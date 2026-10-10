@@ -1,0 +1,60 @@
+import { Notice } from "obsidian";
+
+export interface NoticeAction {
+	label: string;
+	run: () => void | Promise<void>;
+}
+
+/**
+ * A notice with action buttons. `timeout` 0 keeps it until dismissed (used for
+ * conflicts and damaged-file messages).
+ */
+export function actionNotice(message: string, actions: NoticeAction[], timeout = 8000): Notice {
+	let notice: Notice | null = null;
+	const fragment = createFragment((f) => {
+		f.createDiv({ text: message, cls: "checkpoint-notice-text" });
+		if (actions.length === 0) return;
+		const row = f.createDiv({ cls: "checkpoint-notice-actions" });
+		for (const action of actions) {
+			const button = row.createEl("button", { text: action.label });
+			button.addEventListener("click", (evt) => {
+				evt.stopPropagation();
+				notice?.hide();
+				void Promise.resolve(action.run()).catch((err: unknown) => showError(err));
+			});
+		}
+	});
+	notice = new Notice(fragment, timeout);
+	return notice;
+}
+
+/**
+ * The Undo button of a notice. `undo` resolves false when there is nothing to undo any more; `onNothing` then
+ * says so (callers that stay silent omit it). A thrown error reaches `showError` through `actionNotice`.
+ */
+export function undoAction(undo: () => Promise<boolean>, onNothing?: () => void): NoticeAction {
+	return {
+		label: "Undo",
+		run: async () => {
+			if (!(await undo())) onNothing?.();
+		},
+	};
+}
+
+/** The one-time Sync notice closes by itself after this long. */
+export const SYNC_NOTICE_MS = 15000;
+
+/** .cpbase is not a default Obsidian Sync type. Closes after 15 s or with "Got it". */
+export function syncNotice(): Notice {
+	return actionNotice(
+		"If you use Obsidian Sync, turn on \"Sync all other types\" so the database file syncs. Git and other file-sync tools need no change.",
+		[{ label: "Got it", run: () => undefined }],
+		SYNC_NOTICE_MS,
+	);
+}
+
+export function showError(err: unknown): void {
+	const message = err instanceof Error ? err.message : String(err);
+	new Notice(message);
+	if (!(err instanceof Error && err.name === "DomainError")) console.error("Logwell:", err);
+}

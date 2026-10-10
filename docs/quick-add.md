@@ -1,0 +1,78 @@
+# Quick Add
+
+Quick Add turns one line of text into a task. You type the title and its details together, and Logwell finds the date, list, tags, priority, duration, note and repeat as you type.
+
+## Open Quick Add
+
+You can type a new task in two places. Both read your text the same way.
+
+- **The add bar** at the top of a list view. Press Enter to add the task; the bar stays for the next one. The view fills in defaults: in Today the task gets today's date, in a list it goes into that list, and in a tag view it gets that tag.
+- **The Quick add task window.** Open it with the command **Quick add task** or the plus button in the list header. Enter adds the task and closes the window, unless **Keep quick add open after saving** is on.
+
+The **Add subtask** bar in the details pane reads text the same way. See [Tasks](tasks.md).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/quick-add-dark.png">
+  <img src="images/quick-add-light.png" alt="The Quick add task window with the text Call Sam tomorrow 4pm #Work @Calls !1 for 30m and chips for the date, list, tag, priority and duration">
+</picture>
+
+## See what Quick Add found
+
+Each word Logwell recognizes is highlighted, shown as a chip under the input and taken out of the title. `Pay rent friday #Home @errands !1` becomes the title "Pay rent" with a date, a list, a tag and a priority.
+
+- Press × on a chip to keep its words in the title as plain text.
+- When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value".
+- Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
+- Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week.
+- If nothing is left of the title, Logwell keeps the full text as the title.
+- Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.
+
+## What you can type
+
+| You want | You type | Notes |
+| --- | --- | --- |
+| A date | `today`, `tomorrow`, `in 3 days`, `next week`, `this weekend`, `the day after tomorrow` | `next week` is seven days from today. |
+| | `friday`, `next fri`, `this monday`, `on friday` | A weekday means its next date. |
+| | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date. The **Date order** setting decides what `10/5` means. |
+| A date and time | `at 7pm`, `19:00`, `at noon`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. |
+| | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
+| A deadline | `by friday`, `by Oct 9`, `by 5pm` | `by` right before a date makes it a deadline. |
+| A planned duration | `for 45m`, `for 1h30m`, `for 90 min`, `for 1.5 hours`, `for half an hour` | From 1 minute to 24 hours. A longer value shows an error chip. |
+| A list | `#Home`, `#Work` | Capitals, spaces, `-` and `_` do not matter. |
+| A tag | `@errands`, `@home/garden` | A new tag is created when you add the task. A name that another tag uses under another parent stays in the title. |
+| A linked note | `[[Budget]]`, `[[Home/Budget]]`, `[[Budget\|alias]]` | Matches the note by path, then by name. |
+| A priority | `!1` or `!high`, `!2` or `!medium`, `!3` or `!low` | It must be a separate word: `Wow!` and `!4` stay text. |
+
+You can also type a repeat, such as `Pay rent every month on the 1st`. A repeat it cannot read stays in the title, marked "Recurrence not supported yet". See [Repeating tasks](repeating-tasks.md#type-a-repeat) for the forms you can type.
+
+## Fix an unknown list or note
+
+A `#list` that does not exist stops the save, because Logwell never creates a list from text. Press Enter and a picker opens with Inbox selected. Choose a list and the task is saved.
+
+A `[[note]]` that matches several notes shows how many; open the chip to choose one. Saved without a choice, the task has no note and the text stays in the title.
+
+Typing `#`, `@` or `[[` opens suggestions of your lists, tags and notes.
+
+## Set values by hand
+
+The add bar has two buttons.
+
+- **Date** opens a popover with **Date** and **Duration** tabs. On **Date**, pick **Today**, **Tomorrow**, **Next week** or **Tonight**, or a day in the month, and set **Time**, **Deadline** and **Repeat**. On **Duration**, pick 15m, 30m, 45m, 1h, 1h30 or 2h, or type minutes. **Clear** removes the values and **OK** closes the popover.
+- **Priority, list, tags and note** opens the priority flags and the rows **List**, **Tags**, **Description note** and **Matrix quadrant**.
+
+Picked values show as pills next to the chips, with × to remove them. A value set by hand wins: typed text for it shows as a suggestion such as "Replace date?".
+
+In the Quick add task window, **All fields** shows plain fields for **Date**, **Time**, **Deadline**, **Repeat**, **Duration (min)**, **List**, **Urgent** and **Important**, plus tags and **Link existing note**.
+
+A repeating task has no deadline. If you add both, the task is saved without the deadline and a notice says so.
+
+## Use the keyboard
+
+- Enter adds the task.
+- Tab moves from the input to **Date**, the more button and then the chips.
+- Left and Right move between chips. Enter opens or accepts a chip, and Delete or Backspace keeps its text in the title.
+- Escape closes an open popover or chip picker first, then the window.
+
+## Daylight saving
+
+A time that does not exist on a spring-forward day moves to the next valid time, with "Adjusted for daylight saving" on its chip. A time that happens twice on a fall-back day uses the first one, with "Ambiguous time; using first occurrence".

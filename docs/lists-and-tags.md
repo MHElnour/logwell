@@ -1,0 +1,99 @@
+# Lists, sections and tags
+
+Every task is in exactly one list, such as Work, Home or Errands. Sections split a list into groups, such as Planning and Review. Tags are labels such as `@home`, and a task can have any number of them.
+
+## Create a list
+
+A task goes to Inbox unless you choose another list. You can rename Inbox and change its icon and color, but you cannot delete it. To add your own list:
+
+1. Click **New list**, the plus button next to Lists in the sidebar.
+2. Type a **Name**. Names must be unique, ignoring capitals.
+3. Pick an **Icon**, or none. **Search icons** finds more.
+4. Pick a **Color**. The next palette color is preselected. **Default** means no color.
+5. Choose **Create**.
+
+Quick Add never creates a list: a `#name` that matches no list must be resolved first. See [Quick Add](quick-add.md).
+
+## Edit, reorder or delete a list
+
+Right-click a list in the sidebar, or focus it and press the context-menu key or Shift+F10:
+
+- **Edit** renames it. Its tasks stay in it.
+- **Change icon…** and **Change color…** open the pickers. **None** clears either.
+- **Sync with TickTick…** and **Unlink from TickTick**: see [TickTick sync](ticktick-sync.md).
+- **Move up** and **Move down** change its place in the sidebar.
+- **Delete** asks first and says how many tasks will move to Inbox. Its sections are deleted too. The notice offers **Undo**.
+
+## Put a task in a list
+
+Add the task from the list's view, type `#name` in Quick Add (`Pay rent friday #Home`), or choose **Move to list…** in the row menu.
+
+A subtask always stays in its parent's list and section, and moves with its parent.
+
+## Add a section
+
+Inbox and every list can have sections.
+
+1. In the list's view, click **View options** (the ⋯ button) and choose **Add section**. On the board you can also click **Add section** after the last column.
+2. Type a name and press Enter. Escape closes the field.
+
+Section names must be unique within the list, ignoring capitals.
+
+## See your sections
+
+In the list layout, choose **View options**, **Group by…**, then **Section**. Adding a section picks this grouping for you. "No section" comes first, then each section, even an empty one. Click a heading to collapse it.
+
+## Move a task into a section
+
+- Drag the task into the section, in the list or on the board.
+- Choose **Move to section…** in the row menu, then a section or **No section**. It shows for top-level tasks when the list has sections.
+- Click the plus button on a section's heading or column to add a task to it.
+
+Moving a task to another list clears its section.
+
+## Rename, reorder or delete a section
+
+Click the ⋯ button on a section's heading or column:
+
+- **Rename** asks for the new name.
+- **Move left** and **Move right** move it one place. On the board you can also drag the column's header.
+- **Delete** removes the section at once. Its tasks move to "No section", and the notice offers **Undo**.
+
+"No section" always stays first and has no menu.
+
+## Work on a board
+
+In a list, the board shows each section as a column of cards that you drag between. See [Board](board.md).
+
+## Tag a task
+
+- Type `@name` in Quick Add, such as `Buy groceries @errands`. A tag that does not exist is created when you add the task.
+- In the details pane, click **Add tag** (the plus button) under **Tags** and type a name. Click **Add** for an existing tag or **New tag: name** to create one. The × on a tag removes it.
+- In the add bar, open **Priority, list, tags and note**, then **Tags**, to pick existing tags.
+
+A tag name may contain letters, digits, `-`, `_` and `/`. Tags ignore capitals: `@Home` and `@home` are the same tag, shown with the spelling you used first.
+
+## Nest tags
+
+A slash makes a path: `@home/garden` sits under home. Tags nest one level deep. A deeper tag already in your database keeps working.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/tags-dark.png">
+  <img src="images/tags-light.png" alt="The Home tag selected in the sidebar with Garden nested under it, and the tasks that carry Home or Garden">
+</picture>
+
+- The sidebar shows a Tags tree once you have a tag. The chevron beside a parent folds its children.
+- Click a tag to see its tasks. A parent's view and its count of open tasks include its children, and each task counts once.
+- A parent you never created as a tag shows while a child exists. It has no color and no menu.
+- `@home/garden` does not also tag a task `@home`.
+- Adding a task from a tag's view gives it that tag, unless the tag is a parent you never created.
+
+A tag name is used once, whatever its parent. If `home/calls` exists, you cannot create `work/calls`: Logwell says "A tag named calls already exists under home." A tag cannot repeat its parent's name either, as in `home/home`. In Quick Add, such an `@name` stays in the title as text. Tags that already share a name keep working.
+
+## Color or delete a tag
+
+Right-click a tag in the sidebar, or focus it and press the context-menu key or Shift+F10. Choose **No color** or a color, such as **Color: green**, or **Delete**.
+
+Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent keeps its children. Tags cannot be renamed.
+
+To show only tasks with chosen tags in Search, the calendar or the matrix, see [Views](views.md).

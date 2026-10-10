@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest something Logwell should do.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: The situation and what gets in the way. An example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should Logwell do?
+      description: Optional. Your idea of how it could work.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Tasks and Quick Add
+        - Lists, sections and tags
+        - Views and boards
+        - Calendar
+        - Eisenhower matrix
+        - Focus
+        - Habits
+        - Repeating tasks
+        - Your data (backup, export, sync)
+        - Settings
+        - Performance
+        - Other

@@ -1,0 +1,68 @@
+{
+  "main": {
+    "id": "b708a0fa7f3c16a4",
+    "type": "split",
+    "children": [
+      {
+        "id": "dcf9da5ab7dd2559",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c266ac60854310d7",
+            "type": "leaf",
+            "state": {
+              "type": "checkpoint-app",
+              "state": { "file": "Checkpoint.cpbase" },
+              "icon": "check-square",
+              "title": "Checkpoint"
+            }
+          },
+          {
+            "id": "98cb7ed4865648a5",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": { "file": "Notes/Other.md", "mode": "source", "source": false },
+              "icon": "lucide-file",
+              "title": "Other"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "77655977ebf312e5",
+    "type": "split",
+    "children": [
+      {
+        "id": "2ac6c4abe98c36bb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "643f562c70e0f6e5",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": { "sortOrder": "alphabetical", "autoReveal": false },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200
+  },
+  "right": {
+    "id": "69afd21489445ad8",
+    "type": "split",
+    "children": [],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "active": "c266ac60854310d7"
+}

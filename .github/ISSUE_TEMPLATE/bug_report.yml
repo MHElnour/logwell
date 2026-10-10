@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Logwell does not work as it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The more specific the report is, the faster it can be reproduced and fixed. Before posting, remove private vault content, task titles, note paths or anything else that is not needed to reproduce the problem.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What happened, and what did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that triggers the problem.
+      placeholder: |
+        1. Open Today
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: logwell-version
+    attributes:
+      label: Logwell version
+      description: Settings, Community plugins (or Obsidian's debug info).
+      placeholder: "0.6.0"
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version and platform
+      description: Run "Show debug info" in the command palette, or write the version and your operating system.
+      placeholder: "1.13.0, macOS"
+  - type: textarea
+    id: database
+    attributes:
+      label: Database
+      description: Roughly how many tasks the database has and how large the `.cpbase` file is, and whether you sync it. Do not paste task titles or other private content.
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors or logs
+      description: Open the developer console (Ctrl+Shift+I, or Cmd+Option+I on macOS), reproduce the problem and paste any errors.
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or screen recording

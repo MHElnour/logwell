@@ -1,0 +1,24 @@
+{"format":"checkpoint-db","schemaVersion":1,"dbId":"5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90","revision":"r-8f1a2b3c4d5e","baseRevision":"r-77c0aa11bb22","history":["r-1111aaaa2222","r-77c0aa11bb22"],"writtenBy":"d-a81f00000001","writtenAt":"2026-10-01T18:41:02.000Z",
+"categories":[
+{"id":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","name":"Study","icon":"📖","nameKey":"study","sortKey":"k","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"},
+{"id":"inbox","name":"Inbox","icon":"📥","nameKey":"inbox","isInbox":true,"sortKey":"0V","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"}
+],
+"tags":[
+{"key":"learning","displayName":"learning","color":"yellow","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"}
+],
+"tasks":[
+{"id":"0b9f6c1e-6a52-4c39-9a7c-5f2f0f4f8a11","title":"Study Python","descriptionNote":{"linkedAt":"2026-10-01T09:12:00.000Z","path":"Task notes/Python study plan.md"},"categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","tagKeys":["learning"],"scheduled":{"kind":"datetime","local":"2026-10-02T19:00","tz":"Europe/Berlin"},"deadline":{"date":"2026-10-09","kind":"date"},"plannedDurationMin":45,"important":true,"status":"open","sortKey":"V","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"},
+{"id":"1c0a7d2f-7b63-4d4a-8b8d-6a3a1a5b9b22","title":"Read chapter 3","categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","parentId":"0b9f6c1e-6a52-4c39-9a7c-5f2f0f4f8a11","status":"open","sortKey":"V","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"},
+{"id":"2d1b8e30-8c74-4e5b-9c9e-7b4b2b6cac33","title":"Buy milk","categoryId":"inbox","urgent":true,"status":"completed","completedAt":"2026-10-01T12:00:00.000Z","sortKey":"k","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"}
+],
+"occurrenceRecords":[],
+"habits":[
+{"id":"h-7c1a0000-0000-4000-8000-000000000001","archivedAt":null,"createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z","name":"Read","sortKey":"V","versions":[{"effectiveFrom":"2026-09-01","goal":{"period":"day","target":30,"type":"quantity","unit":"min"},"schedule":{"kind":"daily"},"weekStart":"MO"}]}
+],
+"checkins":[],
+"focusSessions":[],
+"savedFilters":[],
+"trash":[
+{"batchId":"t-55e00000-0000-4000-8000-000000000001","deletedAt":"2026-10-01T10:00:00.000Z","tasks":[{"id":"3e2c9f41-9d85-4f6c-ad0f-8c5c3c7dbd44","title":"Old idea","categoryId":"inbox","status":"open","sortKey":"z","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"}]}
+]
+}

@@ -1,0 +1,44 @@
+{"format":"checkpoint-db","schemaVersion":4,"dbId":"5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90","revision":"r-9a2b3c4d5e6f","baseRevision":"r-8f1a2b3c4d5e","history":["r-1111aaaa2222","r-77c0aa11bb22","r-8f1a2b3c4d5e"],"writtenBy":"d-a81f00000001","writtenAt":"2026-10-05T08:00:00.000Z",
+"categories":[
+{"id":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","name":"Study","icon":"book-open","color":"purple","nameKey":"study","sortKey":"k","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"},
+{"id":"7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","name":"Work","icon":"briefcase","color":"blue","nameKey":"work","sortKey":"s","createdAt":"2026-10-01T09:05:00.000Z","modifiedAt":"2026-10-01T09:05:00.000Z"},
+{"id":"8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e","name":"Home","icon":"🏠","nameKey":"home","sortKey":"t","createdAt":"2026-10-01T09:06:00.000Z","modifiedAt":"2026-10-01T09:06:00.000Z"},
+{"id":"inbox","name":"Inbox","icon":"inbox","nameKey":"inbox","isInbox":true,"sortKey":"0V","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"}
+],
+"sections":[
+{"id":"a1b2c3d4-0001-4a00-8000-00000000a001","categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","name":"Week 1","nameKey":"week 1","sortKey":"a","createdAt":"2026-10-01T09:30:00.000Z","modifiedAt":"2026-10-01T09:30:00.000Z"},
+{"id":"a1b2c3d4-0002-4a00-8000-00000000a002","categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","name":"Week 2","nameKey":"week 2","sortKey":"b","createdAt":"2026-10-01T09:31:00.000Z","modifiedAt":"2026-10-01T09:31:00.000Z"},
+{"id":"b2c3d4e5-0003-4b00-8000-00000000b003","categoryId":"inbox","name":"Triage","nameKey":"triage","sortKey":"a","createdAt":"2026-10-01T09:32:00.000Z","modifiedAt":"2026-10-01T09:32:00.000Z"}
+],
+"tags":[
+{"key":"learning","displayName":"learning","color":"yellow","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z"}
+],
+"tasks":[
+{"id":"0b9f6c1e-6a52-4c39-9a7c-5f2f0f4f8a11","title":"Study Python","descriptionNote":{"linkedAt":"2026-10-01T09:12:00.000Z","path":"Task notes/Python study plan.md"},"categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","tagKeys":["learning"],"sectionId":"a1b2c3d4-0001-4a00-8000-00000000a001","scheduled":{"kind":"datetime","local":"2026-10-02T19:00","tz":"Europe/Berlin"},"deadline":{"date":"2026-10-09","kind":"date"},"plannedDurationMin":45,"important":true,"priority":1,"status":"open","sortKey":"V","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"},
+{"id":"1c0a7d2f-7b63-4d4a-8b8d-6a3a1a5b9b22","title":"Read chapter 3","categoryId":"5e0d1c2b-3a49-4f58-8e67-7d6c5b4a3921","parentId":"0b9f6c1e-6a52-4c39-9a7c-5f2f0f4f8a11","sectionId":"a1b2c3d4-0001-4a00-8000-00000000a001","priority":2,"status":"open","sortKey":"V","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"},
+{"id":"2d1b8e30-8c74-4e5b-9c9e-7b4b2b6cac33","title":"Buy milk","categoryId":"inbox","sectionId":"b2c3d4e5-0003-4b00-8000-00000000b003","urgent":true,"priority":3,"status":"completed","completedAt":"2026-10-01T12:00:00.000Z","sortKey":"k","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"},
+{"id":"3f4a5b6c-7d8e-4f9a-a0b1-c2d3e4f5a6b7","title":"Pack the bag","categoryId":"8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e","parentId":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","status":"open","sortKey":"V","createdAt":"2026-09-27T10:01:00.000Z","modifiedAt":"2026-10-02T06:00:00.000Z"},
+{"id":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","title":"Gym","categoryId":"8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e","priority":2,"status":"open","recurrence":{"anchor":"2026-09-28","end":{"kind":"never"},"endedAt":null,"versions":[{"effectiveFrom":"2026-09-28","rule":{"afterCompletion":false,"freq":"weekly","interval":1,"monthly":null,"time":"07:00","tz":"Europe/Berlin","weekdays":["MO","WE","FR"]}},{"effectiveFrom":"2026-10-12","rule":{"afterCompletion":false,"freq":"weekly","interval":1,"monthly":null,"time":"07:00","tz":"Europe/Berlin","weekdays":["TU","TH"]}}]},"sortKey":"c","createdAt":"2026-09-27T10:00:00.000Z","modifiedAt":"2026-10-05T07:59:00.000Z"},
+{"id":"5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d","title":"Pay rent","categoryId":"inbox","status":"open","recurrence":{"anchor":"2026-08-31","end":{"count":12,"kind":"count"},"endedAt":null,"versions":[{"effectiveFrom":"2026-08-31","rule":{"afterCompletion":true,"freq":"monthly","interval":1,"monthly":{"day":31,"kind":"day"},"time":null,"tz":null,"weekdays":null}}]},"sortKey":"d","createdAt":"2026-08-30T10:00:00.000Z","modifiedAt":"2026-08-30T10:00:00.000Z"},
+{"id":"6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e","title":"Read the news","categoryId":"inbox","status":"completed","completedAt":"2026-10-03T09:00:00.000Z","recurrence":{"anchor":"2026-09-20","end":{"date":"2026-10-31","kind":"date"},"endedAt":"2026-10-03T09:00:00.000Z","versions":[{"effectiveFrom":"2026-09-20","rule":{"afterCompletion":false,"freq":"daily","interval":2,"monthly":null,"time":null,"tz":null,"weekdays":null}}]},"sortKey":"e","createdAt":"2026-09-19T10:00:00.000Z","modifiedAt":"2026-10-03T09:00:00.000Z"},
+{"id":"9c3d4e5f-6a7b-4c8d-ae9f-1a2b3c4d5e6f","title":"Send invoice","categoryId":"7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","priority":1,"status":"open","sortKey":"a","createdAt":"2026-10-01T09:20:00.000Z","modifiedAt":"2026-10-01T09:20:00.000Z"},
+{"id":"ad4e5f6a-7b8c-4d9e-bfa0-2b3c4d5e6f70","title":"Water plants","categoryId":"8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e","status":"open","sortKey":"b","createdAt":"2026-10-01T09:20:00.000Z","modifiedAt":"2026-10-01T09:20:00.000Z"}
+],
+"occurrenceRecords":[
+{"taskId":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","occurrenceDate":"2026-09-28","status":"done","resolvedAt":"2026-09-28T05:40:00.000Z","completedOn":"2026-09-28"},
+{"taskId":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","occurrenceDate":"2026-09-30","status":"skipped","resolvedAt":"2026-10-02T06:00:00.000Z","auto":true},
+{"taskId":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","occurrenceDate":"2026-10-02","status":"done","resolvedAt":"2026-10-02T06:00:00.000Z","completedOn":"2026-10-02"},
+{"taskId":"4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8","occurrenceDate":"2026-10-05","status":"skipped","resolvedAt":"2026-10-05T07:59:00.000Z"},
+{"taskId":"5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d","occurrenceDate":"2026-08-31","status":"done","resolvedAt":"2026-09-01T18:00:00.000Z","completedOn":"2026-09-01"},
+{"taskId":"6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e","occurrenceDate":"2026-09-20","status":"done","resolvedAt":"2026-09-20T08:00:00.000Z","completedOn":"2026-09-20"}
+],
+"habits":[
+{"id":"h-7c1a0000-0000-4000-8000-000000000001","name":"Read","sortKey":"V","createdAt":"2026-10-01T09:00:00.000Z","modifiedAt":"2026-10-01T09:00:00.000Z","versions":[{"effectiveFrom":"2026-09-01","goal":{"period":"day","target":30,"type":"quantity","unit":"min"},"schedule":{"kind":"daily"},"weekStart":"MO"}]}
+],
+"checkins":[],
+"focusSessions":[],
+"savedFilters":[],
+"trash":[
+{"batchId":"t-55e00000-0000-4000-8000-000000000001","deletedAt":"2026-10-01T10:00:00.000Z","tasks":[{"id":"3e2c9f41-9d85-4f6c-ad0f-8c5c3c7dbd44","title":"Old idea","categoryId":"inbox","sectionId":"b2c3d4e5-0003-4b00-8000-00000000b003","priority":2,"status":"open","sortKey":"z","createdAt":"2026-10-01T09:10:00.000Z","modifiedAt":"2026-10-01T09:12:00.000Z"}]}
+]
+}

@@ -1,0 +1,7471 @@
+/* Checkpoint. Theme variables only; every rule is scoped to a plugin container. */
+
+/* -- Design tokens ----------------------------------------------------------------
+   Declared on the view, the Quick Add modal and .cp-theme. The accent classes
+   (.cp-accent-*) go on the same element, because derived tokens resolve where
+   they are declared. */
+
+.checkpoint-view,
+.checkpoint-quick-add-modal,
+.checkpoint-icon-picker,
+.cp-theme {
+	--cp-accent: var(--interactive-accent);
+	--cp-soft-a: 17%;
+	--cp-hue-a: 18%;
+
+	--cp-font: 15px;
+	--cp-font-family: var(--font-interface);
+	--cp-title-size: 28px;
+	--cp-details-title-size: 22px;
+	--cp-label-size: 12px;
+	--cp-label-spacing: 0.04em;
+	--cp-icon-stroke: 1.75px;
+
+	--cp-rail-w: 64px;
+	--cp-rail-btn: 44px;
+	--cp-rail-icon: 22px;
+	--cp-rail-radius: 10px;
+	--cp-side-w: 268px;
+	--cp-side-row: 42px;
+	--cp-side-icon: 20px;
+	--cp-side-radius: 10px;
+	--cp-meta-icon: 16px;
+	--cp-row-h: 52px;
+	--cp-row-pad: 14px;
+	--cp-row-radius: 12px;
+	--cp-cb: 20px;
+	--cp-cb-radius: 6px;
+	--cp-cb-border: 2px;
+	--cp-details-w: 420px;
+	--cp-pop-radius: 14px;
+	--cp-menu-row: 44px;
+	--cp-addbar-h: 52px;
+	--cp-addbar-radius: 12px;
+	--cp-hit: 44px;
+
+	--cp-accent-soft: color-mix(in srgb, var(--cp-accent) var(--cp-soft-a), transparent);
+	--cp-accent-text: color-mix(in srgb, var(--cp-accent) 75%, var(--text-normal));
+
+	--cp-red: var(--color-red);
+	--cp-orange: var(--color-orange);
+	--cp-yellow: var(--color-yellow);
+	--cp-green: var(--color-green);
+	--cp-cyan: var(--color-cyan);
+	--cp-blue: var(--color-blue);
+	--cp-purple: var(--color-purple);
+	--cp-pink: var(--color-pink);
+
+	--cp-red-soft: color-mix(in srgb, var(--color-red) var(--cp-hue-a), transparent);
+	--cp-orange-soft: color-mix(in srgb, var(--color-orange) var(--cp-hue-a), transparent);
+	--cp-yellow-soft: color-mix(in srgb, var(--color-yellow) var(--cp-hue-a), transparent);
+	--cp-green-soft: color-mix(in srgb, var(--color-green) var(--cp-hue-a), transparent);
+	--cp-cyan-soft: color-mix(in srgb, var(--color-cyan) var(--cp-hue-a), transparent);
+	--cp-blue-soft: color-mix(in srgb, var(--color-blue) var(--cp-hue-a), transparent);
+	--cp-purple-soft: color-mix(in srgb, var(--color-purple) var(--cp-hue-a), transparent);
+	--cp-pink-soft: color-mix(in srgb, var(--color-pink) var(--cp-hue-a), transparent);
+
+	--cp-red-text: color-mix(in srgb, var(--color-red) 75%, var(--text-normal));
+	--cp-orange-text: color-mix(in srgb, var(--color-orange) 75%, var(--text-normal));
+	--cp-yellow-text: color-mix(in srgb, var(--color-yellow) 75%, var(--text-normal));
+	--cp-green-text: color-mix(in srgb, var(--color-green) 75%, var(--text-normal));
+	--cp-cyan-text: color-mix(in srgb, var(--color-cyan) 75%, var(--text-normal));
+	--cp-blue-text: color-mix(in srgb, var(--color-blue) 75%, var(--text-normal));
+	--cp-purple-text: color-mix(in srgb, var(--color-purple) 75%, var(--text-normal));
+	--cp-pink-text: color-mix(in srgb, var(--color-pink) 75%, var(--text-normal));
+
+	/* Eisenhower quadrants: I red, II yellow, III blue, IV green. */
+	--cp-q1: var(--cp-red);
+	--cp-q2: var(--cp-yellow);
+	--cp-q3: var(--cp-blue);
+	--cp-q4: var(--cp-green);
+	--cp-q1-soft: var(--cp-red-soft);
+	--cp-q2-soft: var(--cp-yellow-soft);
+	--cp-q3-soft: var(--cp-blue-soft);
+	--cp-q4-soft: var(--cp-green-soft);
+	--cp-q1-text: var(--cp-red-text);
+	--cp-q2-text: var(--cp-yellow-text);
+	--cp-q3-text: var(--cp-blue-text);
+	--cp-q4-text: var(--cp-green-text);
+
+	--cp-popover-shadow: var(--shadow-l);
+}
+
+/* Light themes need less alpha for the same visual weight. */
+body.theme-light .checkpoint-view,
+body.theme-light .checkpoint-quick-add-modal,
+body.theme-light .checkpoint-icon-picker,
+body.theme-light .cp-theme {
+	--cp-soft-a: 11%;
+	--cp-hue-a: 12%;
+}
+
+/* Accent setting: after the base block, same specificity, so these win. */
+.checkpoint-view.cp-accent-purple,
+.checkpoint-quick-add-modal.cp-accent-purple,
+.checkpoint-icon-picker.cp-accent-purple,
+.cp-theme.cp-accent-purple { --cp-accent: var(--color-purple); }
+.checkpoint-view.cp-accent-blue,
+.checkpoint-quick-add-modal.cp-accent-blue,
+.checkpoint-icon-picker.cp-accent-blue,
+.cp-theme.cp-accent-blue { --cp-accent: var(--color-blue); }
+.checkpoint-view.cp-accent-green,
+.checkpoint-quick-add-modal.cp-accent-green,
+.checkpoint-icon-picker.cp-accent-green,
+.cp-theme.cp-accent-green { --cp-accent: var(--color-green); }
+.checkpoint-view.cp-accent-orange,
+.checkpoint-quick-add-modal.cp-accent-orange,
+.checkpoint-icon-picker.cp-accent-orange,
+.cp-theme.cp-accent-orange { --cp-accent: var(--color-orange); }
+
+/* Numbered quadrant badge (matrix view). */
+.checkpoint-view .cp-q-badge,
+.cp-theme .cp-q-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 8px;
+	background: var(--cp-q-soft, var(--cp-accent-soft));
+	color: var(--cp-q-text, var(--cp-accent-text));
+	font-size: 13px;
+	font-weight: 700;
+}
+.checkpoint-view .cp-q-badge.cp-q1, .cp-theme .cp-q-badge.cp-q1 { --cp-q-soft: var(--cp-q1-soft); --cp-q-text: var(--cp-q1-text); }
+.checkpoint-view .cp-q-badge.cp-q2, .cp-theme .cp-q-badge.cp-q2 { --cp-q-soft: var(--cp-q2-soft); --cp-q-text: var(--cp-q2-text); }
+.checkpoint-view .cp-q-badge.cp-q3, .cp-theme .cp-q-badge.cp-q3 { --cp-q-soft: var(--cp-q3-soft); --cp-q-text: var(--cp-q3-text); }
+.checkpoint-view .cp-q-badge.cp-q4, .cp-theme .cp-q-badge.cp-q4 { --cp-q-soft: var(--cp-q4-soft); --cp-q-text: var(--cp-q4-text); }
+
+/* -- Notices ------------------------------------------------------------- */
+
+.checkpoint-notice-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+/* -- App shell ------------------------------------------------------------ */
+
+.checkpoint-view.view-content {
+	padding: 0;
+	overflow: hidden;
+}
+
+.checkpoint-view .checkpoint-root {
+	height: 100%;
+}
+
+.checkpoint-view .cp-app {
+	display: flex;
+	height: 100%;
+	container-type: inline-size;
+	container-name: cp-app;
+	color: var(--text-normal);
+	background: var(--background-primary);
+	font-family: var(--cp-font-family);
+	font-size: var(--cp-font);
+	line-height: 1.4;
+	/* Obsidian's status bar is fixed at the bottom right and exposes no height variable: its text
+	   (--status-bar-font-size) plus its 18 px minimum and padding come to about 28 px. Each column
+	   (rail, sidebar, scroll areas) keeps this room at its own bottom, inside its background, so the
+	   backgrounds run to the window's bottom edge and no strip shows. */
+	--cp-status-bar-room: calc(var(--size-4-6) + var(--size-4-1));
+}
+
+/* The mobile app has no status bar. */
+body.is-mobile .checkpoint-view .cp-app {
+	--cp-status-bar-room: 0px;
+}
+
+/* Visually hidden text that names a container through aria-labelledby. Containers must not carry
+   aria-label: Obsidian shows a hover tooltip for any element that has one. */
+.checkpoint-view .cp-sr-only,
+.checkpoint-quick-add-modal .cp-sr-only,
+.checkpoint-icon-picker .cp-sr-only,
+.cp-theme .cp-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.checkpoint-view .cp-rail {
+	flex: 0 0 var(--cp-rail-w);
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-4) 0 calc(var(--size-4-4) + var(--cp-status-bar-room));
+	border-right: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-rail-spacer {
+	flex: 1 1 auto;
+}
+
+.checkpoint-view .cp-rail .cp-icon-button {
+	width: var(--cp-rail-btn);
+	height: var(--cp-rail-btn);
+	border-radius: var(--cp-rail-radius);
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-rail .cp-icon-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-rail .cp-icon-button.is-active {
+	color: var(--cp-accent-text);
+	background: var(--cp-accent-soft);
+}
+
+.checkpoint-view .cp-rail .cp-icon svg {
+	width: var(--cp-rail-icon);
+	height: var(--cp-rail-icon);
+}
+
+.checkpoint-view .cp-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+}
+
+.checkpoint-view .cp-section {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+}
+
+.checkpoint-view .cp-section[hidden] {
+	display: none;
+}
+
+.checkpoint-view .cp-tasks,
+.checkpoint-view .cp-search {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	position: relative;
+}
+
+.checkpoint-view .cp-sidebar-pane {
+	flex: 0 0 var(--cp-side-w);
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding: var(--size-4-4) var(--size-4-3) calc(var(--size-4-4) + var(--cp-status-bar-room));
+	border-right: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+/* The list column is a size container: rows adapt to its width, not the window's. At 1200 px
+   (rail 64 + sidebar 268 + details 420) it is about 448 px; it never gets narrower than that. */
+.checkpoint-view .cp-main {
+	flex: 1 1 auto;
+	min-width: min(440px, 100%);
+	container-type: inline-size;
+	container-name: cp-list;
+	overflow-y: auto;
+	padding: 28px var(--size-4-8) var(--cp-status-bar-room);
+}
+
+.checkpoint-view .cp-details-pane {
+	flex: 0 0 var(--cp-details-w);
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding: var(--size-4-3) var(--size-4-4) calc(var(--size-4-3) + var(--cp-status-bar-room));
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-details-close {
+	display: none;
+}
+
+/* Wide views: the ☰ button collapses the sidebar (the narrow overlay rules below win under 800 px). */
+.checkpoint-view .cp-tasks.is-sidebar-collapsed .cp-sidebar-pane {
+	display: none;
+}
+
+/* Under ~1200 px the details pane becomes a drawer: rail 64 + sidebar 268 + details 420 leaves the
+   list about 448 px at 1200 px, and the list would get squeezed below that. */
+@container cp-app (max-width: 1200px) {
+	.checkpoint-view .cp-details-pane {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: min(var(--cp-details-w), 92%);
+		z-index: var(--layer-popover);
+		box-shadow: var(--cp-popover-shadow);
+	}
+
+	.checkpoint-view .cp-details-close {
+		display: inline-flex;
+	}
+}
+
+/* Under ~800 px the sidebar collapses behind the menu button. */
+@container cp-app (max-width: 800px) {
+	.checkpoint-view .cp-sidebar-pane {
+		display: none;
+	}
+
+	.checkpoint-view .cp-tasks.is-sidebar-open .cp-sidebar-pane {
+		display: block;
+		position: absolute;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		width: min(var(--cp-side-w), 85%);
+		z-index: var(--layer-popover);
+		box-shadow: var(--cp-popover-shadow);
+	}
+
+	.checkpoint-view .cp-sidebar-toggle {
+		display: inline-flex;
+	}
+
+	.checkpoint-view .cp-main {
+		padding: var(--size-4-4) var(--size-4-4) var(--cp-status-bar-room);
+	}
+}
+
+/* -- Focus, icons and generic controls ------------------------------------- */
+
+/* Every interactive control gets the same accent ring. */
+.checkpoint-view :focus-visible,
+.checkpoint-quick-add-modal :focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+.checkpoint-view .cp-icon,
+.checkpoint-quick-add-modal .cp-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Meta size by default; the rail and sidebar override it. */
+.checkpoint-view .cp-icon svg,
+.checkpoint-quick-add-modal .cp-icon svg {
+	width: var(--cp-meta-icon);
+	height: var(--cp-meta-icon);
+	stroke-width: var(--cp-icon-stroke);
+}
+
+.checkpoint-view .cp-icon-button {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-muted);
+}
+
+/* The 44 px touch target extends past smaller visible buttons. */
+.checkpoint-view .cp-icon-button::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: max(100%, var(--cp-hit));
+	height: max(100%, var(--cp-hit));
+	transform: translate(-50%, -50%);
+}
+
+.checkpoint-view .cp-icon-button.is-active {
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-link-button {
+	padding: 0;
+	height: auto;
+	background: none;
+	box-shadow: none;
+	border: none;
+	color: var(--text-accent);
+	cursor: pointer;
+	font-size: inherit;
+}
+
+.checkpoint-view .cp-link-button:hover {
+	text-decoration: underline;
+}
+
+.checkpoint-view .cp-hint,
+.checkpoint-quick-add-modal .cp-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* Empty states: a large faint icon and one short line. */
+.checkpoint-view .cp-empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-12) var(--size-4-4);
+	color: var(--text-faint);
+	text-align: center;
+}
+
+.checkpoint-view .cp-empty-state .cp-empty-icon svg {
+	width: 48px;
+	height: 48px;
+	stroke-width: 1.5px;
+}
+
+.checkpoint-view .cp-empty-text {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--cp-font);
+}
+
+/* Motion is only added when the user has not asked to reduce it. */
+@media (prefers-reduced-motion: no-preference) {
+	.checkpoint-view .cp-icon-button,
+	.checkpoint-view .cp-sidebar-item,
+	.checkpoint-view .cp-task-row,
+	.checkpoint-view .cp-sidebar-add {
+		transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+	}
+}
+
+/* -- Banners ---------------------------------------------------------------- */
+
+.checkpoint-view .cp-banner {
+	margin: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	border: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-banner p {
+	margin: 0 0 var(--size-4-2);
+}
+
+.checkpoint-view .cp-banner-error {
+	border-color: var(--background-modifier-error);
+}
+
+.checkpoint-view .cp-banner-warning {
+	border-color: var(--color-orange);
+}
+
+.checkpoint-view .cp-banner-actions {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+/* -- Sidebar ---------------------------------------------------------------- */
+
+.checkpoint-view .cp-sidebar-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.checkpoint-view .cp-sidebar-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	width: 100%;
+	height: var(--cp-side-row);
+	box-sizing: border-box;
+	padding: 0 var(--size-4-3);
+	border: none;
+	box-shadow: none;
+	background: none;
+	border-radius: var(--cp-side-radius);
+	color: var(--text-normal);
+	font-size: var(--cp-font);
+	text-align: left;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-sidebar-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-sidebar-item .cp-icon,
+.checkpoint-view .cp-sidebar-item .cp-emoji {
+	flex: 0 0 var(--cp-side-icon);
+	width: var(--cp-side-icon);
+	justify-content: center;
+	color: var(--cp-list-color, var(--text-muted));
+}
+
+.checkpoint-view .cp-sidebar-item .cp-icon svg {
+	width: var(--cp-side-icon);
+	height: var(--cp-side-icon);
+}
+
+.checkpoint-view .cp-sidebar-item.is-active {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-sidebar-item.is-active .cp-icon {
+	color: var(--cp-list-color, var(--cp-accent-text));
+}
+
+.checkpoint-view .cp-sidebar-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-count {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 13px;
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-sidebar-item.is-active .cp-count {
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-sidebar-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin: 0;
+	padding: var(--size-4-4) var(--size-4-3) var(--size-4-1);
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	letter-spacing: var(--cp-label-spacing);
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-sidebar-heading .cp-icon-button {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 8px;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-sidebar-heading .cp-icon-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-sidebar-footer {
+	margin-top: var(--size-4-3);
+	padding-top: var(--size-4-3);
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-emoji {
+	display: inline-block;
+	text-align: center;
+	line-height: 1;
+}
+
+/* -- Tags ------------------------------------------------------------------- */
+
+.checkpoint-view .cp-tag-dot {
+	flex: 0 0 10px;
+	width: 10px;
+	height: 10px;
+	margin: 0 5px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+
+.checkpoint-view .cp-tag-dot.cp-tag-red { background: var(--color-red); }
+.checkpoint-view .cp-tag-dot.cp-tag-orange { background: var(--color-orange); }
+.checkpoint-view .cp-tag-dot.cp-tag-yellow { background: var(--color-yellow); }
+.checkpoint-view .cp-tag-dot.cp-tag-green { background: var(--color-green); }
+.checkpoint-view .cp-tag-dot.cp-tag-cyan { background: var(--color-cyan); }
+.checkpoint-view .cp-tag-dot.cp-tag-blue { background: var(--color-blue); }
+.checkpoint-view .cp-tag-dot.cp-tag-purple { background: var(--color-purple); }
+.checkpoint-view .cp-tag-dot.cp-tag-pink { background: var(--color-pink); }
+
+.checkpoint-view .cp-chip.cp-tag-red,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-red { color: var(--color-red); }
+.checkpoint-view .cp-chip.cp-tag-orange,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-orange { color: var(--color-orange); }
+.checkpoint-view .cp-chip.cp-tag-yellow,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-yellow { color: var(--color-yellow); }
+.checkpoint-view .cp-chip.cp-tag-green,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-green { color: var(--color-green); }
+.checkpoint-view .cp-chip.cp-tag-cyan,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-cyan { color: var(--color-cyan); }
+.checkpoint-view .cp-chip.cp-tag-blue,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-blue { color: var(--color-blue); }
+.checkpoint-view .cp-chip.cp-tag-purple,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-purple { color: var(--color-purple); }
+.checkpoint-view .cp-chip.cp-tag-pink,
+.checkpoint-quick-add-modal .cp-chip.cp-tag-pink { color: var(--color-pink); }
+
+/* -- Main list -------------------------------------------------------------- */
+
+.checkpoint-view .cp-main-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-5);
+}
+
+/* The title never shrinks ("Today" must not become "To…"); the search field gives way, and the
+   header wraps before anything else does. Only a name longer than the header ellipsizes. */
+.checkpoint-view .cp-main-title {
+	flex: 0 0 auto;
+	max-width: 100%;
+	margin: 0;
+	font-size: var(--cp-title-size);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-count-pill {
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The search field takes the free space, pushing the icon buttons right. */
+.checkpoint-view .cp-view-search {
+	flex: 1 1 120px;
+	min-width: 120px;
+	margin-left: auto;
+	width: auto;
+	max-width: 240px;
+}
+
+.checkpoint-view .cp-main-header .cp-icon-button {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--cp-rail-radius);
+}
+
+.checkpoint-view .cp-main-header .cp-icon-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-add-bar {
+	margin-bottom: var(--size-4-2);
+}
+
+.checkpoint-view .cp-group-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 14px 4px 8px;
+	color: var(--text-faint);
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.checkpoint-view .cp-group-heading.is-overdue {
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-group-heading.is-today {
+	color: var(--cp-blue-text);
+}
+
+.checkpoint-view .cp-group-heading.is-tomorrow {
+	color: var(--cp-orange-text);
+}
+
+.checkpoint-view .cp-group-count {
+	color: var(--text-faint);
+	font-weight: 600;
+}
+
+.checkpoint-view .cp-task-row {
+	display: flex;
+	align-items: center;
+	gap: var(--cp-row-pad);
+	height: var(--cp-row-h);
+	box-sizing: border-box;
+	padding: 0 var(--cp-row-pad);
+	border: 1.5px solid transparent;
+	border-radius: var(--cp-row-radius);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-task-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-task-row.is-selected {
+	background: var(--cp-accent-soft);
+	border-color: var(--cp-accent);
+}
+
+.checkpoint-view .cp-task-row.is-subtask {
+	margin-left: var(--size-4-6);
+}
+
+.checkpoint-view .cp-task-row.is-completed .cp-task-title {
+	color: var(--text-faint);
+	text-decoration: line-through;
+}
+
+.checkpoint-view .cp-task-row.is-completing {
+	opacity: 0.5;
+}
+
+/* The priority checkbox: Obsidian's own checkbox, sized and colored by tokens. */
+.checkpoint-view .cp-task-checkbox {
+	--checkbox-size: var(--cp-cb);
+	--checkbox-radius: var(--cp-cb-radius);
+	--checkbox-color: var(--text-faint);
+	--checkbox-color-hover: var(--text-muted);
+	--checkbox-marker-color: var(--background-primary);
+	--checkbox-border-color: var(--text-faint);
+	--checkbox-border-color-hover: var(--text-muted);
+	flex: 0 0 var(--cp-cb);
+	width: var(--cp-cb);
+	height: var(--cp-cb);
+	margin: 0;
+	border-width: var(--cp-cb-border);
+	border-radius: var(--cp-cb-radius);
+}
+
+/* Obsidian draws the check mark in a :after sized to the box and offset by -1px, which assumes its
+   own 1 px border. The :after is positioned from the padding box, so with a thicker border the mark
+   would sit 1 px low and to the right. The offset is the border width here. */
+.checkpoint-view .cp-task-checkbox:checked:after {
+	top: calc(-1 * var(--cp-cb-border));
+	inset-inline-start: calc(-1 * var(--cp-cb-border));
+	width: var(--cp-cb);
+	height: var(--cp-cb);
+}
+
+.checkpoint-view .cp-task-checkbox.cp-pri-1:not(:checked) {
+	--checkbox-border-color: var(--cp-red);
+	--checkbox-border-color-hover: var(--cp-red);
+	background-color: var(--cp-red-soft);
+}
+
+.checkpoint-view .cp-task-checkbox.cp-pri-2:not(:checked) {
+	--checkbox-border-color: var(--cp-yellow);
+	--checkbox-border-color-hover: var(--cp-yellow);
+	background-color: var(--cp-yellow-soft);
+}
+
+.checkpoint-view .cp-task-checkbox.cp-pri-3:not(:checked) {
+	--checkbox-border-color: var(--cp-blue);
+	--checkbox-border-color-hover: var(--cp-blue);
+	background-color: var(--cp-blue-soft);
+}
+
+.checkpoint-view .cp-task-title {
+	flex: 1 1 120px;
+	/* Never narrower than this: the meta below is hidden first (container queries on the list). */
+	min-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-task-meta {
+	/* May shrink: the meta never pushes the date past the row's edge. */
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	max-width: 60%;
+	color: var(--text-faint);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-task-meta > * {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	white-space: nowrap;
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The date is the one meta item that must always be fully visible. */
+.checkpoint-view .cp-task-meta > .cp-meta-date {
+	flex-shrink: 0;
+	overflow: visible;
+}
+
+.checkpoint-view .cp-meta-tags {
+	gap: var(--size-2-2);
+	min-width: 0;
+}
+
+.checkpoint-view .cp-meta-tags .cp-tag-pill {
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: inline-block;
+}
+
+.checkpoint-view .cp-tag-more {
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-meta-list-name {
+	max-width: 12ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Narrow list (details open next to the sidebar): drop the lower-priority meta, never the title. */
+@container cp-list (max-width: 560px) {
+	.checkpoint-view .cp-meta-tags {
+		display: none;
+	}
+
+	.checkpoint-view .cp-meta-matrix {
+		display: none;
+	}
+}
+
+@container cp-list (max-width: 440px) {
+	.checkpoint-view .cp-meta-list-name {
+		display: none;
+	}
+}
+
+@container cp-list (max-width: 340px) {
+	.checkpoint-view .cp-meta-note,
+	.checkpoint-view .cp-meta-subtasks,
+	.checkpoint-view .cp-meta-duration,
+	.checkpoint-view .cp-meta-matrix,
+	.checkpoint-view .cp-meta-deadline {
+		display: none;
+	}
+}
+
+.checkpoint-view .cp-meta-deadline.is-missed {
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-meta-date {
+	min-width: 84px;
+	justify-content: flex-end;
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-meta-date.is-overdue { color: var(--cp-red-text); }
+.checkpoint-view .cp-meta-date.is-today { color: var(--cp-blue-text); }
+.checkpoint-view .cp-meta-date.is-tomorrow { color: var(--cp-orange-text); }
+.checkpoint-view .cp-meta-date.is-later,
+.checkpoint-view .cp-meta-date.is-none { color: var(--text-faint); }
+
+.checkpoint-view .cp-parent-prefix {
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-chips,
+.checkpoint-quick-add-modal .cp-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	margin-top: var(--size-4-1);
+}
+
+.checkpoint-view .cp-chip,
+.checkpoint-quick-add-modal .cp-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: 0 var(--size-4-1);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+}
+
+.checkpoint-view .cp-chip-remove,
+.checkpoint-quick-add-modal .cp-chip-remove {
+	height: auto;
+	padding: 0 2px;
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+/* -- Filter bar ---------------------------------------------------------------- */
+
+.checkpoint-view .cp-filter-toggle-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-view .cp-filter-panel {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	margin: var(--size-4-1) 0 var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-filter-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.checkpoint-view .cp-filter-chips legend {
+	margin-bottom: var(--size-4-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-view .cp-toggle-chip {
+	height: auto;
+	padding: 2px var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-view .cp-toggle-chip.is-on {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.checkpoint-view .cp-filter-selects {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-3);
+}
+
+.checkpoint-view .cp-filter-selects label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-inline-select {
+	height: auto;
+	padding: 0 var(--size-4-4) 0 var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+}
+
+/* -- Details pane ------------------------------------------------------------ */
+
+.checkpoint-view .cp-details {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+}
+
+.checkpoint-view .cp-details-top {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	min-height: 64px;
+	box-sizing: border-box;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-due-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	height: auto;
+	min-height: 36px;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 8px;
+	box-shadow: none;
+	background: none;
+	font-size: 14px;
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-due-chip:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-due-chip.is-today { color: var(--cp-blue-text); }
+.checkpoint-view .cp-due-chip.is-tomorrow { color: var(--cp-orange-text); }
+.checkpoint-view .cp-due-chip.is-overdue { color: var(--cp-red-text); }
+.checkpoint-view .cp-due-chip.is-later { color: var(--text-muted); }
+.checkpoint-view .cp-due-chip.is-none,
+.checkpoint-view .cp-due-chip.is-empty { color: var(--text-faint); }
+.checkpoint-view .cp-due-chip.is-missed { color: var(--cp-red-text); }
+
+.checkpoint-view .cp-details-top-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	margin-left: auto;
+}
+
+.checkpoint-view .cp-details-top-actions .cp-icon-button {
+	width: 40px;
+	height: 40px;
+	border-radius: var(--cp-rail-radius);
+}
+
+.checkpoint-view .cp-priority-button.cp-hue-red { color: var(--cp-red); }
+.checkpoint-view .cp-priority-button.cp-hue-yellow { color: var(--cp-yellow); }
+.checkpoint-view .cp-priority-button.cp-hue-blue { color: var(--cp-blue); }
+.checkpoint-view .cp-priority-button[class*="cp-hue-"] svg { fill: currentColor; }
+
+.checkpoint-view .cp-details-title {
+	width: 100%;
+	margin: var(--size-4-3) 0 var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	border: none;
+	background: none;
+	box-shadow: none;
+	resize: none;
+	font-size: var(--cp-details-title-size);
+	font-weight: 700;
+	field-sizing: content;
+}
+
+.checkpoint-view .cp-parent-link {
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-view .cp-details-fields,
+.checkpoint-quick-add-modal .cp-quick-add-fields {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--size-4-2) var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+}
+
+.checkpoint-view .cp-field,
+.checkpoint-quick-add-modal .cp-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-date-field {
+	grid-column: span 2;
+}
+
+.checkpoint-view .cp-date-inputs {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.checkpoint-view .cp-details-section {
+	margin-top: var(--size-4-4);
+}
+
+.checkpoint-view .cp-section-heading {
+	margin-bottom: var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	letter-spacing: var(--cp-label-spacing);
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-subtasks {
+	list-style: none;
+	margin: 0 0 var(--size-4-2);
+	padding: 0;
+}
+
+.checkpoint-view .cp-subtasks li {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-2-1) 0;
+}
+
+.checkpoint-view .cp-subtasks li.is-completed .cp-link-button {
+	color: var(--text-muted);
+	text-decoration: line-through;
+}
+
+.checkpoint-view .cp-add-subtask {
+	margin-top: var(--size-4-2);
+	margin-bottom: 0;
+}
+
+.checkpoint-view .cp-tag-entry,
+.checkpoint-quick-add-modal .cp-tag-entry {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-1);
+}
+
+/* Description area */
+
+.checkpoint-view .cp-description {
+	margin-top: var(--size-4-4);
+	padding: 14px 16px;
+	border-radius: 12px;
+	border: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-note-head {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+}
+
+.checkpoint-view .cp-note-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-description.is-empty {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	border-style: dashed;
+}
+
+.checkpoint-view .cp-description.is-missing {
+	border-color: var(--background-modifier-error);
+}
+
+.checkpoint-view .cp-description-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+.checkpoint-view .cp-note-preview {
+	max-height: 60vh;
+	overflow-y: auto;
+	font-size: var(--font-text-size);
+}
+
+.checkpoint-view .cp-also-linked {
+	margin-top: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-view .cp-details-info {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: var(--size-2-1) var(--size-4-3);
+	margin-top: var(--size-4-4);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-details-info dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+/* -- Trash, search, data ----------------------------------------------------- */
+
+.checkpoint-view .cp-trash-list,
+.checkpoint-view .cp-backup-list,
+.checkpoint-view .cp-search-categories {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.checkpoint-view .cp-trash-entry,
+.checkpoint-view .cp-backup-list li {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) 0;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-trash-text,
+.checkpoint-view .cp-backup-list li > div {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-search-box {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-2);
+}
+
+.checkpoint-view .cp-search-box input[type="search"] {
+	flex: 1 1 240px;
+}
+
+.checkpoint-view .cp-checkbox-label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-view .cp-data-section {
+	max-width: 720px;
+	margin-bottom: var(--size-4-6);
+}
+
+.checkpoint-view .cp-data-actions {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+/* -- Quick add modal ------------------------------------------------------------ */
+
+.checkpoint-quick-add-modal .cp-quick-add {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+}
+
+.checkpoint-quick-add-modal .cp-qa-input-wrap {
+	font-size: var(--font-ui-large);
+}
+
+.checkpoint-quick-add-modal .cp-flags {
+	flex-direction: row;
+	align-items: flex-end;
+	gap: var(--size-4-3);
+}
+
+.checkpoint-quick-add-modal .cp-form-message {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-quick-add-modal .cp-quick-add-footer {
+	display: flex;
+	justify-content: flex-end;
+}
+
+/* -- Quick add input, chips and pickers ----------------------------------------- */
+
+.checkpoint-quick-add-modal .cp-qa,
+.cp-add-bar .cp-qa {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+/* The highlight layer sits behind a transparent input with identical metrics. */
+.checkpoint-quick-add-modal .cp-qa-input-wrap,
+.cp-add-bar .cp-qa-input-wrap {
+	position: relative;
+	border-radius: var(--input-radius);
+	background: var(--background-modifier-form-field);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-quick-add-modal .cp-qa-mirror,
+.cp-add-bar .cp-qa-mirror {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 0 var(--size-4-2);
+	border: var(--input-border-width) solid transparent;
+	overflow: hidden;
+	color: transparent;
+	font-family: inherit;
+	font-size: inherit;
+	white-space: pre;
+	pointer-events: none;
+}
+
+.checkpoint-quick-add-modal .cp-qa-input,
+.cp-add-bar .cp-qa-input {
+	position: relative;
+	width: 100%;
+	box-sizing: border-box;
+	background: transparent;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+.checkpoint-quick-add-modal .cp-qa-span,
+.cp-add-bar .cp-qa-span {
+	border-radius: var(--radius-s);
+	background: var(--text-selection);
+	color: transparent;
+}
+
+.checkpoint-quick-add-modal .cp-qa-span-suggestion,
+.checkpoint-quick-add-modal .cp-qa-span-choice,
+.cp-add-bar .cp-qa-span-suggestion,
+.cp-add-bar .cp-qa-span-choice {
+	background: var(--background-modifier-hover);
+	text-decoration: underline dashed var(--text-muted);
+}
+
+.checkpoint-quick-add-modal .cp-qa-span-unresolved,
+.checkpoint-quick-add-modal .cp-qa-span-collision,
+.cp-add-bar .cp-qa-span-unresolved,
+.cp-add-bar .cp-qa-span-collision {
+	background: var(--background-modifier-hover);
+	text-decoration: underline wavy var(--text-warning);
+}
+
+.checkpoint-quick-add-modal .cp-qa-span-missing,
+.checkpoint-quick-add-modal .cp-qa-span-invalid,
+.checkpoint-quick-add-modal .cp-qa-span-superseded,
+.checkpoint-quick-add-modal .cp-qa-span-unsupported,
+.cp-add-bar .cp-qa-span-missing,
+.cp-add-bar .cp-qa-span-invalid,
+.cp-add-bar .cp-qa-span-superseded,
+.cp-add-bar .cp-qa-span-unsupported {
+	background: transparent;
+	text-decoration: underline dotted var(--text-faint);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chips,
+.cp-add-bar .cp-qa-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip,
+.cp-add-bar .cp-qa-chip {
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-suggestion,
+.checkpoint-quick-add-modal .cp-qa-chip-choice,
+.cp-add-bar .cp-qa-chip-suggestion,
+.cp-add-bar .cp-qa-chip-choice {
+	border-style: dashed;
+	background: transparent;
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-unresolved,
+.checkpoint-quick-add-modal .cp-qa-chip-collision,
+.cp-add-bar .cp-qa-chip-unresolved,
+.cp-add-bar .cp-qa-chip-collision {
+	border-color: var(--text-warning);
+	color: var(--text-warning);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-missing,
+.checkpoint-quick-add-modal .cp-qa-chip-invalid,
+.checkpoint-quick-add-modal .cp-qa-chip-superseded,
+.checkpoint-quick-add-modal .cp-qa-chip-unsupported,
+.cp-add-bar .cp-qa-chip-missing,
+.cp-add-bar .cp-qa-chip-invalid,
+.cp-add-bar .cp-qa-chip-superseded,
+.cp-add-bar .cp-qa-chip-unsupported {
+	border-style: dotted;
+	color: var(--text-muted);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-main,
+.cp-add-bar .cp-qa-chip-main {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+	height: auto;
+	padding: 0 var(--size-4-1);
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: inherit;
+	font-size: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-hint,
+.cp-add-bar .cp-qa-chip-hint {
+	color: var(--text-muted);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip.has-warning .cp-qa-chip-hint,
+.cp-add-bar .cp-qa-chip.has-warning .cp-qa-chip-hint {
+	color: var(--text-warning);
+}
+
+.checkpoint-quick-add-modal .cp-qa-chip-remove,
+.cp-add-bar .cp-qa-chip-remove {
+	height: auto;
+	padding: 0 var(--size-4-1);
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.checkpoint-quick-add-modal .cp-qa-panel,
+.cp-add-bar .cp-qa-panel {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.checkpoint-quick-add-modal .cp-qa-panel-title,
+.cp-add-bar .cp-qa-panel-title {
+	flex-basis: 100%;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.cp-add-bar .cp-qa.is-compact .cp-qa-chips {
+	gap: var(--size-2-2);
+}
+
+/* -- Details, tags, footer, completed group, pickers --------------------------- */
+
+.checkpoint-view .cp-hue-red { --cp-hue: var(--cp-red); --cp-hue-soft: var(--cp-red-soft); --cp-hue-text: var(--cp-red-text); --cp-list-color: var(--cp-red); }
+.checkpoint-view .cp-hue-orange { --cp-hue: var(--cp-orange); --cp-hue-soft: var(--cp-orange-soft); --cp-hue-text: var(--cp-orange-text); --cp-list-color: var(--cp-orange); }
+.checkpoint-view .cp-hue-yellow { --cp-hue: var(--cp-yellow); --cp-hue-soft: var(--cp-yellow-soft); --cp-hue-text: var(--cp-yellow-text); --cp-list-color: var(--cp-yellow); }
+.checkpoint-view .cp-hue-green { --cp-hue: var(--cp-green); --cp-hue-soft: var(--cp-green-soft); --cp-hue-text: var(--cp-green-text); --cp-list-color: var(--cp-green); }
+.checkpoint-view .cp-hue-cyan { --cp-hue: var(--cp-cyan); --cp-hue-soft: var(--cp-cyan-soft); --cp-hue-text: var(--cp-cyan-text); --cp-list-color: var(--cp-cyan); }
+.checkpoint-view .cp-hue-blue { --cp-hue: var(--cp-blue); --cp-hue-soft: var(--cp-blue-soft); --cp-hue-text: var(--cp-blue-text); --cp-list-color: var(--cp-blue); }
+.checkpoint-view .cp-hue-purple { --cp-hue: var(--cp-purple); --cp-hue-soft: var(--cp-purple-soft); --cp-hue-text: var(--cp-purple-text); --cp-list-color: var(--cp-purple); }
+.checkpoint-view .cp-hue-pink { --cp-hue: var(--cp-pink); --cp-hue-soft: var(--cp-pink-soft); --cp-hue-text: var(--cp-pink-text); --cp-list-color: var(--cp-pink); }
+
+.checkpoint-view .cp-tag-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: 2px 9px;
+	border-radius: 999px;
+	background: var(--cp-hue-soft, var(--background-modifier-hover));
+	color: var(--cp-hue-text, var(--text-muted));
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-list-dot {
+	flex: 0 0 8px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cp-hue, var(--text-faint));
+}
+
+.checkpoint-view .cp-tag-remove {
+	height: auto;
+	padding: 0 2px;
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-tag-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-view .cp-add-tag {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 1.5px dashed var(--text-faint);
+	border-radius: 999px;
+	box-shadow: none;
+	background: none;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-add-tag::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: var(--cp-hit);
+	height: var(--cp-hit);
+	transform: translate(-50%, -50%);
+}
+
+.checkpoint-view .cp-add-tag:hover {
+	color: var(--text-normal);
+	border-color: var(--text-muted);
+}
+
+.checkpoint-view .cp-details .cp-section-heading {
+	display: flex;
+	justify-content: space-between;
+}
+
+.checkpoint-view .cp-details-foot {
+	order: 99;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin-top: auto;
+	padding-top: var(--size-4-4);
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-foot-spacer {
+	flex: 1 1 auto;
+}
+
+.checkpoint-view .cp-list-button,
+.checkpoint-view .cp-focus-button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-height: var(--cp-hit);
+	font-size: 14px;
+}
+
+.checkpoint-view .cp-list-button {
+	padding: 8px 12px;
+	border: none;
+	border-radius: var(--cp-rail-radius);
+	box-shadow: none;
+	background: none;
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-list-button:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-focus-button {
+	padding: 9px 16px;
+	border-radius: var(--cp-rail-radius);
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-button[aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* A completed group at the end of a mixed list: collapsed, faint. */
+.checkpoint-view .cp-completed-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	width: 100%;
+	min-height: var(--cp-hit);
+	padding: 0 var(--size-4-2);
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: var(--text-faint);
+	font-size: 13px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-completed-count {
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-completed-group .cp-task-row {
+	opacity: 0.75;
+}
+
+.checkpoint-view .cp-completed-more {
+	display: block;
+	min-height: var(--cp-hit);
+	padding: 0 var(--size-4-2);
+	font-size: 13px;
+}
+
+/* The ⋯ view menu: a small accent dot while the lists or tags narrow the view. */
+.checkpoint-view .cp-view-menu-button .cp-view-dot {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cp-accent);
+	box-shadow: 0 0 0 2px var(--background-primary);
+}
+
+.checkpoint-view .cp-view-menu-button.is-narrowing {
+	color: var(--cp-accent-text);
+}
+
+/* Filter bar: priority chips take the priority hue, the sort select sits with the other selects. */
+.checkpoint-view .cp-toggle-chip.cp-pri-1.is-on { background: var(--cp-red-soft); color: var(--cp-red-text); }
+.checkpoint-view .cp-toggle-chip.cp-pri-2.is-on { background: var(--cp-yellow-soft); color: var(--cp-yellow-text); }
+.checkpoint-view .cp-toggle-chip.cp-pri-3.is-on { background: var(--cp-blue-soft); color: var(--cp-blue-text); }
+
+.checkpoint-view .cp-filter-priority .cp-toggle-chip {
+	min-height: 28px;
+}
+
+/* The list icon picker modal. */
+.checkpoint-icon-picker .cp-icon-filter {
+	width: 100%;
+	margin-bottom: var(--size-4-3);
+}
+
+.checkpoint-icon-picker .cp-icon-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-3);
+}
+
+.checkpoint-icon-picker .cp-icon-choice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 44px;
+	padding: 0;
+	box-shadow: none;
+	background: none;
+	border-radius: 10px;
+	color: var(--text-muted);
+}
+
+.checkpoint-icon-picker .cp-icon-choice:hover {
+	background: var(--cp-accent-soft);
+	color: var(--text-normal);
+}
+
+.checkpoint-icon-picker .cp-icon-choice.is-current {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent);
+}
+
+.checkpoint-icon-picker .cp-icon-none {
+	min-height: var(--cp-hit);
+	padding: 0 var(--size-4-4);
+}
+
+.checkpoint-icon-picker .cp-icon-choice svg {
+	width: 22px;
+	height: 22px;
+}
+
+.checkpoint-icon-picker .cp-hidden {
+	display: none;
+}
+
+.checkpoint-icon-picker :focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+/* Completion: a check pop on the checkbox. Nothing animates under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+	.checkpoint-view .cp-task-row.is-just-completed .cp-task-checkbox:checked {
+		animation: cp-check-pop 180ms ease-out;
+	}
+
+	.checkpoint-view .cp-task-row.is-completing {
+		transition: opacity 200ms ease;
+	}
+
+	@keyframes cp-check-pop {
+		0% { transform: scale(0.8); }
+		60% { transform: scale(1.15); }
+		100% { transform: scale(1); }
+	}
+}
+
+/* == U1-B: add bar, date popover, more menu == */
+
+/* Every rule below is written once and applies in both plugin containers: the view and the
+   Quick Add modal. Colors come from the tokens only. */
+
+/* -- Add bar: 52 px, 12 px radius, 1.5 px border; focus = accent border plus a 4 px soft ring */
+
+.checkpoint-view .cp-qa-barwrap,
+.checkpoint-quick-add-modal .cp-qa-barwrap {
+	position: relative;
+}
+
+.checkpoint-view .cp-qa-bar,
+.checkpoint-quick-add-modal .cp-qa-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	box-sizing: border-box;
+	height: var(--cp-addbar-h);
+	padding: 0 8px 0 16px;
+	border: 1.5px solid var(--background-modifier-border);
+	border-radius: var(--cp-addbar-radius);
+	background: var(--background-secondary);
+	color: var(--text-faint);
+	transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.checkpoint-view .cp-qa-bar:focus-within,
+.checkpoint-quick-add-modal .cp-qa-bar:focus-within {
+	border-color: var(--cp-accent);
+	box-shadow: 0 0 0 4px var(--cp-accent-soft);
+}
+
+.checkpoint-view .cp-qa-lead,
+.checkpoint-quick-add-modal .cp-qa-lead {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-qa-lead svg,
+.checkpoint-quick-add-modal .cp-qa-lead svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* The highlight layer and the input share one box and one set of metrics. */
+.checkpoint-view .cp-qa-bar .cp-qa-input-wrap,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input-wrap {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	border-radius: 0;
+	background: transparent;
+	font-size: var(--cp-font);
+}
+
+.checkpoint-view .cp-qa-bar .cp-qa-mirror,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-mirror {
+	padding: 0;
+	border: 0;
+	font-family: inherit;
+	line-height: normal;
+}
+
+.checkpoint-view .cp-qa-bar .cp-qa-input,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input,
+.checkpoint-view .cp-qa-bar .cp-qa-input:hover,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input:hover,
+.checkpoint-view .cp-qa-bar .cp-qa-input:focus,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input:focus,
+.checkpoint-view .cp-qa-bar .cp-qa-input:focus-visible,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input:focus-visible {
+	height: 100%;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	background: transparent;
+	outline: none;
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: inherit;
+	line-height: normal;
+}
+
+.checkpoint-view .cp-qa-bar .cp-qa-input::placeholder,
+.checkpoint-quick-add-modal .cp-qa-bar .cp-qa-input::placeholder {
+	color: var(--text-faint);
+}
+
+/* Inline tokens: only the background shows; the text is drawn by the input above. */
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-date,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-date { background: var(--cp-blue-soft); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-dur,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-dur { background: var(--background-modifier-hover); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-cat,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-cat { background: var(--cp-accent-soft); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-tag,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-tag { background: var(--cp-cyan-soft); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-pri-1,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-pri-1 { background: var(--cp-red-soft); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-pri-2,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-pri-2 { background: var(--cp-yellow-soft); }
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-pri-3,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-pri-3 { background: var(--cp-blue-soft); }
+
+/* Tools: 40 px visible, a 44 px hit area. */
+.checkpoint-view .cp-qa-tool,
+.checkpoint-quick-add-modal .cp-qa-tool {
+	position: relative;
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 10px;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-qa-tool::before,
+.checkpoint-quick-add-modal .cp-qa-tool::before {
+	content: "";
+	position: absolute;
+	inset: -2px;
+}
+
+.checkpoint-view .cp-qa-tool svg,
+.checkpoint-quick-add-modal .cp-qa-tool svg {
+	width: 20px;
+	height: 20px;
+}
+
+.checkpoint-view .cp-qa-tool:hover,
+.checkpoint-quick-add-modal .cp-qa-tool:hover,
+.checkpoint-view .cp-qa-tool.is-on,
+.checkpoint-quick-add-modal .cp-qa-tool.is-on {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-qa-tool:focus-visible,
+.checkpoint-quick-add-modal .cp-qa-tool:focus-visible,
+.checkpoint-view .cp-pop button:focus-visible,
+.checkpoint-quick-add-modal .cp-pop button:focus-visible,
+.checkpoint-view .cp-pop input:focus-visible,
+.checkpoint-quick-add-modal .cp-pop input:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+/* -- Chips as pills (parsed) and manual pills (picked in a popover) ----------------- */
+
+.checkpoint-view .cp-qa-chips,
+.checkpoint-quick-add-modal .cp-qa-chips {
+	gap: 8px;
+	margin-top: 2px;
+}
+
+.checkpoint-view .cp-qa-chip,
+.checkpoint-quick-add-modal .cp-qa-chip,
+.checkpoint-view .cp-qa-manual,
+.checkpoint-quick-add-modal .cp-qa-manual {
+	gap: 6px;
+	min-height: 30px;
+	padding-left: 10px;
+	border-radius: 999px;
+	box-sizing: border-box;
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-qa-manual,
+.checkpoint-quick-add-modal .cp-qa-manual {
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid transparent;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-qa-chip-icon,
+.checkpoint-quick-add-modal .cp-qa-chip-icon {
+	flex: 0 0 auto;
+}
+
+.checkpoint-view .cp-qa-chip-icon svg,
+.checkpoint-quick-add-modal .cp-qa-chip-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.checkpoint-view .cp-qa-chip-main,
+.checkpoint-quick-add-modal .cp-qa-chip-main {
+	align-items: center;
+}
+
+.checkpoint-view .cp-qa-chip-remove,
+.checkpoint-quick-add-modal .cp-qa-chip-remove,
+.checkpoint-view .cp-qa-manual-remove,
+.checkpoint-quick-add-modal .cp-qa-manual-remove {
+	width: 24px;
+	height: 24px;
+	margin-right: 3px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	box-shadow: none;
+	background: transparent;
+	color: inherit;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-qa-chip-remove:hover,
+.checkpoint-quick-add-modal .cp-qa-chip-remove:hover,
+.checkpoint-view .cp-qa-manual-remove:hover,
+.checkpoint-quick-add-modal .cp-qa-manual-remove:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="scheduled"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="scheduled"],
+.checkpoint-view .cp-qa-manual[data-kind="scheduled"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="scheduled"] {
+	border-color: transparent;
+	background: var(--cp-blue-soft);
+	color: var(--cp-blue-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="deadline"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="deadline"],
+.checkpoint-view .cp-qa-manual[data-kind="deadline"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="deadline"] {
+	border-color: transparent;
+	background: var(--cp-orange-soft);
+	color: var(--cp-orange-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="duration"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="duration"],
+.checkpoint-view .cp-qa-manual[data-kind="duration"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="duration"] {
+	border-color: transparent;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="category"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="category"],
+.checkpoint-view .cp-qa-manual[data-kind="category"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="category"] {
+	border-color: transparent;
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="tag"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="tag"],
+.checkpoint-view .cp-qa-manual[data-kind="tag"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="tag"] {
+	border-color: transparent;
+	background: var(--cp-cyan-soft);
+	color: var(--cp-cyan-text);
+}
+
+.checkpoint-view .cp-qa-manual[data-kind="quadrant"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="quadrant"] {
+	background: var(--cp-purple-soft);
+	color: var(--cp-purple-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="priority"][data-priority="1"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="priority"][data-priority="1"],
+.checkpoint-view .cp-qa-manual[data-kind="priority"][data-priority="1"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="priority"][data-priority="1"] {
+	border-color: transparent;
+	background: var(--cp-red-soft);
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="priority"][data-priority="2"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="priority"][data-priority="2"],
+.checkpoint-view .cp-qa-manual[data-kind="priority"][data-priority="2"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="priority"][data-priority="2"] {
+	border-color: transparent;
+	background: var(--cp-yellow-soft);
+	color: var(--cp-yellow-text);
+}
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="priority"][data-priority="3"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="priority"][data-priority="3"],
+.checkpoint-view .cp-qa-manual[data-kind="priority"][data-priority="3"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="priority"][data-priority="3"] {
+	border-color: transparent;
+	background: var(--cp-blue-soft);
+	color: var(--cp-blue-text);
+}
+
+/* A priority flag is filled. */
+.checkpoint-view .cp-qa-chip[data-kind="priority"] .cp-qa-chip-icon svg,
+.checkpoint-quick-add-modal .cp-qa-chip[data-kind="priority"] .cp-qa-chip-icon svg,
+.checkpoint-view .cp-qa-manual[data-kind="priority"] .cp-qa-chip-icon svg,
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="priority"] .cp-qa-chip-icon svg {
+	fill: currentColor;
+}
+
+.checkpoint-view .cp-qa-chip-main:focus-visible,
+.checkpoint-quick-add-modal .cp-qa-chip-main:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+	border-radius: 999px;
+}
+
+/* -- Popovers: inside the container, under the bar, right-aligned --------------------- */
+
+.checkpoint-view .cp-pop,
+.checkpoint-quick-add-modal .cp-pop {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 5;
+	box-sizing: border-box;
+	max-width: 100%;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--cp-pop-radius);
+	background: var(--background-secondary);
+	box-shadow: var(--cp-popover-shadow);
+	color: var(--text-normal);
+	font-size: 14px;
+	/* The script sets --cp-pop-max from the space below the bar (popoverFit.ts); 480 px otherwise. */
+	max-height: min(480px, var(--cp-pop-max, 480px));
+}
+
+/* Not enough room below the bar: open above it. */
+.checkpoint-view .cp-pop.is-above,
+.checkpoint-quick-add-modal .cp-pop.is-above {
+	top: auto;
+	bottom: calc(100% + 8px);
+}
+
+/* The date popover scrolls its body; Clear / OK are a footer that never scrolls away. */
+.checkpoint-view .cp-date-pop,
+.checkpoint-quick-add-modal .cp-date-pop {
+	display: flex;
+	flex-direction: column;
+	width: 336px;
+}
+
+.checkpoint-view .cp-pop-body,
+.checkpoint-quick-add-modal .cp-pop-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 16px 16px 0;
+	overflow-y: auto;
+}
+
+.checkpoint-view .cp-more-pop,
+.checkpoint-quick-add-modal .cp-more-pop {
+	width: 290px;
+	padding: 8px;
+	overflow-y: auto;
+}
+
+/* Obsidian styles every <button>; the popover's buttons start from nothing. */
+.checkpoint-view .cp-pop button,
+.checkpoint-quick-add-modal .cp-pop button {
+	height: auto;
+	padding: 0;
+	border: 0;
+	box-shadow: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-pop-grow,
+.checkpoint-quick-add-modal .cp-pop-grow {
+	flex: 1 1 auto;
+}
+
+/* Date / Duration tabs */
+.checkpoint-view .cp-seg,
+.checkpoint-quick-add-modal .cp-seg {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-bottom: 14px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-seg-tab,
+.checkpoint-quick-add-modal .cp-pop .cp-seg-tab {
+	position: relative;
+	height: 34px;
+	border-radius: 8px;
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+/* The visible tab stays 34 px; its hit area reaches 44 px. */
+.checkpoint-view .cp-pop .cp-seg-tab::after,
+.checkpoint-quick-add-modal .cp-pop .cp-seg-tab::after,
+.checkpoint-view .cp-pop .cp-cal-nav button::after,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-nav button::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: max(100%, var(--cp-hit));
+	height: max(100%, var(--cp-hit));
+	transform: translate(-50%, -50%);
+}
+
+.checkpoint-view .cp-pop .cp-seg-tab.is-on,
+.checkpoint-quick-add-modal .cp-pop .cp-seg-tab.is-on {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
+/* Quick picks */
+.checkpoint-view .cp-quick,
+.checkpoint-quick-add-modal .cp-quick {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
+	margin-bottom: 12px;
+}
+
+.checkpoint-view .cp-pop .cp-quick-btn,
+.checkpoint-quick-add-modal .cp-pop .cp-quick-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	min-height: var(--cp-hit);
+	padding: 8px 0;
+	border-radius: 10px;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-pop .cp-quick-btn:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-quick-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-quick-icon svg,
+.checkpoint-quick-add-modal .cp-quick-icon svg {
+	width: 22px;
+	height: 22px;
+}
+
+/* Month grid */
+.checkpoint-view .cp-cal-head,
+.checkpoint-quick-add-modal .cp-cal-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 4px 8px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-cal-nav,
+.checkpoint-quick-add-modal .cp-cal-nav {
+	display: flex;
+	gap: 2px;
+}
+
+.checkpoint-view .cp-pop .cp-cal-nav button,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-nav button {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 8px;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-pop .cp-cal-nav button:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-nav button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-cal,
+.checkpoint-quick-add-modal .cp-cal {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	gap: 2px;
+	text-align: center;
+}
+
+.checkpoint-view .cp-cal-wd,
+.checkpoint-quick-add-modal .cp-cal-wd {
+	padding: 6px 0;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-pop .cp-cal-day,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-day {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 36px;
+	border-radius: 10px;
+	font-size: 14px;
+}
+
+.checkpoint-view .cp-pop .cp-cal-day:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-day:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-cal-day.is-muted,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-day.is-muted {
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-pop .cp-cal-day.is-today,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-day.is-today {
+	color: var(--cp-accent-text);
+	font-weight: 700;
+}
+
+.checkpoint-view .cp-pop .cp-cal-day.is-picked,
+.checkpoint-quick-add-modal .cp-pop .cp-cal-day.is-picked {
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	font-weight: 700;
+}
+
+/* Time and Deadline rows, and the more menu's rows */
+.checkpoint-view .cp-pop-rows,
+.checkpoint-quick-add-modal .cp-pop-rows {
+	margin-top: 10px;
+}
+
+.checkpoint-view .cp-pop .cp-pop-row,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-row,
+.checkpoint-view .cp-pop .cp-pop-back,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-back,
+.checkpoint-view .cp-pop .cp-pop-choice,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-choice {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: var(--cp-menu-row);
+	padding: 0 6px;
+	border-radius: 10px;
+	font-size: 14px;
+	text-align: left;
+}
+
+.checkpoint-view .cp-pop .cp-pop-row:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-row:hover,
+.checkpoint-view .cp-pop .cp-pop-back:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-back:hover,
+.checkpoint-view .cp-pop .cp-pop-choice:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-choice:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-pop-row:disabled,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-row:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.checkpoint-view .cp-pop-row-icon svg,
+.checkpoint-quick-add-modal .cp-pop-row-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.checkpoint-view .cp-pop-val,
+.checkpoint-quick-add-modal .cp-pop-val {
+	color: var(--text-faint);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-pop-chevron,
+.checkpoint-quick-add-modal .cp-pop-chevron {
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-pop-edit,
+.checkpoint-quick-add-modal .cp-pop-edit {
+	padding: 0 6px 8px;
+}
+
+.checkpoint-view .cp-pop-edit input,
+.checkpoint-quick-add-modal .cp-pop-edit input {
+	width: 100%;
+}
+
+.checkpoint-view .cp-pop-choice.is-on,
+.checkpoint-quick-add-modal .cp-pop-choice.is-on {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-pop-back,
+.checkpoint-quick-add-modal .cp-pop-back {
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-pop-empty,
+.checkpoint-quick-add-modal .cp-pop-empty {
+	margin: 0;
+	padding: 8px 10px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-pop-sep,
+.checkpoint-quick-add-modal .cp-pop-sep {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-pop-label,
+.checkpoint-quick-add-modal .cp-pop-label {
+	padding: 6px 10px 2px;
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	letter-spacing: var(--cp-label-spacing);
+	text-transform: uppercase;
+}
+
+/* Priority flags */
+.checkpoint-view .cp-pri-flags,
+.checkpoint-quick-add-modal .cp-pri-flags {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
+	padding: 4px 6px 10px;
+}
+
+.checkpoint-view .cp-pop .cp-pri-flag,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: var(--cp-menu-row);
+	border-radius: 10px;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-pop .cp-pri-flag:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-pri-flag.cp-flag-1,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag.cp-flag-1 { color: var(--cp-red); }
+.checkpoint-view .cp-pop .cp-pri-flag.cp-flag-2,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag.cp-flag-2 { color: var(--cp-yellow); }
+.checkpoint-view .cp-pop .cp-pri-flag.cp-flag-3,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag.cp-flag-3 { color: var(--cp-blue); }
+
+.checkpoint-view .cp-pri-flag svg,
+.checkpoint-quick-add-modal .cp-pri-flag svg {
+	width: 22px;
+	height: 22px;
+}
+
+.checkpoint-view .cp-pri-flag.cp-flag-1 svg,
+.checkpoint-quick-add-modal .cp-pri-flag.cp-flag-1 svg,
+.checkpoint-view .cp-pri-flag.cp-flag-2 svg,
+.checkpoint-quick-add-modal .cp-pri-flag.cp-flag-2 svg,
+.checkpoint-view .cp-pri-flag.cp-flag-3 svg,
+.checkpoint-quick-add-modal .cp-pri-flag.cp-flag-3 svg {
+	fill: currentColor;
+}
+
+.checkpoint-view .cp-pop .cp-pri-flag.is-on,
+.checkpoint-quick-add-modal .cp-pop .cp-pri-flag.is-on {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 0 0 0 1.5px var(--background-modifier-border);
+}
+
+/* Duration tab */
+.checkpoint-view .cp-dur-presets,
+.checkpoint-quick-add-modal .cp-dur-presets {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.checkpoint-view .cp-pop .cp-dur-btn,
+.checkpoint-quick-add-modal .cp-pop .cp-dur-btn {
+	height: var(--cp-hit);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-pop .cp-dur-btn:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-dur-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-dur-btn.is-on,
+.checkpoint-quick-add-modal .cp-pop .cp-dur-btn.is-on {
+	border-color: var(--cp-accent);
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-dur-custom,
+.checkpoint-quick-add-modal .cp-dur-custom {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 12px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-dur-custom input,
+.checkpoint-quick-add-modal .cp-dur-custom input {
+	width: 100%;
+}
+
+/* Clear / OK */
+.checkpoint-view .cp-pbtns,
+.checkpoint-quick-add-modal .cp-pbtns {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	flex: 0 0 auto;
+	padding: 12px 16px 16px;
+}
+
+.checkpoint-view .cp-pop .cp-pop-clear,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-clear,
+.checkpoint-view .cp-pop .cp-pop-ok,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-ok {
+	height: var(--cp-hit);
+	min-height: var(--cp-hit);
+	border-radius: 10px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-pop .cp-pop-clear,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-clear {
+	border: 1px solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-pop .cp-pop-clear:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-clear:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-pop-ok,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-ok {
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+}
+
+/* The modal keeps the manual fields behind a disclosure. */
+.checkpoint-quick-add-modal .cp-quick-add-all > summary {
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+/* Touch screens: the day cells and month buttons reach 44 px. */
+@media (pointer: coarse) {
+	.checkpoint-view .cp-pop .cp-cal-day,
+	.checkpoint-quick-add-modal .cp-pop .cp-cal-day { height: var(--cp-hit); }
+	.checkpoint-view .cp-pop .cp-cal-nav button,
+	.checkpoint-quick-add-modal .cp-pop .cp-cal-nav button { width: var(--cp-hit); height: var(--cp-hit); }
+	.checkpoint-view .cp-pop .cp-seg-tab,
+	.checkpoint-quick-add-modal .cp-pop .cp-seg-tab { height: var(--cp-hit); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.checkpoint-view .cp-qa-bar,
+	.checkpoint-quick-add-modal .cp-qa-bar { transition: none; }
+}
+
+/* == end U1-B == */
+
+/* -- Import preview ------------------------------------------------------------- */
+
+.checkpoint-import .checkpoint-import-notice {
+	color: var(--text-warning);
+}
+
+.checkpoint-import .checkpoint-import-counts td {
+	padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) 0;
+}
+
+/* == M3 calendar == */
+
+/* The calendar section. Theme variables only; the hour height is the one place the
+   grid's geometry is set (HOUR_PX in src/ui/calendar/geometry.ts must match). Blocks are placed
+   by custom properties the component sets from layoutWeek: --cp-start and --cp-len in minutes,
+   --cp-col and --cp-cols for overlaps. */
+
+.checkpoint-view .cp-calendar {
+	--cp-cal-hour: 48px;
+	--cp-cal-gutter: 56px;
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	position: relative;
+}
+
+.checkpoint-view .cp-cal-main {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	padding: 28px var(--size-4-8) calc(var(--size-4-4) + var(--cp-status-bar-room));
+}
+
+.checkpoint-view .cp-cal-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* -- Header ---------------------------------------------------------------- */
+
+.checkpoint-view .cp-cal-header {
+	margin-bottom: var(--size-4-3);
+}
+
+.checkpoint-view .cp-cal-nav {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.checkpoint-view .cp-cal-mode {
+	display: inline-flex;
+	margin-left: auto;
+	padding: 3px;
+	gap: 2px;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+}
+
+/* Text buttons: 40 px tall, with a 44 px hit area like the icon buttons. */
+.checkpoint-view .cp-cal-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 40px;
+	padding: 0 12px;
+	border: none;
+	box-shadow: none;
+	border-radius: var(--cp-rail-radius);
+	background: none;
+	color: var(--text-muted);
+	font-size: 14px;
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-cal-btn::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: max(100%, var(--cp-hit));
+	height: max(100%, var(--cp-hit));
+	transform: translate(-50%, -50%);
+}
+
+.checkpoint-view .cp-cal-btn:hover {
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-cal-mode-btn {
+	height: 34px;
+	border-radius: 8px;
+}
+
+.checkpoint-view .cp-cal-mode-btn.is-on,
+.checkpoint-view .cp-cal-mode-btn.is-on:hover {
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-cal-unscheduled-toggle.is-on,
+.checkpoint-view .cp-cal-unscheduled-toggle.is-on:hover {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-cal-btn .cp-icon svg {
+	width: var(--cp-meta-icon);
+	height: var(--cp-meta-icon);
+}
+
+.checkpoint-view .cp-cal-btn:focus-visible,
+.checkpoint-view .cp-cal-daynum:focus-visible,
+.checkpoint-view .cp-cal-allday-more:focus-visible,
+.checkpoint-view .cp-cal-allday-less:focus-visible,
+.checkpoint-view .cp-cal-more:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+/* -- Entries: blocks, all-day pills, deadline pills, month titles ------------ */
+
+.checkpoint-view .cp-cal-entry {
+	--cp-cal-bg: var(--cp-hue-soft, var(--cp-accent-soft));
+	position: relative;
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-left: 3px solid var(--cp-hue, var(--cp-accent));
+	border-radius: 6px;
+	box-shadow: none;
+	background: var(--cp-cal-bg);
+	color: var(--text-normal);
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.25;
+	text-align: left;
+	cursor: pointer;
+}
+
+/* Obsidian's own button hover would repaint the fill; keep the entry's own. */
+.checkpoint-view .cp-cal-entry:hover,
+.checkpoint-view .cp-cal-entry:active {
+	background: var(--cp-cal-bg);
+	box-shadow: none;
+}
+
+.checkpoint-view .cp-cal-entry:hover .cp-cal-entry-body {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-cal-entry:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: -2px;
+	z-index: 3;
+}
+
+.checkpoint-view .cp-cal-entry-body {
+	display: flex;
+	flex-wrap: wrap;
+	align-content: flex-start;
+	align-items: center;
+	gap: 0 6px;
+	box-sizing: border-box;
+	height: 100%;
+	padding: 2px 6px;
+	overflow: hidden;
+	border-radius: 0 5px 5px 0;
+}
+
+.checkpoint-view .cp-cal-entry-text {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-cal-entry-time,
+.checkpoint-view .cp-cal-noduration {
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-cal-noduration {
+	color: var(--text-faint);
+}
+
+/* A timed block: positioned in its day column by minutes (wall-clock rows). */
+.checkpoint-view .cp-cal-daycol > .cp-cal-entry.is-block {
+	position: absolute;
+	top: calc(var(--cp-cal-hour) * var(--cp-start) / 60);
+	height: calc(var(--cp-cal-hour) * var(--cp-len) / 60 - 2px);
+	/* A 5 to 15 minute block would be a sliver: keep it clickable with a visible focus ring. */
+	min-height: 20px;
+	left: calc(100% * var(--cp-col) / var(--cp-cols) + 1px);
+	width: calc(100% / var(--cp-cols) - 2px);
+	z-index: 1;
+}
+
+/* A short block (under 45 visible minutes) is one line: a fixed one-line body, so a time that does
+   not fit after the title wraps below the box and is hidden whole, never cut mid-glyph. The title
+   ellipsizes first; the time follows only if it fits. The body is one line tall, so the hover tint
+   moves to the block itself. */
+.checkpoint-view .cp-cal-entry.is-short .cp-cal-entry-body {
+	flex-wrap: wrap;
+	align-content: flex-start;
+	height: 1.25em;
+	margin-top: 2px;
+	padding-top: 0;
+	padding-bottom: 0;
+	overflow: hidden;
+}
+
+.checkpoint-view .cp-cal-entry.is-short:hover {
+	background: linear-gradient(var(--background-modifier-hover), var(--background-modifier-hover)), var(--cp-cal-bg);
+}
+
+.checkpoint-view .cp-cal-entry.is-short:hover .cp-cal-entry-body {
+	background: none;
+}
+
+/* No duration. */
+.checkpoint-view .cp-cal-entry.is-noduration {
+	border: 1px dashed var(--cp-hue, var(--cp-accent));
+	border-left: 3px dashed var(--cp-hue, var(--cp-accent));
+}
+
+/* Deadline: an outline pill with the flag, unlike the filled schedule entries. */
+.checkpoint-view .cp-cal-entry.is-deadline {
+	--cp-cal-bg: transparent;
+	border: 1px solid var(--cp-hue, var(--cp-accent));
+	border-radius: 999px;
+}
+
+.checkpoint-view .cp-cal-entry.is-deadline .cp-cal-entry-body {
+	flex-wrap: nowrap;
+	gap: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+}
+
+.checkpoint-view .cp-cal-entry.is-deadline .cp-icon svg {
+	width: 12px;
+	height: 12px;
+	flex: 0 0 auto;
+}
+
+/* Past open entries: muted with the overdue (red) accent. A missed deadline is red. */
+.checkpoint-view .cp-cal-entry.is-past {
+	--cp-cal-bg: var(--cp-red-soft);
+	border-left-color: var(--cp-red);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-cal-entry.is-noduration.is-past {
+	border-color: var(--cp-red);
+}
+
+.checkpoint-view .cp-cal-entry.is-missed {
+	--cp-cal-bg: var(--cp-red-soft);
+	border-color: var(--cp-red);
+	color: var(--cp-red-text);
+}
+
+/* Completed (status "all"): faint and struck through. */
+.checkpoint-view .cp-cal-entry.is-completed {
+	opacity: 0.55;
+	text-decoration: line-through;
+}
+
+.checkpoint-view .cp-cal-entry.is-completed .cp-cal-entry-text {
+	text-decoration: line-through;
+}
+
+.checkpoint-view .cp-cal-entry.is-selected {
+	--cp-cal-bg: var(--cp-accent-soft);
+	outline: 1.5px solid var(--cp-accent);
+	outline-offset: -1px;
+}
+
+/* -- Week view --------------------------------------------------------------- */
+
+.checkpoint-view .cp-cal-week,
+.checkpoint-view .cp-cal-month {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--cp-row-radius);
+}
+
+/* The only scroller of the week: vertical for the hours, horizontal when the pane is narrow. */
+.checkpoint-view .cp-cal-scroller {
+	flex: 1 1 auto;
+	min-height: 0;
+	position: relative;
+	overflow: auto;
+}
+
+.checkpoint-view .cp-cal-week-inner {
+	min-width: 560px;
+}
+
+/* The day header and the all-day row stay put while the hours scroll. */
+.checkpoint-view .cp-cal-sticky {
+	position: sticky;
+	top: 0;
+	z-index: 4;
+	background: var(--background-primary);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-cal-head-row,
+.checkpoint-view .cp-cal-allday,
+.checkpoint-view .cp-cal-body {
+	display: grid;
+	grid-template-columns: var(--cp-cal-gutter) repeat(7, minmax(0, 1fr));
+}
+
+.checkpoint-view .cp-cal-dayhead {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 8px 0 6px;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-cal-dow {
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-cal-dom {
+	min-width: 32px;
+	height: 32px;
+	line-height: 32px;
+	border-radius: 999px;
+	text-align: center;
+	color: var(--text-normal);
+	font-size: 18px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Today is blue (design: color semantics). */
+.checkpoint-view .cp-cal-dayhead.is-today .cp-cal-dow {
+	color: var(--cp-blue-text);
+}
+
+.checkpoint-view .cp-cal-dayhead.is-today .cp-cal-dom {
+	background: var(--cp-blue-soft);
+	color: var(--cp-blue-text);
+}
+
+.checkpoint-view .cp-cal-allday {
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-cal-gutter-cell {
+	padding: 6px 8px 0 0;
+	text-align: right;
+	color: var(--text-faint);
+	font-size: 11px;
+}
+
+.checkpoint-view .cp-cal-allday-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	min-height: 32px;
+	padding: 3px 2px;
+	box-sizing: border-box;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-cal-gutter {
+	min-width: 0;
+}
+
+.checkpoint-view .cp-cal-hour-label {
+	position: relative;
+	top: -0.55em;
+	box-sizing: border-box;
+	height: var(--cp-cal-hour);
+	padding-right: 8px;
+	line-height: 1;
+	text-align: right;
+	color: var(--text-faint);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-cal-hour-label:first-child {
+	top: 2px;
+}
+
+.checkpoint-view .cp-cal-daycol {
+	position: relative;
+	min-width: 0;
+	height: calc(var(--cp-cal-hour) * 24);
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	background-image: linear-gradient(to bottom, var(--background-modifier-border) 1px, transparent 1px);
+	background-size: 100% var(--cp-cal-hour);
+}
+
+.checkpoint-view .cp-cal-daycol.is-today {
+	background-color: color-mix(in srgb, var(--cp-blue-soft) 35%, transparent);
+}
+
+/* A DST day keeps 24 rows. The skipped hour is hatched; the repeated hour is marked x2. */
+.checkpoint-view .cp-cal-skipped,
+.checkpoint-view .cp-cal-repeated {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(var(--cp-cal-hour) * var(--cp-start) / 60);
+	height: calc(var(--cp-cal-hour) * var(--cp-len) / 60);
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-cal-skipped {
+	background-color: var(--background-secondary);
+	background-image: repeating-linear-gradient(135deg, var(--background-modifier-border) 0, var(--background-modifier-border) 1px, transparent 1px, transparent 6px);
+}
+
+.checkpoint-view .cp-cal-repeated {
+	background: var(--background-modifier-hover);
+	border-top: 1px dashed var(--text-faint);
+	border-bottom: 1px dashed var(--text-faint);
+}
+
+.checkpoint-view .cp-cal-repeated-mark {
+	position: absolute;
+	top: 2px;
+	right: 4px;
+	color: var(--text-muted);
+	font-size: 11px;
+	font-weight: var(--font-semibold);
+}
+
+/* The current-time line in today's column. */
+.checkpoint-view .cp-cal-now {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(var(--cp-cal-hour) * var(--cp-start) / 60);
+	height: 0;
+	border-top: 2px solid var(--cp-red);
+	z-index: 2;
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-cal-now::before {
+	content: "";
+	position: absolute;
+	left: -5px;
+	top: -6px;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--cp-red);
+}
+
+/* -- Month view ------------------------------------------------------------- */
+
+.checkpoint-view .cp-cal-month-head,
+.checkpoint-view .cp-cal-month-row {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.checkpoint-view .cp-cal-month-head {
+	padding: 8px 0;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	text-align: center;
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-cal-month-grid {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+}
+
+.checkpoint-view .cp-cal-month-row {
+	flex: 1 0 104px;
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-cal-month-row:first-child {
+	border-top: none;
+}
+
+.checkpoint-view .cp-cal-cell {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	box-sizing: border-box;
+	padding: 4px;
+	overflow: hidden;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-cal-cell:first-child {
+	border-left: none;
+}
+
+/* Days outside the month are faint. */
+.checkpoint-view .cp-cal-cell.is-out {
+	background: var(--background-secondary);
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-cal-cell.is-out .cp-cal-daynum {
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-cal-cell.is-out .cp-cal-entry {
+	opacity: 0.6;
+}
+
+.checkpoint-view .cp-cal-cell-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px;
+}
+
+.checkpoint-view .cp-cal-daynum {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	height: 28px;
+	padding: 0 4px;
+	border: none;
+	box-shadow: none;
+	border-radius: 999px;
+	background: none;
+	color: var(--text-normal);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-cal-daynum:hover {
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+.checkpoint-view .cp-cal-cell.is-today .cp-cal-daynum {
+	background: var(--cp-blue-soft);
+	color: var(--cp-blue-text);
+}
+
+.checkpoint-view .cp-cal-count {
+	color: var(--text-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-cal-cell-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.checkpoint-view .cp-cal-cell-list li {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+}
+
+.checkpoint-view .cp-cal-entry.is-month .cp-cal-entry-body {
+	flex-wrap: nowrap;
+	padding: 1px 6px;
+}
+
+.checkpoint-view .cp-cal-more {
+	align-self: flex-start;
+	height: auto;
+	padding: 0 6px;
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: var(--text-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-cal-more:hover {
+	background: none;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-decoration: underline;
+}
+
+/* The week's all-day row shows three entries per day, then "+k more" (expands the whole row) and,
+   while expanded, "Show less". Styled like the month's "+k more". */
+.checkpoint-view .cp-cal-allday-more,
+.checkpoint-view .cp-cal-allday-less {
+	align-self: flex-start;
+	height: auto;
+	padding: 2px 6px;
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: var(--text-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-cal-allday-more:hover,
+.checkpoint-view .cp-cal-allday-less:hover {
+	background: none;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-decoration: underline;
+}
+
+/* -- Unscheduled drawer ---------------------------------------------------- */
+
+.checkpoint-view .cp-cal-unscheduled {
+	flex: 0 0 300px;
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding: var(--size-4-3) var(--size-4-3) calc(var(--size-4-4) + var(--cp-status-bar-room));
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-cal-unscheduled-title {
+	margin: 0;
+	padding: var(--size-4-1) var(--size-4-2) var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	letter-spacing: var(--cp-label-spacing);
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-cal-unscheduled-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+}
+
+/* Below 1200 px both drawers float over the grid. They start under the header (the component sets
+   --cp-cal-drawer-top from the header's bottom edge), so the Unscheduled toggle and the other header
+   controls stay reachable. The details drawer wins the same spot: while it is open the unscheduled
+   one is hidden (it stays open in the state and returns when the details close). */
+@container cp-app (max-width: 1200px) {
+	.checkpoint-view .cp-cal-unscheduled {
+		position: absolute;
+		top: var(--cp-cal-drawer-top, 0px);
+		right: 0;
+		bottom: 0;
+		width: min(320px, 92%);
+		z-index: var(--layer-popover);
+		box-shadow: var(--cp-popover-shadow);
+	}
+
+	.checkpoint-view .cp-calendar .cp-details-pane {
+		top: var(--cp-cal-drawer-top, 0px);
+	}
+
+	.checkpoint-view .cp-calendar.has-details .cp-cal-unscheduled {
+		display: none;
+	}
+}
+
+/* Under 800 px the week keeps its 7 columns and scrolls sideways inside the grid; the month keeps
+   7 columns with truncated titles. */
+@container cp-app (max-width: 800px) {
+	.checkpoint-view .cp-cal-main {
+		padding: var(--size-4-4) var(--size-4-4) calc(var(--size-4-3) + var(--cp-status-bar-room));
+	}
+
+	.checkpoint-view .cp-cal-week-inner {
+		min-width: 720px;
+	}
+
+	.checkpoint-view .cp-cal-mode {
+		margin-left: 0;
+	}
+
+	.checkpoint-view .cp-cal-cell {
+		padding: 2px;
+	}
+
+	.checkpoint-view .cp-cal-entry.is-month .cp-cal-entry-time {
+		display: none;
+	}
+}
+
+/* Touch screens: the month's day numbers reach 44 px. */
+@media (pointer: coarse) {
+	.checkpoint-view .cp-cal-daynum {
+		min-width: var(--cp-hit);
+		height: var(--cp-hit);
+	}
+}
+
+/* == end M3 calendar == */
+
+/* == M4 matrix == */
+
+/* The Eisenhower matrix section. A 2x2 grid that fills the section with 16 px gaps;
+   each quadrant scrolls by itself. Theme variables only; the quadrant colors are --cp-q1..q4. */
+
+.checkpoint-view .cp-matrix {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	position: relative;
+}
+
+.checkpoint-view .cp-matrix-main {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	padding: 28px var(--size-4-8) calc(var(--size-4-4) + var(--cp-status-bar-room));
+}
+
+.checkpoint-view .cp-matrix-header {
+	align-items: flex-start;
+	margin-bottom: var(--size-4-3);
+}
+
+/* The ⋯ view menu sits right of the title; the header wraps when there is no room. */
+.checkpoint-view .cp-matrix-header {
+	align-items: center;
+}
+
+.checkpoint-view .cp-matrix-header .cp-view-menu-button {
+	margin-left: auto;
+}
+
+/* The Completed group in a quadrant looks like the other group labels. */
+.checkpoint-view .cp-matrix-group.is-completed .cp-completed-toggle {
+	min-height: 28px;
+	padding: 8px 2px 4px;
+	font-size: 12px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-matrix-grid {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-rows: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.checkpoint-view .cp-matrix-q {
+	--cp-q: var(--cp-q4);
+	--cp-q-soft: var(--cp-q4-soft);
+	--cp-q-text: var(--cp-q4-text);
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 16px 18px;
+	overflow: hidden;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 16px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-matrix-q.cp-q1 { --cp-q: var(--cp-q1); --cp-q-soft: var(--cp-q1-soft); --cp-q-text: var(--cp-q1-text); }
+.checkpoint-view .cp-matrix-q.cp-q2 { --cp-q: var(--cp-q2); --cp-q-soft: var(--cp-q2-soft); --cp-q-text: var(--cp-q2-text); }
+.checkpoint-view .cp-matrix-q.cp-q3 { --cp-q: var(--cp-q3); --cp-q-soft: var(--cp-q3-soft); --cp-q-text: var(--cp-q3-text); }
+.checkpoint-view .cp-matrix-q.cp-q4 { --cp-q: var(--cp-q4); --cp-q-soft: var(--cp-q4-soft); --cp-q-text: var(--cp-q4-text); }
+
+.checkpoint-view .cp-matrix-q.is-drop-target {
+	border-color: var(--cp-q);
+	background: var(--cp-q-soft);
+}
+
+.checkpoint-view .cp-matrix-q-head {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 6px;
+}
+
+/* The badge is a solid fill in the matrix (the shared .cp-q-badge is a soft chip). */
+.checkpoint-view .cp-matrix-q .cp-q-badge {
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	background: var(--cp-q);
+	color: var(--text-on-accent);
+	font-size: 13px;
+	font-weight: 800;
+}
+
+.checkpoint-view .cp-matrix-q-title {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--cp-q-text);
+	font-size: 16px;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-matrix-q-sub {
+	flex: 0 1 auto;
+	color: var(--text-faint);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-matrix-q-add {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	margin-left: auto;
+	padding: 0;
+	border-radius: 9px;
+	box-shadow: none;
+	background: none;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-matrix-q-add:hover {
+	background: var(--background-modifier-hover);
+	box-shadow: none;
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-matrix-q-body {
+	/* A size container with the list column's name: the row meta thins out with the quadrant's width
+	   by the same @container cp-list rules as in the lists. */
+	container-type: inline-size;
+	container-name: cp-list;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+}
+
+.checkpoint-view .cp-matrix-q-empty {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	color: var(--text-faint);
+	font-size: 14px;
+}
+
+.checkpoint-view .cp-matrix-q-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.checkpoint-view .cp-matrix-group-label {
+	padding: 8px 2px 4px;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-matrix-group-label.is-overdue {
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-matrix-group-label.is-today {
+	color: var(--cp-blue-text);
+}
+
+/* Cards are the shared rows, framed as cards. */
+.checkpoint-view .cp-matrix-q .cp-task-row {
+	height: 46px;
+	margin-bottom: 4px;
+	border-color: var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-primary);
+	cursor: grab;
+}
+
+.checkpoint-view .cp-matrix-q .cp-task-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-matrix-q .cp-task-row.is-selected {
+	background: var(--cp-accent-soft);
+	border-color: var(--cp-accent);
+}
+
+.checkpoint-view .cp-matrix-q .cp-task-row.is-subtask {
+	margin-left: 0;
+}
+
+/* Dragging: the card stays in place, dimmed; a clone follows the pointer over the whole grid. */
+.checkpoint-view .cp-matrix-grid.is-dragging-card {
+	cursor: grabbing;
+	user-select: none;
+}
+
+.checkpoint-view .cp-matrix-q .cp-task-row.is-dragging {
+	opacity: 0.4;
+	cursor: grabbing;
+}
+
+/* The ghost lives in the grid, outside .cp-matrix-q, so it carries the card look itself. */
+.checkpoint-view .cp-matrix-ghost {
+	position: absolute;
+	z-index: var(--layer-popover);
+	box-sizing: border-box;
+	height: 46px;
+	margin: 0;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-primary);
+	box-shadow: var(--cp-popover-shadow);
+	opacity: 1;
+	pointer-events: none;
+	cursor: grabbing;
+}
+
+/* Under 800 px the grid is one column; the section scrolls, each quadrant keeps a usable height. */
+@container cp-app (max-width: 800px) {
+	.checkpoint-view .cp-matrix-main {
+		padding: var(--size-4-4) var(--size-4-4) calc(var(--size-4-3) + var(--cp-status-bar-room));
+		overflow-y: auto;
+	}
+
+	.checkpoint-view .cp-matrix-grid {
+		flex: 0 0 auto;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: none;
+		grid-auto-rows: minmax(260px, auto);
+	}
+}
+
+/* == end M4 matrix == */
+
+/* == M4 drag == */
+
+/* Calendar drag and drop. Mouse and pen only; touch keeps scrolling.
+   Theme variables only. The ghost uses the block geometry (--cp-start and --cp-len in minutes). */
+
+/* The one-line hint the press gives: blocks and entries can be dragged. */
+.checkpoint-view .cp-calendar .cp-cal-entry:not(.is-deadline) {
+	cursor: grab;
+}
+
+.checkpoint-view .cp-calendar .cp-cal-entry.is-deadline {
+	cursor: pointer;
+}
+
+/* While a drag is active: no text selection, a grabbing cursor, no hover tints under the pointer. */
+.checkpoint-view .cp-calendar.is-dragging {
+	user-select: none;
+	cursor: grabbing;
+}
+
+.checkpoint-view .cp-calendar.is-dragging .cp-cal-entry:not(.is-deadline) {
+	cursor: grabbing;
+}
+
+/* The original stays in place, dimmed, so the move reads as a preview. */
+.checkpoint-view .cp-cal-entry.is-dragging {
+	opacity: 0.45;
+}
+
+/* Where a drop would land: the day column, the all-day cell or the month cell. */
+.checkpoint-view .cp-cal-daycol.is-drop-target,
+.checkpoint-view .cp-cal-allday-cell.is-drop-target,
+.checkpoint-view .cp-cal-cell.is-drop-target {
+	background-color: var(--cp-accent-soft);
+	box-shadow: inset 0 0 0 2px var(--cp-accent);
+}
+
+/* A drop that is not supported (a timed block on the all-day row, a date entry on the grid). */
+.checkpoint-view .cp-cal-daycol.is-drop-refused,
+.checkpoint-view .cp-cal-allday-cell.is-drop-refused {
+	background-color: var(--cp-red-soft);
+	box-shadow: inset 0 0 0 2px var(--cp-red);
+	cursor: not-allowed;
+}
+
+/* The target block: the slot a drop would use, with its time. */
+.checkpoint-view .cp-cal-ghost {
+	position: absolute;
+	left: 1px;
+	right: 1px;
+	top: calc(var(--cp-cal-hour) * var(--cp-start) / 60);
+	height: calc(var(--cp-cal-hour) * var(--cp-len) / 60 - 2px);
+	min-height: 20px;
+	box-sizing: border-box;
+	padding: 2px 6px;
+	overflow: hidden;
+	border: 2px dashed var(--cp-accent);
+	border-radius: 6px;
+	background: var(--cp-accent-soft);
+	color: var(--text-normal);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+	/* Under the sticky header (4), over the blocks (2). */
+	z-index: 3;
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-cal-ghost-time {
+	display: block;
+	white-space: nowrap;
+}
+
+/* The bottom edge of a timed block: an 8 px strip that shows a grip on hover and while resizing. */
+.checkpoint-view .cp-cal-entry .cp-cal-resize {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	/* A 15 or 30 minute block keeps room to grab the block itself. */
+	height: min(8px, 33%);
+	cursor: ns-resize;
+}
+
+.checkpoint-view .cp-cal-entry .cp-cal-resize::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 2px;
+	width: 20px;
+	height: 3px;
+	margin-left: -10px;
+	border-radius: 2px;
+	background: var(--text-muted);
+	opacity: 0;
+}
+
+.checkpoint-view .cp-cal-entry:hover .cp-cal-resize::after,
+.checkpoint-view .cp-calendar.is-dragging .cp-cal-entry.is-dragging .cp-cal-resize::after {
+	opacity: 0.6;
+}
+
+/* == end M4 drag == */
+
+/* == K1a list drag == */
+
+/* Dragging a row to reorder it: the row stays in place, dimmed, and a line shows where it will land. */
+.checkpoint-view .cp-task-list.is-reordering {
+	position: relative;
+	cursor: grabbing;
+	user-select: none;
+}
+
+.checkpoint-view .cp-task-list.is-reordering .cp-task-row {
+	cursor: grabbing;
+}
+
+.checkpoint-view .cp-task-list.is-reordering .cp-task-row.is-dragging {
+	opacity: 0.4;
+}
+
+.checkpoint-view .cp-reorder-line {
+	position: absolute;
+	z-index: var(--layer-popover);
+	height: 2px;
+	margin-top: -1px;
+	border-radius: 1px;
+	background: var(--interactive-accent);
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-reorder-line[hidden] {
+	display: none;
+}
+
+/* == end K1a list drag == */
+
+/* == Release B windowed lists == */
+
+/* Stands in for the rows of a long list or board column that are not drawn (src/ui/VirtualRows.tsx). Its
+   height is the rows' total, set on the element as a custom property; it draws nothing and takes no pointer. */
+.checkpoint-view .cp-virtual-spacer {
+	flex: none;
+	height: var(--cp-virtual-h, 0);
+	pointer-events: none;
+}
+
+/* == end Release B windowed lists == */
+
+/* == K1a board == */
+
+/* The List | Board switch in the list header: two buttons, the active one in the accent. */
+.checkpoint-view .cp-mode-switch {
+	display: inline-flex;
+	flex: 0 0 auto;
+	padding: 2px;
+	border-radius: var(--cp-rail-radius);
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-mode-button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	height: 36px;
+	padding: 0 var(--size-4-3);
+	border: none;
+	border-radius: calc(var(--cp-rail-radius) - 2px);
+	box-shadow: none;
+	background: none;
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-mode-button:hover {
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-mode-button.is-active {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-mode-button:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+/* In Board mode the list column stops scrolling as a whole: each board column scrolls by itself. */
+.checkpoint-view .cp-main.is-board {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.checkpoint-view .cp-board {
+	position: relative;
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.checkpoint-view .cp-board-scroll {
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	align-items: stretch;
+	gap: var(--size-4-4);
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: calc(var(--size-4-3) + var(--cp-status-bar-room));
+}
+
+.checkpoint-view .cp-board-col {
+	flex: 0 0 300px;
+	width: 300px;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	border-radius: var(--cp-row-radius);
+}
+
+.checkpoint-view .cp-board-col.is-drop-target {
+	background: var(--cp-accent-soft);
+	box-shadow: inset 0 0 0 2px var(--cp-accent);
+}
+
+.checkpoint-view .cp-board-col.is-refused {
+	background: var(--cp-red-soft);
+	box-shadow: inset 0 0 0 2px var(--cp-red);
+	cursor: not-allowed;
+}
+
+.checkpoint-view .cp-board-col-head {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	/* Same height with or without the "+" (Overdue has none), so column titles line up. */
+	box-sizing: border-box;
+	min-height: calc(32px + var(--size-4-2));
+	padding: 0 var(--size-4-1) var(--size-4-2) var(--size-4-2);
+}
+
+.checkpoint-view .cp-board-col-title {
+	flex: 0 1 auto;
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	color: var(--text-normal);
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-board-col.is-overdue .cp-board-col-title { color: var(--cp-red-text); }
+.checkpoint-view .cp-board-col.is-today .cp-board-col-title { color: var(--cp-blue-text); }
+.checkpoint-view .cp-board-col.is-tomorrow .cp-board-col-title { color: var(--cp-orange-text); }
+
+.checkpoint-view .cp-board-col-count {
+	flex: 1 1 auto;
+	color: var(--text-faint);
+	font-size: 13px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-board-col-head .cp-board-add {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--cp-rail-radius);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-board-col-head .cp-board-add:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-board-col-body {
+	flex: 1 1 0;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 2px var(--size-4-1) var(--size-4-3);
+}
+
+.checkpoint-view .cp-board-cards {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-view .cp-board-empty {
+	margin: var(--size-4-2) 0;
+	padding: var(--size-4-3) 0;
+	color: var(--text-faint);
+	font-size: 13px;
+	text-align: center;
+}
+
+/* A card: a rounded box with a border; the items inside carry the padding, so the whole box is clickable. */
+.checkpoint-view .cp-board-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--cp-row-radius);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-board-card.is-dragging,
+.checkpoint-view .cp-board-item.is-sub.is-dragging {
+	opacity: 0.4;
+	cursor: grabbing;
+}
+
+.checkpoint-view .cp-board-item {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	box-sizing: border-box;
+	padding: 10px var(--size-4-3);
+	border: 1.5px solid transparent;
+	border-radius: var(--cp-row-radius);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-board-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-board-item.is-selected {
+	border-color: var(--cp-accent);
+	background: var(--cp-accent-soft);
+}
+
+.checkpoint-view .cp-board-item:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: -2px;
+}
+
+.checkpoint-view .cp-board-line {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-width: 0;
+}
+
+.checkpoint-view .cp-board-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	line-height: 1.35;
+}
+
+.checkpoint-view .cp-board-item.is-completed .cp-board-title {
+	color: var(--text-faint);
+	text-decoration: line-through;
+}
+
+/* The meta line sits under the title, aligned with it (past the checkbox). */
+.checkpoint-view .cp-board-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-2-3) var(--size-4-2);
+	padding-left: 28px;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-board-meta > * {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-board-meta .cp-meta-date {
+	min-width: 0;
+	justify-content: flex-start;
+}
+
+.checkpoint-view .cp-board-meta .cp-meta-deadline.is-missed {
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-board-meta .cp-meta-list-name {
+	max-width: 14ch;
+}
+
+.checkpoint-view .cp-board-chevron {
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	margin-left: -6px;
+	padding: 0;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-board-chevron:focus-visible {
+	outline: 2px solid var(--cp-accent);
+}
+
+/* Nested subtasks: indented under the parent, each with its own checkbox and meta line. */
+.checkpoint-view .cp-board-subs {
+	display: flex;
+	flex-direction: column;
+	padding: 0 0 var(--size-2-3) var(--size-4-5);
+}
+
+.checkpoint-view .cp-board-item.is-sub {
+	padding-top: 6px;
+	padding-bottom: 6px;
+	font-size: 14px;
+}
+
+/* The completed group of a column sits below its cards. */
+.checkpoint-view .cp-board-completed {
+	margin-top: var(--size-4-3);
+}
+
+.checkpoint-view .cp-board-completed .cp-task-row {
+	height: auto;
+	min-height: 40px;
+}
+
+/* Where a drop would land: a line before the card, or at the end of the list. */
+.checkpoint-view .cp-board-item.is-drop-before::before,
+.checkpoint-view .cp-board-cards.is-drop-end::after,
+.checkpoint-view .cp-board-card.is-drop-end .cp-board-subs::after {
+	content: "";
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--cp-accent);
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-board-card > .cp-board-item.is-drop-before::before {
+	top: -6px;
+}
+
+.checkpoint-view .cp-board-subs .cp-board-item.is-drop-before::before {
+	top: -2px;
+}
+
+.checkpoint-view .cp-board-cards.is-drop-end::after {
+	bottom: -6px;
+}
+
+.checkpoint-view .cp-board-card.is-drop-end .cp-board-subs {
+	position: relative;
+}
+
+.checkpoint-view .cp-board-card.is-drop-end .cp-board-subs::after {
+	bottom: 0;
+}
+
+/* While a card is dragged: no text selection, a grabbing cursor. */
+.checkpoint-view .cp-board.is-dragging-card {
+	user-select: none;
+	cursor: grabbing;
+}
+
+/* The ghost lives in .cp-board, outside the columns, so it carries the card look itself. */
+.checkpoint-view .cp-board-ghost {
+	position: absolute;
+	z-index: var(--layer-popover);
+	box-sizing: border-box;
+	margin: 0;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--cp-row-radius);
+	background: var(--background-primary);
+	box-shadow: var(--cp-popover-shadow);
+	pointer-events: none;
+	cursor: grabbing;
+}
+
+.checkpoint-view .cp-board-ghost.cp-board-item {
+	background: var(--background-primary);
+}
+
+/* == end K1a board == */
+
+/* == K1b sections == */
+
+/* List view: a section heading is the Today-style heading with a collapse button, the count, "+" and ⋯. */
+.checkpoint-view .cp-group-heading.cp-section-heading {
+	padding-right: 0;
+	/* The details pane's older `.cp-section-heading` (uppercase label) must not leak into list headings. */
+	margin-bottom: 0;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: none;
+}
+
+.checkpoint-view .cp-section-toggle {
+	display: inline-flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	height: auto;
+	align-items: center;
+	/* Obsidian centers button content; a heading reads from the left like the Today headings. */
+	justify-content: flex-start;
+	gap: 8px;
+	padding: 0;
+	border: none;
+	box-shadow: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-section-toggle:focus-visible,
+.checkpoint-view .cp-section-name-input:focus-visible,
+.checkpoint-view .cp-board-add-section:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+.checkpoint-view .cp-section-heading .cp-icon-button {
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-section-heading .cp-icon-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* The inline section name field (list bottom and board column). */
+.checkpoint-view .cp-section-add-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-3);
+	padding: var(--size-4-2) 4px;
+}
+
+.checkpoint-view .cp-section-name-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.checkpoint-view .cp-section-name-input[aria-invalid="true"] {
+	border-color: var(--cp-red);
+}
+
+.checkpoint-view .cp-section-error {
+	margin: 0;
+	color: var(--cp-red-text);
+	font-size: 13px;
+}
+
+/* Board: the section column header menu, the dragged column and the faint "+ Add section" column. */
+.checkpoint-view .cp-board-col-head .cp-board-menu {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--cp-rail-radius);
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-board-col-head .cp-board-menu:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-board-col[data-section-id] .cp-board-col-head {
+	cursor: grab;
+}
+
+.checkpoint-view .cp-board-scroll.is-dragging-column,
+.checkpoint-view .cp-board-scroll.is-dragging-column .cp-board-col-head {
+	cursor: grabbing;
+	user-select: none;
+}
+
+.checkpoint-view .cp-board-col.is-dragging-column {
+	opacity: 0.4;
+}
+
+.checkpoint-view .cp-board-col.is-column-drop-before {
+	box-shadow: -4px 0 0 0 var(--cp-accent);
+}
+
+.checkpoint-view .cp-board-add-col {
+	flex: 0 0 300px;
+	width: 300px;
+	box-sizing: border-box;
+	padding-top: calc(32px + var(--size-4-2));
+}
+
+.checkpoint-view .cp-board-add-col.is-column-drop-end {
+	box-shadow: -4px 0 0 0 var(--cp-accent);
+}
+
+.checkpoint-view .cp-board-add-section {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-3);
+	border: 1.5px dashed var(--background-modifier-border);
+	border-radius: var(--cp-row-radius);
+	box-shadow: none;
+	background: none;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-board-add-section:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* The New list dialog reuses the icon picker's tokens and grid. */
+.checkpoint-new-list .cp-new-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-new-list .cp-new-list-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-new-list .cp-new-list-name {
+	width: 100%;
+}
+
+.checkpoint-new-list .cp-new-list-name[aria-invalid="true"] {
+	border-color: var(--color-red);
+}
+
+.checkpoint-new-list .cp-new-list-error {
+	margin: 0;
+	color: var(--color-red);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-new-list .cp-new-list-error[hidden] {
+	display: none;
+}
+
+.checkpoint-new-list .cp-icon-grid {
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.checkpoint-new-list .cp-icon-choice[aria-pressed="true"] {
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent);
+}
+
+.checkpoint-new-list .cp-color-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-new-list .cp-color-choice {
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 50%;
+	box-shadow: none;
+	background: var(--cp-swatch, var(--background-modifier-border));
+}
+
+.checkpoint-new-list .cp-color-choice.is-default {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border);
+}
+
+.checkpoint-new-list .cp-color-choice[aria-pressed="true"] {
+	border-color: var(--text-normal);
+	box-shadow: 0 0 0 2px var(--background-primary) inset;
+}
+
+.checkpoint-new-list .cp-color-choice:focus-visible,
+.checkpoint-new-list .cp-new-list-name:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+.checkpoint-new-list .cp-new-list-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+/* == end K1b sections == */
+
+/* == G1 group by == */
+/* The heading of a past date is red (the tone class is the Today/Upcoming one) and carries a small "overdue" label. */
+.checkpoint-view .cp-task-group > .cp-group-heading.is-overdue {
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-group-heading .cp-group-overdue {
+	padding: 1px 6px;
+	border: 1px solid var(--cp-red-text);
+	border-radius: var(--radius-s);
+	color: var(--cp-red-text);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0;
+	line-height: 1.3;
+}
+/* == end G1 group by == */
+
+/* == M5 focus == */
+/* The Focus section: one calm timer stage in the middle and a slim column (about 340 px)
+   with the overview and the focus record. The section is a size
+   container, so "one column below about 860 px" follows the pane width (with the sidebar and details
+   open) and not the window. */
+
+.checkpoint-view .cp-focus {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	position: relative;
+	container-type: inline-size;
+	container-name: cp-focus;
+	font-family: var(--font-interface);
+}
+
+.checkpoint-view .cp-focus-main {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+}
+
+.checkpoint-view .cp-focus-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 430px;
+	grid-template-rows: minmax(0, 1fr);
+}
+
+/* Wide: the stage and the column scroll on their own. */
+.checkpoint-view .cp-focus-timer,
+.checkpoint-view .cp-focus-insights {
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	box-sizing: border-box;
+	padding-bottom: var(--cp-status-bar-room);
+}
+
+.checkpoint-view .cp-focus-timer {
+	display: flex;
+	flex-direction: column;
+	padding-inline: var(--size-4-6);
+}
+
+/* margin-block auto centers the stage and still lets it scroll from the top when it is taller than the pane. */
+.checkpoint-view .cp-focus-stage {
+	margin-block: auto;
+	padding-block: var(--size-4-10) var(--size-4-12);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 26px;
+	min-width: 0;
+}
+
+@container cp-focus (max-width: 860px) {
+	.checkpoint-view .cp-focus-body {
+		display: block;
+		overflow-y: auto;
+	}
+
+	.checkpoint-view .cp-focus-timer,
+	.checkpoint-view .cp-focus-insights {
+		overflow-y: visible;
+	}
+
+	.checkpoint-view .cp-focus-timer {
+		padding-inline: var(--size-4-4);
+	}
+
+	.checkpoint-view .cp-focus-stage {
+		padding-block: var(--size-4-6);
+	}
+
+	.checkpoint-view .cp-focus-insights {
+		border-left: 0;
+		border-top: var(--border-width) solid var(--background-modifier-border);
+	}
+}
+
+/* The "Focus on" pill: a native select drawn as a rounded chip. */
+.checkpoint-view .cp-focus-task {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	max-width: min(100%, 420px);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-task:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-focus-task select {
+	appearance: none;
+	field-sizing: content;
+	max-width: 100%;
+	min-width: 0;
+	height: auto;
+	margin: 0;
+	padding: 8px 34px 8px 36px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font: inherit;
+	font-weight: var(--font-medium);
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-focus-task.is-none select {
+	color: var(--text-muted);
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-focus-task select:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+.checkpoint-view .cp-focus-task-icon,
+.checkpoint-view .cp-focus-task-chevron {
+	position: absolute;
+	top: 50%;
+	display: flex;
+	width: 16px;
+	height: 16px;
+	margin-top: -8px;
+	pointer-events: none;
+}
+
+.checkpoint-view .cp-focus-task-icon {
+	left: 12px;
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-focus-task-chevron {
+	right: 12px;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-focus-task-icon svg,
+.checkpoint-view .cp-focus-task-chevron svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* The ring. */
+.checkpoint-view .cp-focus-ring-wrap {
+	--cp-focus-tone: var(--cp-accent);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.checkpoint-view .cp-focus-ring-wrap.is-break {
+	--cp-focus-tone: var(--cp-green);
+}
+
+.checkpoint-view .cp-focus-ring-wrap.is-paused {
+	--cp-focus-tone: var(--text-faint);
+}
+
+.checkpoint-view .cp-focus-ring {
+	position: relative;
+	width: min(300px, 72cqi);
+	aspect-ratio: 1;
+}
+
+.checkpoint-view .cp-focus-ring svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.checkpoint-view .cp-focus-ring-track {
+	fill: none;
+	stroke: var(--background-modifier-border);
+	stroke-width: 7;
+}
+
+.checkpoint-view .cp-focus-ring-bar {
+	fill: none;
+	stroke: var(--cp-focus-tone);
+	stroke-width: 7;
+	stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.checkpoint-view .cp-focus-ring-bar {
+		transition:
+			stroke-dashoffset 1s linear,
+			stroke 0.3s;
+	}
+}
+
+.checkpoint-view .cp-focus-face {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+
+.checkpoint-view .cp-focus-time {
+	font-size: clamp(44px, 12cqi, 68px);
+	font-weight: 300;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-check {
+	display: flex;
+	width: clamp(44px, 12cqi, 68px);
+	height: clamp(44px, 12cqi, 68px);
+	color: var(--cp-focus-tone);
+}
+
+.checkpoint-view .cp-focus-check svg {
+	width: 100%;
+	height: 100%;
+	stroke-width: 1.5;
+}
+
+.checkpoint-view .cp-focus-phase-line {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-focus-phase {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-ring-wrap.is-break .cp-focus-phase {
+	color: var(--cp-green-text);
+}
+
+.checkpoint-view .cp-focus-dots {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 5px;
+	margin: 10px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.checkpoint-view .cp-focus-dot {
+	width: 18px;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-focus-dot.is-done {
+	background: var(--cp-focus-tone);
+}
+
+.checkpoint-view .cp-focus-dot.is-current {
+	background: linear-gradient(90deg, var(--cp-focus-tone) var(--cp-focus-fill, 50%), var(--background-modifier-border) var(--cp-focus-fill, 50%));
+}
+
+/* The controls: a large round primary button with smaller circular ones beside it, each with a caption. */
+.checkpoint-view .cp-focus-controls {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 22px;
+}
+
+.checkpoint-view .cp-focus-ctl {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	min-width: 48px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-focus-ctl:hover:not(:disabled) {
+	background: transparent;
+}
+
+.checkpoint-view .cp-focus-ctl:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.checkpoint-view .cp-focus-ctl-disc {
+	display: grid;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 50%;
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-ctl:hover:not(:disabled) .cp-focus-ctl-disc {
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-ctl-disc .cp-icon,
+.checkpoint-view .cp-focus-ctl-disc svg {
+	display: flex;
+	width: 20px;
+	height: 20px;
+}
+
+.checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc {
+	width: 72px;
+	height: 72px;
+	border: 0;
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	box-shadow: 0 6px 18px var(--cp-accent-soft);
+}
+
+.checkpoint-view .cp-focus-ctl.is-main:hover:not(:disabled) .cp-focus-ctl-disc {
+	background: var(--cp-accent);
+	filter: brightness(1.06);
+}
+
+.checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc .cp-icon,
+.checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc svg {
+	width: 28px;
+	height: 28px;
+	fill: currentColor;
+}
+
+.checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-cap {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-focus-ctl:focus-visible .cp-focus-ctl-disc {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+/* The set summary line while a set runs, and the finished-set text. */
+.checkpoint-view .cp-focus-setline {
+	color: var(--text-muted);
+	font-size: 13px;
+	text-align: center;
+}
+
+.checkpoint-view .cp-focus-summary {
+	text-align: center;
+}
+
+.checkpoint-view .cp-focus-summary-main {
+	font-size: 24px;
+	font-weight: 300;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The recovery banner. */
+.checkpoint-view .cp-focus-banner {
+	display: grid;
+	gap: 10px;
+	width: min(420px, 100%);
+	box-sizing: border-box;
+	padding: 12px 14px;
+	border-radius: 12px;
+	background: var(--cp-orange-soft);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-banner-title {
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-banner p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+.checkpoint-view .cp-focus-banner-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-view .cp-focus-banner-actions button {
+	height: auto;
+	min-height: 32px;
+	padding: 7px 12px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--background-primary);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-focus-banner-actions button.mod-cta {
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+}
+
+.checkpoint-view .cp-focus-banner-actions button.mod-warning {
+	background: transparent;
+	color: var(--cp-orange-text);
+}
+
+.checkpoint-view .cp-focus-banner-actions button:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+/* The compact set settings, shown before a set. */
+.checkpoint-view .cp-focus-settings {
+	display: grid;
+	width: min(360px, 100%);
+	box-sizing: border-box;
+	padding: 6px 16px;
+	border-radius: 14px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-field {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-focus-field:last-child {
+	border-bottom: 0;
+}
+
+.checkpoint-view .cp-focus-field-text {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-focus-hint {
+	color: var(--text-faint);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.checkpoint-view .cp-focus-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex: none;
+	padding: 3px;
+	border-radius: 9px;
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-focus-step {
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 17px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-focus-step:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-focus-step[aria-disabled="true"] {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.checkpoint-view .cp-focus-step:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+.checkpoint-view .cp-focus-value {
+	min-width: 56px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-unit {
+	margin-left: 3px;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: var(--font-normal);
+}
+
+/* The right column. */
+.checkpoint-view .cp-focus-insights {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+	padding: 28px 22px;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-focus-side-heading {
+	margin: 0 0 10px;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-focus-stats {
+	border-collapse: separate;
+	border-spacing: 14px 10px;
+	margin: -10px -14px;
+	width: calc(100% + 28px);
+}
+
+.checkpoint-view .cp-focus-stats th,
+.checkpoint-view .cp-focus-stats td {
+	padding: 0;
+	border: 0;
+	text-align: left;
+}
+
+.checkpoint-view .cp-focus-stats thead th {
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-focus-stat-label {
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-focus-stat-count,
+.checkpoint-view .cp-focus-stat-value {
+	font-size: 20px;
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The focus record: a timeline grouped by day. */
+.checkpoint-view .cp-focus-history {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-focus-history .cp-focus-side-heading {
+	margin-bottom: 10px;
+}
+
+.checkpoint-view .cp-focus-empty {
+	margin: 0;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-focus-day + .cp-focus-day {
+	margin-top: 16px;
+}
+
+.checkpoint-view .cp-focus-day-heading {
+	display: flex;
+	justify-content: space-between;
+	margin: 0 0 4px;
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-day-total {
+	color: var(--text-faint);
+	font-weight: var(--font-normal);
+	font-variant-numeric: tabular-nums;
+}
+
+/* A focus set: a heading that folds, its task, then the rounds as a tree. */
+.checkpoint-view .cp-focus-set {
+	padding: var(--size-4-1) var(--size-4-1) var(--size-4-2);
+	border-radius: 12px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-set + .cp-focus-set {
+	margin-top: var(--size-4-2);
+}
+
+.checkpoint-view .cp-focus-set.is-closed {
+	padding-bottom: var(--size-4-1);
+}
+
+.checkpoint-view .cp-focus-set-head {
+	display: grid;
+	grid-template-columns: 16px minmax(0, 1fr) auto;
+	gap: var(--size-4-2);
+	align-items: center;
+	width: 100%;
+	height: auto;
+	padding: var(--size-4-2) 10px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-align: left;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-focus-set-head:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-focus-set-twisty {
+	display: inline-flex;
+	color: var(--text-faint);
+	transition: transform 0.15s;
+}
+
+.checkpoint-view .cp-focus-set-twisty svg {
+	width: 14px;
+	height: 14px;
+}
+
+.checkpoint-view .cp-focus-set.is-closed .cp-focus-set-twisty {
+	transform: rotate(-90deg);
+}
+
+.checkpoint-view .cp-focus-set-title {
+	display: grid;
+	gap: 1px;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-focus-set-name {
+	font-size: 13.5px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-set-meta {
+	color: var(--text-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-focus-set-sum {
+	font-weight: var(--font-bold);
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-focus-set-task {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: 2px 12px 6px 34px;
+}
+
+.checkpoint-view .cp-focus-set-task .svg-icon {
+	flex: none;
+	width: 15px;
+	height: 15px;
+	margin-top: 2px;
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-focus-set-task span {
+	font-weight: var(--font-semibold);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.checkpoint-view .cp-focus-set-task.is-none span {
+	color: var(--text-muted);
+	font-style: italic;
+	font-weight: var(--font-normal);
+}
+
+/* The tree line runs through the centers of the dots: --cp-dot-y is the height of a round's first row, halved. */
+.checkpoint-view .cp-focus-rounds {
+	--cp-dot-y: 23px;
+	position: relative;
+	margin: 0;
+	padding: 0 var(--size-4-2) 0 34px;
+	list-style: none;
+}
+
+.checkpoint-view .cp-focus-rec {
+	position: relative;
+	display: grid;
+	grid-template-columns: 16px minmax(0, 1fr) auto 28px;
+	gap: 0 var(--size-4-2);
+	align-items: center;
+	padding: 6px 4px;
+	border-radius: 8px;
+}
+
+.checkpoint-view .cp-focus-rec::before {
+	content: "";
+	position: absolute;
+	left: 11.25px;
+	top: 0;
+	bottom: 0;
+	width: 1.5px;
+	background: var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-focus-rec:first-child::before {
+	top: var(--cp-dot-y);
+}
+
+.checkpoint-view .cp-focus-rec:last-child::before {
+	bottom: auto;
+	height: var(--cp-dot-y);
+}
+
+.checkpoint-view .cp-focus-rec:only-child::before {
+	display: none;
+}
+
+.checkpoint-view .cp-focus-rec:hover,
+.checkpoint-view .cp-focus-rec:focus-within {
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-focus-status-dot {
+	position: relative;
+	z-index: 1;
+	display: inline-block;
+	width: 9px;
+	height: 9px;
+	box-sizing: border-box;
+	justify-self: center;
+	border-radius: 50%;
+	background: var(--cp-accent);
+	box-shadow: 0 0 0 3px var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-rec:hover .cp-focus-status-dot,
+.checkpoint-view .cp-focus-rec:focus-within .cp-focus-status-dot {
+	box-shadow: 0 0 0 3px var(--background-primary);
+}
+
+.checkpoint-view .cp-focus-status-dot.is-early {
+	border: 1.5px solid var(--cp-accent);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-status-dot.is-stopped {
+	border: 1.5px solid var(--text-faint);
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-focus-status-dot.is-recovered {
+	background: var(--color-yellow);
+}
+
+.checkpoint-view .cp-focus-round-what {
+	display: grid;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-focus-round-name {
+	font-size: 13px;
+	font-weight: var(--font-medium);
+	line-height: 18px;
+}
+
+.checkpoint-view .cp-focus-round-status {
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	line-height: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-focus-round-status em {
+	color: var(--text-muted);
+	font-style: normal;
+}
+
+.checkpoint-view .cp-focus-round-time {
+	font-size: 13px;
+	font-weight: var(--font-bold);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The round menu shows on hover and on keyboard focus; on touch it is always there. */
+.checkpoint-view .cp-focus-round-more {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-faint);
+	opacity: 0;
+}
+
+.checkpoint-view .cp-focus-rec:hover .cp-focus-round-more,
+.checkpoint-view .cp-focus-round-more:focus-visible {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.checkpoint-view .cp-focus-round-more {
+		opacity: 1;
+	}
+}
+
+/* A round with its own task: the task sits under its line. */
+.checkpoint-view .cp-focus-round-task {
+	grid-column: 2 / 5;
+	color: var(--text-muted);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.checkpoint-view .cp-focus-round-task.is-none {
+	font-style: italic;
+}
+
+.checkpoint-view .cp-focus-gap {
+	grid-column: 2 / 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin-top: 6px;
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-focus-gap.is-pending {
+	color: var(--cp-orange-text);
+}
+
+.checkpoint-view .cp-focus-gap button {
+	height: auto;
+	padding: 2px 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--cp-accent-text);
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-focus-gap button.cp-focus-gap-exclude {
+	color: var(--text-muted);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-focus-more {
+	align-self: flex-start;
+	margin-top: var(--size-4-3);
+}
+
+.checkpoint-view .cp-focus-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	margin-top: var(--size-4-6);
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-focus-legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.checkpoint-view .cp-focus-legend .cp-focus-status-dot {
+	box-shadow: none;
+}
+
+/* The focus chip on a row and the total next to the details Focus button. */
+.checkpoint-view .cp-meta-focus {
+	color: var(--cp-accent-text);
+	font-variant-numeric: tabular-nums;
+}
+
+@container cp-list (max-width: 340px) {
+	.checkpoint-view .cp-meta-focus {
+		display: none;
+	}
+}
+
+.checkpoint-view .cp-focus-total {
+	color: var(--text-muted);
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+}
+/* Keyboard focus on the small controls. The status-bar item lives outside the view. */
+.checkpoint-view .cp-focus-gap button:focus-visible,
+.checkpoint-view .cp-focus-more:focus-visible,
+.checkpoint-view .cp-focus-round-more:focus-visible,
+.checkpoint-view .cp-focus-set-head:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+.status-bar-item.cp-focus-status:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+}
+/* == end M5 focus == */
+
+/* == 0.3.0 tag tree == */
+
+/* Parent tags. A row is the fold column (20 px, the icon column) plus the usual sidebar item. */
+.checkpoint-view .cp-tag-node {
+	list-style: none;
+}
+
+.checkpoint-view .cp-tag-row {
+	display: flex;
+	align-items: center;
+	padding-left: calc(var(--cp-tag-depth, 0) * var(--size-4-4));
+}
+
+.checkpoint-view .cp-tag-row .cp-sidebar-item {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: auto;
+	padding-left: var(--size-4-1);
+}
+
+.checkpoint-view .cp-tag-fold,
+.checkpoint-view .cp-tag-fold-spacer {
+	flex: 0 0 var(--cp-side-icon);
+	width: var(--cp-side-icon);
+	margin-left: var(--size-4-2);
+}
+
+.checkpoint-view .cp-tag-fold {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: var(--cp-side-row);
+	padding: 0;
+	border: none;
+	box-shadow: none;
+	background: none;
+	border-radius: var(--cp-side-radius);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-tag-fold:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-tag-fold:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: -2px;
+}
+
+.checkpoint-view .cp-tag-fold .cp-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.checkpoint-view .cp-tag-children {
+	margin: 0;
+	padding: 0;
+}
+
+/* == end 0.3.0 tag tree == */
+
+/* == M6 habits == */
+/* The Habits section, the Today block and column and the New habit dialog. Token map: bg → --background-primary, bg-2 →
+   --background-secondary, bg-3 → --background-modifier-hover, fg/muted/faint → --text-normal/-muted/-faint, line →
+   --background-modifier-border, accent → --cp-accent, good → --cp-green, orange → --cp-orange. The page is a
+   size container, so "detail under the list" (980 px) and "controls under the name" (560 px) follow the pane. */
+
+.checkpoint-view .cp-habits,
+.checkpoint-view .cp-today-habits,
+.checkpoint-view .cp-board-habits,
+.checkpoint-habit-dialog {
+	--cp-good: var(--cp-green);
+	--cp-good-soft: var(--cp-green-soft);
+	--cp-good-mid: color-mix(in srgb, var(--cp-green) 45%, transparent);
+	--cp-track: var(--background-modifier-border);
+	/* A habit without a color shows the accent; a .cp-hue-* class on the icon overrides these. */
+	--cp-hue: var(--cp-accent);
+	--cp-hue-soft: var(--cp-accent-soft);
+	--cp-hue-text: var(--cp-accent-text);
+}
+
+.checkpoint-habit-dialog .cp-hue-red { --cp-hue: var(--cp-red); --cp-hue-soft: var(--cp-red-soft); --cp-hue-text: var(--cp-red-text); }
+.checkpoint-habit-dialog .cp-hue-orange { --cp-hue: var(--cp-orange); --cp-hue-soft: var(--cp-orange-soft); --cp-hue-text: var(--cp-orange-text); }
+.checkpoint-habit-dialog .cp-hue-yellow { --cp-hue: var(--cp-yellow); --cp-hue-soft: var(--cp-yellow-soft); --cp-hue-text: var(--cp-yellow-text); }
+.checkpoint-habit-dialog .cp-hue-green { --cp-hue: var(--cp-green); --cp-hue-soft: var(--cp-green-soft); --cp-hue-text: var(--cp-green-text); }
+.checkpoint-habit-dialog .cp-hue-cyan { --cp-hue: var(--cp-cyan); --cp-hue-soft: var(--cp-cyan-soft); --cp-hue-text: var(--cp-cyan-text); }
+.checkpoint-habit-dialog .cp-hue-blue { --cp-hue: var(--cp-blue); --cp-hue-soft: var(--cp-blue-soft); --cp-hue-text: var(--cp-blue-text); }
+.checkpoint-habit-dialog .cp-hue-purple { --cp-hue: var(--cp-purple); --cp-hue-soft: var(--cp-purple-soft); --cp-hue-text: var(--cp-purple-text); }
+.checkpoint-habit-dialog .cp-hue-pink { --cp-hue: var(--cp-pink); --cp-hue-soft: var(--cp-pink-soft); --cp-hue-text: var(--cp-pink-text); }
+
+/* -- Page frame -------------------------------------------------------------- */
+
+.checkpoint-view .cp-habits {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	position: relative;
+	container-type: inline-size;
+	container-name: cp-habits;
+	font-family: var(--font-interface);
+}
+
+.checkpoint-view .cp-habits-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 380px;
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.checkpoint-view .cp-habits-main,
+.checkpoint-view .cp-habit-detail {
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	overflow-y: auto;
+	padding-bottom: calc(var(--size-4-10) + var(--cp-status-bar-room));
+}
+
+.checkpoint-view .cp-habits-main {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	padding: 26px 28px;
+}
+
+.checkpoint-view .cp-habits-main.is-empty {
+	width: 100%;
+}
+
+.checkpoint-view .cp-habits-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.checkpoint-view .cp-habits-title {
+	margin: 0;
+	font-size: 26px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+}
+
+.checkpoint-view .cp-habits-sub {
+	margin-top: 2px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+/* Buttons: Obsidian's default button has its own height, shadow and fill, so each is set. */
+.checkpoint-view .cp-habit-btn,
+.checkpoint-view .cp-habits-foot button,
+.checkpoint-view .cp-habit-more,
+.checkpoint-view .cp-habit-restore,
+.checkpoint-view .cp-habit-examples button,
+.checkpoint-view .cp-today-habits-link {
+	box-shadow: none;
+	font: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-btn {
+	height: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 14px;
+	border: 0;
+	border-radius: 9px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-habit-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-habit-btn.is-cta {
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+}
+
+.checkpoint-view .cp-habit-btn.is-cta:hover {
+	background: var(--cp-accent);
+	filter: brightness(1.06);
+}
+
+.checkpoint-view .cp-habit-btn .cp-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* -- Week strip --------------------------------------------------------------- */
+
+.checkpoint-view .cp-habit-week {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.checkpoint-view .cp-habit-day {
+	height: auto;
+	display: grid;
+	justify-items: center;
+	gap: 6px;
+	padding: 8px 4px 10px;
+	border: 0;
+	border-radius: 12px;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-normal);
+	font: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-day:hover {
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-habit-day-name {
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-habit-day.is-today {
+	background: var(--cp-accent-soft);
+}
+
+.checkpoint-view .cp-habit-day.is-today .cp-habit-day-name {
+	color: var(--cp-accent-text);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-day.is-selected {
+	outline: 1.5px solid var(--cp-accent);
+}
+
+.checkpoint-view .cp-habit-day:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.checkpoint-view .cp-habit-day-ring {
+	position: relative;
+	width: 38px;
+	height: 38px;
+}
+
+.checkpoint-view .cp-habit-day-ring svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	transform: rotate(-90deg);
+}
+
+.checkpoint-view .cp-habit-day-ring circle {
+	fill: none;
+	stroke-width: 4;
+}
+
+.checkpoint-view .cp-habit-ring-track {
+	stroke: var(--cp-track);
+}
+
+.checkpoint-view .cp-habit-ring-bar {
+	stroke: var(--cp-good);
+	stroke-linecap: round;
+}
+
+.checkpoint-view .cp-habit-day-ring b {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+}
+
+/* -- Groups and rows ------------------------------------------------------------ */
+
+.checkpoint-view .cp-habit-groups {
+	display: grid;
+	gap: 18px;
+}
+
+.checkpoint-view .cp-habit-group-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 4px;
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+	line-height: 1.3;
+}
+
+.checkpoint-view .cp-habit-group-heading .cp-icon svg {
+	width: 15px;
+	height: 15px;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-habit-group-count {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 12.5px;
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-habit-now {
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+	font-size: 11px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-list {
+	display: grid;
+	gap: 6px;
+}
+
+.checkpoint-view .cp-habit-row {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 14px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-row:hover {
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-habit-row.is-selected {
+	background: var(--cp-accent-soft);
+	box-shadow: inset 0 0 0 1.5px var(--cp-accent);
+}
+
+.checkpoint-view .cp-habit-icon {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
+	background: var(--cp-hue-soft);
+	color: var(--cp-hue-text);
+}
+
+.checkpoint-view .cp-habit-icon .cp-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.checkpoint-view .cp-habit-what {
+	min-width: 0;
+	display: grid;
+	gap: 4px;
+}
+
+.checkpoint-view .cp-habit-name {
+	justify-self: start;
+	max-width: 100%;
+	height: auto;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	border: 0;
+	border-radius: 4px;
+	box-shadow: none;
+	background: none;
+	color: var(--text-normal);
+	font: inherit;
+	font-weight: var(--font-semibold);
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.checkpoint-view span.cp-habit-name {
+	cursor: inherit;
+}
+
+.checkpoint-view .cp-habit-row.is-done .cp-habit-name {
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habit-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+
+.checkpoint-view .cp-habit-streak {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--cp-orange);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-streak .cp-icon svg {
+	width: 13px;
+	height: 13px;
+	fill: currentColor;
+}
+
+.checkpoint-view .cp-habit-bell {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-habit-bell .cp-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.checkpoint-view .cp-habit-bar {
+	display: block;
+	max-width: 260px;
+	height: 5px;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--cp-track);
+}
+
+.checkpoint-view .cp-habit-bar i {
+	display: block;
+	height: 100%;
+	border-radius: 3px;
+	background: var(--cp-good);
+}
+
+/* -- Controls -------------------------------------------------------------------- */
+
+.checkpoint-view .cp-habit-ctl {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.checkpoint-view .cp-habit-check {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 50%;
+	box-shadow: none;
+	background: transparent;
+	color: transparent;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-check:hover {
+	border-color: var(--cp-good);
+	background: transparent;
+	color: var(--cp-good-mid);
+}
+
+.checkpoint-view .cp-habit-check.is-on {
+	border-color: var(--cp-good);
+	background: var(--cp-good);
+	color: var(--text-on-accent);
+}
+
+.checkpoint-view .cp-habit-check .cp-icon svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 3;
+}
+
+.checkpoint-view .cp-habit-count {
+	min-width: 46px;
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+	text-align: right;
+}
+
+.checkpoint-view .cp-habit-count small {
+	color: var(--text-faint);
+	font-size: inherit;
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-habit-met {
+	display: inline-flex;
+	color: var(--cp-good);
+}
+
+.checkpoint-view .cp-habit-met .cp-icon svg {
+	width: 16px;
+	height: 16px;
+	stroke-width: 3;
+}
+
+.checkpoint-view .cp-habit-plus {
+	height: 36px;
+	min-width: 52px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 18px;
+	box-shadow: none;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-plus:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-habit-row.is-selected .cp-habit-plus,
+.checkpoint-view .cp-habit-row.is-selected .cp-habit-amount {
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-habit-amount {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 3px 3px 12px;
+	border-radius: 18px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-habit-amount input {
+	width: 38px;
+	height: auto;
+	padding: 4px 0;
+	border: 0;
+	box-shadow: none;
+	background: transparent;
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+	text-align: right;
+}
+
+.checkpoint-view .cp-habit-amount input::placeholder {
+	color: var(--text-faint);
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-habit-unit {
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-habit-add {
+	height: 30px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 15px;
+	box-shadow: none;
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-habit-rest {
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+
+.checkpoint-view .cp-habit-restore {
+	height: 30px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 15px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-habit-none {
+	margin: 0;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habits-foot {
+	display: flex;
+	gap: 16px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-habits-foot button {
+	height: auto;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habits-foot button:hover {
+	background: transparent;
+	color: var(--text-normal);
+}
+
+/* -- Detail ------------------------------------------------------------------------ */
+
+.checkpoint-view .cp-habit-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	padding: 24px 22px;
+	padding-bottom: calc(var(--size-4-10) + var(--cp-status-bar-room));
+	border-left: var(--border-width) solid var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-habit-detail-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.checkpoint-view .cp-habit-detail-title {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-habit-detail-title h3 {
+	margin: 0;
+	font-size: 20px;
+	line-height: 1.25;
+}
+
+.checkpoint-view .cp-habit-detail-title p {
+	margin: 2px 0 0;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-habit-detail-head .cp-icon-button,
+.checkpoint-view .cp-habit-month-nav .cp-icon-button {
+	width: 34px;
+	height: 34px;
+	flex: none;
+	padding: 0;
+	border-radius: 8px;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habit-detail-head .cp-icon-button:hover,
+.checkpoint-view .cp-habit-month-nav .cp-icon-button:hover:not(:disabled) {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-habit-tiles {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.checkpoint-view .cp-habit-tile {
+	display: grid;
+	gap: 2px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-habit-tile-k {
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-habit-tile-v {
+	font-size: 22px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+}
+
+.checkpoint-view .cp-habit-tile-v small {
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-habit-tile.is-fire .cp-habit-tile-v {
+	color: var(--cp-orange);
+}
+
+.checkpoint-view .cp-habit-sec-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
+.checkpoint-view .cp-habit-sec-head h4 {
+	margin: 0;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: var(--font-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-habit-month-nav {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-habit-month-nav .cp-icon-button {
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+}
+
+.checkpoint-view .cp-habit-month-nav .cp-icon-button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.checkpoint-view .cp-habit-cal {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	gap: 5px;
+	/* In the one-column layout the detail spans the whole pane; square cells would grow huge. */
+	max-width: 420px;
+}
+
+.checkpoint-view .cp-habit-wd {
+	padding-bottom: 2px;
+	color: var(--text-faint);
+	font-size: 11px;
+	text-align: center;
+}
+
+.checkpoint-view .cp-habit-cell {
+	display: grid;
+	place-items: center;
+	max-width: 100%;
+	aspect-ratio: 1;
+	border-radius: 7px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 11.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-habit-cell.is-met {
+	background: var(--cp-good);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-cell.is-part {
+	background: var(--cp-good-soft);
+	color: var(--cp-good);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-cell.is-miss {
+	background: var(--background-secondary);
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-habit-cell.is-off {
+	background: transparent;
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-habit-cell.is-fut {
+	background: transparent;
+	color: var(--text-faint);
+	opacity: 0.5;
+}
+
+.checkpoint-view .cp-habit-cell.is-today {
+	box-shadow: inset 0 0 0 1.5px var(--cp-accent);
+}
+
+.checkpoint-view .cp-habit-cell.is-blank {
+	background: transparent;
+}
+
+.checkpoint-view .cp-habit-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	margin-top: 10px;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-habit-legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.checkpoint-view .cp-habit-legend i {
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+}
+
+.checkpoint-view .cp-habit-legend i.is-met { background: var(--cp-good); }
+.checkpoint-view .cp-habit-legend i.is-part { background: var(--cp-good-soft); }
+.checkpoint-view .cp-habit-legend i.is-miss {
+	background: var(--background-secondary);
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+}
+
+.checkpoint-view .cp-habit-log {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.checkpoint-view .cp-habit-entry {
+	display: grid;
+	grid-template-columns: 76px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	padding: 8px 0;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-habit-entry:last-child {
+	border-bottom: 0;
+}
+
+.checkpoint-view .cp-habit-entry-day {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-habit-entry-value {
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-habit-entry-value small {
+	margin-left: 6px;
+	color: var(--text-faint);
+	font-size: inherit;
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-habit-entry-actions {
+	display: flex;
+	gap: 2px;
+	opacity: 0.55;
+}
+
+.checkpoint-view .cp-habit-entry:hover .cp-habit-entry-actions,
+.checkpoint-view .cp-habit-entry:focus-within .cp-habit-entry-actions {
+	opacity: 1;
+}
+
+.checkpoint-view .cp-habit-entry-actions .cp-icon-button {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 6px;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habit-entry-actions .cp-icon-button:hover:not(:disabled) {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.checkpoint-view .cp-habit-entry-actions .cp-icon-button:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.checkpoint-view .cp-habit-entry-actions .cp-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.checkpoint-view .cp-habit-more {
+	margin-top: 8px;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+@media (hover: none) {
+	.checkpoint-view .cp-habit-entry-actions {
+		opacity: 1;
+	}
+}
+
+/* -- First visit ----------------------------------------------------------------- */
+
+.checkpoint-view .cp-habit-empty {
+	flex: 1;
+	display: grid;
+	place-items: center;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.checkpoint-view .cp-habit-empty-box {
+	display: grid;
+	justify-items: center;
+	gap: 10px;
+	max-width: 360px;
+}
+
+.checkpoint-view .cp-habit-empty-box h3 {
+	margin: 0;
+	color: var(--text-normal);
+	font-size: 18px;
+}
+
+.checkpoint-view .cp-habit-empty-box p {
+	margin: 0;
+}
+
+.checkpoint-view .cp-habit-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 64px;
+	height: 64px;
+	border-radius: 18px;
+	background: var(--cp-hue-soft);
+	color: var(--cp-hue-text);
+}
+
+.checkpoint-view .cp-habit-empty-icon .cp-icon svg {
+	width: 30px;
+	height: 30px;
+}
+
+.checkpoint-view .cp-habit-examples {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 6px;
+}
+
+.checkpoint-view .cp-habit-examples button {
+	height: auto;
+	padding: 6px 12px;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-habit-examples button:hover {
+	background: var(--background-secondary);
+}
+
+/* -- Search results --------------------------------------------------------------- */
+
+.checkpoint-view .cp-search-tag {
+	margin-left: var(--size-4-2);
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-faint);
+	font-size: 11px;
+}
+
+/* -- Focus rings ---------------------------------------------------------------------- */
+
+.checkpoint-view .cp-habits :is(button, input, select):focus-visible,
+.checkpoint-view .cp-today-habits :is(button, input, select):focus-visible,
+.checkpoint-view .cp-board-habits :is(button, input, select):focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+/* -- Narrow ----------------------------------------------------------------------------- */
+
+@container cp-habits (max-width: 980px) {
+	.checkpoint-view .cp-habits-body {
+		display: block;
+		overflow-y: auto;
+	}
+
+	.checkpoint-view .cp-habits-main,
+	.checkpoint-view .cp-habit-detail {
+		overflow-y: visible;
+	}
+
+	.checkpoint-view .cp-habits-main {
+		padding-bottom: 22px;
+	}
+
+	.checkpoint-view .cp-habit-detail {
+		border-left: 0;
+		border-top: var(--border-width) solid var(--background-modifier-border);
+	}
+}
+
+@container cp-habits (max-width: 560px) {
+	.checkpoint-view .cp-habits-main {
+		padding: 18px 14px 28px;
+	}
+
+	.checkpoint-view .cp-habit-row {
+		grid-template-columns: 36px minmax(0, 1fr);
+	}
+
+	.checkpoint-view .cp-habit-row .cp-habit-ctl {
+		grid-column: 2;
+	}
+}
+
+/* -- Today: the block above the list --------------------------------------------------- */
+
+.checkpoint-view .cp-today-habits {
+	margin: var(--size-4-2) 0 var(--size-4-3);
+	padding: 12px 12px 8px;
+	border-radius: 14px;
+	background: var(--background-secondary);
+}
+
+.checkpoint-view .cp-today-habits-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.checkpoint-view .cp-today-habits-head h3 {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-today-habits-flame svg {
+	width: 15px;
+	height: 15px;
+	color: var(--cp-orange);
+	fill: currentColor;
+}
+
+.checkpoint-view .cp-today-habits-count {
+	color: var(--text-faint);
+	font-weight: var(--font-normal);
+}
+
+.checkpoint-view .cp-today-habits-link {
+	height: auto;
+	margin-left: auto;
+	padding: 2px 4px;
+	border: 0;
+	background: transparent;
+	color: var(--cp-accent-text);
+	font-size: 12.5px;
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-today-habits-link:hover {
+	background: transparent;
+	text-decoration: underline;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-row {
+	grid-template-columns: 32px minmax(0, 1fr) auto;
+	padding: 6px;
+	cursor: default;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-row:hover {
+	background: transparent;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 9px;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-icon .cp-icon svg {
+	width: 17px;
+	height: 17px;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-check {
+	width: 30px;
+	height: 30px;
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-plus,
+.checkpoint-view .cp-today-habits .cp-habit-amount {
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-today-habits .cp-habit-plus {
+	height: 30px;
+}
+
+.checkpoint-view .cp-today-habits-fold {
+	padding: 6px 6px 2px;
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+
+/* -- Today: the first board column ------------------------------------------------------- */
+
+.checkpoint-view .cp-board-col.cp-board-habits {
+	background: color-mix(in srgb, var(--cp-orange) 7%, var(--background-secondary));
+}
+
+.checkpoint-view .cp-board-habits .cp-board-col-head {
+	padding-left: var(--size-4-3);
+}
+
+.checkpoint-view .cp-board-habits .cp-board-col-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.checkpoint-view .cp-board-habits .cp-board-col-body {
+	padding: 2px var(--size-4-3) var(--size-4-3);
+}
+
+.checkpoint-view .cp-habit-card {
+	display: grid;
+	grid-template-columns: 28px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: var(--background-primary);
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-icon {
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-icon .cp-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-name {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: 13.5px;
+	font-weight: var(--font-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-habit-card-meta {
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-habit-card.is-done .cp-habit-name {
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-check {
+	width: 28px;
+	height: 28px;
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-check .cp-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-plus {
+	height: 28px;
+	min-width: 40px;
+	padding: 0 8px;
+}
+
+.checkpoint-view .cp-habit-card .cp-habit-count {
+	min-width: 0;
+}
+
+/* -- New habit dialog ------------------------------------------------------------------- */
+
+.checkpoint-habit-dialog .cp-habit-form {
+	display: grid;
+	gap: 18px;
+}
+
+.checkpoint-habit-dialog .cp-habit-field {
+	display: grid;
+	gap: 8px;
+}
+
+.checkpoint-habit-dialog .cp-habit-label {
+	color: var(--text-muted);
+	font-size: 12.5px;
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-habit-dialog .cp-habit-name-row {
+	display: flex;
+	gap: 10px;
+}
+
+.checkpoint-habit-dialog .cp-habit-icon-button {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 12px;
+	box-shadow: none;
+	background: var(--cp-hue-soft);
+	color: var(--cp-hue-text);
+	cursor: pointer;
+}
+
+.checkpoint-habit-dialog .cp-habit-icon-slot svg {
+	width: 20px;
+	height: 20px;
+}
+
+.checkpoint-habit-dialog .cp-habit-text {
+	width: 100%;
+	border-radius: 10px;
+}
+
+.checkpoint-habit-dialog .cp-color-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-habit-dialog .cp-color-choice {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 50%;
+	box-shadow: none;
+	background: var(--cp-swatch, var(--background-modifier-border));
+}
+
+.checkpoint-habit-dialog .cp-color-choice.is-default {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border);
+}
+
+.checkpoint-habit-dialog .cp-color-choice[aria-pressed="true"] {
+	border-color: var(--text-normal);
+	box-shadow: 0 0 0 2px var(--background-primary) inset;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg.is-four {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.checkpoint-habit-dialog .cp-habit-seg button {
+	display: grid;
+	gap: 2px;
+	height: auto;
+	padding: 10px 8px;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: none;
+	background: var(--background-primary);
+	text-align: left;
+	cursor: pointer;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg.is-four button {
+	text-align: center;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg button b {
+	font-size: 13.5px;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg button small {
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-habit-dialog .cp-habit-seg button[aria-pressed="true"] {
+	border-color: var(--cp-accent);
+	background: var(--cp-accent-soft);
+}
+
+.checkpoint-habit-dialog .cp-habit-seg button[aria-pressed="true"] b {
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-habit-dialog .cp-habit-goal-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-muted);
+}
+
+.checkpoint-habit-dialog .cp-habit-target {
+	width: 70px;
+}
+
+.checkpoint-habit-dialog .cp-habit-unit-input {
+	width: 130px;
+}
+
+.checkpoint-habit-dialog .cp-habit-select {
+	position: relative;
+	display: inline-flex;
+}
+
+.checkpoint-habit-dialog .cp-habit-select select {
+	appearance: none;
+	padding: 9px 34px 9px 12px;
+	border-radius: 10px;
+	cursor: pointer;
+}
+
+.checkpoint-habit-dialog .cp-habit-select::after {
+	content: "";
+	position: absolute;
+	right: 13px;
+	top: 50%;
+	width: 7px;
+	height: 7px;
+	border-right: 1.8px solid var(--text-muted);
+	border-bottom: 1.8px solid var(--text-muted);
+	transform: translateY(-70%) rotate(45deg);
+	pointer-events: none;
+}
+
+.checkpoint-habit-dialog .cp-habit-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.checkpoint-habit-dialog .cp-habit-chips button {
+	width: 40px;
+	height: 36px;
+	padding: 0;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: 9px;
+	box-shadow: none;
+	background: var(--background-primary);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.checkpoint-habit-dialog .cp-habit-chips button[aria-pressed="true"] {
+	border-color: var(--cp-accent);
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-habit-dialog .cp-habit-hint {
+	margin: 0;
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+
+.checkpoint-habit-dialog .cp-habit-rem {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.checkpoint-habit-dialog .cp-habit-switch {
+	position: relative;
+	flex: none;
+	width: 40px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 12px;
+	box-shadow: none;
+	background: var(--background-modifier-border);
+	cursor: pointer;
+}
+
+.checkpoint-habit-dialog .cp-habit-switch.is-on {
+	background: var(--cp-accent);
+}
+
+.checkpoint-habit-dialog .cp-habit-switch::after {
+	content: "";
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--text-on-accent);
+}
+
+.checkpoint-habit-dialog .cp-habit-switch.is-on::after {
+	left: 19px;
+}
+
+.checkpoint-habit-dialog .cp-habit-time {
+	border-radius: 10px;
+}
+
+.checkpoint-habit-dialog .cp-habit-form-error {
+	margin: 0;
+	color: var(--color-red);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-habit-dialog .cp-habit-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+}
+
+/* The hidden attribute must win over every display rule above (grid, flex, inline-flex have the same specificity as
+   a plain class), so this comes last and is one class stronger. */
+.checkpoint-habit-dialog .cp-habit-form [hidden] {
+	display: none;
+}
+
+.checkpoint-habit-dialog :is(button, input, select):focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+	.checkpoint-habit-dialog .cp-habit-seg {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.checkpoint-habit-dialog .cp-habit-seg.is-four {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+/* == end M6 habits == */
+
+/* == #4 dashboard block == */
+
+/* A `logwell` code block in a note (src/obsidian/dashboardBlock.ts). The root carries `.checkpoint-view` and
+   `.cp-theme`, so the task rows inside are styled by the app's own row rules; only the frame, the header, the
+   messages and the scrolling box are defined here. The root keeps the header's height while it is empty or
+   hidden, and the body a fixed maximum, so the note does not jump when the block draws or the list grows. */
+.checkpoint-view.cp-block {
+	--cp-block-head-h: 40px;
+	--cp-block-max-h: 340px;
+	display: block;
+	box-sizing: border-box;
+	min-height: var(--cp-block-head-h);
+	margin: var(--size-4-2) 0 var(--size-4-4);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--cp-font-family);
+	font-size: var(--cp-font);
+	line-height: 1.4;
+}
+
+.checkpoint-view .cp-block-head {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	box-sizing: border-box;
+	min-height: var(--cp-block-head-h);
+	padding: var(--size-2-2) var(--size-4-2) var(--size-2-2) var(--size-4-3);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* In Live Preview the editor floats its own edit button over the block's top right corner. */
+.cm-embed-block .cp-block .cp-block-head {
+	padding-inline-end: var(--size-4-8);
+}
+
+.checkpoint-view .cp-block-filters {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	min-width: 0;
+}
+
+.checkpoint-view .cp-block-chip {
+	padding: 0 var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	overflow-wrap: anywhere;
+}
+
+.checkpoint-view .cp-block-count {
+	flex: 0 0 auto;
+	margin-inline-start: auto;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-block-open {
+	flex: 0 0 auto;
+}
+
+.checkpoint-view .cp-block-open:hover {
+	color: var(--cp-accent-text);
+}
+
+/* The rows scroll inside the block. A size container with the list column's name, so the row meta thins out with
+   the block's width by the same @container cp-list rules as in the lists. The windowed list follows this box. */
+.checkpoint-view .cp-block-body {
+	max-height: var(--cp-block-max-h);
+	overflow-y: auto;
+	container-type: inline-size;
+	container-name: cp-list;
+	padding: var(--size-2-2);
+}
+
+.checkpoint-view .cp-block-msg {
+	padding: var(--size-4-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-view .cp-block-msg.is-error {
+	color: var(--text-error);
+}
+
+/* == end #4 dashboard block == */
+
+/* == Issue #6 TickTick sync == */
+
+/* The marker after a synced list's name, and the line under its title. */
+.checkpoint-view .cp-sidebar-item .cp-sync-mark {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	color: var(--cp-accent-text);
+}
+
+.checkpoint-view .cp-sidebar-item .cp-sync-mark .cp-icon {
+	flex: none;
+	width: 12px;
+	color: inherit;
+}
+
+.checkpoint-view .cp-sidebar-item .cp-sync-mark .cp-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.checkpoint-view .cp-sync-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-sync-status .cp-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.checkpoint-view .cp-sync-status > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* "Not synced": a repeating task, or one kept in Logwell only, in a list synced with TickTick. */
+.checkpoint-view .cp-meta-notsynced {
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--cp-orange-soft);
+	color: var(--cp-orange-text);
+	font-weight: var(--font-medium);
+	white-space: nowrap;
+}
+
+/* The dialogs of the sync: the link list, the first-sync preview and the confirmation of removed tasks. */
+.checkpoint-tt-dialog .cp-tt-lead {
+	margin: 0 0 var(--size-4-3);
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+.checkpoint-tt-dialog .cp-tt-status {
+	margin: 0 0 var(--size-4-3);
+	color: var(--text-muted);
+}
+
+.checkpoint-tt-dialog .cp-tt-status[role="alert"] {
+	color: var(--text-error);
+}
+
+.checkpoint-tt-dialog .cp-tt-warn {
+	margin: var(--size-4-3) 0;
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-s);
+	background: var(--cp-yellow-soft);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.checkpoint-tt-dialog .cp-tt-options {
+	max-height: 230px;
+	overflow: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.checkpoint-tt-dialog .cp-tt-option {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+}
+
+.checkpoint-tt-dialog .cp-tt-option:first-child {
+	border-top: 0;
+}
+
+.checkpoint-tt-dialog .cp-tt-option:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-tt-dialog .cp-tt-option[aria-selected="true"] {
+	background: var(--cp-accent-soft);
+}
+
+.checkpoint-tt-dialog .cp-tt-option.is-disabled {
+	color: var(--text-faint);
+	cursor: not-allowed;
+}
+
+.checkpoint-tt-dialog .cp-tt-option:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: -2px;
+}
+
+.checkpoint-tt-dialog .cp-tt-option-detail {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-tt-dialog .cp-tt-counts {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--size-4-3);
+}
+
+.checkpoint-tt-dialog .cp-tt-count {
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.checkpoint-tt-dialog .cp-tt-count b {
+	display: block;
+	font-size: 22px;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-tt-dialog .cp-tt-count span {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.checkpoint-tt-dialog .cp-tt-titles {
+	max-height: 160px;
+	margin: 0 0 var(--size-4-3);
+	padding: 0;
+	overflow: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	list-style: none;
+}
+
+.checkpoint-tt-dialog .cp-tt-titles li {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.checkpoint-tt-dialog .cp-tt-titles li:first-child {
+	border-top: 0;
+}
+
+.checkpoint-tt-dialog .cp-tt-titles:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 2px;
+}
+
+.checkpoint-tt-dialog .cp-tt-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-4);
+}
+
+/* == end Issue #6 TickTick sync == */
+
+/* == M7 recurrence == */
+
+/* Repeating tasks: the repeat picker (a listbox of presets and the custom editor), the Repeat field,
+   the purple repeat chip of a row or card, the history rows of Completed and the calendar's occurrences.
+   Theme variables only. The picker lives inside a `.cp-pop` (the date popover or its own inline panel), so the
+   popover's button reset applies and these rules are one class stronger where they restyle a button.
+   Rules for the picker and the Repeat field cover the view and the Quick Add modal, which both hold the add bar
+   and "All fields". */
+
+/* -- The picker as an inline panel (the details pane and "All fields") -------------- */
+
+.checkpoint-view .cp-repeat-field,
+.checkpoint-quick-add-modal .cp-repeat-field {
+	position: relative;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-repeat-field.is-open,
+.checkpoint-quick-add-modal .cp-repeat-field.is-open {
+	grid-column: 1 / -1;
+}
+
+.checkpoint-view .cp-repeat-button,
+.checkpoint-quick-add-modal .cp-repeat-button {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	height: var(--input-height);
+	padding: 0 var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--input-radius);
+	background: var(--background-modifier-form-field);
+	color: var(--text-normal);
+	font: inherit;
+	font-size: var(--font-ui-small);
+	text-align: left;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-repeat-button:disabled,
+.checkpoint-quick-add-modal .cp-repeat-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.checkpoint-view .cp-repeat-button-icon svg,
+.checkpoint-quick-add-modal .cp-repeat-button-icon svg {
+	width: 16px;
+	height: 16px;
+	color: var(--cp-purple-text);
+}
+
+.checkpoint-view .cp-repeat-button-text,
+.checkpoint-quick-add-modal .cp-repeat-button-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-repeat-button:focus-visible,
+.checkpoint-quick-add-modal .cp-repeat-button:focus-visible,
+.checkpoint-view .cp-pop .cp-repeat-opt:focus-visible,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-opt:focus-visible,
+.checkpoint-view .cp-pop .cp-repeat-day:focus-visible,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-day:focus-visible,
+.checkpoint-view .cp-pop .cp-repeat-seg button:focus-visible,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-seg button:focus-visible,
+.checkpoint-view .cp-pop .cp-repeat-custom select:focus-visible,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-custom select:focus-visible,
+.checkpoint-view .cp-pop .cp-repeat-custom input:focus-visible,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-custom input:focus-visible {
+	outline: 2px solid var(--cp-accent);
+	outline-offset: 1px;
+}
+
+/* In place, under its button: not floating, so nothing clips it. */
+.checkpoint-view .cp-pop.cp-repeat-pop.is-inline,
+.checkpoint-quick-add-modal .cp-pop.cp-repeat-pop.is-inline {
+	position: static;
+	box-sizing: border-box;
+	width: 100%;
+	max-height: none;
+	margin-top: var(--size-4-2);
+	padding: var(--size-4-3);
+	box-shadow: none;
+}
+
+/* The date popover shows the custom editor in place of its date body. */
+.checkpoint-view .cp-date-pop.is-repeat,
+.checkpoint-quick-add-modal .cp-date-pop.is-repeat {
+	width: 336px;
+}
+
+.checkpoint-view .cp-repeat-inline,
+.checkpoint-quick-add-modal .cp-repeat-inline {
+	padding: 0 6px 8px;
+}
+
+/* -- Presets: the Repeat line and the listbox ----------------------------------------- */
+
+.checkpoint-view .cp-repeat-presets,
+.checkpoint-quick-add-modal .cp-repeat-presets {
+	display: grid;
+	gap: var(--size-4-2);
+}
+
+.checkpoint-view .cp-repeat-line,
+.checkpoint-quick-add-modal .cp-repeat-line {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: 0 6px;
+	min-height: var(--cp-menu-row);
+}
+
+.checkpoint-view .cp-repeat-line-k,
+.checkpoint-quick-add-modal .cp-repeat-line-k {
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-repeat-line-v,
+.checkpoint-quick-add-modal .cp-repeat-line-v {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--cp-purple-text);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-repeat-opts,
+.checkpoint-quick-add-modal .cp-repeat-opts {
+	display: grid;
+	gap: 2px;
+	padding: 4px;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-repeat-opt,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-opt {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 36px;
+	padding: 0 10px;
+	border-radius: 7px;
+	font-size: 14px;
+	text-align: left;
+}
+
+.checkpoint-view .cp-pop .cp-repeat-opt:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-opt:hover {
+	background: var(--background-modifier-active-hover);
+}
+
+.checkpoint-view .cp-pop .cp-repeat-opt.is-on,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-opt.is-on {
+	background: var(--background-primary);
+	color: var(--cp-accent-text);
+	font-weight: var(--font-semibold);
+	box-shadow: 0 1px 2px var(--background-modifier-box-shadow);
+}
+
+.checkpoint-view .cp-repeat-opt-hint,
+.checkpoint-quick-add-modal .cp-repeat-opt-hint {
+	color: var(--text-faint);
+	font-size: 12.5px;
+	font-weight: var(--font-normal);
+}
+
+/* -- Custom: the aligned grid editor ---------------------------------------------------- */
+
+.checkpoint-view .cp-repeat-title,
+.checkpoint-quick-add-modal .cp-repeat-title {
+	margin: 0 0 12px;
+	color: var(--text-faint);
+	font-size: var(--cp-label-size);
+	font-weight: var(--font-semibold);
+	letter-spacing: var(--cp-label-spacing);
+	text-transform: uppercase;
+}
+
+.checkpoint-view .cp-repeat-grid,
+.checkpoint-quick-add-modal .cp-repeat-grid {
+	display: grid;
+	grid-template-columns: 52px minmax(0, 1fr);
+	gap: 12px 10px;
+	align-items: start;
+}
+
+.checkpoint-view .cp-repeat-lbl,
+.checkpoint-quick-add-modal .cp-repeat-lbl {
+	color: var(--text-muted);
+	line-height: 34px;
+}
+
+.checkpoint-view .cp-repeat-r,
+.checkpoint-quick-add-modal .cp-repeat-r {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	min-height: 34px;
+	color: var(--text-muted);
+}
+
+.checkpoint-view .cp-repeat-full,
+.checkpoint-quick-add-modal .cp-repeat-full {
+	grid-column: 1 / -1;
+}
+
+.checkpoint-view .cp-repeat-ctl,
+.checkpoint-quick-add-modal .cp-repeat-ctl {
+	grid-column: 2;
+}
+
+.checkpoint-view .cp-repeat-custom input.cp-repeat-num,
+.checkpoint-quick-add-modal .cp-repeat-custom input.cp-repeat-num {
+	box-sizing: border-box;
+	width: 60px;
+	height: 34px;
+	padding: 0 8px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-repeat-custom input.cp-repeat-date,
+.checkpoint-quick-add-modal .cp-repeat-custom input.cp-repeat-date {
+	box-sizing: border-box;
+	height: 34px;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-repeat-custom select.dropdown,
+.checkpoint-quick-add-modal .cp-repeat-custom select.dropdown {
+	height: 34px;
+	max-width: 100%;
+}
+
+.checkpoint-view .cp-repeat-days,
+.checkpoint-quick-add-modal .cp-repeat-days {
+	display: flex;
+	gap: 4px;
+	width: 100%;
+}
+
+.checkpoint-view .cp-pop .cp-repeat-day,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-day {
+	flex: 1 1 0;
+	min-width: 0;
+	height: 34px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 12.5px;
+}
+
+.checkpoint-view .cp-pop .cp-repeat-day:hover,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-day:hover {
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-repeat-day[aria-pressed="true"],
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-day[aria-pressed="true"] {
+	border-color: var(--cp-accent);
+	background: var(--cp-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-repeat-radio,
+.checkpoint-quick-add-modal .cp-repeat-radio {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-repeat-radio-row,
+.checkpoint-quick-add-modal .cp-repeat-radio-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-height: 34px;
+	margin: 0;
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-repeat-radio-label,
+.checkpoint-quick-add-modal .cp-repeat-radio-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-repeat-radio-row input[type="radio"],
+.checkpoint-quick-add-modal .cp-repeat-radio-row input[type="radio"] {
+	flex: none;
+	margin: 0;
+}
+
+.checkpoint-view .cp-repeat-note,
+.checkpoint-quick-add-modal .cp-repeat-note {
+	color: var(--text-faint);
+}
+
+.checkpoint-view .cp-repeat-check,
+.checkpoint-quick-add-modal .cp-repeat-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0;
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-repeat-check input,
+.checkpoint-quick-add-modal .cp-repeat-check input {
+	flex: none;
+	margin: 3px 0 0;
+}
+
+.checkpoint-view .cp-repeat-check-text,
+.checkpoint-quick-add-modal .cp-repeat-check-text {
+	min-width: 0;
+}
+
+.checkpoint-view .cp-repeat-check small,
+.checkpoint-quick-add-modal .cp-repeat-check small {
+	display: block;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+.checkpoint-view .cp-repeat-check.is-off,
+.checkpoint-quick-add-modal .cp-repeat-check.is-off {
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.checkpoint-view .cp-repeat-seg,
+.checkpoint-quick-add-modal .cp-repeat-seg {
+	display: inline-flex;
+	align-items: center;
+	height: 34px;
+	padding: 3px;
+	border-radius: 8px;
+	background: var(--background-modifier-hover);
+}
+
+.checkpoint-view .cp-pop .cp-repeat-seg button,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-seg button {
+	padding: 5px 10px;
+	border-radius: 6px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.checkpoint-view .cp-pop .cp-repeat-seg button[aria-pressed="true"],
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-seg button[aria-pressed="true"] {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+	box-shadow: 0 1px 2px var(--background-modifier-box-shadow);
+}
+
+.checkpoint-view .cp-repeat-summary,
+.checkpoint-quick-add-modal .cp-repeat-summary {
+	padding: 8px 10px;
+	border-radius: 9px;
+	background: var(--cp-accent-soft);
+	color: var(--cp-accent-text);
+	font-size: 13px;
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-repeat-summary.is-problem,
+.checkpoint-quick-add-modal .cp-repeat-summary.is-problem {
+	background: var(--cp-red-soft);
+	color: var(--cp-red-text);
+}
+
+.checkpoint-view .cp-repeat-btns,
+.checkpoint-quick-add-modal .cp-repeat-btns {
+	padding: 14px 0 0;
+}
+
+.checkpoint-view .cp-pop .cp-repeat-done:disabled,
+.checkpoint-quick-add-modal .cp-pop .cp-repeat-done:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* The date popover's Repeat row: the rule can be long ("every 2 weeks, Mon, Wed · ends Dec 31"). */
+.checkpoint-view .cp-pop .cp-pop-row[data-row="repeat"] .cp-pop-val,
+.checkpoint-quick-add-modal .cp-pop .cp-pop-row[data-row="repeat"] .cp-pop-val {
+	min-width: 0;
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* -- Typed and picked repeats in the Quick Add chip row ------------------------------------ */
+
+.checkpoint-view .cp-qa-chip-applied[data-kind="recurrence"],
+.checkpoint-quick-add-modal .cp-qa-chip-applied[data-kind="recurrence"],
+.checkpoint-view .cp-qa-manual[data-kind="recurrence"],
+.checkpoint-quick-add-modal .cp-qa-manual[data-kind="recurrence"] {
+	border-color: transparent;
+	background: var(--cp-purple-soft);
+	color: var(--cp-purple-text);
+}
+
+.checkpoint-view .cp-qa-span-applied.cp-qa-tok-repeat,
+.checkpoint-quick-add-modal .cp-qa-span-applied.cp-qa-tok-repeat {
+	background: var(--cp-purple-soft);
+}
+
+/* -- Rows and cards ---------------------------------------------------------------------------- */
+
+.checkpoint-view .cp-meta-repeat {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--cp-purple-soft);
+	color: var(--cp-purple-text);
+	font-weight: var(--font-medium);
+}
+
+.checkpoint-view .cp-meta-repeat .cp-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.checkpoint-view .cp-meta-repeat-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A narrow row shrinks the words with an ellipsis (the meta cells shrink: .cp-task-meta > *); the icon stays. */
+
+.checkpoint-view .cp-occurrence-date {
+	color: var(--text-muted);
+}
+
+/* -- Calendar occurrences ---------------------------------------------------------------------------- */
+
+/* Current solid; future faded with a dashed edge; skipped fainter; done is struck through by .is-completed. */
+.checkpoint-view .cp-cal-entry.is-future {
+	opacity: 0.55;
+	border-left-style: dashed;
+}
+
+.checkpoint-view .cp-cal-entry.is-skipped {
+	opacity: 0.4;
+}
+
+/* An occurrence is not draggable: it opens, it does not grab. */
+.checkpoint-view .cp-calendar:not(.is-dragging) .cp-cal-entry.is-repeat {
+	cursor: pointer;
+}
+
+.checkpoint-view .cp-cal-repeat {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	color: var(--cp-purple-text);
+}
+
+.checkpoint-view .cp-cal-repeat svg {
+	width: 11px;
+	height: 11px;
+}
+
+/* == end M7 recurrence == */

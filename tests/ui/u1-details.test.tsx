@@ -1,0 +1,253 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it } from "vitest";
+import { addDays } from "../../src/domain/time";
+import { menuItem, mountU1, settle } from "./u1-helpers";
+
+// The details pane, sidebar list icon and color editing.
+
+let current: { unmount: () => void } | null = null;
+afterEach(() => {
+	current?.unmount();
+	current = null;
+});
+async function mount() {
+	const m = await mountU1();
+	current = m;
+	return m;
+}
+const side = (root: HTMLElement, name: string) =>
+	[...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(name))!;
+async function openTask(root: HTMLElement, title: string) {
+	side(root, "Inbox").click();
+	await settle();
+	[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes(title))!.click();
+	await settle();
+	return root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+}
+const icon = (el: Element | null) => el?.querySelector("[data-icon]")?.getAttribute("data-icon");
+
+describe("details pane", () => {
+	it("top bar: priority checkbox, date chip, priority flag, more menu", async () => {
+		const { h, host, root } = await mount();
+		const { task } = await h.app.tasks.create({
+			title: "Plan",
+			scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" },
+			plannedDurationMin: 45,
+		});
+		await h.app.tasks.setPriority(task.id, 1);
+		const d = await openTask(root, "Plan");
+		const top = d.querySelector(".cp-details-top")!;
+		expect(top.querySelector(".cp-task-checkbox")!.classList.contains("cp-pri-1")).toBe(true);
+		const chip = top.querySelector<HTMLButtonElement>(".cp-due-chip")!;
+		expect(chip.tagName).toBe("BUTTON");
+		expect(chip.textContent).toContain("Today, 19:00 · 45 min");
+		expect(chip.classList.contains("is-today")).toBe(true);
+		const flag = top.querySelector<HTMLButtonElement>('[aria-label="Priority: high"]')!;
+		expect(icon(flag)).toBe("flag");
+		flag.click();
+		const menu = host.menus.at(-1);
+		expect(menuItem(menu, "Medium").run).toBeTypeOf("function");
+		menuItem(menu, "Medium").run();
+		await settle();
+		expect(h.app.store.state.tasks.get(task.id)?.priority).toBe(2);
+		expect(top.querySelector('[aria-label="Priority: medium"]')).not.toBeNull();
+		expect(top.querySelector('[aria-label="More task actions"]')).not.toBeNull();
+	});
+
+	it("shows No date and priority none", async () => {
+		const { h, root } = await mount();
+		await h.app.tasks.create({ title: "Bare" });
+		const d = await openTask(root, "Bare");
+		expect(d.querySelector(".cp-due-chip")?.textContent).toContain("No date");
+		expect(d.querySelector('[aria-label="Priority: none"]')).not.toBeNull();
+	});
+
+	it("body: dashed add-tag button, tag pills, subtasks n / m", async () => {
+		const { h, root } = await mount();
+		const tag = await h.app.tags.create("work", "blue");
+		const { task } = await h.app.tasks.create({ title: "Parent", tagKeys: [tag.key] });
+		const sub = await h.app.tasks.create({ title: "Child", parentId: task.id });
+		await h.app.tasks.complete(sub.task.id);
+		const d = await openTask(root, "Parent");
+		expect(d.querySelector(".cp-details-tags .cp-tag-pill.cp-hue-blue")?.textContent).toContain("@work");
+		const add = d.querySelector<HTMLButtonElement>(".cp-add-tag")!;
+		expect(add.getAttribute("aria-label")).toBe("Add tag");
+		expect(d.querySelector(".cp-tag-input input")).toBeNull();
+		add.click();
+		await settle();
+		expect(d.querySelector(".cp-tag-input input")).not.toBeNull();
+		expect(d.querySelector(".cp-section-heading")?.textContent).toBeDefined();
+		expect(d.querySelector(".cp-subtasks-count")?.textContent).toBe("1 / 1");
+	});
+
+	it("note card: none, linked (file name, open button), missing", async () => {
+		const { h, host, root } = await mount();
+		h.notes.files.set("Notes/Plan.md", "body");
+		const { task } = await h.app.tasks.create({ title: "Noted" });
+		let d = await openTask(root, "Noted");
+		expect(d.querySelector(".cp-description.is-empty")).not.toBeNull();
+		await h.app.tasks.linkNote(task.id, "Notes/Plan.md");
+		await settle();
+		d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+		const card = d.querySelector(".cp-description.is-linked")!;
+		expect(card.querySelector(".cp-note-head")?.textContent).toContain("Plan.md");
+		expect(icon(card.querySelector(".cp-note-head"))).toBe("file-text");
+		const open = card.querySelector<HTMLButtonElement>('[aria-label="Open note"]')!;
+		expect(icon(open)).toBe("external-link");
+		open.click();
+		expect(host.opened).toEqual(["Notes/Plan.md"]);
+		h.notes.files.delete("Notes/Plan.md");
+		host.noteEvents.emit("note", "Notes/Plan.md");
+		await settle();
+		expect(root.querySelector(".cp-tasks .cp-description.is-missing")).not.toBeNull();
+	});
+
+	it("footer: list button and an enabled Focus button that starts focus", async () => {
+		const { h, host, root } = await mount();
+		const cat = await h.app.categories.create("Work", "briefcase");
+		const { task } = await h.app.tasks.create({ title: "Footed", categoryId: cat.id });
+		side(root, "Work").click();
+		await settle();
+		[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Footed"))!.click();
+		await settle();
+		const foot = root.querySelector<HTMLElement>(".cp-tasks .cp-details-foot")!;
+		const listBtn = foot.querySelector<HTMLButtonElement>(".cp-list-button")!;
+		expect(listBtn.textContent).toContain("Work");
+		expect(icon(listBtn)).toBe("briefcase");
+		host.nextCategory = "inbox";
+		listBtn.click();
+		await settle();
+		expect(h.app.store.state.tasks.get(task.id)?.categoryId).toBe("inbox");
+		const focus = foot.querySelector<HTMLButtonElement>(".cp-focus-button")!;
+		const started: (string | null)[] = [];
+		host.startFocus = async (id: string | null) => {
+			started.push(id);
+		};
+		expect(focus.disabled).toBe(false);
+		expect(focus.getAttribute("aria-disabled")).toBeNull();
+		expect(focus.textContent).toContain("Focus");
+		expect(icon(focus)).toBe("target");
+		expect(focus.getAttribute("title")).toBeNull();
+		focus.click();
+		expect(started).toEqual([task.id]);
+	});
+});
+
+describe("list icon and color editing", () => {
+	it("the list menu offers Change icon and Change color", async () => {
+		const { h, host, root } = await mount();
+		const cat = await h.app.categories.create("Study");
+		await settle();
+		side(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+		const menu = host.menus.at(-1);
+		host.nextIcon = "book-open";
+		menuItem(menu, "Change icon…").run();
+		await settle();
+		expect(h.app.store.state.categories.get(cat.id)?.icon).toBe("book-open");
+		expect(icon(side(root, "Study"))).toBe("book-open");
+
+		host.nextIcon = null;
+		menuItem(menu, "Change icon…").run();
+		await settle();
+		expect(h.app.store.state.categories.get(cat.id)?.icon).toBeNull();
+
+		host.nextIcon = undefined;
+		menuItem(menu, "Change icon…").run();
+		await settle();
+		expect(h.app.store.state.categories.get(cat.id)?.icon).toBeNull();
+
+		menuItem(menu, "Change color…").run();
+		const colorMenu = host.menus.at(-1);
+		menuItem(colorMenu, "Green").run();
+		await settle();
+		expect(h.app.store.state.categories.get(cat.id)?.color).toBe("green");
+		expect(side(root, "Study").classList.contains("cp-hue-green")).toBe(true);
+		menuItem(host.menus.at(-1), "None").run();
+		await settle();
+		expect(h.app.store.state.categories.get(cat.id)?.color).toBeNull();
+	});
+
+	it("the color menu lists all eight colors and none, marking the current one", async () => {
+		const { h, host, root } = await mount();
+		const cat = await h.app.categories.create("Study");
+		await h.app.categories.setColor(cat.id, "pink");
+		await settle();
+		side(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+		menuItem(host.menus.at(-1), "Change color…").run();
+		const items = host.menus.at(-1)!.filter((i) => i !== "separator");
+		expect(items.map((i) => i.title)).toEqual(["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "None"]);
+		expect(items.filter((i) => i.checked).map((i) => i.title)).toEqual(["Pink"]);
+	});
+});
+
+describe("details completion checkbox", () => {
+	it("reflects completing and reopening at once (checked, aria-label, no other interaction)", async () => {
+		const { h, root } = await mount();
+		const { task } = await h.app.tasks.create({ title: "Finish me" });
+		const d = await openTask(root, "Finish me");
+		const box = () => d.querySelector<HTMLInputElement>(".cp-details-top .cp-task-checkbox")!;
+		expect(box().checked).toBe(false);
+		box().click();
+		await settle();
+		expect(h.app.store.state.tasks.get(task.id)?.status).toBe("completed");
+		expect(box().checked).toBe(true);
+		expect(box().getAttribute("aria-label")).toBe('Reopen "Finish me"');
+		box().click();
+		await settle();
+		expect(box().checked).toBe(false);
+		expect(box().getAttribute("aria-label")).toBe('Complete "Finish me"');
+	});
+});
+
+describe("details subtasks use the Quick Add parser (polish #95)", () => {
+	const typeInto = async (input: HTMLInputElement, value: string) => {
+		input.value = value;
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+		await settle();
+	};
+	const enter = async (el: Element) => {
+		el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		await settle();
+	};
+	const subInput = (d: HTMLElement) => d.querySelector<HTMLInputElement>(".cp-details-section .cp-qa-input")!;
+
+	it("parses date, priority and tags, keeps the parent's category and ID", async () => {
+		const { h, root } = await mount();
+		const cat = await h.app.categories.create("Study");
+		const { task: parent } = await h.app.tasks.create({ title: "Parent", categoryId: cat.id });
+		side(root, "Study").click();
+		await settle();
+		[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Parent"))!.click();
+		await settle();
+		const d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+		await typeInto(subInput(d), "Read ch 2 tomorrow !1 @reading");
+		await enter(subInput(d));
+		const subs = [...h.app.store.state.tasks.values()].filter((t) => t.parentId === parent.id);
+		expect(subs).toHaveLength(1);
+		const sub = subs[0]!;
+		expect(sub.title).toBe("Read ch 2");
+		expect(sub.scheduled).toEqual({ kind: "date", date: addDays(h.app.queryContext().today, 1) });
+		expect(sub.priority).toBe(1);
+		expect(sub.tagKeys).toEqual(["reading"]);
+		expect(sub.categoryId).toBe(cat.id);
+		// The input is empty and ready for the next one.
+		expect(subInput(d).value).toBe("");
+	});
+
+	it("a typed #Category never moves a subtask (SUB-02): it stays in the parent's category", async () => {
+		const { h, root } = await mount();
+		const study = await h.app.categories.create("Study");
+		const work = await h.app.categories.create("Work");
+		const { task: parent } = await h.app.tasks.create({ title: "Parent", categoryId: study.id });
+		side(root, "Study").click();
+		await settle();
+		[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Parent"))!.click();
+		await settle();
+		const d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+		await typeInto(subInput(d), "Draft #Work");
+		await enter(subInput(d));
+		const sub = [...h.app.store.state.tasks.values()].find((t) => t.parentId === parent.id)!;
+		expect(sub.categoryId).toBe(study.id);
+		expect(sub.categoryId).not.toBe(work.id);
+	});
+});

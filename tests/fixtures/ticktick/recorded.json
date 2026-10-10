@@ -1,0 +1,1182 @@
+{
+ "_about": "Recorded TickTick Open API responses (2026-10-07/08) from throwaway sandbox projects. Response bodies only; no headers or tokens. Keys name the probe request.",
+ "responses": {
+  "10-tasks/01-create-all-day-task": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 5,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "etag": "fvfm0dle",
+    "etimestamp": 1791399159238,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:39.230+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   },
+   "request": {
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "title": "Call the bank",
+    "content": "Content written on the TickTick side",
+    "isAllDay": true,
+    "startDate": "2026-10-08T00:00:00+0300",
+    "dueDate": "2026-10-08T00:00:00+0300",
+    "timeZone": "Europe/Moscow",
+    "priority": 5,
+    "tags": [
+     "home",
+     "calls"
+    ]
+   }
+  },
+  "10-tasks/02-get-task": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 5,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "etag": "fvfm0dle",
+    "etimestamp": 1791399159238,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:39.230+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   }
+  },
+  "10-tasks/03-create-timed-task": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f98f088b3af839d240",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -2199023255552,
+    "title": "Dentist",
+    "startDate": "2026-10-08T07:00:00.000+0000",
+    "dueDate": "2026-10-08T07:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": false,
+    "priority": 0,
+    "isFloating": false,
+    "status": 0,
+    "tags": [],
+    "etag": "kxu2663c",
+    "etimestamp": 1791399161706,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:41.705+0000",
+    "createdTime": "2026-10-07T18:52:41.705+0000"
+   },
+   "request": {
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "title": "Dentist",
+    "isAllDay": false,
+    "startDate": "2026-10-08T09:00:00+0300",
+    "dueDate": "2026-10-08T10:00:00+0300",
+    "timeZone": "Europe/Moscow"
+   }
+  },
+  "10-tasks/04-create-subtask": {
+   "status": 200,
+   "body": {
+    "id": "6ac694fa8f088b3af839d262",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -3298534883328,
+    "title": "Find the account number",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": false,
+    "priority": 0,
+    "isFloating": false,
+    "status": 0,
+    "tags": [],
+    "etag": "f96xbuqe",
+    "etimestamp": 1791399162914,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.910+0000",
+    "createdTime": "2026-10-07T18:52:42.910+0000"
+   },
+   "request": {
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "title": "Find the account number",
+    "parentId": "6ac694f78f08797283361f3b"
+   }
+  },
+  "10-tasks/05-get-sandbox-project-data": {
+   "status": 200,
+   "body": {
+    "project": {
+     "id": "6ac694f38f084dbfa9c80388",
+     "name": "Logwell API sandbox",
+     "sortOrder": 0,
+     "viewMode": "list",
+     "kind": "TASK"
+    },
+    "tasks": [
+     {
+      "id": "6ac694f98f088b3af839d240",
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "sortOrder": -2199023255552,
+      "title": "Dentist",
+      "startDate": "2026-10-08T07:00:00.000+0000",
+      "dueDate": "2026-10-08T07:00:00.000+0000",
+      "timeZone": "Europe/Moscow",
+      "isAllDay": false,
+      "priority": 0,
+      "isFloating": false,
+      "status": 0,
+      "tags": [],
+      "etag": "kxu2663c",
+      "etimestamp": 1791399161706,
+      "kind": "TEXT",
+      "modifiedTime": "2026-10-07T18:52:41.705+0000",
+      "createdTime": "2026-10-07T18:52:41.705+0000"
+     },
+     {
+      "id": "6ac694f78f08797283361f3b",
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "sortOrder": -1099511627776,
+      "title": "Call the bank",
+      "content": "Content written on the TickTick side",
+      "startDate": "2026-10-07T21:00:00.000+0000",
+      "dueDate": "2026-10-07T21:00:00.000+0000",
+      "timeZone": "Europe/Moscow",
+      "isAllDay": true,
+      "priority": 5,
+      "isFloating": false,
+      "status": 0,
+      "tags": [
+       "calls",
+       "home"
+      ],
+      "childIds": [
+       "6ac694fa8f088b3af839d262"
+      ],
+      "etag": "27jvk3p3",
+      "etimestamp": 1791399162923,
+      "kind": "TEXT",
+      "modifiedTime": "2026-10-07T18:52:42.923+0000",
+      "createdTime": "2026-10-07T18:52:39.230+0000"
+     },
+     {
+      "id": "6ac694fa8f088b3af839d262",
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "sortOrder": -3298534883328,
+      "title": "Find the account number",
+      "timeZone": "Europe/Moscow",
+      "isAllDay": false,
+      "priority": 0,
+      "isFloating": false,
+      "status": 0,
+      "tags": [],
+      "parentId": "6ac694f78f08797283361f3b",
+      "etag": "22ds64w2",
+      "etimestamp": 1791399162928,
+      "kind": "TEXT",
+      "modifiedTime": "2026-10-07T18:52:42.928+0000",
+      "createdTime": "2026-10-07T18:52:42.910+0000"
+     }
+    ],
+    "columns": []
+   }
+  },
+  "10-tasks/06-partial-update-title-only": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank (renamed)",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 5,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "childIds": [
+     "6ac694fa8f088b3af839d262"
+    ],
+    "etag": "0yirgkx1",
+    "etimestamp": 1791399165235,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.923+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   },
+   "request": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "title": "Call the bank (renamed)"
+   }
+  },
+  "10-tasks/07-get-task-after-partial-update": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank (renamed)",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 5,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "childIds": [
+     "6ac694fa8f088b3af839d262"
+    ],
+    "etag": "0yirgkx1",
+    "etimestamp": 1791399165235,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.923+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   }
+  },
+  "10-tasks/08-complete-task": {
+   "status": 200,
+   "body": ""
+  },
+  "10-tasks/09-list-completed-in-window": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac694f98f088b3af839d240",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -2199023255552,
+     "title": "Dentist",
+     "startDate": "2026-10-08T07:00:00.000+0000",
+     "dueDate": "2026-10-08T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "completedTime": "2026-10-07T18:52:47.480+0000",
+     "status": 2,
+     "etag": "yom23fpy",
+     "etimestamp": 1791399167483,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:47.483+0000",
+     "createdTime": "2026-10-07T18:52:41.705+0000"
+    }
+   ],
+   "request": {
+    "projectIds": [
+     "6ac694f38f084dbfa9c80388"
+    ],
+    "startDate": "2026-10-06T00:00:00+0300",
+    "endDate": "2026-10-14T23:59:00+0300"
+   }
+  },
+  "10-tasks/10-reopen-task-status-0": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f98f088b3af839d240",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -2199023255552,
+    "title": "Dentist",
+    "startDate": "2026-10-08T07:00:00.000+0000",
+    "dueDate": "2026-10-08T07:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": false,
+    "priority": 0,
+    "isFloating": false,
+    "completedTime": "2026-10-07T18:52:47.480+0000",
+    "status": 0,
+    "etag": "1qo59a5t",
+    "etimestamp": 1791399169744,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:47.483+0000",
+    "createdTime": "2026-10-07T18:52:41.705+0000"
+   },
+   "request": {
+    "id": "6ac694f98f088b3af839d240",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "status": 0
+   }
+  },
+  "10-tasks/11-delete-subtask": {
+   "status": 200,
+   "body": ""
+  },
+  "10-tasks/12-get-deleted-task": {
+   "status": 200,
+   "body": {
+    "id": "6ac694fa8f088b3af839d262",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -3298534883328,
+    "title": "Find the account number",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": false,
+    "priority": 0,
+    "isFloating": false,
+    "status": 0,
+    "tags": [],
+    "parentId": "6ac694f78f08797283361f3b",
+    "etag": "e73brxot",
+    "etimestamp": 1791399170932,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:50.932+0000",
+    "createdTime": "2026-10-07T18:52:42.910+0000"
+   }
+  },
+  "20-change-detection/01-get-task-record-etag": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank (renamed)",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 5,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "childIds": [
+     "6ac694fa8f088b3af839d262"
+    ],
+    "etag": "0yirgkx1",
+    "etimestamp": 1791399165235,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.923+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   }
+  },
+  "20-change-detection/02-update-priority": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank (renamed)",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 1,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "childIds": [
+     "6ac694fa8f088b3af839d262"
+    ],
+    "etag": "dvqg9moy",
+    "etimestamp": 1791399174432,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.923+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   },
+   "request": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "priority": 1
+   }
+  },
+  "20-change-detection/03-get-task-etag-changed": {
+   "status": 200,
+   "body": {
+    "id": "6ac694f78f08797283361f3b",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -1099511627776,
+    "title": "Call the bank (renamed)",
+    "content": "Content written on the TickTick side",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 1,
+    "isFloating": false,
+    "status": 0,
+    "tags": [
+     "calls",
+     "home"
+    ],
+    "childIds": [
+     "6ac694fa8f088b3af839d262"
+    ],
+    "etag": "dvqg9moy",
+    "etimestamp": 1791399174432,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:52:42.923+0000",
+    "createdTime": "2026-10-07T18:52:39.230+0000"
+   }
+  },
+  "20-change-detection/04-batch-add-and-update": {
+   "status": 200,
+   "body": {
+    "id2etag": {
+     "6ac695088f084dbfa9c807f1": "bkptmrgk",
+     "6ac695088f089f3769d2b755": "01yd4xz5",
+     "6ac694f78f08797283361f3b": "2x7fg4ct"
+    },
+    "id2error": {}
+   },
+   "request": {
+    "add": [
+     {
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "title": "Buy milk"
+     },
+     {
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "title": "Water the plants"
+     }
+    ],
+    "update": [
+     {
+      "id": "6ac694f78f08797283361f3b",
+      "projectId": "6ac694f38f084dbfa9c80388",
+      "title": "Call the bank (batch)"
+     }
+    ]
+   }
+  },
+  "20-change-detection/05-filter-tasks-in-sandbox": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac694f78f08797283361f3b",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -1099511627776,
+     "title": "Call the bank (batch)",
+     "content": "Content written on the TickTick side",
+     "startDate": "2026-10-07T21:00:00.000+0000",
+     "dueDate": "2026-10-07T21:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": true,
+     "priority": 1,
+     "isFloating": false,
+     "status": 0,
+     "tags": [
+      "calls",
+      "home"
+     ],
+     "childIds": [
+      "6ac694fa8f088b3af839d262"
+     ],
+     "etag": "2x7fg4ct",
+     "etimestamp": 1791399176724,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:42.923+0000",
+     "createdTime": "2026-10-07T18:52:39.230+0000"
+    },
+    {
+     "id": "6ac695088f084dbfa9c807f1",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -4398046511104,
+     "title": "Water the plants",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "bkptmrgk",
+     "etimestamp": 1791399176713,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:56.711+0000",
+     "createdTime": "2026-10-07T18:52:56.711+0000"
+    },
+    {
+     "id": "6ac695088f089f3769d2b755",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -4398046511104,
+     "title": "Buy milk",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "01yd4xz5",
+     "etimestamp": 1791399176700,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:56.698+0000",
+     "createdTime": "2026-10-07T18:52:56.698+0000"
+    },
+    {
+     "id": "6ac694f98f088b3af839d240",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -2199023255552,
+     "title": "Dentist",
+     "startDate": "2026-10-08T07:00:00.000+0000",
+     "dueDate": "2026-10-08T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "completedTime": "2026-10-07T18:52:47.480+0000",
+     "status": 0,
+     "etag": "1qo59a5t",
+     "etimestamp": 1791399169744,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:47.483+0000",
+     "createdTime": "2026-10-07T18:52:41.705+0000"
+    }
+   ],
+   "request": {
+    "projectIds": [
+     "6ac694f38f084dbfa9c80388"
+    ],
+    "status": [
+     0,
+     2
+    ]
+   }
+  },
+  "20-change-detection/06-undone-tasks-next-7-days": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac694f98f088b3af839d240",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -2199023255552,
+     "title": "Dentist",
+     "startDate": "2026-10-08T07:00:00.000+0000",
+     "dueDate": "2026-10-08T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "completedTime": "2026-10-07T18:52:47.480+0000",
+     "status": 0,
+     "etag": "1qo59a5t",
+     "etimestamp": 1791399169744,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:47.483+0000",
+     "createdTime": "2026-10-07T18:52:41.705+0000"
+    },
+    {
+     "id": "6ac694f78f08797283361f3b",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -1099511627776,
+     "title": "Call the bank (batch)",
+     "content": "Content written on the TickTick side",
+     "startDate": "2026-10-07T21:00:00.000+0000",
+     "dueDate": "2026-10-07T21:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": true,
+     "priority": 1,
+     "isFloating": false,
+     "status": 0,
+     "tags": [
+      "calls",
+      "home"
+     ],
+     "childIds": [
+      "6ac694fa8f088b3af839d262"
+     ],
+     "etag": "2x7fg4ct",
+     "etimestamp": 1791399176724,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:52:42.923+0000",
+     "createdTime": "2026-10-07T18:52:39.230+0000"
+    }
+   ],
+   "request": {
+    "projectIds": [
+     "6ac694f38f084dbfa9c80388"
+    ],
+    "startDate": "2026-10-06T00:00:00+0300",
+    "endDate": "2026-10-14T23:59:00+0300"
+   }
+  },
+  "20-change-detection/07-move-task-to-inbox": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac694f78f08797283361f3b",
+     "isAllDay": false,
+     "isFloating": false,
+     "etag": "p59fc3ha",
+     "etimestamp": 1791399180218,
+     "modifiedTime": "2026-10-07T18:53:00.218+0000"
+    }
+   ],
+   "request": [
+    {
+     "fromProjectId": "6ac694f38f084dbfa9c80388",
+     "toProjectId": "inbox",
+     "taskId": "6ac694f78f08797283361f3b"
+    }
+   ]
+  },
+  "20-change-detection/08-move-task-back-to-sandbox": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac694f78f08797283361f3b",
+     "isAllDay": false,
+     "isFloating": false,
+     "etag": "1zizlksh",
+     "etimestamp": 1791399181532,
+     "modifiedTime": "2026-10-07T18:53:01.532+0000"
+    }
+   ],
+   "request": [
+    {
+     "fromProjectId": "inbox",
+     "toProjectId": "6ac694f38f084dbfa9c80388",
+     "taskId": "6ac694f78f08797283361f3b"
+    }
+   ]
+  },
+  "20-change-detection/09-get-task-with-wrong-project": {
+   "status": 404,
+   "body": {
+    "errorId": "8xsgt7gg@erver-14",
+    "errorCode": "resource_not_found",
+    "errorMessage": "task not found: 6ac694f78f08797283361f3b",
+    "data": null
+   }
+  },
+  "30-recurrence/01-create-weekly-repeating-task": {
+   "status": 200,
+   "body": {
+    "id": "6ac6950f8f08929498563bfa",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -5497558138880,
+    "title": "Take out the trash",
+    "startDate": "2026-10-07T21:00:00.000+0000",
+    "dueDate": "2026-10-07T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 0,
+    "isFloating": false,
+    "repeatFlag": "RRULE:FREQ=WEEKLY;INTERVAL=1",
+    "repeatFrom": "0",
+    "status": 0,
+    "tags": [],
+    "etag": "cwy5kj6u",
+    "etimestamp": 1791399183913,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:53:03.912+0000",
+    "createdTime": "2026-10-07T18:53:03.912+0000"
+   },
+   "request": {
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "title": "Take out the trash",
+    "isAllDay": true,
+    "startDate": "2026-10-08T00:00:00+0300",
+    "dueDate": "2026-10-08T00:00:00+0300",
+    "timeZone": "Europe/Moscow",
+    "repeatFlag": "RRULE:FREQ=WEEKLY;INTERVAL=1",
+    "repeatFrom": 0
+   }
+  },
+  "30-recurrence/02-complete-repeating-task": {
+   "status": 200,
+   "body": ""
+  },
+  "30-recurrence/03-get-repeating-task-after-complete": {
+   "status": 200,
+   "body": {
+    "id": "6ac6950f8f08929498563bfa",
+    "projectId": "6ac694f38f084dbfa9c80388",
+    "sortOrder": -5497558138880,
+    "title": "Take out the trash",
+    "startDate": "2026-10-14T21:00:00.000+0000",
+    "dueDate": "2026-10-14T21:00:00.000+0000",
+    "timeZone": "Europe/Moscow",
+    "isAllDay": true,
+    "priority": 0,
+    "progress": 0,
+    "isFloating": false,
+    "repeatFlag": "RRULE:FREQ=WEEKLY;INTERVAL=1",
+    "repeatFrom": "0",
+    "status": 0,
+    "etag": "2mamoh3l",
+    "etimestamp": 1791399185185,
+    "kind": "TEXT",
+    "modifiedTime": "2026-10-07T18:53:05.171+0000",
+    "createdTime": "2026-10-07T18:53:03.912+0000"
+   }
+  },
+  "30-recurrence/04-completed-list-after-repeat": {
+   "status": 200,
+   "body": [
+    {
+     "id": "6ac695118f084dbfa9c809ef",
+     "projectId": "6ac694f38f084dbfa9c80388",
+     "sortOrder": -6597069766656,
+     "title": "Take out the trash",
+     "startDate": "2026-10-07T21:00:00.000+0000",
+     "dueDate": "2026-10-07T21:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": true,
+     "priority": 0,
+     "isFloating": false,
+     "completedTime": "2026-10-07T18:53:05.134+0000",
+     "status": 2,
+     "tags": [],
+     "etag": "3814otkr",
+     "etimestamp": 1791399185135,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-07T18:53:05.134+0000",
+     "createdTime": "2026-10-07T18:53:03.912+0000"
+    }
+   ],
+   "request": {
+    "projectIds": [
+     "6ac694f38f084dbfa9c80388"
+    ],
+    "startDate": "2026-10-06T00:00:00+0300",
+    "endDate": "2026-10-14T23:59:00+0300"
+   }
+  },
+  "probe/01-create-probe-project": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748da8f089f3769e4fd94",
+     "name": "Logwell probe",
+     "sortOrder": 0,
+     "viewMode": "kanban",
+     "kind": "TASK"
+    }
+   ]
+  },
+  "probe/02-v7b-create-start-only": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748db8f088b3af84c12f7",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -1099511627776,
+     "title": "Start only",
+     "startDate": "2026-10-09T06:00:00.000+0000",
+     "dueDate": "2026-10-09T06:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "z2gxi4zl",
+     "etimestamp": 1791445211716,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:11.714+0000",
+     "createdTime": "2026-10-08T07:40:11.714+0000"
+    }
+   ]
+  },
+  "probe/03-v7b-create-span": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748dd8f089f3769e4fde1",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -2199023255552,
+     "title": "Span",
+     "startDate": "2026-10-09T07:00:00.000+0000",
+     "dueDate": "2026-10-09T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "xo7n206d",
+     "etimestamp": 1791445213106,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:13.105+0000",
+     "createdTime": "2026-10-08T07:40:13.105+0000"
+    }
+   ]
+  },
+  "probe/04-v7b-update-span": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748dd8f089f3769e4fde1",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -2199023255552,
+     "title": "Span",
+     "startDate": "2026-10-09T07:00:00.000+0000",
+     "dueDate": "2026-10-09T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "etag": "xo7n206d",
+     "etimestamp": 1791445213106,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:13.105+0000",
+     "createdTime": "2026-10-08T07:40:13.105+0000"
+    }
+   ]
+  },
+  "probe/05-v7b-read-span": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748dd8f089f3769e4fde1",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -2199023255552,
+     "title": "Span",
+     "startDate": "2026-10-09T07:00:00.000+0000",
+     "dueDate": "2026-10-09T07:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "xo7n206d",
+     "etimestamp": 1791445213106,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:13.105+0000",
+     "createdTime": "2026-10-08T07:40:13.105+0000"
+    }
+   ]
+  },
+  "probe/06-v7b-batch-span": {
+   "status": 200,
+   "results": [
+    {
+     "id2etag": {
+      "6ac748e18f088b3af84c13a8": "2a3wxlmf"
+     },
+     "id2error": {}
+    }
+   ]
+  },
+  "probe/07-v15b-create-with-client-id": {
+   "status": 200,
+   "results": [
+    "sent e049dd89b7acc9a85a5ab0d4 got 6ac748e28f08929498680484"
+   ]
+  },
+  "probe/08-v15b-batch-with-client-id": {
+   "status": 200,
+   "results": [
+    "sent c9c91ea7f16242dd841e6afd got {\"id2etag\":{\"6ac748e38f089f3769e4febe\":\"n98c3mvt\"},\"id2error\":{}}"
+   ]
+  },
+  "probe/09-col-create": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748e58f088b3af84c1412",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "name": "Probe section",
+     "sortOrder": 0
+    }
+   ]
+  },
+  "probe/10-col-delete": {
+   "status": 500,
+   "results": [
+    "status 500 {\"errorId\":\"i3hyej8b@erver-14\",\"errorCode\":\"client_exception\",\"errorMessage\":\"Request method 'DELETE' not supported\",\"data\":null}"
+   ]
+  },
+  "probe/11-col-list-after-delete": {
+   "status": 200,
+   "results": [
+    [
+     {
+      "id": "6ac748e58f088b3af84c1412",
+      "projectId": "6ac748da8f089f3769e4fd94",
+      "name": "Probe section",
+      "sortOrder": 0
+     }
+    ]
+   ]
+  },
+  "probe/12-checklist-create": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748e98f08797283487327",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -6597069766656,
+     "title": "Trip",
+     "desc": "Trip notes go here.",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "items": [
+      {
+       "id": "6ac748e98f08797283487328",
+       "status": 0,
+       "title": "Bring passport",
+       "sortOrder": 0,
+       "timeZone": "Europe/Moscow"
+      },
+      {
+       "id": "6ac748e98f08797283487329",
+       "status": 0,
+       "title": "Print ticket",
+       "sortOrder": 0,
+       "timeZone": "Europe/Moscow"
+      }
+     ],
+     "tags": [],
+     "etag": "eodgmjkn",
+     "etimestamp": 1791445225104,
+     "kind": "CHECKLIST",
+     "modifiedTime": "2026-10-08T07:40:25.103+0000",
+     "createdTime": "2026-10-08T07:40:25.103+0000"
+    }
+   ]
+  },
+  "probe/13-checklist-update-items": {
+   "status": 200,
+   "results": [
+    "before [{\"id\":\"6ac748e98f08797283487328\",\"status\":0,\"title\":\"Bring passport\",\"sortOrder\":0,\"timeZone\":\"Europe/Moscow\"},{\"id\":\"6ac748e98f08797283487329\",\"status\":0,\"title\":\"Print ticket\",\"sortOrder\":0,\"timeZone\":\"Europe/Moscow\"}]",
+    {
+     "id": "6ac748e98f08797283487327",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -6597069766656,
+     "title": "Trip",
+     "desc": "Trip notes go here.",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": false,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "items": [
+      {
+       "id": "6ac748e98f08797283487328",
+       "status": 0,
+       "title": "Bring passport",
+       "sortOrder": 0,
+       "isAllDay": false,
+       "timeZone": "Europe/Moscow"
+      },
+      {
+       "id": "6ac748e98f08797283487329",
+       "status": 1,
+       "title": "Print ticket",
+       "sortOrder": 0,
+       "isAllDay": false,
+       "timeZone": "Europe/Moscow"
+      },
+      {
+       "id": "6ac748ea8f0892949868053e",
+       "status": 0,
+       "title": "Pack charger",
+       "sortOrder": 0,
+       "timeZone": "Europe/Moscow"
+      }
+     ],
+     "etag": "u5yutlr4",
+     "etimestamp": 1791445226442,
+     "kind": "CHECKLIST",
+     "modifiedTime": "2026-10-08T07:40:25.103+0000",
+     "createdTime": "2026-10-08T07:40:25.103+0000"
+    }
+   ]
+  },
+  "probe/14-wontdo-create": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748eb8f089f3769e4ff92",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -7696581394432,
+     "title": "Skip this",
+     "startDate": "2026-10-08T21:00:00.000+0000",
+     "dueDate": "2026-10-08T21:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": true,
+     "priority": 0,
+     "isFloating": false,
+     "status": 0,
+     "tags": [],
+     "etag": "2qod1waz",
+     "etimestamp": 1791445227760,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:27.759+0000",
+     "createdTime": "2026-10-08T07:40:27.759+0000"
+    }
+   ]
+  },
+  "probe/15-wontdo-set--1": {
+   "status": 200,
+   "results": [
+    {
+     "id": "6ac748eb8f089f3769e4ff92",
+     "projectId": "6ac748da8f089f3769e4fd94",
+     "sortOrder": -7696581394432,
+     "title": "Skip this",
+     "startDate": "2026-10-08T21:00:00.000+0000",
+     "dueDate": "2026-10-08T21:00:00.000+0000",
+     "timeZone": "Europe/Moscow",
+     "isAllDay": true,
+     "priority": 0,
+     "isFloating": false,
+     "completedTime": "2026-10-08T07:40:29.092+0000",
+     "status": -1,
+     "etag": "ifbsi6vx",
+     "etimestamp": 1791445229094,
+     "kind": "TEXT",
+     "modifiedTime": "2026-10-08T07:40:27.759+0000",
+     "createdTime": "2026-10-08T07:40:27.759+0000"
+    }
+   ]
+  },
+  "probe/16-wontdo-in-completed": {
+   "status": 200,
+   "results": [
+    []
+   ]
+  },
+  "probe/17-wontdo-in-filter--1": {
+   "status": 200,
+   "results": [
+    [
+     [
+      "Skip this",
+      -1
+     ],
+     [
+      "Trip",
+      0
+     ],
+     [
+      "Batch client id",
+      0
+     ],
+     [
+      "Client id",
+      0
+     ],
+     [
+      "Batch span",
+      0
+     ],
+     [
+      "Span",
+      0
+     ],
+     [
+      "Start only",
+      0
+     ]
+    ]
+   ]
+  },
+  "probe/18-wontdo-in-data": {
+   "status": 200,
+   "results": [
+    [
+     [
+      "Span",
+      0
+     ],
+     [
+      "Batch span",
+      0
+     ],
+     [
+      "Start only",
+      0
+     ],
+     [
+      "Client id",
+      0
+     ],
+     [
+      "Batch client id",
+      0
+     ],
+     [
+      "Trip",
+      0
+     ]
+    ]
+   ]
+  },
+  "probe/19-cap-batch-1": {
+   "status": 200,
+   "results": [
+    "ok 41 errors {}"
+   ]
+  },
+  "probe/20-cap-batch-2": {
+   "status": 200,
+   "results": [
+    "ok 41 errors {}"
+   ]
+  },
+  "probe/21-cap-batch-3": {
+   "status": 500,
+   "results": [
+    "ok 0 errors {}"
+   ]
+  },
+  "probe/22-cap-batch-4": {
+   "status": 500,
+   "results": [
+    "ok 0 errors {}"
+   ]
+  },
+  "probe/23-cap-batch-5": {
+   "status": 500,
+   "results": [
+    "ok 0 errors {}"
+   ]
+  },
+  "probe/24-cap-read-data": {
+   "status": 200,
+   "results": [
+    "open tasks returned 99"
+   ]
+  },
+  "probe/25-delete-probe-project": {
+   "status": 200,
+   "results": [
+    "status 200"
+   ]
+  }
+ },
+ "_notes": {
+  "limit-free-plan": "A batch that pushes a list past 99 open tasks returned HTTP 500 with only part of the batch created; completing tasks frees room (open tasks count, completed do not).",
+  "column-delete": "DELETE /project/{id}/column/{columnId} -> 500 'Request method DELETE not supported'."
+ }
+}
