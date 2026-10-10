@@ -11,7 +11,15 @@ permissions:
   attestations: write
 
 jobs:
+  # Stage 1: the same checks as CI, on the tagged commit. Stage 2 starts only if they pass.
+  checks:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # Stage 2: build and publish.
   release:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,9 +36,6 @@ jobs:
       - name: Verify the release
         run: node scripts/release-check.mjs verify "$GITHUB_REF_NAME" > notes.md
 
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
       - run: npm run build
 
       # Build attestation (Obsidian Scorecard). GitHub offers it only for public repositories on a
