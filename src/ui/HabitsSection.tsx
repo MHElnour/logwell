@@ -43,7 +43,7 @@ export function HabitsSection(props: {
 	state: DbData;
 	ctx: QueryContext;
 	ui: HabitsSectionState;
-	setUi: (s: HabitsSectionState) => void;
+	setUi: (update: (s: HabitsSectionState) => HabitsSectionState) => void;
 	focusRequest: HabitFocusRequest | null;
 }) {
 	const { host, ctx, ui, setUi } = props;
@@ -78,13 +78,10 @@ export function HabitsSection(props: {
 		(row?.querySelector<HTMLElement>(".cp-habit-ctl input, .cp-habit-ctl button") ?? row?.querySelector<HTMLElement>(".cp-habit-name"))?.focus();
 	});
 
-	const select = (id: ID) => setUi({ ...ui, selectedId: id });
-	// The dialog outlives this render: a saved habit is selected on the latest state.
-	const uiLatest = useRef(ui);
-	uiLatest.current = ui;
+	const select = (id: ID) => setUi((s) => ({ ...s, selectedId: id }));
 	const openDialog = (initial: HabitInput | null) =>
 		void host
-			.habitDialog(habitDialogOptions(host, { initial, onSaved: (id) => setUi({ ...uiLatest.current, selectedId: id, showArchived: false }) }))
+			.habitDialog(habitDialogOptions(host, { initial, onSaved: (id) => setUi((s) => ({ ...s, selectedId: id, showArchived: false })) }))
 			.catch((err: unknown) => host.error(err));
 
 	const newButton = (
@@ -129,7 +126,7 @@ export function HabitsSection(props: {
 						<ArchivedList host={host} habits={archived} today={today} selectedId={selectedId} onSelect={select} />
 					) : (
 						<>
-							<WeekStrip days={stripDays(today, share)} today={today} selected={shownDay} onSelect={(day) => setUi({ ...ui, day })} />
+							<WeekStrip days={stripDays(today, share)} today={today} selected={shownDay} onSelect={(day) => setUi((s) => ({ ...s, day }))} />
 							{onScreen.length === 0 ? (
 								<p class="cp-habit-none">{active.length === 0 ? "No active habits. Restore one from the archive, or add a new one." : "No habits on this day."}</p>
 							) : (
@@ -148,14 +145,14 @@ export function HabitsSection(props: {
 					)}
 					{archived.length > 0 && (
 						<div class="cp-habits-foot">
-							<button type="button" onClick={() => setUi({ ...ui, showArchived: !archivedMode })}>
+							<button type="button" onClick={() => setUi((s) => ({ ...s, showArchived: !archivedMode }))}>
 								{archivedMode ? "Back to habits" : `Archived habits (${archived.length})`}
 							</button>
 						</div>
 					)}
 				</section>
 				{selected !== null && (
-					<HabitDetail key={selected.id} host={host} habit={selected} index={index} today={today} zone={zone} month={ui.month} onMonth={(month) => setUi({ ...ui, month })} />
+					<HabitDetail key={selected.id} host={host} habit={selected} index={index} today={today} zone={zone} month={ui.month} onMonth={(month) => setUi((s) => ({ ...s, month }))} />
 				)}
 			</div>
 		</div>
