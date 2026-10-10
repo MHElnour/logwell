@@ -63,11 +63,6 @@ export interface HabitInput {
 
 // -- day numbers ---------------------------------------------------------------
 
-/** The first day of the week that holds `date` (same as calendar.weekStartOf, without Luxon). */
-function weekStartDate(date: LocalDate, weekStart: WeekStart): LocalDate {
-	return dateOf(weekStartNum(dayNum(date), weekStart));
-}
-
 /** Sums are rounded to the 6 decimals a value may have, so 0.7 + 0.1 meets 0.8. */
 function round6(x: number): number {
 	return Math.round(x * 1e6) / 1e6;
@@ -505,7 +500,7 @@ export function sameRule(v: HabitVersion, goal: HabitGoal, schedule: HabitSchedu
  */
 export function nextVersion(habit: Habit, goal: HabitGoal, schedule: HabitSchedule, weekStart: WeekStart, today: LocalDate): HabitVersion[] {
 	const first = habit.versions[0]?.effectiveFrom ?? today;
-	let from = goal.period === "week" ? weekStartDate(today, weekStart) : today;
+	let from = goal.period === "week" ? dateOf(weekStartNum(dayNum(today), weekStart)) : today;
 	if (from < first) from = first;
 	if (habit.versions.length > 0) {
 		const rules = rulesOf(habit);

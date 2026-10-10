@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import { isDeadlineMissed } from "./queries";
 import { occurrenceSpec, projectOccurrences } from "./recurrence";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import { WEEK_START_ISO, addDays, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, isoWeekdayOf, pad2, wallTimeToDateTime } from "./time";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, pad2, wallTimeToDateTime, weekStartOfDay } from "./time";
 import type { DateSpec, ID, LocalDate, OccurrenceRecord, Task, WeekStart } from "./types";
 
 // Calendar layout. Pure: the caller filters
@@ -17,8 +17,7 @@ export type { WeekStart } from "./types";
 
 /** The first day of the week that contains `date`. */
 export function weekStartOf(date: LocalDate, weekStart: WeekStart): LocalDate {
-	const lead = (isoWeekdayOf(date) - WEEK_START_ISO[weekStart] + 7) % 7;
-	return addDays(date, -lead);
+	return dateOf(weekStartOfDay(dayNum(date), weekStart));
 }
 
 /** The 7 dates of the week that contains `anchor`. */
