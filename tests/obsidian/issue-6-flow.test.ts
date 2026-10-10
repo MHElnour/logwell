@@ -300,20 +300,26 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 	function prompter(s: SyncHarness, answers: ("trash" | "keep" | null)[]) {
 		const asked: { pending: PendingTrash; listName: string }[] = [];
 		const undo: [string, string][] = [];
+		/** Each notice's Undo button, bound the way the session binds it. */
+		const undoButtons: (() => Promise<boolean>)[] = [];
 		const notices: string[] = [];
 		const errors: unknown[] = [];
 		const p = new ConfirmationPrompter({
 			state: () => s.h.app.store.state,
 			sync: s.sync,
+			undoMark: () => s.h.app.store.undoMark(),
 			ask: async (pending, listName) => {
 				asked.push({ pending, listName });
 				return answers.shift() ?? null;
 			},
-			notifyUndo: (m, l) => undo.push([m, l]),
+			notifyUndo: (m, l, mark) => {
+				undo.push([m, l]);
+				undoButtons.push(s.h.app.store.undoFor(mark, l));
+			},
 			notify: (m) => notices.push(m),
 			error: (e) => errors.push(e),
 		});
-		return { p, asked, undo, notices, errors };
+		return { p, asked, undo, undoButtons, notices, errors };
 	}
 	const settle = () => new Promise((r) => setTimeout(r, 0));
 
@@ -329,8 +335,29 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 		expect(t.asked[0]!.pending).toMatchObject({ listId, reason: "many" });
 		expect(s.h.app.store.state.tasks.size).toBe(1);
 		expect(t.undo).toEqual([["Moved 5 tasks to Trash.", TICKTICK_TRASH_LABEL]]);
-		expect(await s.h.app.store.undoIfLatest(TICKTICK_TRASH_LABEL)).toBe(true);
+		expect(await t.undoButtons[0]!()).toBe(true);
 		expect(s.h.app.store.state.tasks.size).toBe(6);
+	});
+
+	it("two Move to Trash writes: the first notice's Undo does not undo the second (#39)", async () => {
+		const { s, ids } = await withTasks(6);
+		const size = () => s.h.app.store.state.tasks.size;
+		for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
+		const t = prompter(s, ["trash", "trash"]);
+		t.p.handle((await s.sync.sync()).needsConfirmation);
+		await settle();
+		expect(size()).toBe(1);
+		s.tt.remove(s.link("task", ids[5]!)!.ttId);
+		s.tick();
+		t.p.handle((await s.sync.sync()).needsConfirmation);
+		await settle();
+		expect(size()).toBe(0);
+		expect(t.undo.map(([, label]) => label)).toEqual([TICKTICK_TRASH_LABEL, TICKTICK_TRASH_LABEL]);
+
+		await expect(t.undoButtons[0]!()).rejects.toMatchObject({ code: "UndoConflict" });
+		expect(size()).toBe(0);
+		await expect(t.undoButtons[1]!()).resolves.toBe(true);
+		expect(size()).toBe(1);
 	});
 
 	it("Keep leaves the tasks in Logwell, marks them Not synced (localOnly) and never sends them again", async () => {
@@ -422,6 +449,7 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 				asked.push(pending.reason);
 				return asked.length === 1 ? open : Promise.resolve("trash");
 			},
+			undoMark: () => s.h.app.store.undoMark(),
 			notifyUndo: () => undefined,
 			notify: () => undefined,
 			error: () => undefined,
@@ -451,6 +479,7 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 				asked.push(pend);
 				return new Promise<"trash">((r) => (answer = r));
 			},
+			undoMark: () => s.h.app.store.undoMark(),
 			notifyUndo: () => undefined,
 			notify: () => undefined,
 			error: () => undefined,
