@@ -204,12 +204,18 @@ describe("missing from TickTick (SYNC-08)", () => {
 		expect(s.tt.count("getTask")).toBe(2);
 	});
 
-	it("looks up at most LOOKUP_MAX missing tasks per list; the rest count as missing", async () => {
+	it("looks up at most LOOKUP_MAX missing tasks per list; the rest wait for the next sync and are not offered (issue #38)", async () => {
 		const s = await withTasks(LOOKUP_MAX + 10);
 		for (const id of s.ids.slice(0, LOOKUP_MAX + 5)) s.tt.remove(s.link("task", id)!.ttId);
 		const r = await s.sync.sync();
 		expect(s.tt.count("getTask")).toBe(LOOKUP_MAX);
-		expect(r.needsConfirmation[0]?.tasks).toHaveLength(LOOKUP_MAX + 5);
+		expect(r.needsConfirmation[0]?.tasks).toHaveLength(LOOKUP_MAX);
+		expect(s.h.app.store.state.trash.size).toBe(0);
+		// The tasks confirmed gone are not looked up again: the next sync checks the other 5.
+		s.tick();
+		const next = await s.sync.sync();
+		expect(s.tt.count("getTask")).toBe(LOOKUP_MAX + 5);
+		expect(next.needsConfirmation[0]?.tasks).toHaveLength(LOOKUP_MAX + 5);
 		expect(s.h.app.store.state.trash.size).toBe(0);
 	});
 

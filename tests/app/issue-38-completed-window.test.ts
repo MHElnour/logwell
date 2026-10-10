@@ -9,8 +9,8 @@ import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 // split in halves until each holds fewer, at most 32 splits per list. A window that cannot be narrowed (200 or more at
 // almost the same time, or no splits left) is applied as read: the linked tasks it may have cut are looked up one by
 // one, 50 a sync, and while any window is cut no task is offered or moved to Trash as missing. A task not found under
-// its own project is looked up in the other linked ones (moved). TickTick answers at most 200 completed tasks per read
-// (the fake cuts like it).
+// its own project is looked up in the other linked ones (moved). TickTick sync rule 10: a task not looked up yet waits
+// and is never offered for Trash. TickTick answers at most 200 completed tasks per read (the fake cuts like it).
 
 const SECOND = 1000;
 const HOUR = 60 * 60_000;
@@ -274,12 +274,12 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(s.tt.count("getTask") - getTask).toBe(2);
 	});
 
-	it("no splits left with linked completions it cut: applied as read, nothing trashed, the rest looked up 50 a sync", async () => {
-		const s = await imported(["Work", 1000]);
+	it("no splits left with linked completions it cut: nothing offered or trashed, the rest looked up 50 a sync", async () => {
+		const s = await imported(["Work", 1002]);
 		const list = s.lists[0]!;
-		// Linked and unlinked completions interleaved over a day: one linked in every eight.
+		// Linked and unlinked completions interleaved over a day: one linked in every eight. Two stay open.
 		const ids: string[] = [];
-		for (const linked of list.ttIds) {
+		for (const linked of list.ttIds.slice(0, 1000)) {
 			ids.push(linked);
 			for (let i = 0; i < 7; i++) ids.push(s.tt.add(list.projectId, { title: `Done ${ids.length}` }).id);
 		}
@@ -293,15 +293,90 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(s.link("list", list.listId)!.lastPulledAt! > pulledAt).toBe(true);
 		let done = completedIn(s, list);
 		expect(done).toBeLessThan(1000);
-		while (done < 1000) {
+		const hidden = 1000 - done;
+		for (let sync = 0; sync < Math.ceil(hidden / LOOKUP_MAX); sync++) {
 			s.tick(5 * 60_000);
 			r = await s.sync.sync();
 			expect(r.error).toBeNull();
+			expect(r.needsConfirmation).toEqual([]);
 			expect(trashed(s)).toEqual([]);
 			const now = completedIn(s, list);
 			expect(now - done).toBe(Math.min(LOOKUP_MAX, 1000 - done));
 			done = now;
 		}
+		expect(done).toBe(1000);
+	});
+
+	it("120 completions hidden from every read (won't do), no cut: no dialog, all completed after 3 syncs", async () => {
+		const s = await imported(["Work", 122]);
+		const list = s.lists[0]!;
+		for (const id of list.ttIds.slice(0, 120)) s.tt.edit(id, { status: -1 });
+		const done: number[] = [];
+		for (let sync = 0; sync < 3; sync++) {
+			s.tick(5 * 60_000);
+			const r = await s.sync.sync();
+			expect(r.error).toBeNull();
+			expect(r.needsConfirmation).toEqual([]);
+			expect(trashed(s)).toEqual([]);
+			done.push(completedIn(s, list));
+		}
+		expect(done).toEqual([50, 100, 120]);
+	});
+
+	it("80 deleted in TickTick: the dialog lists only the tasks TickTick confirmed gone, all 80 by the second sync", async () => {
+		const s = await imported(["Work", 82]);
+		const list = s.lists[0]!;
+		for (const id of list.ttIds.slice(0, 80)) s.tt.remove(id);
+		s.tick();
+		const first = await s.sync.sync();
+		expect(first.needsConfirmation).toHaveLength(1);
+		expect(first.needsConfirmation[0]).toMatchObject({ listId: list.listId, reason: "many" });
+		expect(first.needsConfirmation[0]!.tasks).toHaveLength(LOOKUP_MAX);
+		// The dialog is closed: nothing decided. The next sync looks up the other 30.
+		s.tick(5 * 60_000);
+		const getTask = s.tt.count("getTask");
+		const second = await s.sync.sync();
+		expect(s.tt.count("getTask") - getTask).toBe(30);
+		expect(second.needsConfirmation).toHaveLength(1);
+		expect(second.needsConfirmation[0]!.tasks.map((t) => t.title).sort()).toEqual(list.ttIds.slice(0, 80).map((_, i) => `Work bill ${i}`).sort());
+		expect(trashed(s)).toEqual([]);
+	});
+
+	it("a list emptied in TickTick asks only once every task is looked up (Keep would unlink it)", async () => {
+		const s = await imported(["Work", 80]);
+		const list = s.lists[0]!;
+		for (const id of list.ttIds) s.tt.remove(id);
+		s.tick();
+		expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+		s.tick(5 * 60_000);
+		const r = await s.sync.sync();
+		expect(r.needsConfirmation).toHaveLength(1);
+		expect(r.needsConfirmation[0]).toMatchObject({ listId: list.listId, reason: "emptied" });
+		expect(r.needsConfirmation[0]!.tasks).toHaveLength(80);
+		expect(trashed(s)).toEqual([]);
+	});
+
+	it("60 deleted and 200 hidden completions, the dialog closed every time: all resolved within ceil(260 / 50) syncs", async () => {
+		const s = await imported(["Work", 262]);
+		const list = s.lists[0]!;
+		// Interleaved, so neither kind is looked up first.
+		const deleted = list.ttIds.slice(0, 260).filter((_, i) => i % 13 < 3);
+		const hidden = list.ttIds.slice(0, 260).filter((_, i) => i % 13 >= 3);
+		expect([deleted.length, hidden.length]).toEqual([60, 200]);
+		for (const id of deleted) s.tt.remove(id);
+		for (const id of hidden) s.tt.edit(id, { status: -1 });
+		const deletedTitles = new Set(deleted.map((id) => `Work bill ${list.ttIds.indexOf(id)}`));
+		let offered: string[] = [];
+		for (let sync = 0; sync < Math.ceil(260 / LOOKUP_MAX); sync++) {
+			s.tick(5 * 60_000);
+			const r = await s.sync.sync();
+			expect(r.error).toBeNull();
+			for (const p of r.needsConfirmation) for (const t of p.tasks) expect(deletedTitles.has(t.title)).toBe(true);
+			offered = r.needsConfirmation.flatMap((p) => p.tasks.map((t) => t.title));
+		}
+		expect(hidden.filter((id) => s.task(`Work bill ${list.ttIds.indexOf(id)}`).status !== "completed")).toEqual([]);
+		expect(offered.sort()).toEqual([...deletedTitles].sort());
+		expect(trashed(s)).toEqual([]);
 	});
 
 	it("lookups in the other linked lists count against the list's 50", async () => {
@@ -315,10 +390,13 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(r.error).toBeNull();
 		// Home, Work, Errands: three calls a task. 16 take 48; the 17th reaches 50 before Errands is asked.
 		expect(s.tt.count("getTask") - getTask).toBe(LOOKUP_MAX);
-		const moved = home.ttIds.slice(0, 17).map((_, i) => s.task(`Home bill ${i}`));
-		expect(moved.filter((t) => t.status === "completed" && t.categoryId === errands.listId)).toHaveLength(16);
-		expect(r.needsConfirmation).toHaveLength(1);
-		expect(r.needsConfirmation[0]!.tasks.map((t) => t.title)).toEqual(["Home bill 16"]);
+		const moved = () => home.ttIds.slice(0, 17).map((_, i) => s.task(`Home bill ${i}`)).filter((t) => t.status === "completed" && t.categoryId === errands.listId);
+		expect(moved()).toHaveLength(16);
+		// The 17th waits for the next sync; it is never offered for Trash.
+		expect(r.needsConfirmation).toEqual([]);
+		s.tick();
+		expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+		expect(moved()).toHaveLength(17);
 	});
 
 	it("reads both halves past the middle when TickTick's bounds are exclusive: the halves share a second", async () => {

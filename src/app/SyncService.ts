@@ -387,6 +387,8 @@ export class SyncService {
 	 * reload such a task can come in twice.
 	 */
 	private readonly pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	/** TickTick ids a lookup found gone, kept for the next sync while their tasks stay missing and undecided. */
+	private goneInTickTick: ReadonlySet<string> = new Set();
 
 	/** See `pendingCreates`: what TickTick answered (the link write failed), or null when the answer was lost. */
 	private remember(listId: ID, logwellId: ID, answer: AnsweredCreate | null): void {
@@ -831,9 +833,12 @@ export class SyncService {
 		const listOfProject = new Map(pulls.map((p) => [p.projectId, p]));
 
 		// 2. Linked tasks expected open but not seen: one lookup each. Completed or won't do there is completed here;
-		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX per list.
-		/** Missing TickTick ids; false when not looked up (beyond LOOKUP_MAX), which always needs confirmation. */
-		const missing = new Map<string, boolean>();
+		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX per list; the rest wait for
+		// the next sync and are never offered for Trash (TickTick sync rule 10).
+		/** TickTick ids confirmed gone: looked up this sync or an earlier one. */
+		const missing = new Set<string>();
+		/** Lists with linked tasks left for the next sync (beyond LOOKUP_MAX). */
+		const waiting = new Set<ID>();
 		const lookups = new Map<ID, number>();
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
@@ -849,32 +854,44 @@ export class SyncService {
 				// An excluded link whose task no longer repeats resumes: it needs TickTick's current state.
 				const expectedOpen = link.base.status === OPEN_HASH;
 				if (link.mode !== "excluded" && !expectedOpen && sameBase(lwHashes(t, names), link.base)) continue;
+				// Confirmed gone by an earlier sync and still undecided: not looked up again, so the lookups reach the
+				// tasks not checked yet. One that came back is in the pull and never gets here.
+				if (this.goneInTickTick.has(link.ttId)) {
+					missing.add(link.ttId);
+					continue;
+				}
 				// Its own project first. Not found there means not under it (a deleted task still reads), so the other
 				// linked projects are asked: it may have moved. Each call counts against its list's LOOKUP_MAX.
 				const projects = [link.ttProjectId, ...pulls.map((p) => p.projectId).filter((id) => id !== link.ttProjectId)];
-				/** Missing: true when found nowhere or open, false when the lookups ran out first; null when completed. */
-				let verdict: boolean | null = true;
+				let verdict: "gone" | "completed" | "waiting" = "gone";
 				for (const projectId of projects) {
 					const looked = lookups.get(pull.listId) ?? 0;
 					if (looked >= LOOKUP_MAX) {
-						// So many are gone that they need confirmation anyway: no more lookups.
-						verdict = false;
+						verdict = "waiting";
 						break;
 					}
 					lookups.set(pull.listId, looked + 1);
 					try {
 						const tt = await this.api.getTask(projectId, link.ttId);
 						lookedUp.set(link.ttId, tt);
-						verdict = statusFromTt(tt.status) === "completed" ? null : true;
-						if (verdict === null) seen.set(tt.id, tt);
+						verdict = statusFromTt(tt.status) === "completed" ? "completed" : "gone";
+						if (verdict === "completed") seen.set(tt.id, tt);
 						break;
 					} catch (err) {
 						if (!isNotFound(err)) return failed(failureOf(err, pull));
 					}
 				}
-				if (verdict === true && !lookedUp.has(link.ttId)) lookedUp.set(link.ttId, null);
-				if (verdict !== null) missing.set(link.ttId, verdict);
+				if (verdict === "waiting") {
+					waiting.add(pull.listId);
+					continue;
+				}
+				if (verdict === "gone") {
+					if (!lookedUp.has(link.ttId)) lookedUp.set(link.ttId, null);
+					missing.add(link.ttId);
+				}
 			}
+			// The confirmed verdicts carry to the next sync while their tasks stay missing and undecided.
+			this.goneInTickTick = new Set(missing);
 			// Creates that TickTick answered but whose link was not written: their copy is looked up by its id when
 			// the pull did not see it (completed outside the window). Gone there, the entry is dropped and the
 			// Logwell task goes up again as new.
@@ -916,7 +933,7 @@ export class SyncService {
 		if (this.stopped) return failed(stoppedFailure());
 
 		// 3. The content command: everything pulled, one write.
-		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, listOfProject, remoteTags.known), {
+		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, waiting, listOfProject, remoteTags.known), {
 			undoable: false,
 		});
 		const result: SyncResult = {
@@ -980,7 +997,8 @@ export class SyncService {
 		tx: Tx,
 		pulls: ListPull[],
 		seen: Map<string, TtTask>,
-		missing: Map<string, boolean>,
+		missing: ReadonlySet<string>,
+		waiting: ReadonlySet<ID>,
 		listOfProject: Map<string, ListPull>,
 		remoteTags: ReadonlyMap<string, TtTag> | null,
 	): PullPlan {
@@ -1131,7 +1149,6 @@ export class SyncService {
 		const isSub = (l: SyncLink) => (tx.get("tasks", l.logwellId)?.parentId ?? null) !== null;
 		links.sort((a, b) => (isSub(a) ? 1 : 0) - (isSub(b) ? 1 : 0));
 		const missingByList = new Map<ID, Task[]>();
-		const unverified = new Set<ID>();
 		/** A synced task that leaves: its TickTick copy is deleted, unless that copy now repeats (only the link goes). */
 		const leave = (link: SyncLink, id: string): void => {
 			const copy = seen.get(link.ttId);
@@ -1168,7 +1185,7 @@ export class SyncService {
 				// gone in TickTick only loses its link: the Logwell task then goes up as new.
 				const tt = seen.get(link.ttId);
 				if (tt === undefined) {
-					if (missing.get(link.ttId) === true) plan.removeLinks.add(id);
+					if (missing.has(link.ttId)) plan.removeLinks.add(id);
 				} else if (isSyncable(tt)) {
 					plan.pairs.push({ logwellId: t.id, ttId: tt.id, ttProjectId: tt.projectId, etag: tt.etag ?? null, ttHashes: ttHashes(tt, lwHashes(t, tags.names)) });
 				}
@@ -1199,12 +1216,11 @@ export class SyncService {
 			}
 			const tt = seen.get(link.ttId);
 			if (tt === undefined) {
-				const verified = missing.get(link.ttId);
-				if (verified !== undefined) {
+				// Only a task TickTick confirmed gone; one not looked up yet waits for the next sync.
+				if (missing.has(link.ttId)) {
 					const group = missingByList.get(home.listId) ?? [];
 					group.push(t);
 					missingByList.set(home.listId, group);
-					if (!verified) unverified.add(home.listId);
 				}
 				continue;
 			}
@@ -1220,11 +1236,13 @@ export class SyncService {
 		}
 
 		// Missing from TickTick. Fewer than 5 in a list go to Trash; 5 or more, or a project that came back
-		// empty, wait for confirmation and nothing is applied.
+		// empty, wait for confirmation and nothing is applied. An emptied list with tasks still to look up asks
+		// nothing yet: Keep would unlink it while some of them may be completed there (TickTick sync rule 10).
 		for (const [listId, group] of missingByList) {
 			const pull = pulls.find((p) => p.listId === listId)!;
 			const emptied = pull.data.tasks.length === 0;
-			if (emptied || group.length >= MISSING_CONFIRM_MIN || unverified.has(listId)) {
+			if (emptied && waiting.has(listId)) continue;
+			if (emptied || group.length >= MISSING_CONFIRM_MIN) {
 				plan.needsConfirmation.push({ listId, reason: emptied ? "emptied" : "many", tasks: group.map((t) => ({ id: t.id, title: t.title })) });
 				continue;
 			}
