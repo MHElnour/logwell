@@ -71,7 +71,7 @@ Listeners use the list to narrow their work: the per-list index (`src/app/listIn
 
 `AppStore.undo` pops the newest entry of the undo stack and restores the `before` values; `DomainError("UndoConflict")` is the refusal of Data and safety rule 17. A read-only store refuses before taking the entry, so it stays; a conflict drops it. Each entry has an increasing id, and a notice undoes its own entry by that id.
 
-Services return a `WriteResult` (`src/app/writes.ts`) with the command's label. A caller takes `store.undoMark()` right before the write; `notifyWrite` (`src/ui/writeNotice.ts`) hands the result and the mark to `ViewHost.notifyUndo` (`src/obsidian/host.ts`), which binds its Undo button with `undoFor(mark, label)` to the one entry pushed since the mark. The button reverts that entry only while it is the newest, checked inside the command queue.
+Services return a `WriteResult` (`src/app/writes.ts`) with the command's label. A caller takes `store.undoMark()` right before the write; `notifyWrite` (`src/ui/writeNotice.ts`) hands the result and the mark to `ViewHost.notifyUndo` (`src/obsidian/host.ts`), which binds its Undo button with `undoFor(mark, label)` to the one entry pushed under that label since the mark (writes under other labels in between do not count; none or two or more bind nothing, and the button refuses). The button reverts that entry only while it is the newest, checked inside the command queue.
 
 Maintenance writes pass `{ undoable: false }`. The depth of Undo and what it covers are in the Data and safety section of the spec.
 
@@ -186,7 +186,7 @@ npm run e2e         # builds first; local only
 ## Glossary
 
 - Command: one write through `store.run`, saved once and undone as a whole.
-- Label: the name a command runs under, shown in its Undo notice and checked by `undoFor` (a notice) and `undoIfLatest`.
+- Label: the name a command runs under, shown in its Undo notice and used by `undoFor` to find the write a notice was shown for.
 - Store: `AppStore` (`src/app/store.ts`) for state, queue and Undo, over `CpbaseStore` (`src/persistence/CpbaseStore.ts`) for the file.
 - Session: a `DbSession`, the one open database with its store, services and sync.
 - Tx: the copy-on-write transaction a command reads and writes through.

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { INBOX_ID, type Task } from "../../src/domain/types";
-import { type CalMount, dragTo, item, mountBoard, openBoard, settle, stubBoardRects } from "./k1a-helpers";
+import { type CalMount, dragTo, item, mountBoard, openBoard, settle, sidebarItem, stubBoardRects } from "./k1a-helpers";
 
 // Data and safety rule 17, through the board: two moves run under the same store label ("Move task"); the
 // first move's notice must not undo the second.
@@ -37,6 +37,24 @@ async function mount(): Promise<{ m: CalMount; shown: Shown[] }> {
 
 const taskOf = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
 const sectionId = (m: CalMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!.id;
+
+describe("#39: the Undo of a list delete notice", () => {
+	it("restores the list, through the notice's own Undo", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		const work = await m.h.app.categories.create("Work");
+		await settle();
+		m.host.choose = (async () => true) as unknown as typeof m.host.choose;
+		sidebarItem(m.root, "Work").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+		const del = m.host.menus.at(-1)!.find((i) => i !== "separator" && i.title === "Delete");
+		if (del === undefined || del === "separator") throw new Error("no Delete item");
+		del.run();
+		await settle();
+		expect(m.h.app.store.state.categories.has(work.id)).toBe(false);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
+		expect(m.h.app.store.state.categories.has(work.id)).toBe(true);
+	});
+});
 
 describe("#39: the Undo of a board move notice", () => {
 	it("undoes only its own move, not a newer move made the same way", async () => {

@@ -403,7 +403,7 @@ describe("dragging a row to another group", () => {
 	});
 
 	it("under another sort a row still crosses groups: one update, the sort key untouched, no place", async () => {
-		const { m, root, undo, tops } = await mountList({ kind: "inbox" }, "priority", seedPriority, false, "priority");
+		const { m, root, undo, host, tops } = await mountList({ kind: "inbox" }, "priority", seedPriority, false, "priority");
 		const before = taskOf(m, "L1").sortKey;
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const update = vi.spyOn(m.h.app.tasks, "update");
@@ -415,7 +415,7 @@ describe("dragging a row to another group", () => {
 		expect(taskOf(m, "L1").sortKey).toBe(before);
 		// The notice must carry the label the store recorded (`update` runs as "Edit task"), or its Undo throws.
 		expect(undo).toHaveBeenCalledWith('Moved "L1" to High.', "Edit task", expect.any(Number));
-		await expect(m.h.app.store.undoIfLatest("Edit task")).resolves.toBe(true);
+		await expect(host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(taskOf(m, "L1").priority).toBe(3);
 	});
 

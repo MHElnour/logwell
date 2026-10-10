@@ -174,8 +174,9 @@ describe("trash and undo (TASK-05)", () => {
 		const h = await appHarness();
 		h.notes.files.set("Plan v2.md", "body text");
 		const { task } = await h.app.tasks.create({ title: "Plan", notePath: "Plan v2.md" });
+		const mark = h.app.store.undoMark();
 		await h.app.tasks.delete(task.id);
-		expect(await h.app.store.undoIfLatest("Delete task")).toBe(true);
+		expect(await h.app.store.undoFor(mark, "Delete task")()).toBe(true);
 		expect(h.app.store.state.tasks.has(task.id)).toBe(true);
 		const entry = await h.app.tasks.delete(task.id);
 		await h.app.tasks.purge(entry.batchId);

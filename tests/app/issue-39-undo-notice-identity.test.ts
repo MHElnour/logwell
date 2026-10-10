@@ -6,6 +6,7 @@ import { appHarness } from "./harness";
 // write that happens to run under the same store label.
 
 const CONFLICT = 'Cannot undo "Edit task": other changes were made since.';
+const UNBOUND = 'Cannot undo "Edit task": this change can no longer be undone here.';
 
 /** What a notice does: take the mark right before the write, bind its Undo right after. */
 async function noticeFor(store: AppStore, label: string, write: () => Promise<unknown>): Promise<() => Promise<boolean>> {
@@ -55,8 +56,8 @@ describe("#39: a notice's Undo targets its own write", () => {
 		const first = h.app.tasks.update(a.id, { title: "Call the bank today" });
 		const second = h.app.tasks.update(b.id, { title: "Water the herbs" });
 		await Promise.all([first, second]);
-		// The first write's notice shows only now, after the second write ran.
-		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict" });
+		// The first write's notice shows only now, after the second write ran: two writes under its label.
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
 		expect(title(a.id)).toBe("Call the bank today");
 		expect(title(b.id)).toBe("Water the herbs");
 	});
@@ -70,14 +71,34 @@ describe("#39: a notice's Undo targets its own write", () => {
 		expect(title(b.id)).toBe("Water the herbs");
 	});
 
-	it("label-only undo checks inside the queue too: it does not revert a command queued before it", async () => {
+	it("a write under another label between the mark and the write does not stop the Undo", async () => {
 		const { h, store, a, b, title } = await twoTasks();
+		const mark = store.undoMark();
+		// The write waits (for example behind a running sync) while another change is made.
+		await h.app.tasks.delete(b.id);
 		await h.app.tasks.update(a.id, { title: "Call the bank today" });
-		const second = h.app.tasks.delete(b.id);
-		const undo = store.undoIfLatest("Edit task");
-		await second;
-		await expect(undo).rejects.toMatchObject({ code: "UndoConflict" });
-		expect(title(a.id)).toBe("Call the bank today");
+		await expect(store.undoFor(mark, "Edit task")()).resolves.toBe(true);
+		expect(title(a.id)).toBe("Call the bank");
 		expect(title(b.id)).toBeUndefined();
+	});
+
+	it("counts a same-label write that was already undone: the notice binds nothing", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const mark = store.undoMark();
+		await h.app.tasks.update(a.id, { title: "Call the bank today" });
+		await store.undo();
+		await h.app.tasks.update(b.id, { title: "Water the herbs" });
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank");
+		expect(title(b.id)).toBe("Water the herbs");
+	});
+
+	it("binds nothing when the mark is older than the remembered writes", async () => {
+		const { h, store, a, title } = await twoTasks();
+		const mark = store.undoMark();
+		for (let i = 0; i < 50; i++) await h.app.tasks.create({ title: `Errand ${i}` });
+		await h.app.tasks.update(a.id, { title: "Call the bank today" });
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank today");
 	});
 });

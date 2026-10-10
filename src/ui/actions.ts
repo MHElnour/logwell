@@ -20,18 +20,21 @@ import { moveToDate } from "../domain/calendar";
 
 /**
  * Completes a task; with open subtasks it asks first ("Complete all (N)" or Cancel) and then completes them
- * too. The result of the last write, or null when the user cancelled. Errors are the caller's.
+ * too. The result of the last write and the undo mark taken right before it (for its notice), or null when the
+ * user cancelled. Errors are the caller's.
  */
-export async function completeAsking(host: UiHost, task: Task): Promise<CompleteResult | null> {
-	const { tasks } = host.app;
+export async function completeAsking(host: UiHost, task: Task): Promise<{ result: CompleteResult; mark: number } | null> {
+	const { tasks, store } = host.app;
+	let mark = store.undoMark();
 	let result = await tasks.complete(task.id);
 	if (result.kind === "needs-confirmation") {
 		const n = result.openSubtasks;
 		const ok = await host.choose("Complete task", `"${task.title}" has ${n} open subtask${n === 1 ? "" : "s"}.`, [{ label: `Complete all (${n})`, value: true, cta: true }]);
 		if (ok !== true) return null;
+		mark = store.undoMark();
 		result = await tasks.complete(task.id, { includeSubtasks: true });
 	}
-	return result;
+	return { result, mark };
 }
 
 /** Complete or reopen, with the prompt for open subtasks: "Complete all (N)" or Cancel. */

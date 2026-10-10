@@ -4,7 +4,7 @@ import { TICKTICK_TRASH_LABEL } from "../../src/app/SyncService";
 import { TickTickError } from "../../src/app/ports";
 import type { LinkOption } from "../../src/app/tickTickLink";
 import { syncLinkId } from "../../src/domain/types";
-import { ConfirmationPrompter, type LinkFlowDeps, NOT_READY_TEXT, linkListFlow, unlinkListFlow } from "../../src/obsidian/tickTickFlow";
+import { ConfirmationPrompter, type LinkFlowDeps, type PrompterDeps, NOT_READY_TEXT, linkListFlow, unlinkListFlow } from "../../src/obsidian/tickTickFlow";
 import { type SyncHarness, linkedList, syncHarness } from "../app/sync-harness";
 
 // The steps around the dialogs, with scripted answers and the real engine.
@@ -297,7 +297,7 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 		return { s, listId, projectId, ids };
 	}
 
-	function prompter(s: SyncHarness, answers: ("trash" | "keep" | null)[]) {
+	function prompter(s: SyncHarness, answers: ("trash" | "keep" | null)[], sync: PrompterDeps["sync"] = s.sync) {
 		const asked: { pending: PendingTrash; listName: string }[] = [];
 		const undo: [string, string][] = [];
 		/** Each notice's Undo button, bound the way the session binds it. */
@@ -306,7 +306,7 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 		const errors: unknown[] = [];
 		const p = new ConfirmationPrompter({
 			state: () => s.h.app.store.state,
-			sync: s.sync,
+			sync,
 			undoMark: () => s.h.app.store.undoMark(),
 			ask: async (pending, listName) => {
 				asked.push({ pending, listName });
@@ -358,6 +358,26 @@ describe("tasks missing from TickTick (screens 8 and 9)", () => {
 		expect(size()).toBe(0);
 		await expect(t.undoButtons[1]!()).resolves.toBe(true);
 		expect(size()).toBe(1);
+	});
+
+	it("Move to Trash that waits while another change is made keeps a working Undo (#39)", async () => {
+		const { s, ids } = await withTasks(6);
+		for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
+		// The trash write waits (behind a running sync); meanwhile the user edits the remaining task.
+		const sync: PrompterDeps["sync"] = {
+			trashMissing: async (listId, taskIds) => {
+				await s.h.app.tasks.update(ids[5]!, { title: "Errand 6, today" });
+				return s.sync.trashMissing(listId, taskIds);
+			},
+			keepMissing: (...args) => s.sync.keepMissing(...args),
+		};
+		const t = prompter(s, ["trash"], sync);
+		t.p.handle((await s.sync.sync()).needsConfirmation);
+		await settle();
+		expect(s.h.app.store.state.tasks.size).toBe(1);
+		await expect(t.undoButtons[0]!()).resolves.toBe(true);
+		expect(s.h.app.store.state.tasks.size).toBe(6);
+		expect(s.h.app.store.state.tasks.get(ids[5]!)?.title).toBe("Errand 6, today");
 	});
 
 	it("Keep leaves the tasks in Logwell, marks them Not synced (localOnly) and never sends them again", async () => {

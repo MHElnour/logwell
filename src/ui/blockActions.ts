@@ -22,9 +22,10 @@ export async function completeBlockTask(host: UiHost, task: Task): Promise<void>
 			await completeOccurrence(host, task);
 			return;
 		}
-		const mark = host.app.store.undoMark();
-		const result = await completeAsking(host, task);
-		if (result === null || result.kind !== "done" || result.completed === 0) return;
+		const done = await completeAsking(host, task);
+		if (done === null) return;
+		const { result, mark } = done;
+		if (result.kind !== "done" || result.completed === 0) return;
 		const subs = result.completed - 1;
 		host.notifyUndo(`Completed "${task.title}"${subs > 0 ? ` and ${subs} subtask${subs === 1 ? "" : "s"}` : ""}.`, result.label, mark);
 	} catch (err) {

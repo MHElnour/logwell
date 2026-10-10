@@ -1020,10 +1020,11 @@ describe("delete and remove task (P4)", () => {
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 1500, 30);
 		const rec = sessions(s)[0]!;
+		const mark = s.h.app.store.undoMark();
 		await s.svc.deleteRecord(rec.id);
 		expect(sessions(s)).toHaveLength(0);
 		expect(s.h.app.store.undoLabel).toBe("Delete focus record");
-		expect(await s.h.app.store.undoIfLatest("Delete focus record")).toBe(true);
+		expect(await s.h.app.store.undoFor(mark, "Delete focus record")()).toBe(true);
 		expect(s.h.app.store.state.focusSessions.get(rec.id)).toEqual(rec);
 	});
 
@@ -1048,9 +1049,10 @@ describe("delete and remove task (P4)", () => {
 		await s.svc.start(cfg(), t.id);
 		await ticks(s, s.svc, 1500, 30);
 		const rec = sessions(s)[0]!;
+		const mark = s.h.app.store.undoMark();
 		await s.svc.assign(rec.id, null);
 		expect(s.h.app.store.state.focusSessions.get(rec.id)?.taskId).toBeNull();
-		expect(await s.h.app.store.undoIfLatest("Assign focus record")).toBe(true);
+		expect(await s.h.app.store.undoFor(mark, "Assign focus record")()).toBe(true);
 		expect(s.h.app.store.state.focusSessions.get(rec.id)?.taskId).toBe(t.id);
 	});
 });

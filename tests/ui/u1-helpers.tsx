@@ -33,8 +33,15 @@ export class U1Host implements UiHost {
 	error(err: unknown) {
 		this.messages.push(err instanceof Error ? err.message : String(err));
 	}
-	notifyUndo(m: string) {
+	/** The Undo button of each notice, newest last, bound as the Obsidian host binds it (`store.undoFor`). */
+	readonly undoButtons: (() => Promise<boolean>)[] = [];
+	notifyUndo(m: string, label: string, mark: number) {
 		this.messages.push(m);
+		this.bindUndo(label, mark);
+	}
+	/** For tests that replace `notifyUndo`: binds the Undo button the way the host does. */
+	bindUndo(label: string, mark: number): void {
+		this.undoButtons.push(this.app.store.undoFor(mark, label));
 	}
 	async choose() {
 		return null;

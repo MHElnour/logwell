@@ -32,7 +32,10 @@ export async function mountM7(): Promise<M7Mount> {
 	const asked: Choice[] = [];
 	const answer = { value: null as unknown };
 	Object.assign(m.host, {
-		notifyUndo: (message: string, label: string) => void notices.push({ message, label }),
+		notifyUndo: (message: string, label: string, mark: number) => {
+			notices.push({ message, label });
+			m.host.bindUndo(label, mark);
+		},
 		choose: async (title: string, message: string, buttons: ButtonSpec<unknown>[]) => {
 			asked.push({ title, message, buttons: buttons.map((b) => b.label) });
 			return answer.value;

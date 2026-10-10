@@ -92,7 +92,7 @@ describe("the Habits block in the Today list (List mode)", () => {
 		await click(q(b(), ".cp-habit-check"));
 		expect(rowNames(b())).not.toContain("Gym");
 		expect(text(q(b(), ".cp-today-habits-fold"))).toBe("✓ Meditate, Gym, Read done · Walk not scheduled today");
-		await m.h.app.store.undoIfLatest(m.notices.at(-1)!.label);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(rowNames(b())).toContain("Gym");
 	});
