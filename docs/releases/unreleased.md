@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#17) Fixed a pick in the Tasks view menu that could undo a selection made a moment earlier.
+
 ## Security
