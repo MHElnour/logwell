@@ -88,4 +88,4 @@ The Trash keeps a deleted task for 30 days; then it is deleted for good. To brin
 
 ## Undo
 
-Most changes show a notice with **Undo**. You can also press Cmd+Z (Ctrl+Z) in the app outside a text field, or run the command **Undo last task change**. Logwell keeps the last 50 changes. Undo refuses when something it would change was edited since. Following note renames, deleting permanently, emptying the Trash and the 30-day clean-up cannot be undone.
+Most changes show a notice with **Undo**. You can also press Cmd+Z (Ctrl+Z) in the app outside a text field, or run the command **Undo last task change**. Logwell keeps the last 50 changes. Undo refuses when something it would change was edited since. A change that cannot be undone because it was edited since is dropped from the history; the next Undo takes the change before it. While the database is read-only, Undo is refused like every other change. Following note renames, deleting permanently, emptying the Trash and the 30-day clean-up cannot be undone.

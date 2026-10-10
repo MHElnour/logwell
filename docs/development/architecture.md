@@ -69,7 +69,7 @@ Listeners use the list to narrow their work: the per-list index (`src/app/listIn
 
 `useAppState` (`src/ui/hooks.ts`) ignores the list and re-renders the app on every `changed` and `status` event. `TasksSection.tsx` calls the selectors in `src/app/views.ts` only when the collections they read changed, and `rowMemo.ts` skips every row whose inputs are the same.
 
-`AppStore.undo` pops the newest entry of the undo stack and restores the `before` values; `DomainError("UndoConflict")` is the refusal of Data and safety rule 17.
+`AppStore.undo` pops the newest entry of the undo stack and restores the `before` values; `DomainError("UndoConflict")` is the refusal of Data and safety rule 17. A read-only store refuses before taking the entry, so it stays; a conflict drops it.
 
 Services return a `WriteResult` (`src/app/writes.ts`) with the command's label. `notifyWrite` (`src/ui/writeNotice.ts`) hands it to `ViewHost.notifyUndo` (`src/obsidian/host.ts`), whose Undo button calls `undoIfLatest(label)`.
 

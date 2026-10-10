@@ -47,6 +47,7 @@ export interface UndoEntry {
 }
 
 const UNDO_LIMIT = 50;
+const READ_ONLY_MESSAGE = "The database is read-only until the problem shown in the banner is resolved.";
 
 export interface RunOptions {
 	/** Rename tracking and maintenance are not user actions; they skip the undo stack. */
@@ -83,7 +84,7 @@ export class AppStore {
 	run<T>(label: string, fn: (tx: Tx) => T, options: RunOptions = {}): Promise<T> {
 		return this.queue.run(() => {
 			if (this.host.readOnlyState !== null) {
-				throw new DomainError("ReadOnly", "The database is read-only until the problem shown in the banner is resolved.");
+				throw new DomainError("ReadOnly", READ_ONLY_MESSAGE);
 			}
 			const tx = new Tx(this.host.data, this.now());
 			const result = fn(tx);
@@ -109,33 +110,13 @@ export class AppStore {
 	}
 
 	/**
-	 * Reverts the newest command. Refuses (UndoConflict) when one of its records changed since, so an
-	 * undo never overwrites a later edit. The entry is taken off the stack before the checks, so a
-	 * refused undo (conflict, or read-only) does not put it back.
+	 * Reverts the newest command (the global Undo command and Cmd/Ctrl+Z); null when there is nothing to undo.
+	 * While read-only it refuses before taking the entry, so the entry stays. It refuses (UndoConflict) when one of
+	 * the command's records changed since, so an undo never overwrites a later edit; that entry is dropped, since the
+	 * record can never match again, and the next undo takes the one before it.
 	 */
 	undo(): Promise<string | null> {
-		return this.queue.run(() => {
-			const entry = this.undoStack.pop();
-			if (entry === undefined) return null;
-			const tx = new Tx(this.host.data, this.now());
-			for (const ch of entry.changes) {
-				const current = tx.get(ch.c, ch.id);
-				if (current !== ch.after) {
-					throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": the item changed since.`);
-				}
-			}
-			for (const ch of entry.changes) {
-				if (ch.before === undefined) tx.remove(ch.c, ch.id);
-				else tx.put(ch.c, ch.before as never);
-			}
-			const { data, ops, changes } = tx.finish();
-			if (this.host.readOnlyState !== null) {
-				throw new DomainError("ReadOnly", "The database is read-only.");
-			}
-			this.host.commit(data, ops);
-			this.bus.emit("changed", { label: `Undo ${entry.label}`, changes });
-			return entry.label;
-		});
+		return this.queue.run(() => this.revertNewest());
 	}
 
 	/** Undo for a specific command (the "Undo" button on a notice). */
@@ -144,6 +125,31 @@ export class AppStore {
 			throw new DomainError("UndoConflict", `Cannot undo "${label}": other changes were made since.`);
 		}
 		return (await this.undo()) !== null;
+	}
+
+	/** Runs inside the queue and stays synchronous from the first check to the commit. */
+	private revertNewest(): string | null {
+		const entry = this.undoStack[this.undoStack.length - 1];
+		if (entry === undefined) return null;
+		if (this.host.readOnlyState !== null) {
+			throw new DomainError("ReadOnly", READ_ONLY_MESSAGE);
+		}
+		this.undoStack.pop();
+		const tx = new Tx(this.host.data, this.now());
+		for (const ch of entry.changes) {
+			const current = tx.get(ch.c, ch.id);
+			if (current !== ch.after) {
+				throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": the item changed since.`);
+			}
+		}
+		for (const ch of entry.changes) {
+			if (ch.before === undefined) tx.remove(ch.c, ch.id);
+			else tx.put(ch.c, ch.before as never);
+		}
+		const { data, ops, changes } = tx.finish();
+		this.host.commit(data, ops);
+		this.bus.emit("changed", { label: `Undo ${entry.label}`, changes });
+		return entry.label;
 	}
 
 	/**

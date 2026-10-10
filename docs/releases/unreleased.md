@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#14) Fixed Undo while the database is read-only: a refused undo no longer drops the change from the history.
+
 ## Security
