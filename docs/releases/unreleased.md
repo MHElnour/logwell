@@ -23,6 +23,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#14) Fixed Undo while the database is read-only: a refused undo no longer drops the change from the history.
 - (#38) Fixed: a TickTick list with 200 or more tasks completed since the last sync now catches up instead of stopping every sync, and the missing-tasks window lists only tasks Logwell checked and could not find in any linked list.
+- (#39) Fixed the Undo button on a notice undoing a different, newer change made with the same action.
 
 ## Security

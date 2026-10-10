@@ -568,21 +568,19 @@ describe("review fixes (deep review of the reminder host)", () => {
 		host.attach(r(app));
 		tickAt(AT_20);
 		await press(shown[0]!, "Check in");
+		expect(ui.notifyUndo.mock.calls[0]![1]).toBe(CHECKIN_LABEL);
 		const undo = ui.notifyUndo.mock.calls[0]![2] as () => Promise<boolean>;
-		const undoIfLatest = vi.spyOn(app.store, "undoIfLatest");
 		await expect(undo()).resolves.toBe(true);
-		expect(undoIfLatest).toHaveBeenCalledWith(CHECKIN_LABEL);
 		expect(app.habits.index().active(med.id)).toHaveLength(0);
-		await expect(undo()).rejects.toThrow(); // the label is no longer the latest: UndoConflict
+		await expect(undo()).rejects.toThrow(); // its write is no longer the latest: UndoConflict
 
-		// After a switch the Undo of the old database resolves false ("Nothing to undo.").
+		// After a switch the Undo of the old database resolves false ("Nothing to undo.") and writes nothing.
 		await press(shown[0]!, "Check in"); // the host is still on this app: writes again
 		const undo2 = ui.notifyUndo.mock.calls[1]![2] as () => Promise<boolean>;
 		host.detach();
-		undoIfLatest.mockClear();
 		await expect(undo2()).resolves.toBe(false);
-		expect(undoIfLatest).not.toHaveBeenCalled();
 		expect(app.habits.index().active(med.id)).toHaveLength(1);
+		expect(app.store.undoLabel).toBe(CHECKIN_LABEL);
 	});
 
 	it("#4: a check-in whose write finishes after a database switch shows no Undo", async () => {

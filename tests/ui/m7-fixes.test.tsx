@@ -113,7 +113,7 @@ describe("re-anchor notices", () => {
 
 	it("notifyReanchored words the date relative to today", async () => {
 		const m = await mount();
-		notifyReanchored(m.host, { title: "X" }, { date: FRIDAY, endCleared: false }, "Move task");
+		notifyReanchored(m.host, { title: "X" }, { date: FRIDAY, endCleared: false }, "Move task", m.h.app.store.undoMark());
 		expect(lastNotice(m)).toEqual({ message: '"X" now repeats from Fri, Oct 9.', label: "Move task" });
 	});
 });

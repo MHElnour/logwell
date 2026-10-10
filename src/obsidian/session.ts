@@ -217,8 +217,8 @@ export class DbSession {
 			state: () => this.app.store.state,
 			sync: this.sync,
 			ask: (pending, listName) => (this.closing ? Promise.resolve(null) : askMissing(this.plugin.app, { pending, listName }, accentClass(this.plugin.settings))),
-			notifyUndo: (message, label) =>
-				void actionNotice(message, [undoAction(() => this.app.store.undoIfLatest(label))]),
+			undoMark: () => this.app.store.undoMark(),
+			notifyUndo: (message, label, mark) => void actionNotice(message, [undoAction(this.app.store.undoFor(mark, label))]),
 			notify: (message) => void new Notice(message),
 			error: showError,
 		});

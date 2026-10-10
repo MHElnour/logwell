@@ -92,8 +92,11 @@ export interface UiHost {
 	notify(message: string): void;
 	/** Shows the error message of a failed command. */
 	error(err: unknown): void;
-	/** A notice with an Undo button for the given command label. */
-	notifyUndo(message: string, label: string): void;
+	/**
+	 * A notice with an Undo button for the write that ran under the store label `label`. `mark` is
+	 * `store.undoMark()` taken right before that write, so the Undo reverts that write and no other.
+	 */
+	notifyUndo(message: string, label: string, mark: number): void;
 	choose<T>(title: string, message: string, buttons: ButtonSpec<T>[]): Promise<T | null>;
 	prompt(title: string, fields: { key: string; label: string; value: string; placeholder?: string }[], submit?: string): Promise<Record<string, string> | null>;
 	/**

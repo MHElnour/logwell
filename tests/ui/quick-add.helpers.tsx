@@ -29,8 +29,11 @@ class QuickHost implements UiHost {
 	error(err: unknown) {
 		this.messages.push(err instanceof Error ? err.message : String(err));
 	}
-	notifyUndo(m: string) {
+	/** The Undo button of each notice, bound as the Obsidian host binds it (`store.undoFor`). */
+	readonly undoButtons: (() => Promise<boolean>)[] = [];
+	notifyUndo(m: string, label: string, mark: number) {
 		this.messages.push(m);
+		this.undoButtons.push(this.app.store.undoFor(mark, label));
 	}
 	async choose() {
 		return null;

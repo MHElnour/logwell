@@ -125,9 +125,11 @@ export async function unlinkListFlow(deps: Pick<LinkFlowDeps, "state" | "sync" |
 export interface PrompterDeps {
 	state: () => DbData;
 	sync: Pick<SyncService, "trashMissing" | "keepMissing">;
+	/** `store.undoMark()`, taken right before Move to Trash writes. */
+	undoMark: () => number;
 	ask: (pending: PendingTrash, listName: string) => Promise<"trash" | "keep" | null>;
-	/** A notice with an Undo button for the store label. */
-	notifyUndo: (message: string, label: string) => void;
+	/** A notice with an Undo button for the write that ran under the store label `label` after `mark`. */
+	notifyUndo: (message: string, label: string, mark: number) => void;
 	notify: (message: string) => void;
 	error: (err: unknown) => void;
 }
@@ -197,8 +199,9 @@ export class ConfirmationPrompter {
 		const n = ids.length;
 		const tasks = `${n} task${n === 1 ? "" : "s"}`;
 		if (choice === "trash") {
+			const mark = this.deps.undoMark();
 			const r = await this.deps.sync.trashMissing(p.listId, ids);
-			if (r.wrote) this.deps.notifyUndo(`Moved ${tasks} to Trash.`, TICKTICK_TRASH_LABEL);
+			if (r.wrote) this.deps.notifyUndo(`Moved ${tasks} to Trash.`, TICKTICK_TRASH_LABEL, mark);
 			return;
 		}
 		await this.deps.sync.keepMissing(p.listId, ids, p.reason);

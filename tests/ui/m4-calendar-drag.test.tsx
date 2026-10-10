@@ -112,9 +112,9 @@ describe("week: move a timed block (D11)", () => {
 		expect(after.id).toBe(id);
 		expect(after.scheduled).toEqual(at("2026-10-02", "20:15"));
 		expect(after.plannedDurationMin).toBe(45);
-		expect(undoNotice).toHaveBeenCalledWith('Moved "Standup".', "Edit task");
+		expect(undoNotice).toHaveBeenCalledWith('Moved "Standup".', "Edit task", expect.any(Number));
 		expect(details(m)).toBeNull();
-		expect(await m.h.app.store.undo()).toBe("Edit task");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(task(m, "Standup").scheduled).toEqual(at("2026-10-01", "19:00"));
 	});
 
@@ -278,7 +278,7 @@ describe("week: resize (D12)", () => {
 		const after = task(m, "Standup");
 		expect(after.plannedDurationMin).toBe(90);
 		expect(after.scheduled).toEqual(at("2026-10-01", "19:00"));
-		expect(undoNotice).toHaveBeenCalledWith('Changed the length of "Standup".', "Edit task");
+		expect(undoNotice).toHaveBeenCalledWith('Changed the length of "Standup".', "Edit task", expect.any(Number));
 		expect(details(m)).toBeNull();
 	});
 
@@ -429,7 +429,7 @@ describe("unscheduled drawer rows (D11)", () => {
 		const t = task(m, "Write report");
 		expect(t.scheduled).toEqual(at("2026-10-02", "12:30"));
 		expect(t.plannedDurationMin).toBe(60);
-		expect(undoNotice).toHaveBeenCalledWith('Scheduled "Write report".', "Edit task");
+		expect(undoNotice).toHaveBeenCalledWith('Scheduled "Write report".', "Edit task", expect.any(Number));
 	});
 
 	it("drops onto an all-day cell: a date-only schedule", async () => {

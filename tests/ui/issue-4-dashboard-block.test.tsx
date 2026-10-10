@@ -36,8 +36,9 @@ class BlockHost extends U1Host {
 	readonly undos: { message: string; label: string }[] = [];
 	answer: boolean | null = null;
 	readonly asked: string[] = [];
-	override notifyUndo(message: string, label?: string): void {
-		this.undos.push({ message, label: label ?? "" });
+	override notifyUndo(message: string, label: string, mark: number): void {
+		this.undos.push({ message, label });
+		this.bindUndo(label, mark);
 	}
 	// U1Host's `choose` is typed to answer null only; the scripted answer is true or null.
 	override async choose(...args: unknown[]): Promise<null> {
@@ -333,7 +334,7 @@ describe("completing from the block", () => {
 		await completeBlockTask(m.host, a);
 		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("completed");
 		expect(m.host.undos).toEqual([{ message: 'Completed "A".', label: "Complete task" }]);
-		await m.h.app.store.undoIfLatest(m.host.undos[0]!.label);
+		await expect(m.host.undoButtons[0]!()).resolves.toBe(true);
 		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("open");
 	});
 

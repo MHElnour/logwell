@@ -170,8 +170,8 @@ function setEndText(set: FocusSetNode): string {
 }
 
 /** Shows the Undo notice for a history edit, unless the write changed nothing (the label is the store's). */
-function notifyEdit(host: UiHost, wrote: boolean, message: string, label: string): void {
-	if (wrote) host.notifyUndo(message, label);
+function notifyEdit(host: UiHost, wrote: boolean, message: string, label: string, mark: number): void {
+	if (wrote) host.notifyUndo(message, label, mark);
 }
 
 function SetNode(props: { host: UiHost; state: DbData; ctx: QueryContext; set: FocusSetNode; open: boolean; onToggle: () => void }) {
@@ -217,24 +217,27 @@ function Round(props: { host: UiHost; state: DbData; ctx: QueryContext; round: F
 		const id = await host.pickTask(s.taskId ?? "");
 		if (id === null) return;
 		try {
+			const mark = host.app.store.undoMark();
 			const wrote = await host.app.focus.assign(s.id, id);
-			notifyEdit(host, wrote, "Assigned the focus record.", ASSIGN_LABEL);
+			notifyEdit(host, wrote, "Assigned the focus record.", ASSIGN_LABEL, mark);
 		} catch (err) {
 			fail(err);
 		}
 	};
 	const unassign = async () => {
 		try {
+			const mark = host.app.store.undoMark();
 			const wrote = await host.app.focus.assign(s.id, null);
-			notifyEdit(host, wrote, "Removed the task from the focus record.", ASSIGN_LABEL);
+			notifyEdit(host, wrote, "Removed the task from the focus record.", ASSIGN_LABEL, mark);
 		} catch (err) {
 			fail(err);
 		}
 	};
 	const remove = async () => {
 		try {
+			const mark = host.app.store.undoMark();
 			await host.app.focus.deleteRecord(s.id);
-			host.notifyUndo("Deleted the focus record.", DELETE_LABEL);
+			host.notifyUndo("Deleted the focus record.", DELETE_LABEL, mark);
 		} catch (err) {
 			fail(err);
 		}
@@ -286,8 +289,9 @@ function Gap(props: { host: UiHost; session: FocusSession; gap: FocusGap; index:
 	const length = focusedText(gapSec(gap));
 	const set = async (included: boolean) => {
 		try {
+			const mark = host.app.store.undoMark();
 			const wrote = await host.app.focus.includeGap(session.id, index, included);
-			notifyEdit(host, wrote, included ? "Included the unobserved time." : "Excluded the unobserved time.", EDIT_LABEL);
+			notifyEdit(host, wrote, included ? "Included the unobserved time." : "Excluded the unobserved time.", EDIT_LABEL, mark);
 		} catch (err) {
 			host.error(err);
 		}

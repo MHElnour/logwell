@@ -209,11 +209,12 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 		const state = app.store.state;
 		await labelled(app.habits.toggle(m.id, "2026-10-14", true), CHECKIN_LABEL, false);
 		expect(app.store.state).toBe(state);
+		const mark = app.store.undoMark();
 		await labelled(app.habits.toggle(m.id, "2026-10-14"), UNCHECK_LABEL);
 		expect(app.store.state.checkins.get(on.id)).toMatchObject({ deletedAt: "2026-10-14T10:00:00.000Z", modifiedAt: "2026-10-14T10:00:00.000Z" });
 		expect(active(app, m.id)).toEqual([]);
 		await labelled(app.habits.toggle(m.id, "2026-10-14", false), UNCHECK_LABEL, false);
-		await app.store.undoIfLatest(UNCHECK_LABEL);
+		expect(await app.store.undoFor(mark, UNCHECK_LABEL)()).toBe(true);
 		expect(app.store.state.checkins.get(on.id)).toBe(on);
 	});
 

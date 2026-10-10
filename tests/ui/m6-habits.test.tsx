@@ -387,7 +387,7 @@ describe("writes from the controls (every Undo notice carries the store's label)
 		expect(gym().getAttribute("aria-pressed")).toBe("true");
 		expect(text(q(rowOf(el, "Gym"), ".cp-habit-progress"))).toBe("2 of 3 this week");
 		// Press the notice's Undo for real, as the host's button does.
-		await expect(m.h.app.store.undoIfLatest(lastNotice(m)!.label)).resolves.toBe(true);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(gym().getAttribute("aria-pressed")).toBe("false");
 		expect(m.h.app.habits.index().byDate(habits.gym.id).get("2026-10-04")).toBeUndefined();
@@ -396,7 +396,7 @@ describe("writes from the controls (every Undo notice carries the store's label)
 		expect(lastNotice(m)).toEqual({ message: "Removed the check-in.", label: UNCHECK_LABEL });
 		labelIsStoreLabel(m);
 		expect(q(rowOf(el, "Meditate"), ".cp-habit-check").getAttribute("aria-pressed")).toBe("false");
-		await m.h.app.store.undoIfLatest(UNCHECK_LABEL);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(q(rowOf(el, "Meditate"), ".cp-habit-check").getAttribute("aria-pressed")).toBe("true");
 	});
@@ -611,7 +611,7 @@ describe("the detail of the selected habit", () => {
 		expect(lastNotice(m)).toEqual({ message: "Deleted the check-in.", label: DELETE_CHECKIN_LABEL });
 		labelIsStoreLabel(m);
 		expect(m.h.app.habits.index().active(habits.read.id)).toHaveLength(5);
-		await m.h.app.store.undoIfLatest(DELETE_CHECKIN_LABEL);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(qa(el, ".cp-habit-entry")).toHaveLength(6);
 	});
@@ -656,7 +656,7 @@ describe("the detail of the selected habit", () => {
 		expect(lastNotice(m)).toEqual({ message: "Deleted Read and its 6 check-ins.", label: DELETE_HABIT_LABEL });
 		labelIsStoreLabel(m);
 		expect(m.h.app.habits.index().active(habits.read.id)).toHaveLength(0);
-		await m.h.app.store.undoIfLatest(DELETE_HABIT_LABEL);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(m.h.app.habits.list().map((h) => h.id)).toContain(habits.read.id);
 		expect(m.h.app.habits.index().active(habits.read.id)).toHaveLength(6);

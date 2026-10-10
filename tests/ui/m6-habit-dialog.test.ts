@@ -604,7 +604,12 @@ describe("habitDialogOptions (what the page hands the dialog)", () => {
 		const h = await appHarness();
 		const u = new U1Host(h);
 		const notices: [string, string][] = [];
-		Object.assign(u, { notifyUndo: (m: string, label: string) => void notices.push([m, label]) });
+		Object.assign(u, {
+			notifyUndo: (m: string, label: string, mark: number) => {
+				notices.push([m, label]);
+				u.bindUndo(label, mark);
+			},
+		});
 		let gestures = 0;
 		u.reminderGesture = () => void gestures++;
 		return { h, u, notices, gestures: () => gestures };

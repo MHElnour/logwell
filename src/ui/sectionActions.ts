@@ -41,10 +41,12 @@ async function renameSection(host: UiHost, section: Section): Promise<void> {
 /** Delete: its tasks move to "No section" in the same run, then an Undo notice. */
 async function deleteSection(host: UiHost, section: Section): Promise<void> {
 	try {
+		const mark = host.app.store.undoMark();
 		const moved = await host.app.sections.delete(section.id);
 		host.notifyUndo(
 			moved > 0 ? `Deleted section "${section.name}". ${moved} task${moved === 1 ? "" : "s"} moved to No section.` : `Deleted section "${section.name}".`,
 			"Delete section",
+			mark,
 		);
 	} catch (err) {
 		host.error(err);
