@@ -776,21 +776,19 @@ export class SyncService {
 	/**
 	 * Adds the tasks of `projectId` completed in `[fromMs, toMs]` (whole seconds) to `found`, by id. TickTick answers
 	 * at most TICKTICK_COMPLETED_MAX per read, so a full answer may be cut: its window is read again in two halves
-	 * (TickTick sync rule 23). Only full reads count against `budget`. Null when every window was read in full;
-	 * otherwise why one could not be narrowed ("same-time": a full window too short to split; "too-many-splits": the
-	 * budget is spent), and `found` must not be used.
+	 * (TickTick sync rule 23). Only full reads count against `budget`. True when an answer stayed cut (a full window
+	 * too short to split, or no splits left): `found` then holds what was read, and may lack completions.
 	 */
-	private async completedIn(projectId: string, fromMs: number, toMs: number, budget: { splits: number }, found: Map<string, TtTask>): Promise<"same-time" | "too-many-splits" | null> {
+	private async completedIn(projectId: string, fromMs: number, toMs: number, budget: { splits: number }, found: Map<string, TtTask>): Promise<boolean> {
 		const tasks = await this.api.listCompleted({ projectIds: [projectId], startDate: ttStamp(fromMs), endDate: ttStamp(toMs) });
-		if (tasks.length < TICKTICK_COMPLETED_MAX) {
-			for (const t of tasks) if (!found.has(t.id)) found.set(t.id, t);
-			return null;
-		}
-		if (toMs - fromMs <= 2 * COMPLETED_WINDOW_MIN_MS) return "same-time";
-		if (budget.splits >= COMPLETED_READS_MAX) return "too-many-splits";
+		for (const t of tasks) if (!found.has(t.id)) found.set(t.id, t);
+		if (tasks.length < TICKTICK_COMPLETED_MAX) return false;
+		if (toMs - fromMs <= 2 * COMPLETED_WINDOW_MIN_MS || budget.splits >= COMPLETED_READS_MAX) return true;
 		budget.splits++;
 		const mid = fromMs + wholeSecond((toMs - fromMs) / 2);
-		return (await this.completedIn(projectId, fromMs, mid + COMPLETED_WINDOW_MIN_MS, budget, found)) ?? (await this.completedIn(projectId, mid, toMs, budget, found));
+		const left = await this.completedIn(projectId, fromMs, mid + COMPLETED_WINDOW_MIN_MS, budget, found);
+		const right = await this.completedIn(projectId, mid, toMs, budget, found);
+		return left || right;
 	}
 
 	private async runSync(): Promise<SyncResult> {
@@ -805,6 +803,8 @@ export class SyncService {
 		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written.
 		const pulls: ListPull[] = [];
 		const seen = new Map<string, TtTask>();
+		/** Lists whose completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
+		const cut = new Set<ID>();
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
@@ -815,23 +815,10 @@ export class SyncService {
 					const from = Date.parse(l.link.lastPulledAt) - COMPLETED_OVERLAP_MS;
 					const to = Date.parse(this.store.now()) + COMPLETED_OVERLAP_MS;
 					const found = new Map<string, TtTask>();
-					// A cut answer is never applied: its completed tasks would read as gone (TickTick sync rule 23).
-					const stop = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found);
-					if (stop !== null) {
-						return failed({
-							listId: l.listId,
-							listName: l.name,
-							kind: "too-many-completed",
-							message:
-								stop === "same-time"
-									? `TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks in "${l.name}" were completed at almost the same time.`
-									: `TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks were completed in "${l.name}" since the last sync.`,
-							retryAfterSec: null,
-						});
-					}
+					if (await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found)) cut.add(l.listId);
 					completed = [...found.values()];
 				}
-				pulls.push({ ...l, projectId, data, splitCompleted: budget.splits > 0 });
+				pulls.push({ ...l, projectId, data, splitCompleted: budget.splits > 0 || cut.has(l.listId) });
 				for (const t of completed) if (!seen.has(t.id)) seen.set(t.id, t);
 				// The open tasks are read first and win: a task reopened after its completion is open.
 				for (const t of data.tasks) seen.set(t.id, t);
@@ -848,6 +835,8 @@ export class SyncService {
 		const lookups = new Map<ID, number>();
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
+		/** Lists with a linked task not seen and not looked up (beyond LOOKUP_MAX). */
+		const unchecked = new Set<ID>();
 		{
 			const state = this.store.state;
 			const names = tagNamesOf(state.tags);
@@ -864,6 +853,7 @@ export class SyncService {
 				if (looked >= LOOKUP_MAX) {
 					// So many are gone that they need confirmation anyway: no more lookups.
 					missing.set(link.ttId, false);
+					unchecked.add(pull.listId);
 					continue;
 				}
 				lookups.set(pull.listId, looked + 1);
@@ -898,6 +888,18 @@ export class SyncService {
 					}
 				}
 			}
+		}
+		// A cut completed answer is applied only when every linked task it may lack was looked up: one left unchecked
+		// could be completed in TickTick and would be offered as gone (TickTick sync rule 23).
+		for (const p of pulls) {
+			if (!cut.has(p.listId) || !unchecked.has(p.listId)) continue;
+			return failed({
+				listId: p.listId,
+				listName: p.name,
+				kind: "too-many-completed",
+				message: `TickTick: too many tasks in "${p.name}" were completed at once to check them all.`,
+				retryAfterSec: null,
+			});
 		}
 
 		// A tag name Logwell does not know, on a task the pull reads: TickTick's tags are read once, for its label

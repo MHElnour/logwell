@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TickTickError } from "../../src/app/ports";
-import { TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
+import { LOOKUP_MAX, TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
 import { TICKTICK_COMPLETED_MAX } from "../../src/domain/ticktick/types";
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
@@ -53,9 +53,15 @@ describe("errors (SYNC-12)", () => {
 		expect(s.tt.get(s.ttId)?.title).toBe("Call the bank at nine");
 	});
 
-	it("stops and reports rather than miss completions when the completed list is full", async () => {
+	it("stops and reports rather than miss completions when the completed list is full and too many are left to check", async () => {
 		const s = await oneTask();
-		for (let i = 0; i < TICKTICK_COMPLETED_MAX; i++) s.tt.add(s.projectId, { title: `Done ${i}`, status: 2, completedTime: "2026-10-01T10:00:30.000+0000" });
+		// Linked tasks completed in TickTick in one instant: the cut answer lacks more of them than can be looked up.
+		const ids: string[] = [];
+		for (let i = 0; i < TICKTICK_COMPLETED_MAX + LOOKUP_MAX + 1; i++) ids.push(s.tt.add(s.projectId, { title: `Done ${i}` }).id);
+		expect((await s.sync.sync()).ok).toBe(true);
+		s.tick();
+		for (const id of ids) s.tt.edit(id, { status: 2 });
+		s.tick();
 		s.tt.edit(s.ttId, { title: "Pulled" });
 		const r = await s.sync.sync();
 		expect(r.ok).toBe(false);

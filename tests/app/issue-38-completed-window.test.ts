@@ -5,8 +5,10 @@ import { TICKTICK_COMPLETED_MAX, type TtTask } from "../../src/domain/ticktick/t
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
 // TickTick sync rule 23: completions since the last pull are read in one window; a window holding 200 or more is
-// split in halves until each holds fewer, at most 32 splits per list. 200 or more at almost the same time, or more
-// splits, stop the sync, writing nothing. TickTick answers at most 200 completed tasks per read (the fake cuts like it).
+// split in halves until each holds fewer, at most 32 splits per list. A window that cannot be narrowed (200 or more at
+// almost the same time, or no splits left) is applied as read: the linked tasks it may have cut are looked up one by
+// one. Only when more of them are left than can be looked up does the sync stop, writing nothing. TickTick answers at
+// most 200 completed tasks per read (the fake cuts like it).
 
 const SECOND = 1000;
 const HOUR = 60 * 60_000;
@@ -78,15 +80,35 @@ async function expectCatchUp(s: SyncHarness & { lists: List[] }): Promise<number
 	return s.lists.reduce((n, l) => n + readsOf(s, l, calls), 0);
 }
 
-/** The sync stops with too-many-completed, writing nothing. */
+/** The sync stops with too-many-completed for the first list, writing nothing on either side. */
 async function expectStop(s: SyncHarness & { lists: List[] }): Promise<{ message: string; reads: number }> {
 	const state = s.h.app.store.state;
+	const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt;
+	const labels: string[] = [];
+	s.h.app.store.bus.on("changed", (e) => labels.push(e.label));
 	const calls = [...s.tt.calls];
 	const r = await s.sync.sync();
 	expect(r.ok).toBe(false);
 	expect(r.error).toMatchObject({ listId: s.lists[0]!.listId, kind: "too-many-completed" });
 	expect(s.h.app.store.state).toBe(state);
+	expect(labels).toEqual([]);
+	expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt).toBe(pulledAt);
+	expect(s.tt.calls.slice(calls.length).filter((c) => !/^(getProjectData|listCompleted|getTask)\b/.test(c))).toEqual([]);
 	return { message: r.error?.message ?? "", reads: readsOf(s, s.lists[0]!, calls) };
+}
+
+const TOO_MANY = (list: string) => `TickTick: too many tasks in "${list}" were completed at once to check them all.`;
+
+/**
+ * `n` linked tasks completed in TickTick at one whole-second instant half an hour into an hour's gap; `extra` more
+ * linked tasks and two that stay open (the list is never emptied).
+ */
+async function sameInstant(n: number, extra = 0): Promise<SyncHarness & { lists: List[] }> {
+	const s = await imported(["Work", n + extra + 2]);
+	s.tick(30 * 60_000);
+	completeOver(s, s.lists[0]!.ttIds.slice(0, n), 0);
+	s.tick(30 * 60_000);
+	return s;
 }
 
 describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync rule 23)", () => {
@@ -128,27 +150,116 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		});
 	}
 
-	it("stops, writing nothing, when 200 or more were completed at the same instant (after more than a day)", async () => {
-		const s = await imported(["Work", TICKTICK_COMPLETED_MAX + 20]);
-		burstInGap(s, s.lists[0]!.ttIds, 0, DAY + HOUR);
-		const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt;
+	for (const order of ["newest", "oldest"] as const) {
+		for (const bounds of ["inclusive", "exclusive"] as const) {
+			it(`230 completed at one instant: the cut read is applied and the rest looked up (${order}, ${bounds} bounds)`, async () => {
+				const s = await sameInstant(230);
+				s.tt.completedOrder = order;
+				s.tt.completedBounds = { start: bounds, end: bounds };
+				const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt!;
+				const getTask = s.tt.count("getTask");
+				const r = await s.sync.sync();
+				expect(r.error).toBeNull();
+				expect(r.needsConfirmation).toEqual([]);
+				expect(completedIn(s, s.lists[0]!)).toBe(230);
+				expect(s.tt.count("getTask") - getTask).toBe(230 - TICKTICK_COMPLETED_MAX);
+				expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt! > pulledAt).toBe(true);
+			});
+		}
+	}
+
+	it("260 completed at one instant, open in Logwell: more than 50 left to check stops the sync, writing nothing", async () => {
+		const s = await sameInstant(260);
 		const { message, reads } = await expectStop(s);
-		expect(message).toBe(`TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks in "Work" were completed at almost the same time.`);
+		expect(message).toBe(TOO_MANY("Work"));
 		expect(reads).toBeLessThanOrEqual(2 * 32 + 1);
-		expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt).toBe(pulledAt);
 		expect(completedIn(s, s.lists[0]!)).toBe(0);
 	});
 
-	it("stops after 32 splits, writing nothing, when the window cannot be narrowed within them", async () => {
+	it("a cut read with 3 tasks gone from TickTick: those 3 go through the usual missing flow", async () => {
+		const s = await sameInstant(230, 3);
+		const gone = s.lists[0]!.ttIds.slice(230, 233);
+		for (const id of gone) s.tt.remove(id);
+		const r = await s.sync.sync();
+		expect(r.error).toBeNull();
+		expect(r.needsConfirmation).toEqual([]);
+		expect(s.lists[0]!.ttIds.slice(0, 230).filter((_, i) => s.task(`Work bill ${i}`).status === "completed")).toHaveLength(230);
+		expect([...s.h.app.store.state.trash.values()].flatMap((e) => e.tasks.map((t) => t.title)).sort()).toEqual(["Work bill 230", "Work bill 231", "Work bill 232"]);
+	});
+
+	it("a cut read with 5 tasks gone from TickTick: they need confirmation, as without the cut", async () => {
+		const s = await sameInstant(230, 5);
+		for (const id of s.lists[0]!.ttIds.slice(230, 235)) s.tt.remove(id);
+		const r = await s.sync.sync();
+		expect(r.error).toBeNull();
+		expect(r.needsConfirmation).toHaveLength(1);
+		expect(r.needsConfirmation[0]).toMatchObject({ listId: s.lists[0]!.listId, reason: "many" });
+		expect(r.needsConfirmation[0]!.tasks.map((t) => t.title).sort()).toEqual(["Work bill 230", "Work bill 231", "Work bill 232", "Work bill 233", "Work bill 234"]);
+		expect(s.lists[0]!.ttIds.slice(0, 230).filter((_, i) => s.task(`Work bill ${i}`).status === "completed")).toHaveLength(230);
+		expect(s.h.app.store.state.trash.size).toBe(0);
+	});
+
+	it("Logwell's own bulk completion of 250 subtasks: the next pulls apply the cut read without lookups", async () => {
+		const s = await imported(["Work", 0]);
+		const list = s.lists[0]!;
+		const { task: parent } = await s.h.app.tasks.create({ title: "Move house", categoryId: list.listId });
+		for (let i = 0; i < 250; i++) await s.h.app.tasks.create({ title: `Box ${i}`, categoryId: list.listId, parentId: parent.id });
+		expect((await s.sync.sync()).ok).toBe(true);
+		s.tick();
+		await s.h.app.tasks.complete(parent.id, { includeSubtasks: true });
+		expect((await s.sync.sync()).ok).toBe(true);
+		s.tick();
+		const pulledAt = s.link("list", list.listId)!.lastPulledAt!;
+		const getTask = s.tt.count("getTask");
+		let calls = [...s.tt.calls];
+		const r = await s.sync.sync();
+		expect(r.error).toBeNull();
+		expect(r.needsConfirmation).toEqual([]);
+		expect(readsOf(s, list, calls)).toBeGreaterThan(1);
+		expect(s.tt.count("getTask") - getTask).toBe(0);
+		expect(s.link("list", list.listId)!.lastPulledAt! > pulledAt).toBe(true);
+		expect(s.task("Box 0").status).toBe("completed");
+		// The completions stay inside the next pull's 5-minute overlap: it splits again, quietly, and moves the window on.
+		s.tick(10 * 60_000);
+		calls = [...s.tt.calls];
+		expect((await s.sync.sync()).ok).toBe(true);
+		expect(readsOf(s, list, calls)).toBeGreaterThan(1);
+		expect(s.tt.count("getTask") - getTask).toBe(0);
+		s.tick();
+		calls = [...s.tt.calls];
+		expect((await s.sync.sync()).ok).toBe(true);
+		expect(readsOf(s, list, calls)).toBe(1);
+	});
+
+	it("no splits left: the reads stay bounded and the window is applied as read", async () => {
 		const s = await imported(["Work", 1]);
 		// 8000 completions over a day need at least 40 windows of fewer than 200: more than 32 splits.
 		const ids: string[] = [];
 		for (let i = 0; i < 8000; i++) ids.push(s.tt.add(s.lists[0]!.projectId, { title: `Done ${i}` }).id);
 		completeOver(s, ids, DAY);
 		s.tick();
-		const { message, reads } = await expectStop(s);
-		expect(message).toBe(`TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks were completed in "Work" since the last sync.`);
+		const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt!;
+		const calls = [...s.tt.calls];
+		const r = await s.sync.sync();
+		expect(r.error).toBeNull();
+		const reads = readsOf(s, s.lists[0]!, calls);
 		expect(reads).toBeGreaterThan(32);
+		expect(reads).toBeLessThanOrEqual(2 * 32 + 1);
+		expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt! > pulledAt).toBe(true);
+	});
+
+	it("no splits left with more than 50 linked tasks it may have cut: the sync stops, writing nothing", async () => {
+		const s = await imported(["Work", 1000]);
+		// Linked and unlinked completions interleaved over a day: one linked in every eight.
+		const ids: string[] = [];
+		for (const linked of s.lists[0]!.ttIds) {
+			ids.push(linked);
+			for (let i = 0; i < 7; i++) ids.push(s.tt.add(s.lists[0]!.projectId, { title: `Done ${ids.length}` }).id);
+		}
+		completeOver(s, ids, DAY);
+		s.tick();
+		const { message, reads } = await expectStop(s);
+		expect(message).toBe(TOO_MANY("Work"));
 		expect(reads).toBeLessThanOrEqual(2 * 32 + 1);
 	});
 
