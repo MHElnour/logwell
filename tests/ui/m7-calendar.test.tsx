@@ -122,7 +122,12 @@ describe("no drag (decision 5)", () => {
 		stubWeek(m.root);
 		const before = JSON.stringify(m.h.app.store.state.tasks.get(t.id));
 		const notices: string[] = [];
-		Object.assign(m.host, { notifyUndo: (msg: string) => void notices.push(msg) });
+		Object.assign(m.host, {
+			notifyUndo: (msg: string, label: string, mark: number) => {
+				notices.push(msg);
+				m.host.bindUndo(label, mark);
+			},
+		});
 		const e = entry(cal(m.root), "Weekly review");
 		await drag(e, { x: 450, y: -75 }, { x: 50, y: -75 });
 		expect(cal(m.root).classList.contains("is-dragging")).toBe(false);

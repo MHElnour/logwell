@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { INBOX_ID, type Task } from "../../src/domain/types";
+import { deleteTask, duplicateTask } from "../../src/ui/actions";
 import { type CalMount, dragTo, item, mountBoard, openBoard, settle, sidebarItem, stubBoardRects } from "./k1a-helpers";
 
 // Data and safety rule 17, through the board: two moves run under the same store label ("Move task"); the
@@ -37,6 +38,71 @@ async function mount(): Promise<{ m: CalMount; shown: Shown[] }> {
 
 const taskOf = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
 const sectionId = (m: CalMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!.id;
+
+describe("#39: the Undo of a task notice", () => {
+	it("Delete: the notice's Undo brings the task back", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		const { task } = await m.h.app.tasks.create({ title: "Call the bank" });
+		await expect(deleteTask(m.host, task)).resolves.toBe(true);
+		expect(m.h.app.store.state.tasks.has(task.id)).toBe(false);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
+		expect(m.h.app.store.state.tasks.has(task.id)).toBe(true);
+	});
+
+	it("Duplicate: the notice's Undo removes the copy", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		const { task } = await m.h.app.tasks.create({ title: "Call the bank" });
+		const copy = await duplicateTask(m.host, task);
+		expect(m.h.app.store.state.tasks.has(copy!.id)).toBe(true);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
+		expect(m.h.app.store.state.tasks.has(copy!.id)).toBe(false);
+		expect(m.h.app.store.state.tasks.has(task.id)).toBe(true);
+	});
+});
+
+describe("#39: the Undo of a tag delete notice", () => {
+	async function tagMenu(m: CalMount, name: string) {
+		const row = [...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((r) => r.querySelector(".cp-sidebar-label")?.textContent === name)!;
+		row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+		await settle();
+		const del = m.host.menus.at(-1)!.find((i) => i !== "separator" && i.title === "Delete");
+		if (del === undefined || del === "separator") throw new Error("no Delete item");
+		return del;
+	}
+
+	it("Delete: the notice's Undo brings the tag back on its task", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		const { task } = await m.h.app.tasks.create({ title: "Call the bank", newTags: ["Errands"] });
+		await settle();
+		m.host.choose = (async () => true) as unknown as typeof m.host.choose;
+		(await tagMenu(m, "Errands")).run();
+		await settle();
+		expect(m.h.app.store.state.tags.has("errands")).toBe(false);
+		expect(m.host.messages.at(-1)).toBe("Deleted tag @Errands.");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
+		expect(m.h.app.store.state.tags.has("errands")).toBe(true);
+		expect(m.h.app.store.state.tasks.get(task.id)!.tagKeys).toEqual(["errands"]);
+	});
+
+	it("shows no notice when the tag was already gone and unused", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		await m.h.app.tags.create("Errands");
+		await settle();
+		m.host.choose = (async () => true) as unknown as typeof m.host.choose;
+		const del = await tagMenu(m, "Errands");
+		// Deleted elsewhere while the menu was open.
+		await m.h.app.tags.delete("errands");
+		const before = m.host.undoButtons.length;
+		del.run();
+		await settle();
+		expect(m.host.undoButtons).toHaveLength(before);
+		expect(m.host.messages).not.toContain("Deleted tag @Errands.");
+	});
+});
 
 describe("#39: the Undo of a list delete notice", () => {
 	it("restores the list, through the notice's own Undo", async () => {

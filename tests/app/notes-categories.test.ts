@@ -184,7 +184,7 @@ describe("tags (TAG-01..04)", () => {
 		await h.app.tags.create("b");
 		const { task } = await h.app.tasks.create({ title: "x", tagKeys: ["a", "b", "a"] });
 		expect(task.tagKeys).toEqual(["a", "b"]);
-		expect(await h.app.tags.delete("a")).toBe(1);
+		expect(await h.app.tags.delete("a")).toEqual({ wrote: true, label: "Delete tag", tasks: 1 });
 		expect(h.app.store.state.tasks.get(task.id)?.tagKeys).toEqual(["b"]);
 	});
 

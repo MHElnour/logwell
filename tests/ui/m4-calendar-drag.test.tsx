@@ -114,7 +114,7 @@ describe("week: move a timed block (D11)", () => {
 		expect(after.plannedDurationMin).toBe(45);
 		expect(undoNotice).toHaveBeenCalledWith('Moved "Standup".', "Edit task", expect.any(Number));
 		expect(details(m)).toBeNull();
-		expect(await m.h.app.store.undo()).toBe("Edit task");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(task(m, "Standup").scheduled).toEqual(at("2026-10-01", "19:00"));
 	});
 

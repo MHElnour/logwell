@@ -170,7 +170,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 		expect(headings(m)).toEqual(["No section:3", "Beta:0"]);
 		expect(undo).toHaveBeenCalledTimes(1);
 		expect((undo.mock.calls[0] as unknown[])[1]).toBe("Delete section");
-		expect(await m.h.app.store.undo()).toBe("Delete section");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta"]);
 		expect(taskOf(m, "A1").sectionId).toBe(sectionOf(m, "Alpha").id);
@@ -679,7 +679,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 		expect(sectionNames(m)).toEqual(["Gamma", "Alpha", "Beta"]);
 		expect(columnTitles(m.root)).toEqual(["No section", "Gamma", "Alpha", "Beta"]);
 		expect(undo).toHaveBeenCalledWith('Moved section "Gamma".', "Move section", expect.any(Number));
-		expect(await m.h.app.store.undo()).toBe("Move section");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta", "Gamma"]);
 	});
 

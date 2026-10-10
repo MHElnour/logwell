@@ -140,7 +140,9 @@ export class AppStore {
 	 * The Undo button of a notice, bound when the notice shows, right after its write: it targets the one entry pushed
 	 * under `label` since `mark`. Entries under other labels pushed in between do not matter. When none or more than
 	 * one entry under `label` was pushed since, nothing is bound and the Undo refuses. The Undo reverts its entry only
-	 * while that entry is the newest, checked inside the queue; otherwise it refuses (UndoConflict) and changes nothing.
+	 * while that entry is the newest, checked inside the queue; otherwise it refuses (UndoConflict) and changes nothing:
+	 * "other changes were made since" while the entry is still in the history under newer ones, "can no longer be
+	 * undone here" when nothing is bound or the entry has left the history.
 	 */
 	undoFor(mark: number, label: string): () => Promise<boolean> {
 		// The log must reach back to the mark, or an entry under `label` may have been pushed unseen.
@@ -149,8 +151,11 @@ export class AppStore {
 		const id = since.length === 1 ? since[0]!.id : null;
 		return () =>
 			this.queue.run(() => {
-				if (id === null) throw new DomainError("UndoConflict", `Cannot undo "${label}": this change can no longer be undone here.`);
-				if (this.undoStack[this.undoStack.length - 1]?.id !== id) {
+				// Not bound, or its entry already left the history (undone, or cleared by a reload): nothing to say about later changes.
+				if (id === null || !this.undoStack.some((e) => e.id === id)) {
+					throw new DomainError("UndoConflict", `Cannot undo "${label}": this change can no longer be undone here.`);
+				}
+				if (this.undoStack[this.undoStack.length - 1]!.id !== id) {
 					throw new DomainError("UndoConflict", `Cannot undo "${label}": other changes were made since.`);
 				}
 				return this.revertNewest() !== null;

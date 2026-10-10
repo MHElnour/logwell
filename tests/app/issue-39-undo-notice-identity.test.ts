@@ -71,6 +71,19 @@ describe("#39: a notice's Undo targets its own write", () => {
 		expect(title(b.id)).toBe("Water the herbs");
 	});
 
+	it("says the change can no longer be undone once its entry left the history (global Undo, reload)", async () => {
+		const { h, store, a, title } = await twoTasks();
+		const undoEdit = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
+		await store.undo();
+		await expect(undoEdit()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank");
+
+		const undoAgain = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank now" }));
+		store.notifyReloaded();
+		await expect(undoAgain()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank now");
+	});
+
 	it("a write under another label between the mark and the write does not stop the Undo", async () => {
 		const { h, store, a, b, title } = await twoTasks();
 		const mark = store.undoMark();
