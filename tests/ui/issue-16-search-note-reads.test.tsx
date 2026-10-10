@@ -36,6 +36,36 @@ async function openTasks(m: CalMount) {
 	await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
 }
 
+/** Makes every note read wait until it is released, so a scan can be held half way. Reads are still recorded in `reads`. */
+function holdReads(m: CalMount) {
+	const notes = m.h.notes;
+	const waiting: (() => void)[] = [];
+	let holding = true;
+	notes.read = async (path: string) => {
+		notes.reads.push(path);
+		if (holding) await new Promise<void>((resolve) => waiting.push(resolve));
+		return notes.files.get(path) ?? null;
+	};
+	return {
+		get waiting() {
+			return waiting.length;
+		},
+		/** Lets the oldest waiting read finish. */
+		async releaseOne() {
+			waiting.shift()?.();
+			await settle();
+		},
+		/** Lets every read finish, also the ones that start after a release. */
+		async releaseAll() {
+			holding = false;
+			for (const r of waiting.splice(0)) r();
+			await settle();
+		},
+	};
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /** Alpha links a.md (has the needle), Beta links b.md (does not), Gamma has no note. Search is open with the toggle on. */
 async function setup() {
 	const m = await mountCal();
@@ -72,12 +102,16 @@ describe("issue 16: Search note reads", () => {
 		expect(resultTitles(m)).toEqual([expect.stringContaining("Alpha 2")]);
 	});
 
-	it("a task that gets another note path reads the new path", async () => {
-		const { m, beta } = await setup();
+	it("a task that gets another note path causes one full scan of the new set, and no scan after an unrelated commit", async () => {
+		const { m, beta, gamma } = await setup();
 		await m.h.app.tasks.linkNote(beta.id, "c.md");
 		await afterDelay();
-		expect(m.h.notes.reads).toContain("c.md");
+		expect([...m.h.notes.reads].sort()).toEqual(["a.md", "c.md"]);
 		expect(resultTitles(m).some((t) => t.includes("Beta"))).toBe(true);
+		m.h.notes.reads.length = 0;
+		await m.h.app.tasks.update(gamma.id, { title: "Gamma 2" });
+		await afterDelay();
+		expect(m.h.notes.reads).toEqual([]);
 	});
 
 	it("a change of a linked note reads exactly that note and updates the match", async () => {
@@ -95,12 +129,18 @@ describe("issue 16: Search note reads", () => {
 		expect(resultTitles(m).some((t) => t.includes("Alpha"))).toBe(false);
 	});
 
-	it("a change of a note no task links, or of the database file, reads nothing", async () => {
-		const { m } = await setup();
+	it("a change of a note no task links, or of the database file, reads nothing; a linked one reads exactly that note", async () => {
+		const { m, gamma } = await setup();
 		m.host.noteEvents.emit("note", "elsewhere.md");
 		m.host.noteEvents.emit("note", "tasks.cpbase");
 		await settle();
 		expect(m.h.notes.reads).toEqual([]);
+		m.host.noteEvents.emit("note", "a.md");
+		await settle();
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		await m.h.app.tasks.update(gamma.id, { title: "Gamma 2" });
+		await afterDelay();
+		expect(m.h.notes.reads).toEqual(["a.md"]);
 	});
 
 	it("while another page is shown nothing is read; coming back does one scan", async () => {
@@ -128,5 +168,97 @@ describe("issue 16: Search note reads", () => {
 		expect(resultTitles(m)).toEqual([]);
 		await afterDelay();
 		expect(resultTitles(m)).toEqual([expect.stringContaining("Beta")]);
+	});
+
+	it("a note event before the scan starts changes nothing; a burst during the scan does not restart it, and the note is read once afterwards", async () => {
+		const { m } = await setup();
+		const held = holdReads(m);
+		await type(m, "stuff");
+		m.host.noteEvents.emit("note", "b.md");
+		await sleep(100);
+		// The scan has not started; it reads that note anyway.
+		expect(m.h.notes.reads).toEqual([]);
+		await sleep(300);
+		await settle();
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		for (let i = 0; i < 10; i++) m.host.noteEvents.emit("note", "b.md");
+		await sleep(400);
+		await settle();
+		// A restarted scan would have read a.md again.
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		await held.releaseOne();
+		expect(m.h.notes.reads).toEqual(["a.md", "b.md"]);
+		await held.releaseOne();
+		// The scan is done; the note that changed meanwhile is read again, once.
+		expect(m.h.notes.reads).toEqual(["a.md", "b.md", "b.md"]);
+		await held.releaseAll();
+		expect(m.h.notes.reads).toEqual(["a.md", "b.md", "b.md"]);
+		expect(resultTitles(m)).toEqual([expect.stringContaining("Beta")]);
+	});
+
+	it("leaving Search or closing the app with a scan in flight stops the reads and shows nothing from it", async () => {
+		const { m } = await setup();
+		const held = holdReads(m);
+		await type(m, "stuff");
+		await sleep(350);
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		await openTasks(m);
+		await held.releaseAll();
+		await sleep(50);
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		expect(resultTitles(m).some((t) => t.includes("Beta"))).toBe(false);
+
+		await openSearch(m);
+		await sleep(350);
+		await settle();
+		expect(m.h.notes.reads.length).toBeGreaterThan(1);
+		const held2 = holdReads(m);
+		await type(m, "needle");
+		await sleep(350);
+		const before = m.h.notes.reads.length;
+		m.unmount();
+		await held2.releaseAll();
+		await sleep(50);
+		expect(m.h.notes.reads.length).toBe(before);
+	});
+
+	it("a newer scan stops an older one, whose result is never shown", async () => {
+		const { m } = await setup();
+		const held = holdReads(m);
+		await type(m, "stuff");
+		await sleep(350);
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		await type(m, "needle");
+		await held.releaseOne();
+		// The older scan stops after the read in flight: b.md is not read, and Beta is not shown.
+		expect(m.h.notes.reads).toEqual(["a.md"]);
+		expect(resultTitles(m).some((t) => t.includes("Beta"))).toBe(false);
+		await sleep(350);
+		expect(m.h.notes.reads).toEqual(["a.md", "a.md"]);
+		await held.releaseAll();
+		expect(m.h.notes.reads).toEqual(["a.md", "a.md", "b.md"]);
+		expect(resultTitles(m)).toEqual([expect.stringContaining("Alpha")]);
+	});
+
+	it("a renamed note: its old path is read once, the new path is read by the full scan", async () => {
+		const { m } = await setup();
+		m.h.notes.files.delete("b.md");
+		m.h.notes.files.set("d.md", "moved, with the needle");
+		m.host.noteEvents.emit("note", "b.md");
+		m.host.noteEvents.emit("note", "d.md");
+		await m.h.app.tasks.rewriteNotePaths("b.md", "d.md", false);
+		await afterDelay();
+		expect(m.h.notes.reads).toContain("d.md");
+		expect(resultTitles(m).some((t) => t.includes("Beta"))).toBe(true);
+	});
+
+	it("a read error is reported once per scan", async () => {
+		const { m } = await setup();
+		m.h.notes.read = async () => {
+			throw new Error("disk gone");
+		};
+		await type(m, "stuff");
+		await afterDelay();
+		expect(m.host.messages.filter((x) => x === "disk gone")).toHaveLength(1);
 	});
 });

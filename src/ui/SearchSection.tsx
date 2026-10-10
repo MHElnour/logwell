@@ -69,47 +69,50 @@ export function SearchSection(props: {
 		let timer: number | undefined;
 		let scan: AbortController | null = null;
 		let stopped = false;
-		const fullScanDue = () => timer !== undefined || scan !== null;
-		// One full scan after a pause; a newer one stops an older one.
-		const scheduleScan = () => {
-			scan?.abort();
-			scan = null;
-			window.clearTimeout(timer);
-			timer = window.setTimeout(() => {
-				timer = undefined;
-				const mine = new AbortController();
-				scan = mine;
-				searchNoteContent(links, query, host.app.notes, mine.signal)
-					.then((ids) => {
-						if (mine.signal.aborted) return;
-						scan = null;
-						setFound((f) => (f.query === query && sameIds(f.ids, ids) ? f : { query, ids }));
-					})
-					.catch((err) => {
-						if (scan === mine) scan = null;
-						host.error(err);
-					});
-			}, NOTE_SCAN_DELAY_MS);
-		};
-		scheduleScan();
-		// A linked note changed in the vault: read that note again, nothing else.
-		const stopListening = host.onNotesChanged((path) => {
+		// Linked notes that changed while the full scan ran: read again one by one once it is done.
+		const dirty = new Set<string>();
+		// Read one linked note again and update only the tasks that link it.
+		const readOne = async (path: string): Promise<void> => {
 			const ids = links.get(path);
 			if (ids === undefined) return;
-			if (fullScanDue()) {
-				scheduleScan();
-				return;
-			}
-			void searchNoteContent(new Map([[path, ids]]), query, host.app.notes).then((hit) => {
-				if (stopped || fullScanDue()) return;
-				setFound((f) => {
-					if (f.query !== query) return f;
-					const next = new Set(f.ids);
-					for (const id of ids) next.delete(id);
-					for (const id of hit) next.add(id);
-					return sameIds(f.ids, next) ? f : { query, ids: next };
-				});
-			}, (err: unknown) => host.error(err));
+			const hit = await searchNoteContent(new Map([[path, ids]]), query, host.app.notes);
+			if (stopped) return;
+			setFound((f) => {
+				if (f.query !== query) return f;
+				const next = new Set(f.ids);
+				for (const id of ids) next.delete(id);
+				for (const id of hit) next.add(id);
+				return sameIds(f.ids, next) ? f : { query, ids: next };
+			});
+		};
+		// One full scan after a pause. Only a new query, toggle, set of links or visibility starts another one (this effect runs again).
+		timer = window.setTimeout(() => {
+			timer = undefined;
+			const mine = new AbortController();
+			scan = mine;
+			void (async () => {
+				try {
+					const ids = await searchNoteContent(links, query, host.app.notes, mine.signal);
+					if (mine.signal.aborted) return;
+					scan = null;
+					setFound((f) => (f.query === query && sameIds(f.ids, ids) ? f : { query, ids }));
+					for (const path of dirty) {
+						dirty.delete(path);
+						await readOne(path);
+						if (stopped) return;
+					}
+				} catch (err) {
+					scan = null;
+					dirty.clear();
+					host.error(err);
+				}
+			})();
+		}, NOTE_SCAN_DELAY_MS);
+		// A linked note changed in the vault. Before the full scan: it reads that note anyway. During it: read again afterwards. Otherwise: read just that note.
+		const stopListening = host.onNotesChanged((path) => {
+			if (!links.has(path) || timer !== undefined) return;
+			if (scan !== null) dirty.add(path);
+			else readOne(path).catch((err: unknown) => host.error(err));
 		});
 		return () => {
 			stopped = true;
