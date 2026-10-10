@@ -39,11 +39,29 @@ export function requireColor<T extends string | null>(color: T): T {
 	return color;
 }
 
-/** The list whose name matches `name` as `categoryNameKey` compares (the first in map order), or undefined. */
-export function findListByName(categories: ReadonlyMap<ID, Category>, name: string): Category | undefined {
-	const key = categoryNameKey(name);
-	for (const c of categories.values()) if (c.nameKey === key) return c;
-	return undefined;
+/** A list name with case, spaces, "-" and "_" ignored (NFC): the looser half of `resolveListName`. */
+function looseListKey(name: string): string {
+	return name.normalize("NFC").toLowerCase().replace(/[\s_-]+/gu, "");
+}
+
+/** What a typed list name stands for: one list, none, or several that it cannot tell apart. */
+export type ListNameMatch<T> = { kind: "one"; list: T } | { kind: "none" } | { kind: "several"; lists: T[] };
+
+/**
+ * The one rule for a list typed by hand (Quick Add `#list`, the `list:` filter of a task block): the exact name
+ * ignoring case first (`categoryNameKey`), else ignoring case, spaces, "-" and "_". Several lists that match only
+ * the loose way are `several`, in the order given; a name of only those characters never matches loosely.
+ */
+export function resolveListName<T extends { readonly name: string }>(lists: Iterable<T>, typed: string): ListNameMatch<T> {
+	const all = [...lists];
+	const exactKey = categoryNameKey(typed);
+	const exact = all.find((c) => categoryNameKey(c.name) === exactKey);
+	if (exact !== undefined) return { kind: "one", list: exact };
+	const looseKey = looseListKey(typed);
+	if (looseKey === "") return { kind: "none" };
+	const loose = all.filter((c) => looseListKey(c.name) === looseKey);
+	if (loose.length === 0) return { kind: "none" };
+	return loose.length === 1 ? { kind: "one", list: loose[0] as T } : { kind: "several", lists: loose };
 }
 
 export function requireCategoryName(raw: string): string {

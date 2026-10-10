@@ -195,10 +195,6 @@ export class TickTickHttp implements TickTickApi {
 		return this.call("POST", `/task/${seg(input.id)}`, input, true).then((v) => task(v, true));
 	}
 
-	async completeTask(projectId: string, taskId: string): Promise<void> {
-		await this.call("POST", `/project/${seg(projectId)}/task/${seg(taskId)}/complete`, undefined, true);
-	}
-
 	async deleteTask(projectId: string, taskId: string): Promise<void> {
 		await this.call("DELETE", `/project/${seg(projectId)}/task/${seg(taskId)}`, undefined, true);
 	}

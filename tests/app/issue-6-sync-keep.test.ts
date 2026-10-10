@@ -27,7 +27,7 @@ async function missingFive(s: SyncHarness) {
 	return { listId, projectId, ttIds, pending: r.needsConfirmation[0]! };
 }
 
-const writes = (s: SyncHarness) => ["createTask", "deleteTask", "batchTasks", "moveTasks", "updateTask", "completeTask"].map((m) => s.tt.count(m as never)).reduce((a, b) => a + b, 0);
+const writes = (s: SyncHarness) => ["createTask", "deleteTask", "batchTasks", "moveTasks", "updateTask"].map((m) => s.tt.count(m as never)).reduce((a, b) => a + b, 0);
 
 describe("first sync backup (SYNC-10)", () => {
 	it("takes a pre-sync snapshot of the database as it was, before any write", async () => {

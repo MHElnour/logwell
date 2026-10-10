@@ -1,5 +1,5 @@
 import type { BlockFilters } from "../parsing/blockQuery";
-import { findListByName } from "../domain/tasks";
+import { resolveListName } from "../domain/tasks";
 import { hasTagOrChild, normalizeTagKey } from "../domain/tags";
 import { INBOX_ID, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -14,8 +14,9 @@ import type { TaskView } from "./views";
  */
 export function blockOpenView(filters: BlockFilters, state: Pick<DbData, "categories" | "tags">): TaskView | null {
 	if (filters.list !== undefined) {
-		const list = findListByName(state.categories, filters.list);
-		if (list === undefined) return null;
+		const match = resolveListName(state.categories.values(), filters.list);
+		if (match.kind !== "one") return null;
+		const list = match.list;
 		return list.id === INBOX_ID ? { kind: "inbox" } : { kind: "category", id: list.id };
 	}
 	if (filters.tag !== undefined) {

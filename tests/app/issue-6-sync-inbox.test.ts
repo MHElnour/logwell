@@ -183,9 +183,8 @@ describe("InboxAliasApi", () => {
 		expect(first.projectId).toBe("inbox");
 		expect(tt.tasks.get([...tt.tasks.keys()][0]!)?.projectId).toBe(inbox.id);
 		await api.updateTask({ id: first.id, projectId: "inbox", title: "A2" });
-		await api.completeTask("inbox", first.id);
 		await api.deleteTask("inbox", first.id);
-		expect(tt.calls.filter((c) => c.startsWith("updateTask") || c.startsWith("completeTask") || c.startsWith("deleteTask"))).toHaveLength(3);
+		expect(tt.calls.filter((c) => c.startsWith("updateTask") || c.startsWith("deleteTask"))).toHaveLength(2);
 	});
 
 	it("leaves ids of other projects as they are", async () => {

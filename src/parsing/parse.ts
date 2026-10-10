@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import type { RepeatRule } from "../domain/types";
+import { resolveListName } from "../domain/tasks";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey } from "../domain/tags";
 import { findDates, resolveDateSpec, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
@@ -56,11 +57,6 @@ const FIELD_OF: Record<string, ParsedField> = {
 	recurrence: "recurrence",
 	tag: "tags",
 };
-
-/** Case-insensitive, ignoring spaces, "-" and "_". */
-function categoryKey(name: string): string {
-	return name.normalize("NFC").toLowerCase().replace(/[\s_-]+/gu, "");
-}
 
 function overlaps(a: Span, b: Span): boolean {
 	return a.start < b.end && b.start < a.end;
@@ -174,13 +170,15 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A token of digits only ("Fix bug #42", "@5") is not a token unless it names something that
 	// exists, so ticket numbers never block saving or disappear from the title.
 	const digitsOnly = (name: string): boolean => /^\d+$/u.test(name);
-	const categoryExists = (name: string): boolean => ctx.categories.some((c) => categoryKey(c.name) === categoryKey(name));
+	const categoryExists = (name: string): boolean => resolveListName(ctx.categories, name).kind !== "none";
 	for (const t of findWordTokens(input, "#", isTaken, (name) => !digitsOnly(name) || categoryExists(name))) {
 		take(t.span);
-		const key = categoryKey(t.name);
-		const found = ctx.categories.find((c) => categoryKey(c.name) === key);
-		if (found) drafts.push(draft(input, "category", t.span, "applied", { categoryId: found.id }));
-		else drafts.push(draft(input, "category", t.span, "unresolved", { notice: `No list named ${t.name}` }));
+		const match = resolveListName(ctx.categories, t.name);
+		if (match.kind === "one") drafts.push(draft(input, "category", t.span, "applied", { categoryId: match.list.id }));
+		else {
+			const notice = match.kind === "several" ? `\u201c${t.name}\u201d matches several lists. Use the exact name.` : `No list named ${t.name}`;
+			drafts.push(draft(input, "category", t.span, "unresolved", { notice }));
+		}
 	}
 
 	const tagExists = (key: string): boolean => ctx.tags.some((x) => normalizeTagKey(x.key) === key);
