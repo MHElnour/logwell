@@ -23,6 +23,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#15) Fixed dates in years 0000 to 0099 being treated as 1900 to 1999 in the calendar and repeating tasks, and repeats, occurrence records and check-ins on such dates being removed on load.
 - (#16) Fixed Search reading every description note again after each change, even with the Search page closed.
 - (#17) Fixed a pick in the Tasks view menu that could undo a selection made a moment earlier.
 

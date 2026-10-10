@@ -5,7 +5,6 @@ import {
 	MAX_HABIT_VALUE,
 	hasAtMostSixDecimals,
 	indexCheckins,
-	isLocalDate,
 	nextVersion,
 	sameRule,
 	validateHabitInput,
@@ -14,7 +13,7 @@ import {
 import type { Clock, IdGenerator } from "../domain/ports";
 import { compareSortKeys, keyAfter } from "../domain/sortKey";
 import { requireColor, requireIconName } from "../domain/tasks";
-import { todayIn } from "../domain/time";
+import { isValidLocalDate, todayIn } from "../domain/time";
 import type { Checkin, Habit, HabitGoal, HabitSchedule, ID, LocalDate } from "../domain/types";
 import { GOAL_TYPES, TIMES_OF_DAY, WEEKDAYS } from "../domain/types";
 import type { SettingsPort } from "./ports";
@@ -315,7 +314,7 @@ export class HabitService {
 
 	/** No check-in writes on a date that is not a real day, on an archived habit, after today, or before the habit's first version. */
 	private writableHabit(tx: Tx, id: ID, date: LocalDate): Habit {
-		if (!isLocalDate(date)) invalidValue("That date is not valid.");
+		if (!isValidLocalDate(date)) invalidValue("That date is not valid.");
 		const habit = this.habit(tx, id);
 		if (habit.archivedAt !== null) invalidValue("Restore the habit to change its check-ins.");
 		if (date > this.today()) invalidValue("A check-in cannot be in the future.");

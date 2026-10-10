@@ -1,8 +1,7 @@
 import type { WeekStart } from "../../app/settings";
 import { monthGrid as domainMonthGrid } from "../../domain/calendar";
-import { isoWeekdayOf } from "../../domain/time";
+import { dateOf, dayNumOf, isoWeekdayOf } from "../../domain/time";
 import { type LocalDate, WEEKDAYS, WEEKDAY_LONG } from "../../domain/types";
-import { pad2 } from "../format";
 
 // Month grid of the date popover. Pure calendar arithmetic on YYYY-MM-DD strings:
 // no zone is involved, because "today" is passed in by the caller.
@@ -49,13 +48,14 @@ export function shiftMonth(ym: YearMonth, delta: number): YearMonth {
 }
 
 function daysInMonth(ym: YearMonth): number {
-	return new Date(Date.UTC(ym.year, ym.month, 0)).getUTCDate();
+	return dayNumOf(ym.year, ym.month + 1, 1) - dayNumOf(ym.year, ym.month, 1);
 }
 
 /** Whole weeks (4 to 6 rows) covering the month, starting on the week-start day. */
 export function monthGrid(ym: YearMonth, weekStart: WeekStart): CalDay[] {
-	const prefix = `${ym.year}-${pad2(ym.month)}-`;
-	return domainMonthGrid(`${prefix}01`, weekStart)
+	const first = dateOf(dayNumOf(ym.year, ym.month, 1));
+	const prefix = first.slice(0, 8);
+	return domainMonthGrid(first, weekStart)
 		.flat()
 		.map((date) => ({ date, inMonth: date.startsWith(prefix) }));
 }
@@ -64,7 +64,7 @@ export function monthGrid(ym: YearMonth, weekStart: WeekStart): CalDay[] {
 export function shiftDateByMonths(date: LocalDate, delta: number): LocalDate {
 	const ym = shiftMonth(yearMonthOf(date), delta);
 	const day = Math.min(Number(date.slice(8, 10)), daysInMonth(ym));
-	return `${ym.year}-${pad2(ym.month)}-${pad2(day)}`;
+	return dateOf(dayNumOf(ym.year, ym.month, day));
 }
 
 /** "Thursday, October 1" for the accessible name of a day. */

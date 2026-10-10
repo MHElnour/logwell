@@ -1,6 +1,6 @@
 import { isValidTagKey } from "../domain/tags";
-import { isInstant, isValidDateSpec, isValidZone } from "../domain/time";
-import { isClockTime, isLocalDate } from "../domain/habits";
+import { isInstant, isValidDateSpec, isValidLocalDate, isValidZone } from "../domain/time";
+import { isClockTime } from "../domain/habits";
 import type {
 	Category,
 	Checkin,
@@ -437,7 +437,7 @@ function readRepeatEnd(raw: unknown, fix: (what: string) => void): RepeatEnd {
 	if (raw === undefined) return { kind: "never" };
 	if (isRecord(raw)) {
 		if (raw.kind === "never") return { ...raw, kind: "never" };
-		if (raw.kind === "date" && isLocalDate(raw.date)) return { ...raw, kind: "date", date: raw.date };
+		if (raw.kind === "date" && isValidLocalDate(raw.date)) return { ...raw, kind: "date", date: raw.date };
 		if (raw.kind === "count" && typeof raw.count === "number" && Number.isInteger(raw.count) && raw.count >= 1) {
 			return { ...raw, kind: "count", count: raw.count };
 		}
@@ -456,7 +456,7 @@ function readRecurrence(raw: unknown, title: string, issues: string[]): Recurren
 	const report = (): void => {
 		for (const what of fixed) issues.push(`Repeating task "${title}" had ${what}.`);
 	};
-	if (!isRecord(raw) || !isLocalDate(raw.anchor)) {
+	if (!isRecord(raw) || !isValidLocalDate(raw.anchor)) {
 		issues.push(`Repeating task "${title}" had an unreadable repeat, which was removed; the task no longer repeats.`);
 		return null;
 	}
@@ -465,7 +465,7 @@ function readRecurrence(raw: unknown, title: string, issues: string[]): Recurren
 	let duplicates = 0;
 	for (const v of Array.isArray(raw.versions) ? (raw.versions as unknown[]) : []) {
 		const rule = isRecord(v) ? readRepeatRule(v.rule, fix) : null;
-		if (!isRecord(v) || !isLocalDate(v.effectiveFrom) || rule === null) {
+		if (!isRecord(v) || !isValidLocalDate(v.effectiveFrom) || rule === null) {
 			unreadable++;
 			continue;
 		}
@@ -507,7 +507,7 @@ const RESOLVED_AT_UNKNOWN = "1970-01-01T00:00:00.000Z";
  */
 function readOccurrenceRecord(o: Obj, issues: string[]): OccurrenceRecord | null {
 	const taskId = isNonEmptyString(o.taskId) ? o.taskId : null;
-	if (taskId === null || !isLocalDate(o.occurrenceDate) || (o.status !== "done" && o.status !== "skipped")) {
+	if (taskId === null || !isValidLocalDate(o.occurrenceDate) || (o.status !== "done" && o.status !== "skipped")) {
 		const date = typeof o.occurrenceDate === "string" ? ` (${o.occurrenceDate})` : "";
 		issues.push(`An occurrence record${date} was damaged and has been removed.`);
 		return null;
@@ -520,7 +520,7 @@ function readOccurrenceRecord(o: Obj, issues: string[]): OccurrenceRecord | null
 	if (typeof o.auto === "boolean") auto = o.auto;
 	else issues.push(`${label} had an unreadable automatic flag; it was set to false.`);
 	let completedOn: string | null = null;
-	if (isLocalDate(o.completedOn)) completedOn = o.completedOn;
+	if (isValidLocalDate(o.completedOn)) completedOn = o.completedOn;
 	else if (o.completedOn !== null) issues.push(`${label} had an unreadable completion day, which was cleared.`);
 	return { ...o, taskId, occurrenceDate: o.occurrenceDate, status: o.status, resolvedAt, auto, completedOn };
 }
@@ -661,7 +661,7 @@ function readHabit(o: Obj, issues: string[]): Habit | null {
 	for (const raw of Array.isArray(o.versions) ? (o.versions as unknown[]) : []) {
 		const goal = isRecord(raw) ? readGoal(raw.goal) : null;
 		const schedule = isRecord(raw) ? readSchedule(raw.schedule) : null;
-		if (!isRecord(raw) || !isLocalDate(raw.effectiveFrom) || goal === null || schedule === null) {
+		if (!isRecord(raw) || !isValidLocalDate(raw.effectiveFrom) || goal === null || schedule === null) {
 			unreadable++;
 			continue;
 		}
@@ -720,7 +720,7 @@ function readCheckin(o: Obj, issues: string[]): Checkin | null {
 	const id = isNonEmptyString(o.id) ? o.id : null;
 	const habitId = isNonEmptyString(o.habitId) ? o.habitId : null;
 	const value = o.value;
-	if (id === null || habitId === null || !isLocalDate(o.date) || typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+	if (id === null || habitId === null || !isValidLocalDate(o.date) || typeof value !== "number" || !Number.isFinite(value) || value < 0) {
 		issues.push(`A check-in ${id === null ? "without an id" : `(${id})`} was damaged and has been removed.`);
 		return null;
 	}

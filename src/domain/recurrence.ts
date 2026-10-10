@@ -1,5 +1,5 @@
 import type { QueryContext } from "./queries";
-import { DAY_MS, dateOf, dateSpecDate, dayNum, isoWeekdayOfDay as isoWeekday, isValidZone, weekStartOfDay as weekStartNum } from "./time";
+import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidZone, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
 	ID,
@@ -64,16 +64,16 @@ const WEEKDAY_ISO: Readonly<Record<Weekday, number>> = { MO: 1, TU: 2, WE: 3, TH
 
 /** Months since year 0 (year * 12 + month - 1) and the day of month. */
 function monthIndexOf(n: number): { mi: number; day: number } {
-	const d = new Date(n * DAY_MS);
-	return { mi: d.getUTCFullYear() * 12 + d.getUTCMonth(), day: d.getUTCDate() };
+	const { y, m, d } = civilOf(n);
+	return { mi: y * 12 + m - 1, day: d };
 }
 
 function firstOfMonth(mi: number): number {
-	return Date.UTC(Math.floor(mi / 12), mi % 12, 1) / DAY_MS;
+	return dayNumOf(Math.floor(mi / 12), mi - Math.floor(mi / 12) * 12 + 1, 1);
 }
 
 function daysInMonth(mi: number): number {
-	return new Date(Date.UTC(Math.floor(mi / 12), (mi % 12) + 1, 0)).getUTCDate();
+	return firstOfMonth(mi + 1) - firstOfMonth(mi);
 }
 
 // -- compiled series (cached per immutable Recurrence object) ----------------------------
