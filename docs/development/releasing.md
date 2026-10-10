@@ -60,12 +60,14 @@ Run `npm run e2e` locally before a release. CI does not run it, because it needs
 
 **CI workflow** (`ci.yml`, on pushes to `main` and pull requests): typecheck, lint, unit tests, and `release-check.mjs lint`, which checks that `unreleased.md` has only the allowed headings and that `docs/releases/README.md` lists exactly the release files.
 
-**Release workflow** (`release.yml`, on a tag like `0.2.0`):
+**Release workflow** (`release.yml`, on a tag like `0.2.0`) runs in two stages. The second starts only if the first passes.
 
-1. `release-check.mjs verify <tag>` fails unless the tag is `x.y.z` with no prefix, equals the `manifest.json` and `package.json` versions, is listed in `versions.json`, and has a `docs/releases/<tag>.md` with the right title and at least one bullet. It prints the entries of that file, which become the release notes (`notes.md`).
-2. typecheck, lint, unit tests and the production build.
-3. A build provenance attestation for `main.js`, `manifest.json` and `styles.css`.
-4. `gh release create` with those three files and the notes, as a pre-release while the major version is 0.
+1. **Checks:** the CI workflow itself (typecheck, lint, unit tests and the release notes lint), run on the tagged commit.
+2. **Release:**
+   1. `release-check.mjs verify <tag>` fails unless the tag is `x.y.z` with no prefix, equals the `manifest.json` and `package.json` versions, is listed in `versions.json`, and has a `docs/releases/<tag>.md` with the right title and at least one bullet. It prints the entries of that file, which become the release notes (`notes.md`).
+   2. The production build.
+   3. A build provenance attestation for `main.js`, `manifest.json` and `styles.css`.
+   4. `gh release create` with those three files and the notes, as a pre-release while the major version is 0.
 
 ## Gated release steps for agents
 

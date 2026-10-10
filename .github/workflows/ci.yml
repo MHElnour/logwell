@@ -2,7 +2,9 @@ name: CI
 
 # Changes that touch only docs or Markdown skip the code checks. Release notes still run them:
 # release-check lints docs/releases/. Patterns are read in order; a later one wins.
+# The release workflow also calls this workflow as its first stage (workflow_call).
 on:
+  workflow_call:
   push:
     branches: [main]
     paths:
