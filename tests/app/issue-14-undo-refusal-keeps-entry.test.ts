@@ -16,6 +16,18 @@ describe("#14: a refused undo and its entry", () => {
 		expect(store.undoLabel).toBe("Create task");
 	});
 
+	it("keeps the entry when a notice's Undo is refused while read-only", async () => {
+		const h = await appHarness();
+		const store = h.app.store;
+		const mark = store.undoMark();
+		await h.app.tasks.create({ title: "Call the bank" });
+		const undo = store.undoFor(mark, "Create task");
+		await makeReadOnly(h);
+		await expect(undo()).rejects.toMatchObject({ code: "ReadOnly" });
+		expect(store.canUndo).toBe(true);
+		expect(store.undoLabel).toBe("Create task");
+	});
+
 	it("resolves null for an empty history, also while read-only", async () => {
 		const h = await appHarness();
 		await makeReadOnly(h);
