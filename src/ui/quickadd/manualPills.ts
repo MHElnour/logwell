@@ -1,4 +1,4 @@
-import type { Priority } from "../../domain/types";
+import { INBOX_NAME, type Priority } from "../../domain/types";
 import { formatDateSpec, formatDuration, specFromInputs } from "../format";
 import { ICON } from "../icons";
 import { repeatLine } from "../repeat";
@@ -76,7 +76,7 @@ export function manualPills(model: QuickAddModel): ManualPill[] {
 		});
 	}
 	if (model.manual.has("category") && model.parent === undefined) {
-		const name = app.categories.list().find((c) => c.id === vals.categoryId)?.name ?? "Unknown";
+		const name = app.categories.list().find((c) => c.id === vals.categoryId)?.name ?? INBOX_NAME;
 		out.push({ key: "category", kind: "category", label: `List: ${name}`, icon: ICON.list, remove: () => model.revertManual("category") });
 	}
 	if (model.manual.has("note") && vals.notePath !== null) {

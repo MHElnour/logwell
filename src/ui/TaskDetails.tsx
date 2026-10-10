@@ -6,7 +6,7 @@ import { describeRule, explicitRule, versionAt } from "../domain/recurrence";
 import { normalizeTagKey } from "../domain/tags";
 import { DURATION_RANGE_MESSAGE, MAX_DURATION_MIN, isDurationMinutes, subtasksOf } from "../domain/tasks";
 import { dateSpecDate } from "../domain/time";
-import type { ID, Task } from "../domain/types";
+import { type ID, INBOX_NAME, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { QUADRANTS, deleteTask, duplicateTask, moveToCategory, priorityItems, priorityLabel, toggleComplete, updateTask } from "./actions";
 import { DateSpecField, Icon, IconButton, SrOnly, TaskCheckbox, hueClass } from "./common";
@@ -315,7 +315,7 @@ export function TaskDetails(props: {
 					) : (
 						<Icon host={host} icon={listIcon.name} fallback={ICON.list} />
 					)}
-					<span>{category?.name ?? "Inbox"}</span>
+					<span>{category?.name ?? INBOX_NAME}</span>
 				</button>
 				<span class="cp-foot-spacer" />
 				{focusSec > 0 && <span class="cp-focus-total">{`${focusedText(focusSec)} focused`}</span>}

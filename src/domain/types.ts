@@ -61,6 +61,8 @@ export interface Task {
 }
 
 export const INBOX_ID = "inbox";
+/** The Inbox's name, and what a task whose list cannot be found is shown under (it moves to the Inbox on save). */
+export const INBOX_NAME = "Inbox";
 
 export interface Category {
 	id: ID;

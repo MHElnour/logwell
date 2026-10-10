@@ -32,7 +32,7 @@ import { compareSortKeys } from "../domain/sortKey";
 import { isUnderTag, tagDisplayPath, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
 import { compareTasksBySortKey, isOpen } from "../domain/tasks";
-import { type Category, type Habit, type ID, INBOX_ID, type LocalDate, type Priority, type Task } from "../domain/types";
+import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
 
@@ -94,7 +94,7 @@ export function viewTitle(view: TaskView, state: DbData): string {
 		case "upcoming":
 			return "Upcoming";
 		case "inbox":
-			return state.categories.get(INBOX_ID)?.name ?? "Inbox";
+			return state.categories.get(INBOX_ID)?.name ?? INBOX_NAME;
 		case "category":
 			return state.categories.get(view.id)?.name ?? "List";
 		case "tag":

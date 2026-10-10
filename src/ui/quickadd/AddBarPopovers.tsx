@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
 import { addDays } from "../../domain/time";
-import type { LocalDate, Priority } from "../../domain/types";
+import { INBOX_NAME, type LocalDate, type Priority } from "../../domain/types";
 import { SrOnly } from "../common";
 import { formatDateSpec } from "../format";
 import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
@@ -440,7 +440,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 	const categories = app.categories.list();
 	const tags = app.tags.list();
 	const current = model.priorityValue();
-	const categoryName = categories.find((c) => c.id === model.categoryValue())?.name ?? "Inbox";
+	const categoryName = categories.find((c) => c.id === model.categoryValue())?.name ?? INBOX_NAME;
 	const tagKeys = model.tagKeysValue();
 	const notePath = model.notePathValue();
 	const close = (refocus: boolean) => model.closePopover(refocus);
