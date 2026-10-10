@@ -230,9 +230,10 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 	);
 	if (ok !== true) return;
 	try {
+		const mark = host.app.store.undoMark();
 		await host.app.categories.delete(category.id);
 		onDeleted();
-		host.notifyUndo(`Deleted list "${category.name}".`, "Delete category");
+		host.notifyUndo(`Deleted list "${category.name}".`, "Delete category", mark);
 	} catch (err) {
 		host.error(err);
 	}
@@ -250,9 +251,10 @@ async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise
 	);
 	if (ok !== true) return;
 	try {
+		const mark = host.app.store.undoMark();
 		await host.app.tags.delete(tag.key);
 		onDeleted();
-		host.notifyUndo(`Deleted tag @${tag.displayName}.`, "Delete tag");
+		host.notifyUndo(`Deleted tag @${tag.displayName}.`, "Delete tag", mark);
 	} catch (err) {
 		host.error(err);
 	}

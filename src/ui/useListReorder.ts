@@ -226,6 +226,7 @@ export function useListReorder(deps: {
 				const ctx = host.app.queryContext();
 				// A series moves by its current occurrence (it has no `scheduled`), keeping the time.
 				const schedule = task.recurrence === null ? undefined : host.app.effectiveSchedule(task);
+				const mark = host.app.store.undoMark();
 				if (!manual) {
 					// Only a group change gets here (`locate` refuses the rest): one `update` with the group's patch.
 					const change = target?.drop === undefined ? {} : groupPatch(task, target.drop, ctx, schedule);
@@ -233,8 +234,8 @@ export function useListReorder(deps: {
 					void writeTaskResult(host, task, change).then((r) => {
 						if (r.outcome !== "changed") return;
 						// `update` runs as "Edit task"; a series' date change re-anchors it and says so instead.
-						if (r.reanchored !== null) notifyReanchored(host, task, r.reanchored, "Edit task");
-						else host.notifyUndo(`Moved "${title}" to ${groupTitle(target, ctx)}.`, "Edit task");
+						if (r.reanchored !== null) notifyReanchored(host, task, r.reanchored, "Edit task", mark);
+						else host.notifyUndo(`Moved "${title}" to ${groupTitle(target, ctx)}.`, "Edit task", mark);
 					});
 					return;
 				}
@@ -246,8 +247,8 @@ export function useListReorder(deps: {
 					.then(({ changed, warnings, reanchored }) => {
 						for (const w of warnings) host.notify(DST_WARNING_TEXT[w]);
 						if (changed !== true) return;
-						if (reanchored !== undefined) notifyReanchored(host, task, reanchored, "Move task");
-						else host.notifyUndo(target === undefined ? `Moved "${title}".` : `Moved "${title}" to ${groupTitle(target, ctx)}.`, "Move task");
+						if (reanchored !== undefined) notifyReanchored(host, task, reanchored, "Move task", mark);
+						else host.notifyUndo(target === undefined ? `Moved "${title}".` : `Moved "${title}" to ${groupTitle(target, ctx)}.`, "Move task", mark);
 					})
 					.catch((err) => host.error(err));
 			},

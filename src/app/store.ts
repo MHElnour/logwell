@@ -42,6 +42,8 @@ export interface AppEvents {
 }
 
 export interface UndoEntry {
+	/** Unique and increasing; a notice's Undo names its entry by it (`undoFor`). */
+	id: number;
 	label: string;
 	changes: Change[];
 }
@@ -62,6 +64,8 @@ export class AppStore {
 	readonly bus = new EventBus<AppEvents>();
 	private readonly queue = new CommandQueue();
 	private undoStack: UndoEntry[] = [];
+	/** The id of the newest entry ever pushed; never reset, so a cleared history never reuses an id. */
+	private lastUndoId = 0;
 
 	constructor(
 		readonly host: StateHost,
@@ -92,7 +96,7 @@ export class AppStore {
 			if (ops.length > 0) {
 				this.host.commit(data, ops);
 				if (options.undoable !== false) {
-					this.undoStack.push({ label, changes });
+					this.undoStack.push({ id: ++this.lastUndoId, label, changes });
 					if (this.undoStack.length > UNDO_LIMIT) this.undoStack.shift();
 				}
 				this.bus.emit("changed", { label, changes });
@@ -119,12 +123,36 @@ export class AppStore {
 		return this.queue.run(() => this.revertNewest());
 	}
 
-	/** Undo for a specific command (the "Undo" button on a notice). */
-	async undoIfLatest(label: string): Promise<boolean> {
-		if (this.undoLabel !== label) {
-			throw new DomainError("UndoConflict", `Cannot undo "${label}": other changes were made since.`);
-		}
-		return (await this.undo()) !== null;
+	/** Taken right before a write whose notice offers Undo; `undoFor` then finds the entry that write pushed. */
+	undoMark(): number {
+		return this.lastUndoId;
+	}
+
+	/**
+	 * The Undo button of a notice, bound when the notice shows, right after its write: it targets the one entry
+	 * pushed since `mark`. When none or more than one was pushed since (another command ran in between), or that
+	 * entry is not under `label`, nothing is bound and the Undo refuses. The Undo reverts its entry only while that
+	 * entry is the newest, checked inside the queue; otherwise it refuses (UndoConflict) and changes nothing.
+	 */
+	undoFor(mark: number, label: string): () => Promise<boolean> {
+		const top = this.undoStack[this.undoStack.length - 1];
+		const id = this.lastUndoId === mark + 1 && top?.id === mark + 1 && top.label === label ? top.id : null;
+		return () => this.undoNewestIf(label, (entry) => entry.id === id);
+	}
+
+	/** Undo by label alone: reverts the newest command when it ran under `label`, checked inside the queue. */
+	undoIfLatest(label: string): Promise<boolean> {
+		return this.undoNewestIf(label, (entry) => entry.label === label);
+	}
+
+	private undoNewestIf(label: string, isTarget: (entry: UndoEntry) => boolean): Promise<boolean> {
+		return this.queue.run(() => {
+			const top = this.undoStack[this.undoStack.length - 1];
+			if (top === undefined || !isTarget(top)) {
+				throw new DomainError("UndoConflict", `Cannot undo "${label}": other changes were made since.`);
+			}
+			return this.revertNewest() !== null;
+		});
 	}
 
 	/** Runs inside the queue and stays synchronous from the first check to the commit. */

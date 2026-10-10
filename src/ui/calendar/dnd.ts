@@ -152,8 +152,9 @@ export function useCalDnd(host: UiHost, ctx: CalendarContext, getRoot: () => HTM
 				const { host: h } = live.current;
 				// Only a real change gets an Undo notice: for a drop that resolves to the current value
 				// (a DST gap) nothing is written, and Undo would revert an unrelated earlier command.
+				const mark = h.app.store.undoMark();
 				void writeTask(h, src.task, r.patch).then((outcome) => {
-					if (outcome === "changed") h.notifyUndo(r.message, "Edit task");
+					if (outcome === "changed") h.notifyUndo(r.message, "Edit task", mark);
 				});
 			},
 			onCancel: () => {

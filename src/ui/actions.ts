@@ -66,8 +66,9 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
 		if (ok !== true) return false;
 	}
 	try {
+		const mark = host.app.store.undoMark();
 		await host.app.tasks.delete(task.id);
-		host.notifyUndo(`Moved "${task.title}" to Trash.`, "Delete task");
+		host.notifyUndo(`Moved "${task.title}" to Trash.`, "Delete task", mark);
 		return true;
 	} catch (err) {
 		host.error(err);
@@ -80,10 +81,11 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
  * undo entry), so a caller must not offer an Undo for it: that Undo would revert an earlier command.
  */
 export async function writeTask(host: UiHost, task: Task, patch: TaskPatch): Promise<"changed" | "same" | "failed"> {
+	const mark = host.app.store.undoMark();
 	const { outcome, reanchored } = await writeTaskResult(host, task, patch);
 	// A date change of a series re-anchors the whole series; say so (the caller's own notice, if any, is replaced
 	// by this one: use writeTaskResult to decide).
-	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, "Edit task");
+	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, "Edit task", mark);
 	return outcome;
 }
 
@@ -151,8 +153,9 @@ export function moveToSection(host: UiHost, task: Task, anchor: HTMLElement): vo
 
 export async function duplicateTask(host: UiHost, task: Task): Promise<Task | null> {
 	try {
+		const mark = host.app.store.undoMark();
 		const copy = await host.app.tasks.duplicate(task.id);
-		host.notifyUndo(`Duplicated "${task.title}".`, "Duplicate task");
+		host.notifyUndo(`Duplicated "${task.title}".`, "Duplicate task", mark);
 		return copy;
 	} catch (err) {
 		host.error(err);

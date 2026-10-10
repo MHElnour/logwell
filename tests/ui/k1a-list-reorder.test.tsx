@@ -102,7 +102,7 @@ describe("list row reorder (D5)", () => {
 		await dragTo(row(m, "C"), { x: X, y: centerY(2) }, { x: X, y: 2 });
 		expect(task(m, "C").id).toBe(id);
 		expect(await reordered(m)).toEqual(["C", "A", "B", "D"]);
-		expect(m.undo).toHaveBeenCalledWith('Moved "C".', "Move task");
+		expect(m.undo).toHaveBeenCalledWith('Moved "C".', "Move task", expect.any(Number));
 		expect(await m.h.app.store.undo()).toBe("Move task");
 		expect(await reordered(m)).toEqual(["A", "B", "C", "D"]);
 	});

@@ -85,8 +85,8 @@ export class ViewHost implements UiHost {
 		showError(err);
 	}
 
-	notifyUndo(message: string, label: string): void {
-		actionNotice(message, [undoAction(() => this.app.store.undoIfLatest(label))]);
+	notifyUndo(message: string, label: string, mark: number): void {
+		actionNotice(message, [undoAction(this.app.store.undoFor(mark, label))]);
 	}
 
 	choose<T>(title: string, message: string, buttons: ButtonSpec<T>[]): Promise<T | null> {

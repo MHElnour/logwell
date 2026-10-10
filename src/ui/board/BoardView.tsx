@@ -142,7 +142,7 @@ export function BoardView(props: {
 	 * Writes a move; the store label of the write when something changed, else null. `to` is set only
 	 * when the card changes column: that is when its day changes. `order` is placed only under the
 	 * Default sort ("Move task"); otherwise the patch goes through `update` ("Edit task"). The Undo
-	 * notice must carry the same label, or its Undo throws UndoConflict (`undoIfLatest`).
+	 * notice must carry the same label, or its Undo throws UndoConflict (`undoFor`).
 	 */
 	const write = async (
 		id: ID,
@@ -172,11 +172,12 @@ export function BoardView(props: {
 	const drop = (d: BoardDrop) => {
 		const title = host.app.store.state.tasks.get(d.id)?.title ?? "Task";
 		const moved = d.to.id !== d.from;
+		const mark = host.app.store.undoMark();
 		void write(d.id, d.order, moved ? d.to : null).then((done) => {
 			if (done === null) return;
 			// A series' date change re-anchors it: that notice replaces the move notice.
-			if (done.reanchored !== null) notifyReanchored(host, { title }, done.reanchored, done.label);
-			else host.notifyUndo(moved ? `Moved "${title}" to ${d.to.title}.` : `Moved "${title}".`, done.label);
+			if (done.reanchored !== null) notifyReanchored(host, { title }, done.reanchored, done.label, mark);
+			else host.notifyUndo(moved ? `Moved "${title}" to ${d.to.title}.` : `Moved "${title}".`, done.label, mark);
 		});
 	};
 
@@ -193,10 +194,11 @@ export function BoardView(props: {
 		sectionIds: () => columnsRef.current.flatMap((c) => (c.sectionId == null ? [] : [c.sectionId])),
 		onDrop: (id, order) => {
 			const title = host.app.store.state.sections.get(id)?.name ?? "Section";
+			const mark = host.app.store.undoMark();
 			void host.app.sections
 				.place(id, order)
 				.then(({ changed }) => {
-					if (changed) host.notifyUndo(`Moved section "${title}".`, "Move section");
+					if (changed) host.notifyUndo(`Moved section "${title}".`, "Move section", mark);
 				})
 				.catch((err) => host.error(err));
 		},
