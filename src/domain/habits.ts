@@ -1,7 +1,7 @@
 import type { Checkin, Habit, HabitGoal, HabitReminder, HabitSchedule, HabitVersion, ID, LocalDate, TagColor, TimeOfDay, WeekStart } from "./types";
 import { TIMES_OF_DAY, WEEKDAYS, WEEKDAY_SHORT } from "./types";
 import { compareSortKeys } from "./sortKey";
-import { WEEK_START_ISO as START_ISO, DAY_MS, dateOf, dayNum, isoWeekdayOfDay as isoWeekday, weekStartOfDay as weekStartNum } from "./time";
+import { WEEK_START_ISO as START_ISO, dateOf, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, weekStartOfDay as weekStartNum } from "./time";
 
 // Habits. Pure: no
 // obsidian, no clock. `today` is always passed in. Dates are "YYYY-MM-DD".
@@ -71,13 +71,6 @@ function weekStartDate(date: LocalDate, weekStart: WeekStart): LocalDate {
 /** Sums are rounded to the 6 decimals a value may have, so 0.7 + 0.1 meets 0.8. */
 function round6(x: number): number {
 	return Math.round(x * 1e6) / 1e6;
-}
-
-const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
-
-/** A real "YYYY-MM-DD" date. Without Luxon: the validator checks 20,000 check-ins on every load. */
-export function isLocalDate(value: unknown): value is LocalDate {
-	return typeof value === "string" && LOCAL_DATE_RE.test(value) && dateOf(dayNum(value)) === value;
 }
 
 // -- compiled rules (cached per habit object; records are immutable) ----------------
@@ -353,7 +346,7 @@ export function total(habit: Habit, index: HabitIndex): number {
 function monthBounds(month: string): { first: number; last: number } {
 	const y = Number(month.slice(0, 4));
 	const m = Number(month.slice(5, 7));
-	return { first: Date.UTC(y, m - 1, 1) / DAY_MS, last: Date.UTC(y, m, 1) / DAY_MS - 1 };
+	return { first: dayNumOf(y, m, 1), last: dayNumOf(y, m + 1, 1) - 1 };
 }
 
 /**

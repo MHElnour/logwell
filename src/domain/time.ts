@@ -27,8 +27,12 @@ export function isValidZone(zone: string): boolean {
 	return valid;
 }
 
-export function isValidLocalDate(value: string): value is LocalDate {
-	return LOCAL_DATE_RE.test(value) && DateTime.fromISO(value, { zone: "UTC" }).isValid;
+/**
+ * A real "YYYY-MM-DD" day in years 0000 to 9999: the one date-only validator. Plain arithmetic, no
+ * Luxon, because a load checks every stored date (20,000 check-ins and more).
+ */
+export function isValidLocalDate(value: unknown): value is LocalDate {
+	return typeof value === "string" && LOCAL_DATE_RE.test(value) && dateOf(dayNum(value)) === value;
 }
 
 /** A stored instant: a non-empty string that Date.parse reads. */
@@ -243,18 +247,51 @@ export function isoWeekdayOf(date: LocalDate): number {
 }
 
 // Day-number helpers (days since 1970-01-01), shared by the calendar, habit and recurrence engines, which
-// avoid Luxon in their hot loops.
+// avoid Luxon in their hot loops. Proleptic Gregorian calendar, exact for every day of years 0000 to 9999
+// (Date.UTC would read years 0-99 as 1900-1999). Divisions use Math.floor, so days before 1970 and before
+// year 0 stay exact.
 
 export const DAY_MS = 86_400_000;
 
-/** The day number of a "YYYY-MM-DD" prefix. Plain arithmetic, no Luxon. */
-export function dayNum(date: string): number {
-	return Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / DAY_MS;
+/**
+ * The day number of year `y`, month `m` (1 = January), day `d`. A month outside 1-12 or a day outside
+ * the month rolls over, so `dayNumOf(y, m + 1, 1) - dayNumOf(y, m, 1)` is the length of month `m`.
+ */
+export function dayNumOf(y: number, m: number, d: number): number {
+	if (m < 1 || m > 12) {
+		y += Math.floor((m - 1) / 12);
+		m -= Math.floor((m - 1) / 12) * 12;
+	}
+	// Years start on 1 March, so the leap day is the last day of the year.
+	if (m <= 2) y -= 1;
+	const era = Math.floor(y / 400);
+	const yoe = y - era * 400;
+	const doy = Math.floor((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1;
+	const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+	return era * 146_097 + doe - 719_468;
 }
 
-/** The "YYYY-MM-DD" date of a day number. */
+/** The year, month (1 = January) and day of a day number. */
+export function civilOf(n: number): { y: number; m: number; d: number } {
+	const z = n + 719_468;
+	const era = Math.floor(z / 146_097);
+	const doe = z - era * 146_097;
+	const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365);
+	const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+	const mp = Math.floor((5 * doy + 2) / 153);
+	const m = mp < 10 ? mp + 3 : mp - 9;
+	return { y: yoe + era * 400 + (m <= 2 ? 1 : 0), m, d: doy - Math.floor((153 * mp + 2) / 5) + 1 };
+}
+
+/** The day number of a "YYYY-MM-DD" prefix. Plain arithmetic, no Luxon. */
+export function dayNum(date: string): number {
+	return dayNumOf(Number(date.slice(0, 4)), Number(date.slice(5, 7)), Number(date.slice(8, 10)));
+}
+
+/** The "YYYY-MM-DD" date of a day number (years 0000 to 9999). */
 export function dateOf(n: number): LocalDate {
-	return new Date(n * DAY_MS).toISOString().slice(0, 10);
+	const { y, m, d } = civilOf(n);
+	return `${String(y).padStart(4, "0")}-${m < 10 ? "0" : ""}${m}-${d < 10 ? "0" : ""}${d}`;
 }
 
 /** The ISO weekday number (1 = Monday) each week start begins on. */

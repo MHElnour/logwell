@@ -38,10 +38,8 @@ const NEW_DATE_ALLOWED = [
 	"src/app/TaskService.ts",
 	"src/domain/focus.ts",
 	"src/domain/ports.ts",
-	"src/domain/recurrence.ts",
 	"src/obsidian/habitReminderHost.ts",
 	"src/persistence/backups.ts",
-	"src/ui/quickadd/calendar.ts",
 ];
 const TIME_MESSAGE = "Date and time code goes through src/domain/time.ts.";
 const noLuxon = [

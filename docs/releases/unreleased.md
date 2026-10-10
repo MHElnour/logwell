@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#15) Fixed dates in years 0000 to 0099 being treated as 1900 to 1999 in the calendar and repeating tasks, and repeats, occurrence records and check-ins on such dates being removed on load.
+
 ## Security

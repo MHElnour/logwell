@@ -1,7 +1,7 @@
-import { type HabitIndex, isClockTime, isLocalDate, isScheduled, progressOn } from "./habits";
+import { type HabitIndex, isClockTime, isScheduled, progressOn } from "./habits";
 import { type Habit, type ID, type Instant, type LocalDate, isRecord } from "./types";
 import { compareSortKeys } from "./sortKey";
-import { isInstant } from "./time";
+import { isInstant, isValidLocalDate } from "./time";
 
 // Habit reminders. Pure: the host passes the device's
 // wall time in and keeps the returned state in device-local storage.
@@ -36,7 +36,7 @@ function readMap<T>(value: unknown, ok: (x: unknown) => x is T): Record<ID, T> |
 /** Reads a stored state; anything unreadable or of another version is null (the caller starts empty, never deletes). */
 export function parseReminderState(raw: unknown): ReminderState | null {
 	if (!isRecord(raw) || raw.v !== 1) return null;
-	if (!isLocalDate(raw.date)) return null;
+	if (!isValidLocalDate(raw.date)) return null;
 	const fired = readMap(raw.fired, (x): x is true => x === true);
 	const snoozedUntil = readMap(raw.snoozedUntil, isInstant);
 	const times = readMap(raw.times, isClockTime);
