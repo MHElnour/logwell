@@ -48,6 +48,10 @@ export interface UndoEntry {
 	changes: Change[];
 }
 
+/** The labels of a "changed" event that is not a command: the state was reloaded from outside, or replaced (import, restore). */
+export const RELOAD_LABEL = "Reload";
+export const REPLACE_ALL_LABEL = "Replace all";
+
 const UNDO_LIMIT = 50;
 const READ_ONLY_MESSAGE = "The database is read-only until the problem shown in the banner is resolved.";
 
@@ -197,7 +201,7 @@ export class AppStore {
 		return this.queue.run(async () => {
 			await this.host.replaceAll(collections, backupKind, check);
 			this.undoStack = [];
-			this.bus.emit("changed", { label: "Replace all" });
+			this.bus.emit("changed", { label: REPLACE_ALL_LABEL });
 		});
 	}
 
@@ -250,7 +254,7 @@ export class AppStore {
 	/** Called when persistence reloaded the state from outside. */
 	notifyReloaded(): void {
 		this.undoStack = [];
-		this.bus.emit("changed", { label: "Reload" });
+		this.bus.emit("changed", { label: RELOAD_LABEL });
 	}
 
 	notifyStatus(): void {

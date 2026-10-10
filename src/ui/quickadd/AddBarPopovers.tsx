@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
 import { addDays } from "../../domain/time";
-import type { LocalDate, Priority } from "../../domain/types";
+import { noteDisplayName } from "../../domain/notes";
+import { INBOX_NAME, type LocalDate, type Priority } from "../../domain/types";
 import { SrOnly } from "../common";
 import { formatDateSpec } from "../format";
 import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
@@ -14,12 +15,13 @@ import {
 	type YearMonth,
 	dayLabel,
 	monthGrid,
-	monthTitle,
 	shiftDateByMonths,
 	shiftMonth,
 	yearMonthOf,
 } from "./calendar";
-import { weekdayInitials } from "../format";
+import { monthTitle } from "../calendar/format";
+import { quadrantWords } from "../matrix/quadrants";
+import { pad2, weekdayInitials } from "../format";
 import { focusables, popoverKeyDown } from "../popoverKeys";
 import { applyPopoverFit } from "./popoverFit";
 import { QaIcon, type SetIcon } from "./QaIcon";
@@ -295,7 +297,7 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 						</div>
 						<div class="cp-cal-head">
 							<span id={calTitleId} class="cp-cal-title" aria-live="polite">
-								{monthTitle(ym)}
+								{monthTitle(`${String(ym.year).padStart(4, "0")}-${pad2(ym.month)}`)}
 							</span>
 							<span class="cp-cal-nav">
 								<button type="button" aria-label="Previous month" onClick={() => goMonth(-1)}>
@@ -440,7 +442,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 	const categories = app.categories.list();
 	const tags = app.tags.list();
 	const current = model.priorityValue();
-	const categoryName = categories.find((c) => c.id === model.categoryValue())?.name ?? "Inbox";
+	const categoryName = categories.find((c) => c.id === model.categoryValue())?.name ?? INBOX_NAME;
 	const tagKeys = model.tagKeysValue();
 	const notePath = model.notePathValue();
 	const close = (refocus: boolean) => model.closePopover(refocus);
@@ -534,7 +536,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 					icon="file-text"
 					label="Description note"
 					row="note"
-					value={notePath === null ? "None" : (notePath.split("/").pop() ?? notePath).replace(/\.md$/iu, "")}
+					value={notePath === null ? "None" : noteDisplayName(notePath)}
 					onClick={pickNote}
 				/>
 				<Row
@@ -542,7 +544,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 					icon="layout-grid"
 					label="Matrix quadrant"
 					row="quadrant"
-					value={model.urgent || model.important ? [model.urgent ? "Urgent" : "", model.important ? "Important" : ""].filter(Boolean).join(", ") : "Not set"}
+					value={model.urgent || model.important ? quadrantWords(model.urgent, model.important) : "Not set"}
 					onClick={() => setSub("quadrant")}
 				/>
 			</>

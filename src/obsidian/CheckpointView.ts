@@ -63,7 +63,7 @@ export class CheckpointView extends FileView {
 	}
 
 	override getDisplayText(): string {
-		return this.file?.basename ?? "Checkpoint";
+		return this.file?.basename ?? "Logwell";
 	}
 
 	override getIcon(): string {

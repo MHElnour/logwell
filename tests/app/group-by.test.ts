@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, buildCompleted, buildView } from "../../src/app/views";
+import { buildBoard, buildCompleted, buildView, viewTitle } from "../../src/app/views";
 import type { TaskView, ViewGroup } from "../../src/app/views";
 import type { GroupBy } from "../../src/domain/groupBy";
 import { type TaskSort, emptyFilter } from "../../src/domain/queries";
@@ -254,6 +254,15 @@ describe("group by list", () => {
 			[`list:${home.id}`, "Home", undefined, ["H"]],
 		]);
 		expect(gs.map((g) => g.drop)).toEqual([INBOX_ID, work.id, home.id].map((categoryId) => ({ kind: "list", categoryId })));
+	});
+
+	it("names a list that is missing Inbox, like every other place (issue 27)", async () => {
+		const h = await appHarness();
+		const gone = await h.app.categories.create("Gone");
+		await h.app.tasks.create({ title: "G", categoryId: gone.id, scheduled: date("2026-10-01") });
+		(h.app.store.state.categories as Map<string, unknown>).delete(gone.id);
+		expect(group(h, { kind: "today" }, "list").map((g) => g.label)).toEqual(["Inbox"]);
+		expect(viewTitle({ kind: "category", id: gone.id }, h.app.store.state)).toBe("Inbox");
 	});
 
 	it("is not offered in Inbox: it falls back to none", async () => {

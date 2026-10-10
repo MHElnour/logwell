@@ -37,7 +37,7 @@ describe("date helpers", () => {
 		const timed = { kind: "datetime" as const, local: "2026-10-01T19:00", tz: "Europe/Berlin" };
 		expect(rowDateText(timed, "Europe/Berlin", TODAY)).toBe("19:00");
 		expect(rowDateText({ kind: "date", date: TODAY }, "Europe/Berlin", TODAY)).toBe("Today");
-		expect(detailsDateText({ scheduled: timed, deadline: null, plannedDurationMin: 45 }, "Europe/Berlin", TODAY)).toBe("Today, 19:00 · 45 min");
+		expect(detailsDateText({ scheduled: timed, deadline: null, plannedDurationMin: 45 }, "Europe/Berlin", TODAY)).toBe("Today, 19:00 · 45m");
 		expect(detailsDateText({ scheduled: null, deadline: null, plannedDurationMin: null }, "Europe/Berlin", TODAY)).toBe("No date");
 	});
 });

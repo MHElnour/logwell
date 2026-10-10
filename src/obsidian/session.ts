@@ -292,9 +292,7 @@ export class DbSession {
 				this.app.store.notifyStatus();
 				if (e.state.reason === "damaged") {
 					const actions = [
-						{ label: "Open conflict view", run: async (): Promise<void> => {
-							await this.plugin.openApp("data");
-						} },
+						{ label: "Open conflict view", run: () => this.openConflictView() },
 					];
 					if (e.state.recoveredFrom !== null) {
 						actions.unshift({ label: "Restore backup", run: () => this.restoreRecovered() });

@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { type QueryContext, isDeadlineMissed, isOverdue, quadrantOf } from "../domain/queries";
 import { describeRule, explicitRule, versionAt } from "../domain/recurrence";
 import { normalizeTagKey } from "../domain/tags";
+import { noteDisplayName } from "../domain/notes";
 import { DURATION_RANGE_MESSAGE, MAX_DURATION_MIN, isDurationMinutes, subtasksOf } from "../domain/tasks";
 import { dateSpecDate } from "../domain/time";
-import type { ID, Task } from "../domain/types";
+import { type ID, INBOX_NAME, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
-import { QUADRANTS, deleteTask, duplicateTask, moveToCategory, priorityItems, priorityLabel, toggleComplete, updateTask } from "./actions";
+import { deleteTask, duplicateTask, moveToCategory, priorityItems, priorityLabel, toggleComplete, updateTask } from "./actions";
 import { DateSpecField, Icon, IconButton, SrOnly, TaskCheckbox, hueClass } from "./common";
 import { PRIORITY_HUE, PRIORITY_NAME, dateTone, detailsDateText, dueSpecOf, formatInstant } from "./format";
 import type { UiHost } from "./host";
@@ -16,6 +17,7 @@ import { useUniqueId } from "./hooks";
 import { focusedText } from "./focus/format";
 import { focusTotalsOf } from "./focus/totals";
 import { ICON, categoryIcon } from "./icons";
+import { QUADRANT_LIST } from "./matrix/quadrants";
 import { type RepeatChoice, sameChoice } from "./repeat";
 import { hasRepeatEditRequest, isPaneShown, onRepeatEditRequest, setRepeat } from "./repeatActions";
 import { RepeatField } from "./RepeatPicker";
@@ -249,13 +251,13 @@ export function TaskDetails(props: {
 						class="dropdown"
 						value={quadrantOf(task)}
 						onChange={(e: TargetedEvent<HTMLSelectElement>) => {
-							const q = QUADRANTS.find((x) => x.id === e.currentTarget.value);
+							const q = QUADRANT_LIST.find((x) => x.id === e.currentTarget.value);
 							if (q !== undefined) void updateTask(host, task, { urgent: q.urgent, important: q.important });
 						}}
 					>
-						{QUADRANTS.map((q) => (
+						{QUADRANT_LIST.map((q) => (
 							<option key={q.id} value={q.id}>
-								{q.label}
+								{q.title}
 							</option>
 						))}
 					</select>
@@ -315,7 +317,7 @@ export function TaskDetails(props: {
 					) : (
 						<Icon host={host} icon={listIcon.name} fallback={ICON.list} />
 					)}
-					<span>{category?.name ?? "Inbox"}</span>
+					<span>{category?.name ?? INBOX_NAME}</span>
 				</button>
 				<span class="cp-foot-spacer" />
 				{focusSec > 0 && <span class="cp-focus-total">{`${focusedText(focusSec)} focused`}</span>}
@@ -515,7 +517,7 @@ function DescriptionArea({ host, task, onSelect }: { host: UiHost; task: Task; o
 			<div class="cp-note-head">
 				<Icon host={host} icon={ICON.note} />
 				<span class="cp-note-name" title={note.path}>
-					{note.path.split("/").pop()}
+					{noteDisplayName(note.path)}
 				</span>
 				<IconButton
 					host={host}

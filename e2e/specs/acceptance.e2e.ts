@@ -306,7 +306,7 @@ describe("Acceptance suite AS-01 to AS-13, in one vault", function () {
 		expect(task?.title).toBe("AS-04 renamed task");
 		const section = await openTaskDetails(id);
 		await expect(section.$(".cp-description.is-linked")).toExist();
-		await expect(section.$(".cp-note-name")).toHaveText("Plan v2.md");
+		await expect(section.$(".cp-note-name")).toHaveText("Plan v2");
 	});
 
 	it("AS-05: deleting the task and purging Trash leaves the note byte-identical", async function () {
@@ -610,7 +610,7 @@ describe("Acceptance suite AS-01 to AS-13, in one vault", function () {
 
 	// -- Matrix ---------------------------------------------------------------------------------------------------------
 
-	it("AS-13: dragging a task to Urgent & important keeps its ID and sets both flags; the details and the list chips reflect it", async function () {
+	it("AS-13: dragging a task to Urgent and important keeps its ID and sets both flags; the details and the list chips reflect it", async function () {
 		const plain = await createTask("AS-13 plain");
 		const before = (await allTasks()).length;
 		const matrix = await visibleMatrix();

@@ -246,7 +246,7 @@ describe("no stray aria-label tooltips", () => {
 		await settle();
 		await click(m.root.querySelector('.cp-rail [aria-label="Matrix"]'));
 		const sections = [...m.root.querySelectorAll<HTMLElement>(".cp-matrix section.cp-matrix-q")];
-		expect(sections.map((s) => labelledBy(s))).toEqual(["Urgent & important", "Important, not urgent", "Urgent, not important", "Neither"]);
+		expect(sections.map((s) => labelledBy(s))).toEqual(["Urgent and important", "Important, not urgent", "Urgent, not important", "Neither"]);
 		for (const s of sections) expect(s.hasAttribute("aria-label")).toBe(false);
 		expect(m.root.querySelectorAll(".cp-matrix .cp-matrix-q-add[aria-label]")).toHaveLength(4);
 		const lists = [...m.root.querySelectorAll<HTMLElement>(".cp-matrix .cp-task-list")];

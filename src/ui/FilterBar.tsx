@@ -4,7 +4,7 @@ import { useState } from "preact/hooks";
 import { type DateFilter, type StatusFilter, type TaskFilter, type TaskSort, emptyFilter, isFilterActive } from "../domain/queries";
 import type { Priority } from "../domain/types";
 import type { DbData } from "../persistence/schema";
-import { QUADRANTS } from "./actions";
+import { QUADRANT_LIST } from "./matrix/quadrants";
 import type { UiHost } from "./host";
 import { IconButton, SrOnly } from "./common";
 import { useUniqueId } from "./hooks";
@@ -177,7 +177,7 @@ export function FilterBar(props: {
 					</div>
 					<fieldset class="cp-filter-chips">
 						<legend>Matrix</legend>
-						{QUADRANTS.map((q) => (
+						{QUADRANT_LIST.map((q) => (
 							<button
 								key={q.id}
 								type="button"
@@ -185,7 +185,7 @@ export function FilterBar(props: {
 								aria-pressed={f.quadrants.includes(q.id)}
 								onClick={() => set({ quadrants: toggle(f.quadrants, q.id) })}
 							>
-								{q.label}
+								{q.title}
 							</button>
 						))}
 					</fieldset>

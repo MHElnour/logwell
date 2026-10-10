@@ -4,7 +4,7 @@ import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
 import { type TagNode, hasTagOrChild, isUnderTag, tagPath, tagTree } from "../domain/tags";
-import { TAG_COLORS, type Category, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
+import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, IconButton, SrOnly, hueClass } from "./common";
 import { capitalize } from "./format";
@@ -362,7 +362,7 @@ export function Sidebar(props: {
 				<Item
 					host={host}
 					{...listIconProps(inbox?.icon === SEEDED_INBOX_ICON ? null : (inbox?.icon ?? null), ICON.inbox)}
-					label={inbox?.name ?? "Inbox"}
+					label={inbox?.name ?? INBOX_NAME}
 					count={counts.categories.get(INBOX_ID)}
 					synced={isListSynced(state.syncLinks, INBOX_ID)}
 					active={is({ kind: "inbox" })}

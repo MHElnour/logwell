@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { dateTone as dayTone } from "../app/views";
-import { dateSpecDate, dateSpecDisplayLocal, daysBetween } from "../domain/time";
+import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, utcDay } from "../domain/time";
 import type { DateSpec, LocalDate, Priority, Task, WeekStart } from "../domain/types";
 
 // Display formatting. Date-only values are shown as-is; timed values in the
@@ -11,7 +11,7 @@ export function formatDate(date: LocalDate, today: LocalDate): string {
 	if (diff === 0) return "Today";
 	if (diff === 1) return "Tomorrow";
 	if (diff === -1) return "Yesterday";
-	const dt = DateTime.fromISO(date, { zone: "UTC" });
+	const dt = utcDay(date);
 	const sameYear = date.slice(0, 4) === today.slice(0, 4);
 	return dt.toFormat(sameYear ? "EEE, MMM d" : "MMM d, yyyy");
 }
@@ -22,6 +22,9 @@ export function formatDateSpec(spec: DateSpec, zone: string, today: LocalDate): 
 	return local === null ? date : `${date} ${local.slice(11)}`;
 }
 
+/** What an Undo that cannot be done says. */
+export const NOTHING_TO_UNDO = "Nothing to undo.";
+
 export function formatDuration(min: number): string {
 	const h = Math.floor(min / 60);
 	const m = min % 60;
@@ -30,7 +33,7 @@ export function formatDuration(min: number): string {
 }
 
 export function formatInstant(iso: string, zone: string): string {
-	const dt = DateTime.fromISO(iso, { zone: "UTC" }).setZone(zone);
+	const dt = DateTime.fromISO(iso, { zone: "UTC", locale: NAME_LOCALE }).setZone(zone);
 	return dt.isValid ? dt.toFormat("MMM d, yyyy, HH:mm") : iso;
 }
 
@@ -106,7 +109,7 @@ export function rowDateText(spec: DateSpec, zone: string, today: LocalDate): str
 }
 
 /**
- * The details chip: "Today, 19:00 · 45 min", or "No date". `opts.schedule` is the effective schedule and
+ * The details chip: "Today, 19:00 · 45m", or "No date". `opts.schedule` is the effective schedule and
  * `opts.repeat` the short rule text, so a repeating task reads "Fri, Oct 9 · every Fri".
  */
 export function detailsDateText(
@@ -117,7 +120,7 @@ export function detailsDateText(
 ): string {
 	const spec = dueSpecOf(task, opts.schedule);
 	const repeat = opts.repeat ?? null;
-	const extras = [...(repeat === null ? [] : [repeat]), ...(task.plannedDurationMin === null ? [] : [`${task.plannedDurationMin} min`])];
+	const extras = [...(repeat === null ? [] : [repeat]), ...(task.plannedDurationMin === null ? [] : [formatDuration(task.plannedDurationMin)])];
 	if (spec === null) return ["No date", ...extras].join(" · ");
 	const local = dateSpecDisplayLocal(spec, zone);
 	const date = formatDate(dateSpecDate(spec, zone), today);

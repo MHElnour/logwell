@@ -61,6 +61,8 @@ export interface Task {
 }
 
 export const INBOX_ID = "inbox";
+/** The Inbox's name, and what a task whose list cannot be found is shown under (it moves to the Inbox on save). */
+export const INBOX_NAME = "Inbox";
 
 export interface Category {
 	id: ID;
@@ -231,6 +233,23 @@ export interface FocusSession {
 export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 /** ISO order, Monday first; index + 1 is the ISO weekday number. */
 export const WEEKDAYS: readonly Weekday[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+/** "Jan" … "Dec". */
+export const MONTH_SHORT: readonly string[] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "January" … "December". */
+export const MONTH_LONG: readonly string[] = [
+	"January",
+	"February",
+	"March",
+	"April",
+	"May",
+	"June",
+	"July",
+	"August",
+	"September",
+	"October",
+	"November",
+	"December",
+];
 /** "Mon" … "Sun". */
 export const WEEKDAY_SHORT: Readonly<Record<Weekday, string>> = { MO: "Mon", TU: "Tue", WE: "Wed", TH: "Thu", FR: "Fri", SA: "Sat", SU: "Sun" };
 /** "Monday" … "Sunday". */

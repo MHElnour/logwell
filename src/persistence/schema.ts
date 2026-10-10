@@ -1,5 +1,5 @@
 import type { Category, Checkin, FocusSession, Habit, Instant, OccurrenceRecord, OpaqueRecord, Section, SyncLink, Tag, Task, TrashEntry } from "../domain/types";
-import { INBOX_ID, isRecord, syncLinkId } from "../domain/types";
+import { INBOX_ID, INBOX_NAME, isRecord, syncLinkId } from "../domain/types";
 
 // The `.cpbase` data model. One JSON document with a header
 // and one array per collection. In memory each collection is a Map by ID.
@@ -303,7 +303,7 @@ export function emptyCollections(): { [C in CollectionName]: Map<string, RecordO
 export function inboxCategory(now: Instant): Category {
 	return {
 		id: INBOX_ID,
-		name: "Inbox",
+		name: INBOX_NAME,
 		icon: "📥",
 		color: null,
 		nameKey: "inbox",

@@ -1,7 +1,8 @@
 import type { FocusService, OpenResult } from "../app/FocusService";
 import { type ActiveTimer, type FocusMoment, type FocusSetConfig, remainingSec } from "../domain/focus";
-import { pad2 } from "../domain/time";
 import type { Instant } from "../domain/types";
+import { clockText, summaryText } from "../ui/focus/format";
+import { NOTHING_TO_UNDO } from "../ui/format";
 import type { ButtonSpec } from "../ui/host";
 import { type NoticeAction, undoAction } from "./notices";
 
@@ -28,24 +29,9 @@ export interface FocusHostUi {
 	error(err: unknown): void;
 }
 
-function clock(sec: number): string {
-	const h = Math.floor(sec / 3600);
-	const m = Math.floor((sec % 3600) / 60);
-	return h > 0 ? `${h}:${pad2(m)}:${pad2(sec % 60)}` : `${pad2(m)}:${pad2(sec % 60)}`;
-}
-
-/** "2h", "1h 15m", "25m", "40s". */
-function formatFocused(sec: number): string {
-	const h = Math.floor(sec / 3600);
-	const m = Math.floor((sec % 3600) / 60);
-	if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
-	if (m > 0) return `${m}m`;
-	return `${sec}s`;
-}
-
 /** The status-bar text: "◎ 18:42 · Round 2/4 · Task title". */
 export function formatStatus(t: ActiveTimer, now: Instant): string {
-	const parts = [`◎ ${clock(remainingSec(t, now))}${t.state === "paused" ? " (paused)" : ""}`];
+	const parts = [`◎ ${clockText(remainingSec(t, now))}${t.state === "paused" ? " (paused)" : ""}`];
 	const round = `Round ${t.round}/${t.config.rounds}`;
 	if (t.phase === "focus") parts.push(round);
 	else parts.push(t.phase === "long-break" ? "Long break" : "Short break", round);
@@ -66,7 +52,7 @@ function shortTitle(title: string): string {
 
 /** The accessible name of the status-bar item: the time as the text shows it, in words. */
 export function statusLabel(t: ActiveTimer, now: Instant): string {
-	const time = clock(remainingSec(t, now));
+	const time = clockText(remainingSec(t, now));
 	return t.state === "paused" ? `Open focus, paused at ${time}` : `Open focus, ${time} left`;
 }
 
@@ -198,7 +184,7 @@ export class FocusHost {
 	}
 
 	private onSetDone(summary: { rounds: number; focusedSec: number }): void {
-		const text = `${summary.rounds} ${summary.rounds === 1 ? "round" : "rounds"}, ${formatFocused(summary.focusedSec)} focused`;
+		const text = summaryText(summary.rounds, summary.focusedSec);
 		this.ui.notify(`Focus set done: ${text}`);
 		this.ui.systemNotify("Focus set done", `${text}.`);
 	}
@@ -206,7 +192,7 @@ export class FocusHost {
 	private onShortDiscarded(sessionId: string): void {
 		const focus = this.focus;
 		this.ui.actionNotice("Focus under a minute was not saved", [
-			undoAction(async () => (await focus?.undoShortDiscard(sessionId)) ?? false, () => this.ui.notify("Nothing to undo.")),
+			undoAction(async () => (await focus?.undoShortDiscard(sessionId)) ?? false, () => this.ui.notify(NOTHING_TO_UNDO)),
 		]);
 	}
 
@@ -234,7 +220,7 @@ export class FocusHost {
 			if (choice === null || this.focus !== focus) return;
 			const applied = await focus.resolveRecovery(choice);
 			if (choice === "discard" && applied) {
-				this.ui.actionNotice("Focus timer discarded", [undoAction(() => focus.restoreDiscardedTimer(), () => this.ui.notify("Nothing to undo."))]);
+				this.ui.actionNotice("Focus timer discarded", [undoAction(() => focus.restoreDiscardedTimer(), () => this.ui.notify(NOTHING_TO_UNDO))]);
 			}
 		} catch (err) {
 			this.ui.error(err);

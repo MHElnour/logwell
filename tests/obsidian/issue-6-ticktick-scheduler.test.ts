@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryTickTickDevice, MemoryTickTickSecret } from "../../src/app/ports";
+import { MemoryTickTickDevice, MemoryTickTickSecret, TickTickError } from "../../src/app/ports";
 import { type PendingTrash, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
 import type { Category, SyncLink } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
@@ -413,6 +413,19 @@ describe("TickTick sync scheduler: one at a time, failures (SYNC-10, SYNC-12)", 
 		expect(s.errors).toHaveLength(1);
 		await advance(5 * MIN);
 		expect(s.stub.calls).toBe(2);
+	});
+
+	it("a thrown error reads in settings as the same failure reported by the sync would (issue 22)", async () => {
+		const s = await setup({ minutes: 60 });
+		s.stub.results.push(new TickTickError("rate-limited", "TickTick: HTTP 429", { retryAfterSec: 30 }));
+		await s.scheduler.syncNow();
+		expect(s.scheduler.status().error).toBe(RATE_LIMITED_TEXT);
+		s.stub.results.push(failed({ kind: "rate-limited", message: "TickTick: HTTP 429", retryAfterSec: 30 }));
+		await s.scheduler.syncNow();
+		expect(s.scheduler.status().error).toBe(RATE_LIMITED_TEXT);
+		s.stub.results.push(new TickTickError("network", "TickTick: no answer (network error)."));
+		await s.scheduler.syncNow();
+		expect(s.scheduler.status().error).toBe("TickTick: no answer (network error).");
 	});
 
 	it("keeps the tasks waiting for confirmation from the latest sync, and applies nothing", async () => {

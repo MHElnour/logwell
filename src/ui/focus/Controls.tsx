@@ -53,8 +53,14 @@ const FIELDS: Field[] = [
 	{ key: "longBreakMin", label: "Long break", ...FOCUS_RANGES.longBreakMin, unit: "min", coarse: true, hint: "After round 4, in sets over 4" },
 ];
 
-/** The step for one click: 1, or 5 on a coarse field away from the low end. */
-const stepFor = (value: number, dir: 1 | -1, coarse: boolean): number => (!coarse || value < 5 || (dir < 0 && value <= 5) ? 1 : 5);
+/**
+ * The step for one click. A coarse field steps by 1 up to 5 and by 5 above it; stepping down from a value above 5 that is
+ * not a multiple of 5 lands on the multiple of 5 below (7 and 6 both go to 5), and from 5 or less it steps by 1 (5, 4, 3 ...).
+ */
+export const stepFor = (value: number, dir: 1 | -1, coarse: boolean): number => {
+	if (!coarse || value < 5 || (dir < 0 && value <= 5)) return 1;
+	return dir < 0 ? value % 5 || 5 : 5;
+};
 
 /** One setting with its minus and plus buttons. Each click is one commit; clicks in a row read the value from a ref. */
 function Stepper(props: { field: Field; value: number; onCommit: (n: number) => void }) {

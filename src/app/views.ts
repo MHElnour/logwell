@@ -32,7 +32,7 @@ import { compareSortKeys } from "../domain/sortKey";
 import { isUnderTag, tagDisplayPath, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
 import { compareTasksBySortKey, isOpen } from "../domain/tasks";
-import { type Category, type Habit, type ID, INBOX_ID, type LocalDate, type Priority, type Task } from "../domain/types";
+import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
 
@@ -94,9 +94,9 @@ export function viewTitle(view: TaskView, state: DbData): string {
 		case "upcoming":
 			return "Upcoming";
 		case "inbox":
-			return state.categories.get(INBOX_ID)?.name ?? "Inbox";
+			return state.categories.get(INBOX_ID)?.name ?? INBOX_NAME;
 		case "category":
-			return state.categories.get(view.id)?.name ?? "List";
+			return state.categories.get(view.id)?.name ?? INBOX_NAME;
 		case "tag":
 			return `@${tagDisplayPath(state.tags, view.key)}`;
 		case "completed":
@@ -360,7 +360,7 @@ function viewGroups(
 			// A list that is missing (not expected after repair) still shows its tasks, last.
 			const lists = [
 				...known.map((c) => ({ id: c.id, name: c.name })),
-				...[...buckets.keys()].filter((id) => !seen.has(id)).map((id) => ({ id, name: "Unknown list" })),
+				...[...buckets.keys()].filter((id) => !seen.has(id)).map((id) => ({ id, name: INBOX_NAME })),
 			];
 			return lists
 				.filter((c) => buckets.has(c.id))

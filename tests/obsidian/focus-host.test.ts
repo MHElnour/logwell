@@ -70,7 +70,7 @@ describe("formatStatus", () => {
 	});
 	it("names the break", () => {
 		const t = { ...base(), phase: "short-break" as const, sessionId: null, plannedSec: 300, startedAt: NOW, round: 2 };
-		expect(formatStatus(t, "2026-10-04T10:01:00.000Z")).toBe("◎ 04:00 · Short break · Round 2/4 · Write report");
+		expect(formatStatus(t, "2026-10-04T10:01:00.000Z")).toBe("◎ 4:00 · Short break · Round 2/4 · Write report");
 	});
 	it("flags a pending recovery prompt", () => {
 		expect(formatStatus({ ...base(), state: "paused", needsRecovery: true }, NOW_1842)).toBe(
@@ -460,7 +460,15 @@ describe("moments (B36, D14)", () => {
 		const h = harness();
 		h.host.attach(h.focus, "none");
 		h.focus.bus.emit("set-done", { rounds: 4, focusedSec: 7200 });
-		expect(h.ui.notify.mock.calls[0]![0]).toBe("Focus set done: 4 rounds, 2h focused");
+		expect(h.ui.notify.mock.calls[0]![0]).toBe("Focus set done: 4 rounds · 2h focused");
 		expect(h.ui.systemNotify).toHaveBeenCalledTimes(1);
+		expect(h.ui.systemNotify).toHaveBeenCalledWith("Focus set done", "4 rounds · 2h focused.");
+	});
+
+	it("set done rounds a short time to whole seconds and counts one round in the singular (issue 18)", () => {
+		const h = harness();
+		h.host.attach(h.focus, "none");
+		h.focus.bus.emit("set-done", { rounds: 1, focusedSec: 40.5 });
+		expect(h.ui.notify.mock.calls[0]![0]).toBe("Focus set done: 1 round · 41s focused");
 	});
 });

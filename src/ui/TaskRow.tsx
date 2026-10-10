@@ -11,6 +11,7 @@ import type { UiHost } from "./host";
 import { focusedText } from "./focus/format";
 import { focusTotalsOf } from "./focus/totals";
 import { ICON } from "./icons";
+import { quadrantWords } from "./matrix/quadrants";
 import { RepeatChip } from "./RepeatChip";
 import { deadlineMark, dueMark, listMark, noteMark, subtaskMark, toneOf } from "./rowMeta";
 import { memoComponent, sameDay, sameEntry, sameFocusTotal, sameLookups, sameSubtasks, sameSyncMark } from "./rowMemo";
@@ -180,7 +181,7 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 				)}
 				{showMatrix && (task.urgent || task.important) && (
 					<span class="cp-meta-matrix" title="Matrix flags">
-						{[task.urgent ? "Urgent" : null, task.important ? "Important" : null].filter(Boolean).join(" · ")}
+						{quadrantWords(task.urgent, task.important)}
 					</span>
 				)}
 				{due !== null && dueMark(due, tone, ctx)}

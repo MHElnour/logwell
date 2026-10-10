@@ -22,6 +22,7 @@ import { CheckpointSettingTab } from "./obsidian/SettingTab";
 import { SoundPlayer } from "./obsidian/sound";
 import { SystemNotifier } from "./obsidian/systemNotification";
 import { CHECKPOINT_VIEW_TYPE, CheckpointView } from "./obsidian/CheckpointView";
+import { NOTHING_TO_UNDO } from "./ui/format";
 import type { SectionId } from "./ui/host";
 
 export interface PluginEvents {
@@ -509,7 +510,7 @@ export default class CheckpointPlugin extends Plugin {
 				openHabits: (id, focusControl) => void this.openHabits(id, focusControl),
 				// `undo` acts on the database the check-in went to (the host binds it).
 				notifyUndo: (message, _label, undo) => {
-					actionNotice(message, [undoAction(undo, () => void new Notice("Nothing to undo."))]);
+					actionNotice(message, [undoAction(undo)]);
 				},
 				requestNotifyPermission: () => this.notifier.requestPermission(),
 				error: showError,
@@ -628,7 +629,7 @@ export default class CheckpointPlugin extends Plugin {
 			callback: () =>
 				void this.withSession(async (s) => {
 					const label = await s.app.store.undo();
-					new Notice(label === null ? "Nothing to undo." : `Undone: ${label}`);
+					new Notice(label === null ? NOTHING_TO_UNDO : `Undone: ${label}`);
 				}),
 		});
 	}

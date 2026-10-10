@@ -1,6 +1,5 @@
-import { DateTime } from "luxon";
-import { addDays } from "../../domain/time";
-import type { LocalDate } from "../../domain/types";
+import { addDays, utcDay } from "../../domain/time";
+import { type LocalDate, MONTH_LONG } from "../../domain/types";
 import { pad2 } from "../format";
 
 // Calendar titles, navigation and the text of day and time labels.
@@ -8,7 +7,7 @@ import { pad2 } from "../format";
 
 export type CalendarMode = "week" | "month";
 
-const d = (date: LocalDate) => DateTime.fromISO(date, { zone: "UTC", locale: "en" });
+const d = utcDay;
 
 /** "Sep 28 – Oct 4, 2026"; both years when the week crosses New Year. */
 export function weekTitle(days: readonly LocalDate[]): string {
@@ -18,9 +17,9 @@ export function weekTitle(days: readonly LocalDate[]): string {
 	return `${first.toFormat("LLL d, yyyy")} – ${last.toFormat("LLL d, yyyy")}`;
 }
 
-/** "October 2026". */
-export function monthTitle(date: LocalDate): string {
-	return d(date).toFormat("LLLL yyyy");
+/** "October 2026", from a date or a "YYYY-MM" month. The one month title of the calendar, the Habits page and the date popover. */
+export function monthTitle(date: string): string {
+	return `${MONTH_LONG[Number(date.slice(5, 7)) - 1] ?? ""} ${date.slice(0, 4)}`;
 }
 
 /**

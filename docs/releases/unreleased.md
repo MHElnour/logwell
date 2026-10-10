@@ -23,4 +23,18 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#18) Fixed focus time being written differently in the status bar, the timer and the "Focus set done" notice. The clock now reads "5:03" everywhere, the set summary reads "4 rounds · 2h focused", and short times are rounded to whole seconds.
+- (#19) Fixed the Undo button on task notices and on the TickTick confirmation prompt doing nothing when the undo could not be done; it now says "Nothing to undo.", like the other Undo buttons.
+- (#20) Fixed the tab title showing the old name "Checkpoint" when no database file is loaded; it now says "Logwell".
+- (#21) Fixed habit reminders wording a habit's progress differently from the Habits page. A daily done-or-not habit now shows its schedule ("every day") in the reminder, and amounts are rounded the same way.
+- (#22) Fixed the TickTick settings line "The last sync stopped" giving a different message for the same problem depending on how the sync failed; it now reads the same.
+- (#23) Fixed the focus length buttons jumping from 6 minutes to 1 when stepping down. Minus now goes to the multiple of 5 below (7 to 5, 6 to 5), then down by 1 at 5 or less.
+- (#24) Fixed the Data section reading the backup folder after every change while it was open. It now lists backups and conflict copies when it opens and after an action in it (restore, export, Keep mine, Keep theirs).
+- (#25) Fixed month and weekday names changing language with the device on the Habits page and in rows and details, while the calendar and Quick Add stayed English. They are now English everywhere.
+- (#26) Fixed the four Eisenhower quadrants having different names in the matrix headings, menus and filters. They are now called "Urgent and important", "Important, not urgent", "Urgent, not important" and "Neither" everywhere, and the Quick Add menu joins the flags with a dot like a task row.
+- (#27) Fixed the Quick Add list pill saying "Unknown" for a list that no longer exists; it now says "Inbox", like everywhere else.
+- (#28) Fixed a linked note's name being written differently in the task details and in the Quick Add menu. Both now hide only the ".md" extension, so "Budget.md" reads "Budget" and "report.pdf" keeps its extension.
+- (#29) Fixed "Open conflict view" in the damaged-database notice not behaving like the other conflict notices when the database file had moved or gone missing.
+- (#42) Fixed the task details showing a planned duration as "90 min" while rows show "1h 30m"; both now read "1h 30m".
+
 ## Security
