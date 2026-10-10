@@ -60,6 +60,7 @@ These run in `npm test`, in Node or happy-dom, not in Obsidian. With `CI` set, e
 | `tests/perf/habits.test.ts` | Habit index and streaks of 20 habits over 20,000 check-ins under 25 ms. |
 | `tests/perf/issue-4-dashboard-block.test.ts` | Ten task blocks over 50,000 tasks: one change wakes only the blocks it can affect, within 50 ms. |
 | `tests/perf/issue-16-search-notes.test.ts` | Search with "Also search description notes" on, 50,000 tasks of which 5,000 link a note: 20 commits that change no note link read no note, and finding the linked notes takes one pass under 25 ms (about 4 ms here). |
+| `tests/perf/issue-35-backup-listing.test.ts` | Measures the backup retention pass after a save. 50 saves with no snapshot due list the snapshots folder 50 times (1 per save). One retention pass over a folder at its limits (50 snapshots) takes about 0.11 ms of CPU in memory; a disk listing with one stat per file takes about 0.21 ms. Bounded loosely, not a budget. |
 | `tests/perf/issue-6-sync.test.ts` | A TickTick sync of 9 lists of 999 tasks within budget, reading only linked tasks of 50,000. |
 | `tests/perf/issue-6-ticktick-mapping.test.ts` | The TickTick field mapping of 50,000 tasks under 200 ms. |
 | `tests/ui/performance.test.tsx` | The Inbox at 5,000 tasks: a constant number of task map scans, query under 25 ms, render under 500 ms. |
