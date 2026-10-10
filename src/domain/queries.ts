@@ -326,6 +326,11 @@ export function matchesText(title: string, query: string): boolean {
 	return q.length === 0 || title.toLocaleLowerCase().includes(q);
 }
 
+/** The last day of "Next 7 days": today and the next six days. The filter, task blocks and the matrix all end here. */
+export function nextSevenDaysEnd(ctx: QueryContext): LocalDate {
+	return addDays(ctx.today, 6);
+}
+
 /** The date criterion on a schedule day `s` and a deadline day `d`; `overdue` is only asked for the "overdue" criterion. */
 function matchesDate(f: Pick<TaskFilter, "date" | "from" | "to">, ctx: QueryContext, s: LocalDate | null, d: LocalDate | null, overdue: () => boolean): boolean {
 	switch (f.date) {
@@ -338,7 +343,7 @@ function matchesDate(f: Pick<TaskFilter, "date" | "from" | "to">, ctx: QueryCont
 		case "today":
 			return s === ctx.today || d === ctx.today;
 		case "next7": {
-			const end = addDays(ctx.today, 6);
+			const end = nextSevenDaysEnd(ctx);
 			return [s, d].some((x) => x !== null && x >= ctx.today && x <= end);
 		}
 		case "range":

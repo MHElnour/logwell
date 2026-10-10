@@ -28,7 +28,7 @@ Each quadrant groups its tasks by date, in this order:
 
 - **Overdue**: the date or deadline has passed.
 - **Today**
-- **Next 7 days**
+- **Next 7 days**: tomorrow up to six days after today. With **Today**, it covers the same seven days as the **Next 7 days** list filter and task blocks.
 - **Later**
 - **No date**
 - **Completed**: collapsed until you click it, newest first. Click **Show more** to see more rows.

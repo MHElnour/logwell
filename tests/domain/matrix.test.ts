@@ -55,8 +55,8 @@ describe("date groups (D3)", () => {
 		["yesterday", "2026-09-30", "overdue"],
 		["today", "2026-10-01", "today"],
 		["today + 1", "2026-10-02", "next7"],
-		["today + 7", "2026-10-08", "next7"],
-		["today + 8", "2026-10-09", "later"],
+		["today + 6", "2026-10-07", "next7"],
+		["today + 7", "2026-10-08", "later"],
 		["no date", null, "nodate"],
 	];
 	for (const [name, date, group] of cases) {

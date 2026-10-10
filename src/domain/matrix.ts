@@ -1,8 +1,8 @@
 import type { ID, Task } from "./types";
 import { compareNewestFirst } from "./completed";
 import { compareSortKeys } from "./sortKey";
-import { type ListEntry, type Quadrant, type QueryContext, entryOf, hasPastDate, keyDate, quadrantOf, scheduleOf } from "./queries";
-import { addDays, dateSpecSortValue } from "./time";
+import { type ListEntry, type Quadrant, type QueryContext, entryOf, hasPastDate, keyDate, nextSevenDaysEnd, quadrantOf, scheduleOf } from "./queries";
+import { dateSpecSortValue } from "./time";
 
 // The Eisenhower matrix layout. Pure: it takes the tasks the view menu let
 // through and returns, per quadrant, the date groups to draw. A task's quadrant comes only from its
@@ -40,7 +40,7 @@ function groupOf(task: Task, ctx: QueryContext, held: ReadonlySet<ID>): MatrixGr
 	const key = keyDate(task, ctx);
 	if (key === null) return "nodate";
 	if (key <= ctx.today) return "today";
-	return key <= addDays(ctx.today, 7) ? "next7" : "later";
+	return key <= nextSevenDaysEnd(ctx) ? "next7" : "later";
 }
 
 /** Scheduled tasks first by time, then the rest; ties by creation time, then id. */
