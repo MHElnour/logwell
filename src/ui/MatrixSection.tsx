@@ -4,14 +4,14 @@ import { type ListEntry, type Quadrant, type QueryContext, type TaskFilter, empt
 import type { SubtaskCount } from "../domain/tasks";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
-import { QUADRANTS, writeTask } from "./actions";
+import { writeTask } from "./actions";
 import { Icon } from "./common";
 import { useActiveMemo, useStableCallback, useSubtaskCounts, useUniqueId } from "./hooks";
 import type { UiHost } from "./host";
 import { ICON } from "./icons";
 import { routedMoves, useMoveEvent } from "./moveKeys";
 import { MATRIX_MOVE_EVENT } from "./matrix/keys";
-import { QUADRANT_INFO, adjacentQuadrant } from "./matrix/quadrants";
+import { QUADRANT_INFO, QUADRANT_LIST, adjacentQuadrant } from "./matrix/quadrants";
 import { useMatrixDrag } from "./matrix/useMatrixDrag";
 import { DetailsPane } from "./TaskDetails";
 import { taskRowFor } from "./TaskRow";
@@ -37,7 +37,7 @@ export function initialMatrixState(): MatrixSectionState {
 }
 
 const NO_GROUPS: Record<Quadrant, MatrixGroup[]> = { "urgent-important": [], important: [], urgent: [], neither: [] };
-const LABEL = new Map(QUADRANTS.map((q) => [q.id, q.label]));
+const LABEL = new Map(QUADRANT_LIST.map((q) => [q.id, q.title]));
 
 /** Moves a task to a quadrant; true when a change was written. A move to the current one writes nothing. */
 async function moveToQuadrant(host: UiHost, id: ID, to: Quadrant): Promise<boolean> {

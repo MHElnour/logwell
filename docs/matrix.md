@@ -13,7 +13,7 @@ Open it with **Matrix** in the rail, or with the command **Open matrix**.
 
 | Quadrant | Position | Flags | Subtitle |
 | --- | --- | --- | --- |
-| I, **Urgent & important** | Top left | Urgent and important | Do it |
+| I, **Urgent and important** | Top left | Urgent and important | Do it |
 | II, **Important, not urgent** | Top right | Important only | Plan it |
 | III, **Urgent, not important** | Bottom left | Urgent only | Delegate it |
 | IV, **Neither** | Bottom right | No flags | Drop it |

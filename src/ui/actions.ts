@@ -1,9 +1,10 @@
 import { type CompleteResult, DST_WARNING_TEXT, type TaskPatch } from "../app/TaskService";
 import { addDays } from "../domain/time";
-import { quadrantOf, type Quadrant } from "../domain/queries";
+import { quadrantOf } from "../domain/queries";
 import { type LocalDate, PRIORITIES, type Priority, type Task } from "../domain/types";
 import { PRIORITY_NAME, capitalize } from "./format";
 import { ICON } from "./icons";
+import { QUADRANT_LIST } from "./matrix/quadrants";
 import type { MenuItemSpec, MenuSpec, UiHost } from "./host";
 import {
 	type Reanchored,
@@ -188,13 +189,6 @@ export function priorityItems(host: UiHost, task: Task, title: (p: Priority) => 
 /** "High", "Medium", "Low", "None". */
 export const priorityLabel = (p: Priority) => capitalize(PRIORITY_NAME[p]);
 
-export const QUADRANTS: { id: Quadrant; label: string; urgent: boolean; important: boolean }[] = [
-	{ id: "urgent-important", label: "Urgent and important", urgent: true, important: true },
-	{ id: "important", label: "Important, not urgent", urgent: false, important: true },
-	{ id: "urgent", label: "Urgent, not important", urgent: true, important: false },
-	{ id: "neither", label: "Neither", urgent: false, important: false },
-];
-
 /** The menu of a Completed history row: one done occurrence of a repeating task. */
 export function occurrenceMenu(host: UiHost, task: Task, date: LocalDate, onOpen: () => void): MenuSpec {
 	return [
@@ -257,8 +251,8 @@ export function taskMenu(host: UiHost, task: Task, today: string, onOpen: () => 
 		...(task.parentId === null && host.app.sections.inList(task.categoryId).length > 0
 			? [{ title: "Move to section…", icon: "layout-list", run: () => moveToSection(host, task, anchor) }]
 			: []),
-		...QUADRANTS.map((q) => ({
-			title: `Move to quadrant: ${q.label.toLowerCase()}`,
+		...QUADRANT_LIST.map((q) => ({
+			title: `Move to quadrant: ${q.title.toLowerCase()}`,
 			checked: quadrant === q.id,
 			run: () => void updateTask(host, task, { urgent: q.urgent, important: q.important }),
 		})),

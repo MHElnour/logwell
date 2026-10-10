@@ -19,6 +19,7 @@ import {
 	yearMonthOf,
 } from "./calendar";
 import { monthTitle } from "../calendar/format";
+import { quadrantWords } from "../matrix/quadrants";
 import { pad2, weekdayInitials } from "../format";
 import { focusables, popoverKeyDown } from "../popoverKeys";
 import { applyPopoverFit } from "./popoverFit";
@@ -542,7 +543,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 					icon="layout-grid"
 					label="Matrix quadrant"
 					row="quadrant"
-					value={model.urgent || model.important ? [model.urgent ? "Urgent" : "", model.important ? "Important" : ""].filter(Boolean).join(", ") : "Not set"}
+					value={model.urgent || model.important ? quadrantWords(model.urgent, model.important) : "Not set"}
 					onClick={() => setSub("quadrant")}
 				/>
 			</>

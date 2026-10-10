@@ -564,6 +564,18 @@ describe("more menu", () => {
 		expect(tasks(m)[0]).toMatchObject({ urgent: true, important: false });
 	});
 
+	it("Matrix quadrant: the row names both flags joined with a dot, like a task row", async () => {
+		const m = await mountForm();
+		await click(moreTool(m.root));
+		const value = () => m.root.querySelector('.cp-pop-row[data-row="quadrant"] .cp-pop-val')?.textContent;
+		expect(value()).toBe("Not set");
+		await click(m.root.querySelector('.cp-pop-row[data-row="quadrant"]'));
+		await click(byText(m.root, ".cp-pop-choice", "Urgent"));
+		await click(byText(m.root, ".cp-pop-choice", "Important"));
+		await click(m.root.querySelector(".cp-pop-back"));
+		expect(value()).toBe("Urgent · Important");
+	});
+
 	it("Escape in a submenu closes the whole popover (and nothing else)", async () => {
 		const m = await mountForm();
 		await click(moreTool(m.root));

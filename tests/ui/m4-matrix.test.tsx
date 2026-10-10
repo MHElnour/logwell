@@ -117,7 +117,7 @@ describe("layout (D1, D2, D5)", () => {
 		const sections = [...matrix(m.root).querySelectorAll<HTMLElement>("section.cp-matrix-q")];
 		expect(sections.map((s) => s.dataset.quadrant)).toEqual(["urgent-important", "important", "urgent", "neither"]);
 		expect(sections.map((s) => document.getElementById(s.getAttribute("aria-labelledby")!)!.textContent)).toEqual([
-			"Urgent & important",
+			"Urgent and important",
 			"Important, not urgent",
 			"Urgent, not important",
 			"Neither",

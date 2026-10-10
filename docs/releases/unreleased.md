@@ -32,5 +32,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#18) Fixed focus time being written differently in the status bar, the timer and the "Focus set done" notice. The clock now reads "5:03" everywhere, the set summary reads "4 rounds · 2h focused", and short times are rounded to whole seconds.
 - (#21) Fixed habit reminders wording a habit's progress differently from the Habits page. A daily done-or-not habit now shows its schedule ("every day") in the reminder, and amounts are rounded the same way.
 - (#25) Fixed month and weekday names changing language with the device on the Habits page and in rows and details, while the calendar and Quick Add stayed English. They are now English everywhere.
+- (#26) Fixed the four Eisenhower quadrants having different names in the matrix headings, menus and filters. They are now called "Urgent and important", "Important, not urgent", "Urgent, not important" and "Neither" everywhere, and the Quick Add menu joins the flags with a dot like a task row.
 
 ## Security
