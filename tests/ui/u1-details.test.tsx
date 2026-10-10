@@ -90,7 +90,7 @@ describe("details pane", () => {
 		await settle();
 		d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
 		const card = d.querySelector(".cp-description.is-linked")!;
-		expect(card.querySelector(".cp-note-head")?.textContent).toContain("Plan.md");
+		expect(card.querySelector(".cp-note-name")?.textContent).toBe("Plan");
 		expect(icon(card.querySelector(".cp-note-head"))).toBe("file-text");
 		const open = card.querySelector<HTMLButtonElement>('[aria-label="Open note"]')!;
 		expect(icon(open)).toBe("external-link");
@@ -100,6 +100,17 @@ describe("details pane", () => {
 		host.noteEvents.emit("note", "Notes/Plan.md");
 		await settle();
 		expect(root.querySelector(".cp-tasks .cp-description.is-missing")).not.toBeNull();
+	});
+
+	it("note card: only the .md extension is hidden from the name", async () => {
+		const { h, root } = await mount();
+		h.notes.files.set("Files/report.pdf", "body");
+		const { task } = await h.app.tasks.create({ title: "Reported" });
+		await openTask(root, "Reported");
+		await h.app.tasks.linkNote(task.id, "Files/report.pdf");
+		await settle();
+		const d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+		expect(d.querySelector(".cp-note-name")?.textContent).toBe("report.pdf");
 	});
 
 	it("footer: list button and an enabled Focus button that starts focus", async () => {

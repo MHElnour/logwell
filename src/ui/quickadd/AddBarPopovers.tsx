@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
 import { addDays } from "../../domain/time";
+import { noteDisplayName } from "../../domain/notes";
 import { INBOX_NAME, type LocalDate, type Priority } from "../../domain/types";
 import { SrOnly } from "../common";
 import { formatDateSpec } from "../format";
@@ -535,7 +536,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 					icon="file-text"
 					label="Description note"
 					row="note"
-					value={notePath === null ? "None" : (notePath.split("/").pop() ?? notePath).replace(/\.md$/iu, "")}
+					value={notePath === null ? "None" : noteDisplayName(notePath)}
 					onClick={pickNote}
 				/>
 				<Row

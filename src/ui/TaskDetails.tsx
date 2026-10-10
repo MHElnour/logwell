@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { type QueryContext, isDeadlineMissed, isOverdue, quadrantOf } from "../domain/queries";
 import { describeRule, explicitRule, versionAt } from "../domain/recurrence";
 import { normalizeTagKey } from "../domain/tags";
+import { noteDisplayName } from "../domain/notes";
 import { DURATION_RANGE_MESSAGE, MAX_DURATION_MIN, isDurationMinutes, subtasksOf } from "../domain/tasks";
 import { dateSpecDate } from "../domain/time";
 import { type ID, INBOX_NAME, type Task } from "../domain/types";
@@ -516,7 +517,7 @@ function DescriptionArea({ host, task, onSelect }: { host: UiHost; task: Task; o
 			<div class="cp-note-head">
 				<Icon host={host} icon={ICON.note} />
 				<span class="cp-note-name" title={note.path}>
-					{note.path.split("/").pop()}
+					{noteDisplayName(note.path)}
 				</span>
 				<IconButton
 					host={host}

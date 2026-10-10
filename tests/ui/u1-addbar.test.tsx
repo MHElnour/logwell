@@ -55,7 +55,7 @@ interface Mounted {
 	closeOverlay: () => boolean;
 }
 
-async function mountForm(opts: { weekStart?: WeekStart; eveningTime?: string; preset?: { date?: string | null } } = {}): Promise<Mounted> {
+async function mountForm(opts: { weekStart?: WeekStart; eveningTime?: string; preset?: { date?: string | null }; pickNote?: () => Promise<string | null> } = {}): Promise<Mounted> {
 	const app = (await appHarness()).app;
 	const saved: string[] = [];
 	const closed = { n: 0 };
@@ -70,7 +70,7 @@ async function mountForm(opts: { weekStart?: WeekStart; eveningTime?: string; pr
 			weekStart={() => opts.weekStart ?? "MO"}
 			eveningTime={() => opts.eveningTime ?? "20:00"}
 			keepOpen={() => false}
-			pickNote={async () => null}
+			pickNote={opts.pickNote ?? (async () => null)}
 			resolveNote={() => []}
 			setIcon={(el, icon) => el.setAttribute("data-icon", icon)}
 			attachTokenSuggest={() => ({ isOpen: () => false, dispose: () => undefined })}
@@ -562,6 +562,19 @@ describe("more menu", () => {
 		await typeInto(input(m.root), "Pay rent");
 		await press(input(m.root), "Enter");
 		expect(tasks(m)[0]).toMatchObject({ urgent: true, important: false });
+	});
+
+	it("Description note: the row hides .md and keeps any other extension", async () => {
+		for (const [path, shown] of [["Notes/Budget.md", "Budget"], ["Files/report.pdf", "report.pdf"]] as const) {
+			const m = await mountForm({ pickNote: async () => path });
+			await click(moreTool(m.root));
+			const value = () => m.root.querySelector('.cp-pop-row[data-row="note"] .cp-pop-val')?.textContent;
+			expect(value()).toBe("None");
+			await click(m.root.querySelector('.cp-pop-row[data-row="note"]'));
+			await settle();
+			await click(moreTool(m.root));
+			expect(value()).toBe(shown);
+		}
 	});
 
 	it("Matrix quadrant: the row names both flags joined with a dot, like a task row", async () => {

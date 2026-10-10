@@ -48,6 +48,11 @@ export function rewriteNotePath(
 	return path.startsWith(prefix) ? `${newPath}/${path.slice(prefix.length)}` : null;
 }
 
+/** The name a linked note is shown under: the file name without its folders; only a ".md" extension is hidden. */
+export function noteDisplayName(path: string): string {
+	return path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/iu, "");
+}
+
 export function basenameOf(path: string): string {
 	const file = path.slice(path.lastIndexOf("/") + 1);
 	const dot = file.lastIndexOf(".");

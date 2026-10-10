@@ -1,6 +1,8 @@
 // Pure helpers of the Quick Add suggester. No parsing import: the token
 // shape is structural, so these stay testable without the parser.
 
+import { noteDisplayName } from "../domain/notes";
+
 export interface TokenSpan {
 	start: number;
 	end: number;
@@ -50,13 +52,11 @@ export function filterByQuery<T>(items: readonly T[], label: (item: T) => string
 	return ranked.slice(0, limit).map((x) => x.item);
 }
 
-const baseOf = (p: string): string => (p.split("/").pop() ?? p).replace(/\.md$/i, "");
-
 /** Counts notes per lower-cased basename, once, so insert names cost O(1) each. */
 function basenameCounts(allPaths: readonly string[]): Map<string, number> {
 	const counts = new Map<string, number>();
 	for (const p of allPaths) {
-		const b = baseOf(p).toLowerCase();
+		const b = noteDisplayName(p).toLowerCase();
 		counts.set(b, (counts.get(b) ?? 0) + 1);
 	}
 	return counts;
@@ -65,7 +65,7 @@ function basenameCounts(allPaths: readonly string[]): Map<string, number> {
 /** `[[basename]]` text when the basename is unique among notes, else the path without `.md`. */
 export function noteInsertName(path: string, allPaths: readonly string[] | ReadonlyMap<string, number>): string {
 	const counts = allPaths instanceof Map ? allPaths : basenameCounts(allPaths as readonly string[]);
-	return (counts.get(baseOf(path).toLowerCase()) ?? 0) > 1 ? path.replace(/\.md$/i, "") : baseOf(path);
+	return (counts.get(noteDisplayName(path).toLowerCase()) ?? 0) > 1 ? path.replace(/\.md$/i, "") : noteDisplayName(path);
 }
 
 export interface NoteFileLike {

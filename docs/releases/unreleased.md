@@ -33,5 +33,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#21) Fixed habit reminders wording a habit's progress differently from the Habits page. A daily done-or-not habit now shows its schedule ("every day") in the reminder, and amounts are rounded the same way.
 - (#25) Fixed month and weekday names changing language with the device on the Habits page and in rows and details, while the calendar and Quick Add stayed English. They are now English everywhere.
 - (#26) Fixed the four Eisenhower quadrants having different names in the matrix headings, menus and filters. They are now called "Urgent and important", "Important, not urgent", "Urgent, not important" and "Neither" everywhere, and the Quick Add menu joins the flags with a dot like a task row.
+- (#28) Fixed a linked note's name being written differently in the task details and in the Quick Add menu. Both now hide only the ".md" extension, so "Budget.md" reads "Budget" and "report.pdf" keeps its extension.
 
 ## Security
