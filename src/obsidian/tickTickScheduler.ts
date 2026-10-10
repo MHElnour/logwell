@@ -1,5 +1,5 @@
 import { EventBus } from "../app/events";
-import type { TickTickDevicePort, TickTickSecretPort } from "../app/ports";
+import { type TickTickDevicePort, TickTickError, type TickTickSecretPort } from "../app/ports";
 import { TICKTICK_PULL_RANGE } from "../app/settings";
 import type { AppEvents, AppStore } from "../app/store";
 import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/SyncService";
@@ -63,6 +63,14 @@ export function failureText(f: SyncFailure): string {
 	if (f.kind === "rate-limited") return RATE_LIMITED_TEXT;
 	if (f.listName === null || f.message.includes(`"${f.listName}"`)) return f.message;
 	return `TickTick sync stopped in "${f.listName}": ${f.message.replace(/^TickTick: /u, "")}`;
+}
+
+/** The settings line for an error the sync threw past its own handling: a TickTick error reads like a reported failure. */
+function thrownText(err: unknown): string {
+	if (err instanceof TickTickError) {
+		return failureText({ listId: null, listName: null, kind: err.kind, message: err.message, retryAfterSec: err.retryAfterSec });
+	}
+	return err instanceof Error ? err.message : String(err);
 }
 
 /** The first failure of each distinct notice text. */
@@ -301,7 +309,7 @@ export class TickTickScheduler {
 		} catch (err) {
 			if (!this.disposed) {
 				this.deps.error(err);
-				this.lastError = err instanceof Error ? err.message : String(err);
+				this.lastError = thrownText(err);
 				this.events.emit("status", this.status());
 			}
 		}
