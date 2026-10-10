@@ -58,6 +58,10 @@ export class FakeTickTick implements TickTickApi {
 	completedCap = TICKTICK_COMPLETED_MAX;
 	/** Which completions a cut `listCompleted` keeps, the newest or the oldest: the real order is not known. */
 	completedOrder: "newest" | "oldest" = "newest";
+	/** Whether `listCompleted` includes a completion exactly at its start or end time: the real bounds are not known. */
+	completedBounds: { start: "inclusive" | "exclusive"; end: "inclusive" | "exclusive" } = { start: "inclusive", end: "inclusive" };
+	/** Completion times parsed once: `listCompleted` reads thousands per call in the window tests. */
+	private readonly completedMs = new Map<string, number>();
 	/** Every call, in order: "method" or "method:arg". */
 	readonly calls: string[] = [];
 	private readonly injected: Injected[] = [];
@@ -285,14 +289,24 @@ export class FakeTickTick implements TickTickApi {
 		const projectIds = query.projectIds.map((id) => this.alias(id));
 		const from = DateTime.fromISO(query.startDate).toMillis();
 		const to = DateTime.fromISO(query.endDate).toMillis();
-		const at = (t: TtTask) => DateTime.fromISO(t.completedTime ?? "").toMillis();
+		const { start, end } = this.completedBounds;
 		const sign = this.completedOrder === "newest" ? -1 : 1;
 		return [...this.tasks.values()]
 			.filter((t) => projectIds.includes(t.projectId) && t.deleted !== true && t.status === 2 && t.completedTime !== undefined)
-			.filter((t) => at(t) >= from && at(t) <= to)
-			.sort((a, b) => sign * (at(a) - at(b)))
+			.map((t) => ({ t, at: this.completedAt(t.completedTime ?? "") }))
+			.filter(({ at }) => (start === "inclusive" ? at >= from : at > from) && (end === "inclusive" ? at <= to : at < to))
+			.sort((a, b) => sign * (a.at - b.at))
 			.slice(0, this.completedCap)
-			.map((t) => this.copy(t));
+			.map(({ t }) => this.copy(t));
+	}
+
+	private completedAt(time: string): number {
+		let ms = this.completedMs.get(time);
+		if (ms === undefined) {
+			ms = DateTime.fromISO(time).toMillis();
+			this.completedMs.set(time, ms);
+		}
+		return ms;
 	}
 
 	async filterTasks(filter: TtTaskFilter): Promise<TtTask[]> {
