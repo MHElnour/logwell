@@ -211,7 +211,7 @@ export function AppRoot(props: { host: UiHost; initialSection: SectionId | "toda
 					/>
 				</div>
 				<div class="cp-section" hidden={section !== "data"}>
-					<DataSection host={host} state={state} ctx={ctx} visible={section === "data"} />
+					<DataSection host={host} ctx={ctx} visible={section === "data"} />
 				</div>
 			</div>
 		</div>

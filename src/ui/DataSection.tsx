@@ -1,7 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { QueryContext } from "../domain/queries";
 import type { BackupInfo } from "../persistence/backups";
-import type { DbData } from "../persistence/schema";
 import { formatInstant } from "./format";
 import type { UiHost } from "./host";
 import { useUniqueId } from "./hooks";
@@ -20,11 +19,11 @@ const KIND_LABELS: Record<BackupInfo["kind"], string> = {
 
 /**
  * Data section: export, import, backups and conflicts.
- * Backups are listed only while the section is visible: listing reads the
- * backup files, so a hidden section skips it on every edit made elsewhere in the app.
- * While it is visible, every store change lists them again.
+ * Backups are listed when the section opens and after an action in it (restore, export, import, Keep mine, Keep
+ * theirs), not on every store change: listing reads the backup files, so an edit, a focus round or a check-in made
+ * elsewhere in the app does not repeat it. A snapshot taken while the section stays open shows when it is opened again.
  */
-export function DataSection({ host, state, ctx, visible }: { host: UiHost; state: DbData; ctx: QueryContext; visible: boolean }) {
+export function DataSection({ host, ctx, visible }: { host: UiHost; ctx: QueryContext; visible: boolean }) {
 	const store = host.app.store;
 	const [snapshots, setSnapshots] = useState<BackupInfo[]>([]);
 	const [conflicts, setConflicts] = useState<BackupInfo[]>([]);
@@ -43,7 +42,7 @@ export function DataSection({ host, state, ctx, visible }: { host: UiHost; state
 		return () => {
 			cancelled = true;
 		};
-	}, [store, state, version, visible]);
+	}, [store, version, visible]);
 
 	const refresh = () => setVersion((v) => v + 1);
 	const run = async (fn: () => Promise<void>) => {

@@ -415,6 +415,27 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
+	it("issue 24: the Data section lists on open and after an action in it, not on every change", async () => {
+		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
+		try {
+			const { h, root } = await mount();
+			root.querySelector<HTMLButtonElement>('.cp-rail [aria-label="Data"]')!.click();
+			await settleUi();
+			const opened = list.mock.calls.length;
+			expect(opened).toBeGreaterThan(0);
+
+			await h.app.tasks.create({ title: "Elsewhere" });
+			await settleUi();
+			expect(list.mock.calls.length).toBe(opened);
+
+			(byText(root, "button", "Export CSV") as HTMLButtonElement).click();
+			await settleUi();
+			expect(list.mock.calls.length).toBeGreaterThan(opened);
+		} finally {
+			list.mockRestore();
+		}
+	});
+
 	it("review #16: export is disabled with a reason while read-only", async () => {
 		const { h, root } = await mount();
 		await makeReadOnly(h);
