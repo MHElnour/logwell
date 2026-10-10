@@ -27,5 +27,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#27) Fixed the Quick Add list pill saying "Unknown" for a list that no longer exists; it now says "Inbox", like everywhere else.
 - (#22) Fixed the TickTick settings line "The last sync stopped" giving a different message for the same problem depending on how the sync failed; it now reads the same.
 - (#29) Fixed "Open conflict view" in the damaged-database notice not behaving like the other conflict notices when the database file had moved or gone missing.
+- (#42) Fixed the task details showing a planned duration as "90 min" while rows show "1h 30m"; both now read "1h 30m".
 
 ## Security

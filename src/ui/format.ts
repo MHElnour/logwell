@@ -106,7 +106,7 @@ export function rowDateText(spec: DateSpec, zone: string, today: LocalDate): str
 }
 
 /**
- * The details chip: "Today, 19:00 · 45 min", or "No date". `opts.schedule` is the effective schedule and
+ * The details chip: "Today, 19:00 · 45m", or "No date". `opts.schedule` is the effective schedule and
  * `opts.repeat` the short rule text, so a repeating task reads "Fri, Oct 9 · every Fri".
  */
 export function detailsDateText(
@@ -117,7 +117,7 @@ export function detailsDateText(
 ): string {
 	const spec = dueSpecOf(task, opts.schedule);
 	const repeat = opts.repeat ?? null;
-	const extras = [...(repeat === null ? [] : [repeat]), ...(task.plannedDurationMin === null ? [] : [`${task.plannedDurationMin} min`])];
+	const extras = [...(repeat === null ? [] : [repeat]), ...(task.plannedDurationMin === null ? [] : [formatDuration(task.plannedDurationMin)])];
 	if (spec === null) return ["No date", ...extras].join(" · ");
 	const local = dateSpecDisplayLocal(spec, zone);
 	const date = formatDate(dateSpecDate(spec, zone), today);

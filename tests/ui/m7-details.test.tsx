@@ -40,7 +40,7 @@ describe("the details date chip", () => {
 				schedule: { kind: "date", date: FRIDAY },
 				repeat: "every Fri",
 			}),
-		).toBe("Fri, Oct 9 · every Fri · 30 min");
+		).toBe("Fri, Oct 9 · every Fri · 30m");
 	});
 });
 

@@ -40,7 +40,7 @@ describe("details pane", () => {
 		expect(top.querySelector(".cp-task-checkbox")!.classList.contains("cp-pri-1")).toBe(true);
 		const chip = top.querySelector<HTMLButtonElement>(".cp-due-chip")!;
 		expect(chip.tagName).toBe("BUTTON");
-		expect(chip.textContent).toContain("Today, 19:00 · 45 min");
+		expect(chip.textContent).toContain("Today, 19:00 · 45m");
 		expect(chip.classList.contains("is-today")).toBe(true);
 		const flag = top.querySelector<HTMLButtonElement>('[aria-label="Priority: high"]')!;
 		expect(icon(flag)).toBe("flag");
