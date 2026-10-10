@@ -1,6 +1,5 @@
-import { DateTime } from "luxon";
 import type { GroupTone, ListEntry, QueryContext } from "./queries";
-import { addDays } from "./time";
+import { addDays, utcDay } from "./time";
 import type { ID, LocalDate } from "./types";
 
 // Board columns: the types and pure helpers. `buildBoard` is in app/views.ts, because
@@ -32,7 +31,7 @@ export interface BoardColumn {
 
 /** Day title: "Sunday, Tomorrow", then "Monday, Oct 5". */
 export function dayTitle(date: LocalDate, ctx: QueryContext): string {
-	const dt = DateTime.fromISO(date, { zone: "utc" }).setLocale("en");
+	const dt = utcDay(date);
 	return date === addDays(ctx.today, 1) ? `${dt.toFormat("cccc")}, Tomorrow` : dt.toFormat("cccc, LLL d");
 }
 

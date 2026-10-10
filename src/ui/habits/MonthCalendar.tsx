@@ -4,7 +4,8 @@ import { IconButton } from "../common";
 import type { UiHost } from "../host";
 import { ICON } from "../icons";
 import { weekdayInitials } from "../format";
-import { cellClass, cellLabel, monthTitle } from "./format";
+import { monthTitle } from "../calendar/format";
+import { cellClass, cellLabel } from "./format";
 
 // The History month calendar of the selected habit. Goal met, some progress, missed; the
 // arrows step a month. The day number is visible and the status is screen-reader text (no aria-label: Obsidian would show a tooltip on every cell), so a screen reader reads "Oct 4, goal met".

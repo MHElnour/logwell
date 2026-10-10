@@ -76,6 +76,14 @@ export function pad2(n: number): string {
 	return String(n).padStart(2, "0");
 }
 
+/** The language of month and weekday names: English everywhere, whatever the device is set to. */
+export const NAME_LOCALE = "en";
+
+/** A date at midnight UTC with English names, for formatting ("Oct 9", "Friday"); UTC, so no day shifts. Accepts "YYYY-MM" too. */
+export function utcDay(date: string): DateTime {
+	return DateTime.fromISO(date, { zone: "UTC", locale: NAME_LOCALE });
+}
+
 export function addDays(date: LocalDate, days: number): LocalDate {
 	return DateTime.fromISO(date, { zone: "UTC" }).plus({ days }).toISODate() ?? date;
 }

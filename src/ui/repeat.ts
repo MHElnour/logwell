@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { EVERY_WEEKDAY, describeEnd, describeRule, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
-import { addDays, isValidLocalDate } from "../domain/time";
+import { addDays, isValidLocalDate, utcDay } from "../domain/time";
 import {
 	type LocalDate,
 	type MonthlyOn,
@@ -224,7 +224,7 @@ function plusUnits(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
 	return DateTime.fromISO(date, { zone: "UTC" }).plus({ months: n }).toISODate() ?? date;
 }
 
-const shortDate = (date: LocalDate): string => DateTime.fromISO(date, { zone: "UTC" }).toFormat("LLL d");
+const shortDate = (date: LocalDate): string => utcDay(date).toFormat("LLL d");
 
 /**
  * The small text under the checkbox: an example from today and the draft's interval ("Done on Oct 5 →

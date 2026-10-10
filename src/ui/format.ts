@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { dateTone as dayTone } from "../app/views";
-import { dateSpecDate, dateSpecDisplayLocal, daysBetween } from "../domain/time";
+import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, utcDay } from "../domain/time";
 import type { DateSpec, LocalDate, Priority, Task, WeekStart } from "../domain/types";
 
 // Display formatting. Date-only values are shown as-is; timed values in the
@@ -11,7 +11,7 @@ export function formatDate(date: LocalDate, today: LocalDate): string {
 	if (diff === 0) return "Today";
 	if (diff === 1) return "Tomorrow";
 	if (diff === -1) return "Yesterday";
-	const dt = DateTime.fromISO(date, { zone: "UTC" });
+	const dt = utcDay(date);
 	const sameYear = date.slice(0, 4) === today.slice(0, 4);
 	return dt.toFormat(sameYear ? "EEE, MMM d" : "MMM d, yyyy");
 }
@@ -33,7 +33,7 @@ export function formatDuration(min: number): string {
 }
 
 export function formatInstant(iso: string, zone: string): string {
-	const dt = DateTime.fromISO(iso, { zone: "UTC" }).setZone(zone);
+	const dt = DateTime.fromISO(iso, { zone: "UTC", locale: NAME_LOCALE }).setZone(zone);
 	return dt.isValid ? dt.toFormat("MMM d, yyyy, HH:mm") : iso;
 }
 

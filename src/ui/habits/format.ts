@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
-import { addDays } from "../../domain/time";
+import { addDays, utcDay } from "../../domain/time";
 import type { Checkin, Habit, HabitVersion, LocalDate, TimeOfDay } from "../../domain/types";
 import { ICON } from "../icons";
 import { capitalize, formatDuration } from "../format";
@@ -105,12 +105,12 @@ export function barShare(habit: Habit, index: HabitIndex, date: LocalDate, p: Pr
 /** "Not scheduled today", "Not scheduled Saturday". */
 export function notScheduledText(date: LocalDate, today: LocalDate): string {
 	if (date === today) return "Not scheduled today";
-	return `Not scheduled ${DateTime.fromISO(date, { zone: "UTC" }).toFormat("cccc")}`;
+	return `Not scheduled ${utcDay(date).toFormat("cccc")}`;
 }
 
 /** The page heading's date: "Sunday, Oct 4". */
 function pageDateText(date: LocalDate): string {
-	return DateTime.fromISO(date, { zone: "UTC" }).toFormat("cccc, MMM d");
+	return utcDay(date).toFormat("cccc, MMM d");
 }
 
 /** The sub line: "Sunday, Oct 4 · 2 of 5 done today" (a past day: "Saturday, Oct 3 · 3 of 5 done"). */
@@ -133,7 +133,7 @@ export interface StripDay {
 export function stripDays(today: LocalDate, share: (date: LocalDate) => { met: number; scheduled: number }): StripDay[] {
 	return Array.from({ length: 7 }, (_, i) => {
 		const date = addDays(today, i - 6);
-		const dt = DateTime.fromISO(date, { zone: "UTC" });
+		const dt = utcDay(date);
 		const { met, scheduled } = share(date);
 		const s = scheduled === 0 ? 0 : met / scheduled;
 		const short = dt.toFormat("ccc d");
@@ -154,11 +154,6 @@ export function monthOf(date: LocalDate): string {
 
 export function shiftMonth(month: string, by: number): string {
 	return DateTime.fromISO(`${month}-01`, { zone: "UTC" }).plus({ months: by }).toFormat("yyyy-MM");
-}
-
-/** "October 2026". */
-export function monthTitle(month: string): string {
-	return DateTime.fromISO(`${month}-01`, { zone: "UTC" }).toFormat("LLLL yyyy");
 }
 
 /** The calendar cell class of a day status (met, part, miss, off, fut). */
@@ -188,12 +183,12 @@ const CELL_WORDS: Readonly<Record<DayStatus, string>> = {
 
 /** "Oct 4, goal met". */
 export function cellLabel(date: LocalDate, status: DayStatus): string {
-	return `${DateTime.fromISO(date, { zone: "UTC" }).toFormat("MMM d")}, ${CELL_WORDS[status]}`;
+	return `${utcDay(date).toFormat("MMM d")}, ${CELL_WORDS[status]}`;
 }
 
 /** "Sep 1", or "Sep 1, 2025" in another year. */
 function sinceText(date: LocalDate, today: LocalDate): string {
-	const dt = DateTime.fromISO(date, { zone: "UTC" });
+	const dt = utcDay(date);
 	return dt.toFormat(date.slice(0, 4) === today.slice(0, 4) ? "MMM d" : "MMM d, yyyy");
 }
 

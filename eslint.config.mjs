@@ -17,7 +17,6 @@ const pureLayerImports = {
 // time.ts, and never add one.
 const LUXON_ALLOWED = [
 	"src/domain/time.ts",
-	"src/domain/board.ts",
 	"src/domain/calendar.ts",
 	"src/domain/ticktick/mapping.ts",
 	"src/app/DataService.ts",

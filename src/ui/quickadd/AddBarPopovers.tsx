@@ -14,12 +14,12 @@ import {
 	type YearMonth,
 	dayLabel,
 	monthGrid,
-	monthTitle,
 	shiftDateByMonths,
 	shiftMonth,
 	yearMonthOf,
 } from "./calendar";
-import { weekdayInitials } from "../format";
+import { monthTitle } from "../calendar/format";
+import { pad2, weekdayInitials } from "../format";
 import { focusables, popoverKeyDown } from "../popoverKeys";
 import { applyPopoverFit } from "./popoverFit";
 import { QaIcon, type SetIcon } from "./QaIcon";
@@ -295,7 +295,7 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 						</div>
 						<div class="cp-cal-head">
 							<span id={calTitleId} class="cp-cal-title" aria-live="polite">
-								{monthTitle(ym)}
+								{monthTitle(`${String(ym.year).padStart(4, "0")}-${pad2(ym.month)}`)}
 							</span>
 							<span class="cp-cal-nav">
 								<button type="button" aria-label="Previous month" onClick={() => goMonth(-1)}>

@@ -14,7 +14,7 @@ import type {
 	WeekStart,
 	Weekday,
 } from "./types";
-import { REPEAT_FREQS, WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT, WEEK_STARTS } from "./types";
+import { MONTH_SHORT, REPEAT_FREQS, WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT, WEEK_STARTS } from "./types";
 import { isClockTime } from "./habits";
 import { compareSortKeys } from "./sortKey";
 
@@ -433,7 +433,6 @@ export function remainingCount(rec: Recurrence, records: readonly OccurrenceReco
 // -- descriptions --------------------------------------------------------------------
 
 const NTH: Readonly<Record<number, string>> = { 1: "first", 2: "second", 3: "third", 4: "fourth", [-1]: "last" };
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "1st", "2nd", "3rd", "11th", "22nd", "31st". */
 export function ordinal(n: number): string {
@@ -488,7 +487,7 @@ export function describeEnd(rec: Recurrence, today?: LocalDate): string | null {
 	const end = rec.end;
 	if (end.kind === "never") return null;
 	if (end.kind === "count") return `ends after ${plural(end.count, "time")}`;
-	const label = `${MONTHS[Number(end.date.slice(5, 7)) - 1]} ${Number(end.date.slice(8, 10))}`;
+	const label = `${MONTH_SHORT[Number(end.date.slice(5, 7)) - 1]} ${Number(end.date.slice(8, 10))}`;
 	return today !== undefined && today.slice(0, 4) !== end.date.slice(0, 4) ? `ends ${label}, ${end.date.slice(0, 4)}` : `ends ${label}`;
 }
 
