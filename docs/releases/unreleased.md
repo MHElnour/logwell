@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#20) Fixed the tab title showing the old name "Checkpoint" when no database file is loaded; it now says "Logwell".
+
 ## Security
