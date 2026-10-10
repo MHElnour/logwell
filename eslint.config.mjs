@@ -11,6 +11,56 @@ const pureLayerImports = {
 	],
 };
 
+// Date and time code goes through src/domain/time.ts: Luxon, `new Date(` and
+// chrono-node's `result.date()` appear nowhere else. The files listed below
+// predate the rule; remove a file from its list when its date code moves to
+// time.ts, and never add one.
+const LUXON_ALLOWED = [
+	"src/domain/time.ts",
+	"src/domain/board.ts",
+	"src/domain/calendar.ts",
+	"src/domain/ticktick/mapping.ts",
+	"src/app/DataService.ts",
+	"src/obsidian/habitReminderHost.ts",
+	"src/parsing/dates.ts",
+	"src/parsing/parse.ts",
+	"src/ui/calendar/format.ts",
+	"src/ui/calendar/geometry.ts",
+	"src/ui/focus/format.ts",
+	"src/ui/format.ts",
+	"src/ui/habits/format.ts",
+	"src/ui/hooks.ts",
+	"src/ui/repeat.ts",
+];
+const NEW_DATE_ALLOWED = [
+	"src/domain/time.ts",
+	"src/app/SyncService.ts",
+	"src/app/TaskService.ts",
+	"src/domain/focus.ts",
+	"src/domain/ports.ts",
+	"src/domain/recurrence.ts",
+	"src/obsidian/habitReminderHost.ts",
+	"src/persistence/backups.ts",
+	"src/ui/quickadd/calendar.ts",
+];
+const TIME_MESSAGE = "Date and time code goes through src/domain/time.ts.";
+const noLuxon = [
+	{ selector: "ImportDeclaration[source.value=/^luxon/]", message: TIME_MESSAGE },
+	{ selector: "ImportExpression[source.value=/^luxon/]", message: TIME_MESSAGE },
+];
+const noNewDate = [{ selector: "NewExpression[callee.name='Date']", message: TIME_MESSAGE }];
+const noChronoDate = [{ selector: "CallExpression[callee.property.name='date'][arguments.length=0]", message: "Never use chrono-node's result.date(); read the parsed components." }];
+const SRC = ["src/**/*.ts", "src/**/*.tsx"];
+const both = LUXON_ALLOWED.filter((f) => NEW_DATE_ALLOWED.includes(f));
+const luxonOnly = LUXON_ALLOWED.filter((f) => !both.includes(f));
+const newDateOnly = NEW_DATE_ALLOWED.filter((f) => !both.includes(f));
+const timeFences = [
+	{ files: SRC, ignores: [...LUXON_ALLOWED, ...NEW_DATE_ALLOWED], rules: { "no-restricted-syntax": ["error", ...noLuxon, ...noNewDate, ...noChronoDate] } },
+	{ files: luxonOnly, rules: { "no-restricted-syntax": ["error", ...noNewDate, ...noChronoDate] } },
+	{ files: newDateOnly, rules: { "no-restricted-syntax": ["error", ...noLuxon, ...noChronoDate] } },
+	{ files: both, rules: { "no-restricted-syntax": ["error", ...noChronoDate] } },
+];
+
 export default defineConfig([
 	globalIgnores(["main.js", "node_modules/**", "coverage/**", "test-vault/**", "dev-vault/**", ".obsidian-cache/**", "e2e/**", "wdio.conf.mts", "scripts/**"]),
 	...obsidianmd.configs.recommended,
@@ -66,6 +116,7 @@ export default defineConfig([
 			],
 		},
 	},
+	...timeFences,
 	{
 		files: ["esbuild.config.mjs"],
 		rules: {
