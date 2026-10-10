@@ -104,7 +104,7 @@ export function TasksSection(props: {
 	state: DbData;
 	ctx: QueryContext;
 	ui: TasksSectionState;
-	setUi: (s: TasksSectionState) => void;
+	setUi: (update: (s: TasksSectionState) => TasksSectionState) => void;
 	/** True while the section is shown; a hidden one holds no just-completed rows. */
 	visible: boolean;
 	sidebarOpen: boolean;
@@ -126,8 +126,6 @@ export function TasksSection(props: {
 	const boardOn = BOARD_VIEWS.has(view.kind) && ui.boardMode[viewKey] === true;
 	// The grouping of the list; the board has fixed columns, so it ignores this.
 	const groupBy = effectiveGroupBy(view.kind, ui.groupBy[viewKey]);
-	const uiRef = useRef(ui);
-	uiRef.current = ui;
 	// Rebuilt only when an input changes, not on every render (selecting a row, typing in a bar).
 	const groups = useActiveMemo(
 		props.visible,
@@ -175,16 +173,13 @@ export function TasksSection(props: {
 		if (groupMenuTimer.current !== null) window.clearTimeout(groupMenuTimer.current);
 		groupMenuTimer.current = window.setTimeout(() => {
 			groupMenuTimer.current = null;
-			const cur = uiRef.current;
 			host.showMenu(
 				at,
-				groupByMenu(groupOptions, effectiveGroupBy(view.kind, cur.groupBy[viewKey]), (by) =>
-					setUi({ ...uiRef.current, groupBy: { ...uiRef.current.groupBy, [viewKey]: by } }),
-				),
+				groupByMenu(groupOptions, effectiveGroupBy(view.kind, ui.groupBy[viewKey]), (by) => setUi((s) => ({ ...s, groupBy: { ...s.groupBy, [viewKey]: by } }))),
 			);
 		}, 0);
 	};
-	const select = useStableCallback((id: ID | null) => setUi({ ...ui, selectedId: id }));
+	const select = useStableCallback((id: ID | null) => setUi((s) => ({ ...s, selectedId: id })));
 	const showCategory = view.kind !== "category" && view.kind !== "inbox";
 
 	// The ☰ button works at every width.
@@ -220,7 +215,7 @@ export function TasksSection(props: {
 					counts={counts}
 					view={view}
 					onView={(v) => {
-						setUi({ ...ui, view: v, text: "" });
+						setUi((s) => ({ ...s, view: v, text: "" }));
 						props.setSidebarOpen(false);
 					}}
 				/>
@@ -247,7 +242,7 @@ export function TasksSection(props: {
 									type="button"
 									class={`cp-mode-button${boardOn === board ? " is-active" : ""}`}
 									aria-pressed={boardOn === board}
-									onClick={() => setUi({ ...ui, boardMode: { ...ui.boardMode, [viewKey]: board } })}
+									onClick={() => setUi((s) => ({ ...s, boardMode: { ...s.boardMode, [viewKey]: board } }))}
 								>
 									<Icon host={host} icon={board ? "layout-dashboard" : ICON.list} />
 									<span>{board ? "Board" : "List"}</span>
@@ -261,7 +256,11 @@ export function TasksSection(props: {
 						placeholder="Search this list"
 						aria-label="Search this list"
 						value={ui.text}
-						onInput={(e) => setUi({ ...ui, text: e.currentTarget.value })}
+						onInput={(e) => {
+							// Read now: the updater runs after the event is done.
+							const text = e.currentTarget.value;
+							setUi((s) => ({ ...s, text }));
+						}}
 					/>
 					{view.kind !== "trash" && (
 						<ViewMenuButton
@@ -271,14 +270,14 @@ export function TasksSection(props: {
 									at,
 									tasksViewMenu({
 										sort: ui.filter.sort,
-										onSort: (sort) => setUi({ ...ui, filter: { ...ui.filter, sort } }),
+										onSort: (sort) => setUi((s) => ({ ...s, filter: { ...s.filter, sort } })),
 										showCompleted: hasGroup ? ui.showCompleted : undefined,
-										onShowCompleted: (showCompleted) => setUi({ ...ui, showCompleted }),
+										onShowCompleted: (showCompleted) => setUi((s) => ({ ...s, showCompleted })),
 										// The new section must be visible, so the list switches to Group by Section.
 										onAddSection:
 											sectionList !== null && !readOnly
 												? () => {
-														if (!boardOn && groupBy !== "section") setUi({ ...ui, groupBy: { ...ui.groupBy, [viewKey]: "section" } });
+														if (!boardOn) setUi((s) => (effectiveGroupBy(view.kind, s.groupBy[viewKey]) === "section" ? s : { ...s, groupBy: { ...s.groupBy, [viewKey]: "section" } }));
 														setAddSectionRequest((n) => n + 1);
 													}
 												: undefined,
@@ -327,7 +326,7 @@ export function TasksSection(props: {
 								completedOpen={(id) => ui.completedOpen[`board:${viewKey}:${id}`] === true}
 								onToggleCompleted={(id) => {
 									const key = `board:${viewKey}:${id}`;
-									setUi({ ...ui, completedOpen: { ...ui.completedOpen, [key]: ui.completedOpen[key] !== true } });
+									setUi((s) => ({ ...s, completedOpen: { ...s.completedOpen, [key]: s.completedOpen[key] !== true } }));
 								}}
 								onSelect={select}
 							/>
@@ -356,7 +355,7 @@ export function TasksSection(props: {
 													categoryId: sectionList,
 													hasAny: hasSections,
 													collapsed: (key) => ui.sectionCollapsed[key] === true,
-													onToggle: (key) => setUi({ ...ui, sectionCollapsed: { ...ui.sectionCollapsed, [key]: ui.sectionCollapsed[key] !== true } }),
+													onToggle: (key) => setUi((s) => ({ ...s, sectionCollapsed: { ...s.sectionCollapsed, [key]: s.sectionCollapsed[key] !== true } })),
 													addRequest: addSectionRequest,
 												}
 									}
@@ -365,7 +364,7 @@ export function TasksSection(props: {
 											? {
 													entries: completedEntries,
 													open: ui.completedOpen[viewKey] === true,
-													onToggle: () => setUi({ ...ui, completedOpen: { ...ui.completedOpen, [viewKey]: ui.completedOpen[viewKey] !== true } }),
+													onToggle: () => setUi((s) => ({ ...s, completedOpen: { ...s.completedOpen, [viewKey]: s.completedOpen[viewKey] !== true } })),
 													resetKey: `${viewKey}|${JSON.stringify(ui.filter)}|${ui.text}`,
 												}
 											: undefined

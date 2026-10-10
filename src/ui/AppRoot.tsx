@@ -199,7 +199,7 @@ export function AppRoot(props: { host: UiHost; initialSection: SectionId | "toda
 						setUi={setSearchUi}
 						visible={section === "search"}
 						onOpenCategory={(id) => {
-							setTasksUi({ ...tasksUi, view: { kind: "category", id }, selectedId: null });
+							setTasksUi((ui) => ({ ...ui, view: { kind: "category", id }, selectedId: null }));
 							setSection("tasks");
 						}}
 						onOpenHabit={(id) => {

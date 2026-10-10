@@ -41,7 +41,7 @@ export function SearchSection(props: {
 	state: DbData;
 	ctx: QueryContext;
 	ui: SearchSectionState;
-	setUi: (s: SearchSectionState) => void;
+	setUi: (update: (s: SearchSectionState) => SearchSectionState) => void;
 	onOpenCategory: (id: ID) => void;
 	/** A habit result opens the Habits page with that habit selected. */
 	onOpenHabit: (id: ID) => void;
@@ -129,7 +129,7 @@ export function SearchSection(props: {
 	const searching = ui.query.trim() !== "";
 	// Counted only while the results are shown: the list below would otherwise scan every task on each store change of a hidden section.
 	const subtaskCounts = useSubtaskCounts(state.tasks, props.visible && searching);
-	const select = useStableCallback((id: ID | null) => setUi({ ...ui, selectedId: id }));
+	const select = useStableCallback((id: ID | null) => setUi((s) => ({ ...s, selectedId: id })));
 
 	return (
 		<div class={`cp-search${ui.selectedId !== null ? " has-details" : ""}`}>
@@ -144,13 +144,20 @@ export function SearchSection(props: {
 						placeholder="Search tasks, lists and habits"
 						aria-label="Search tasks, lists and habits"
 						value={ui.query}
-						onInput={(e) => setUi({ ...ui, query: e.currentTarget.value })}
+						onInput={(e) => {
+							// Read now: the updater runs after the event is done.
+							const query = e.currentTarget.value;
+							setUi((s) => ({ ...s, query }));
+						}}
 					/>
 					<label class="cp-checkbox-label">
 						<input
 							type="checkbox"
 							checked={ui.includeNotes}
-							onChange={(e) => setUi({ ...ui, includeNotes: e.currentTarget.checked })}
+							onChange={(e) => {
+								const includeNotes = e.currentTarget.checked;
+								setUi((s) => ({ ...s, includeNotes }));
+							}}
 						/>
 						Also search description notes
 					</label>
@@ -160,7 +167,7 @@ export function SearchSection(props: {
 					state={state}
 					filter={ui.filter}
 					defaultStatus="all"
-					onChange={(filter) => setUi({ ...ui, filter })}
+					onChange={(filter) => setUi((s) => ({ ...s, filter }))}
 				/>
 				{!searching ? (
 					<EmptyState host={host} icon={ICON.railSearch} text="Type to search task titles, list names and habit names." />
