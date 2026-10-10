@@ -231,7 +231,7 @@ describe("Matrix (M4)", function () {
 		expect(await quadrantOfCard(s.plain)).toBe("");
 	});
 
-	it("AS-13: dragging a card with the real pointer onto Urgent & important keeps the ID and sets both flags", async function () {
+	it("AS-13: dragging a card with the real pointer onto Urgent and important keeps the ID and sets both flags", async function () {
 		const s = await seed();
 		const matrix = await visibleMatrix();
 		await waitForSeededCards();
