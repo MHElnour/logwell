@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#38) Fixed: a TickTick list with 200 or more tasks completed since the last sync now catches up instead of stopping every sync.
+
 ## Security

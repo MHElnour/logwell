@@ -75,6 +75,13 @@ export const LOOKUP_MAX = 50;
 /** Completions are re-read from a little before the last pull, so clock skew cannot drop one. */
 const COMPLETED_OVERLAP_MS = 5 * 60_000;
 /**
+ * The completed-tasks query takes whole seconds (`ttStamp`) and whether its bounds are inclusive is not known, so the
+ * halves of a split window share one second; a window of two such seconds or less is not split further.
+ */
+const COMPLETED_WINDOW_MIN_MS = 1000;
+/** Per list and sync: completed-tasks reads while splitting a full window (TickTick sync rule 23). */
+const COMPLETED_READS_MAX = 32;
+/**
  * A sync that wrote nothing else leaves `lastPulledAt` as it is, until it is this old. Two devices with sync on would
  * otherwise wake each other forever: every write reaches the other device as a reload, which syncs and writes again.
  * The next pull asks for completions since the stored time (less the overlap) either way, so none is missed.
@@ -190,6 +197,11 @@ function failureOf(err: unknown, list: { listId: ID; name: string } | null): Syn
 
 function isNotFound(err: unknown): boolean {
 	return err instanceof TickTickError && err.kind === "not-found";
+}
+
+/** An epoch time cut to the whole second, as `ttStamp` sends it. */
+function wholeSecond(ms: number): number {
+	return Math.floor(ms / COMPLETED_WINDOW_MIN_MS) * COMPLETED_WINDOW_MIN_MS;
 }
 
 /** An instant in the form of TickTick's queries (`2026-10-08T00:00:00+0000`). */
@@ -756,6 +768,25 @@ export class SyncService {
 		);
 	}
 
+	/**
+	 * Adds the tasks of `projectId` completed in `[fromMs, toMs]` (whole seconds) to `found`, by id. TickTick answers
+	 * at most TICKTICK_COMPLETED_MAX per read, so a full answer may be cut: its window is read again in two halves
+	 * (TickTick sync rule 23). Null when every window was read in full; otherwise why it could not be narrowed, and
+	 * `found` must not be used.
+	 */
+	private async completedIn(projectId: string, fromMs: number, toMs: number, budget: { reads: number }, found: Map<string, TtTask>): Promise<"one-second" | "too-many-reads" | null> {
+		if (budget.reads >= COMPLETED_READS_MAX) return "too-many-reads";
+		budget.reads++;
+		const tasks = await this.api.listCompleted({ projectIds: [projectId], startDate: ttStamp(fromMs), endDate: ttStamp(toMs) });
+		if (tasks.length < TICKTICK_COMPLETED_MAX) {
+			for (const t of tasks) if (!found.has(t.id)) found.set(t.id, t);
+			return null;
+		}
+		if (toMs - fromMs <= 2 * COMPLETED_WINDOW_MIN_MS) return "one-second";
+		const mid = fromMs + wholeSecond((toMs - fromMs) / 2);
+		return (await this.completedIn(projectId, fromMs, mid + COMPLETED_WINDOW_MIN_MS, budget, found)) ?? (await this.completedIn(projectId, mid, toMs, budget, found));
+	}
+
 	private async runSync(): Promise<SyncResult> {
 		await this.marking;
 		if (this.unmarked.size > 0) await this.markRemoved([...this.unmarked]);
@@ -776,16 +807,20 @@ export class SyncService {
 				if (l.link.lastPulledAt !== null) {
 					const from = Date.parse(l.link.lastPulledAt) - COMPLETED_OVERLAP_MS;
 					const to = Date.parse(this.store.now()) + COMPLETED_OVERLAP_MS;
-					completed = await this.api.listCompleted({ projectIds: [projectId], startDate: ttStamp(from), endDate: ttStamp(to) });
-					if (completed.length >= TICKTICK_COMPLETED_MAX) {
+					const found = new Map<string, TtTask>();
+					// A cut answer is never applied: its completed tasks would read as gone (TickTick sync rule 23).
+					const stop = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), { reads: 0 }, found);
+					if (stop !== null) {
+						const when = stop === "one-second" ? "within one second" : "since the last sync";
 						return failed({
 							listId: l.listId,
 							listName: l.name,
 							kind: "too-many-completed",
-							message: `TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks were completed in "${l.name}" since the last sync.`,
+							message: `TickTick: ${TICKTICK_COMPLETED_MAX} or more tasks were completed in "${l.name}" ${when}.`,
 							retryAfterSec: null,
 						});
 					}
+					completed = [...found.values()];
 				}
 				pulls.push({ ...l, projectId, data });
 				for (const t of completed) if (!seen.has(t.id)) seen.set(t.id, t);

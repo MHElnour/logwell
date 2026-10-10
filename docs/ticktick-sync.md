@@ -71,7 +71,7 @@ Changes to different fields both apply. If you change the same field on both sid
 
 - A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused. TickTick can still bring tasks in.
 - TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
-- If 200 or more tasks were completed in one TickTick list since the last sync, the sync stops.
+- If 200 or more tasks were completed within the same second in one TickTick list, the sync stops for that list.
 
 ## Fix a sync error
 

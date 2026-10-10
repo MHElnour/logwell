@@ -18,6 +18,7 @@ import type {
 	TtTaskFilter,
 	TtTaskUpdate,
 } from "../../src/domain/ticktick/types";
+import { TICKTICK_COMPLETED_MAX } from "../../src/domain/ticktick/types";
 import type { Clock } from "../../src/domain/ports";
 
 // An in-memory TickTick Open API for the sync tests. Behaves like the recordings in
@@ -53,6 +54,10 @@ export class FakeTickTick implements TickTickApi {
 	 * possibly applied in part.
 	 */
 	openLimit = Number.POSITIVE_INFINITY;
+	/** The most tasks one `listCompleted` returns, like the real API; past it the answer is cut. */
+	completedCap = TICKTICK_COMPLETED_MAX;
+	/** Which completions a cut `listCompleted` keeps, the newest or the oldest: the real order is not known. */
+	completedOrder: "newest" | "oldest" = "newest";
 	/** Every call, in order: "method" or "method:arg". */
 	readonly calls: string[] = [];
 	private readonly injected: Injected[] = [];
@@ -280,12 +285,13 @@ export class FakeTickTick implements TickTickApi {
 		const projectIds = query.projectIds.map((id) => this.alias(id));
 		const from = DateTime.fromISO(query.startDate).toMillis();
 		const to = DateTime.fromISO(query.endDate).toMillis();
+		const at = (t: TtTask) => DateTime.fromISO(t.completedTime ?? "").toMillis();
+		const sign = this.completedOrder === "newest" ? -1 : 1;
 		return [...this.tasks.values()]
 			.filter((t) => projectIds.includes(t.projectId) && t.deleted !== true && t.status === 2 && t.completedTime !== undefined)
-			.filter((t) => {
-				const at = DateTime.fromISO(t.completedTime ?? "").toMillis();
-				return at >= from && at <= to;
-			})
+			.filter((t) => at(t) >= from && at(t) <= to)
+			.sort((a, b) => sign * (at(a) - at(b)))
+			.slice(0, this.completedCap)
 			.map((t) => this.copy(t));
 	}
 
