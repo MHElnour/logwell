@@ -64,14 +64,14 @@ Changes to different fields both apply. If you change the same field on both sid
 
 - A task you delete in Logwell, or move to a list that is not linked, is deleted in TickTick. A task you restore from the Trash is sent again.
 - A task completed or marked won't do in TickTick is completed in Logwell.
-- A task gone from TickTick goes to the Logwell Trash. Logwell checks up to 50 missing tasks per list on each sync and acts only on the ones TickTick confirms as deleted, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
-- For 5 or more in one list, or a TickTick list that comes back empty, a window asks. It lists only tasks TickTick confirmed as deleted; for an emptied list it waits until every task is checked. **Move to Trash** moves them, with Undo. **Keep** keeps them in Logwell only, marked **Not synced**; for an emptied list, it unlinks the list. Closing the window decides nothing.
+- A task gone from TickTick goes to the Logwell Trash. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
+- For 5 or more in one list, or a TickTick list that comes back empty, a window asks. It lists only tasks Logwell checked and could not find. While a list still has tasks to check, nothing moves without asking, and an emptied list asks only once every task is checked. **Move to Trash** moves them, with Undo. **Keep** keeps them in Logwell only, marked **Not synced**; for an emptied list, it unlinks the list. Closing the window decides nothing.
 
 ## Limits
 
 - A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused. TickTick can still bring tasks in.
 - TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
-- After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs (up to 50 per sync beyond the first 200), and tasks deleted in TickTick wait until about five minutes after that burst.
+- After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs, a few dozen per sync beyond the first 200, and tasks deleted in TickTick wait until about five minutes after that burst.
 
 ## Fix a sync error
 

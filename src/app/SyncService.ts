@@ -70,8 +70,13 @@ export const TICKTICK_TAGS_UNREAD_WARNING = "TickTick tags could not be read; ta
 export const MISSING_CONFIRM_MIN = 5;
 /** TickTick's name for the tasks of a kanban project that are in no column. */
 export const NOT_SECTIONED = "Not Sectioned";
-/** Per list and sync: linked tasks missing from a pull that are looked up one by one (completed, won't do or gone). */
+/** Per sync, all lists together: linked tasks missing from a pull that are looked up one by one (completed, won't do or gone). */
 export const LOOKUP_MAX = 50;
+/**
+ * The pull's requests in one sync (project data, completed reads, lookups) past which no task is looked up, leaving
+ * headroom under TickTick's rate limit of about 100 requests a minute. Lookups left out wait for the next sync.
+ */
+const PULL_REQUESTS_MAX = 90;
 /** Completions are re-read from a little before the last pull, so clock skew cannot drop one. */
 const COMPLETED_OVERLAP_MS = 5 * 60_000;
 /**
@@ -388,7 +393,7 @@ export class SyncService {
 	 */
 	private readonly pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
 	/** TickTick ids a lookup found gone, kept for the next sync while their tasks stay missing and undecided. */
-	private goneInTickTick: ReadonlySet<string> = new Set();
+	private goneInTickTick = new Set<string>();
 
 	/** See `pendingCreates`: what TickTick answered (the link write failed), or null when the answer was lost. */
 	private remember(listId: ID, logwellId: ID, answer: AnsweredCreate | null): void {
@@ -807,10 +812,13 @@ export class SyncService {
 		const seen = new Map<string, TtTask>();
 		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
 		let anyCut = false;
+		/** Requests made by the pull so far: project data and completed reads. */
+		let requests = 0;
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
 				const data = await this.api.getProjectData(projectId);
+				requests++;
 				let completed: TtTask[] = [];
 				const budget = { splits: 0 };
 				let thisCut = false;
@@ -819,6 +827,8 @@ export class SyncService {
 					const to = Date.parse(this.store.now()) + COMPLETED_OVERLAP_MS;
 					const found = new Map<string, TtTask>();
 					thisCut = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found);
+					// The first read, and two for each split.
+					requests += 1 + 2 * budget.splits;
 					anyCut ||= thisCut;
 					completed = [...found.values()];
 				}
@@ -833,15 +843,19 @@ export class SyncService {
 		const listOfProject = new Map(pulls.map((p) => [p.projectId, p]));
 
 		// 2. Linked tasks expected open but not seen: one lookup each. Completed or won't do there is completed here;
-		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX per list; the rest wait for
-		// the next sync and are never offered for Trash (TickTick sync rule 10).
+		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX in all, and none past
+		// PULL_REQUESTS_MAX requests; the rest wait for the next sync and are never offered for Trash (TickTick sync
+		// rule 10).
 		/** TickTick ids confirmed gone: looked up this sync or an earlier one. */
 		const missing = new Set<string>();
-		/** Lists with linked tasks left for the next sync (beyond LOOKUP_MAX). */
+		/** Lists with linked tasks left for the next sync (beyond the lookups of this one). */
 		const waiting = new Set<ID>();
-		const lookups = new Map<ID, number>();
+		let lookupsLeft = Math.min(LOOKUP_MAX, Math.max(0, PULL_REQUESTS_MAX - requests));
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
+		// A cut answer may hide a completion of a task an earlier sync found gone (it came back and was completed in
+		// the burst): no earlier verdict is kept or used (TickTick sync rule 23).
+		if (anyCut) this.goneInTickTick.clear();
 		{
 			const state = this.store.state;
 			const names = tagNamesOf(state.tags);
@@ -861,21 +875,21 @@ export class SyncService {
 					continue;
 				}
 				// Its own project first. Not found there means not under it (a deleted task still reads), so the other
-				// linked projects are asked: it may have moved. Each call counts against its list's LOOKUP_MAX.
+				// linked projects are asked: it may have moved. Each call counts against the lookups.
 				const projects = [link.ttProjectId, ...pulls.map((p) => p.projectId).filter((id) => id !== link.ttProjectId)];
-				let verdict: "gone" | "completed" | "waiting" = "gone";
+				let verdict: "gone" | "found" | "waiting" = "gone";
 				for (const projectId of projects) {
-					const looked = lookups.get(pull.listId) ?? 0;
-					if (looked >= LOOKUP_MAX) {
+					if (lookupsLeft <= 0) {
 						verdict = "waiting";
 						break;
 					}
-					lookups.set(pull.listId, looked + 1);
+					lookupsLeft--;
 					try {
 						const tt = await this.api.getTask(projectId, link.ttId);
 						lookedUp.set(link.ttId, tt);
-						verdict = statusFromTt(tt.status) === "completed" ? "completed" : "gone";
-						if (verdict === "completed") seen.set(tt.id, tt);
+						// Completed or won't do; or open under another linked project: moved there after its pull.
+						verdict = statusFromTt(tt.status) === "completed" || projectId !== link.ttProjectId ? "found" : "gone";
+						if (verdict === "found") seen.set(tt.id, tt);
 						break;
 					} catch (err) {
 						if (!isNotFound(err)) return failed(failureOf(err, pull));
@@ -888,10 +902,12 @@ export class SyncService {
 				if (verdict === "gone") {
 					if (!lookedUp.has(link.ttId)) lookedUp.set(link.ttId, null);
 					missing.add(link.ttId);
+					// Kept at once: a sync that stops later (a rate limit) does not look it up again.
+					if (!anyCut) this.goneInTickTick.add(link.ttId);
 				}
 			}
 			// The confirmed verdicts carry to the next sync while their tasks stay missing and undecided.
-			this.goneInTickTick = new Set(missing);
+			if (!anyCut) this.goneInTickTick = new Set(missing);
 			// Creates that TickTick answered but whose link was not written: their copy is looked up by its id when
 			// the pull did not see it (completed outside the window). Gone there, the entry is dropped and the
 			// Logwell task goes up again as new.
@@ -1236,12 +1252,13 @@ export class SyncService {
 		}
 
 		// Missing from TickTick. Fewer than 5 in a list go to Trash; 5 or more, or a project that came back
-		// empty, wait for confirmation and nothing is applied. An emptied list with tasks still to look up asks
-		// nothing yet: Keep would unlink it while some of them may be completed there (TickTick sync rule 10).
+		// empty, wait for confirmation and nothing is applied. While a list has tasks still to look up, fewer than 5
+		// wait (kept as found gone) so they are judged with the rest, never moved a few at a time; an emptied list asks
+		// nothing yet, as Keep would unlink it while some of them may be completed there (TickTick sync rule 10).
 		for (const [listId, group] of missingByList) {
 			const pull = pulls.find((p) => p.listId === listId)!;
 			const emptied = pull.data.tasks.length === 0;
-			if (emptied && waiting.has(listId)) continue;
+			if (waiting.has(listId) && (emptied || group.length < MISSING_CONFIRM_MIN)) continue;
 			if (emptied || group.length >= MISSING_CONFIRM_MIN) {
 				plan.needsConfirmation.push({ listId, reason: emptied ? "emptied" : "many", tasks: group.map((t) => ({ id: t.id, title: t.title })) });
 				continue;
