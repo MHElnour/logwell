@@ -71,7 +71,7 @@ Changes to different fields both apply. If you change the same field on both sid
 
 - A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused. TickTick can still bring tasks in.
 - TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
-- If more than about 250 tasks of one TickTick list are completed there at almost the same time while they are still open in Logwell (or a very large number over a long time without a sync), Logwell cannot check them all and the sync stops.
+- After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs (up to 50 per sync beyond the first 200), and tasks deleted in TickTick wait until about five minutes after that burst.
 
 ## Fix a sync error
 
@@ -83,6 +83,5 @@ A failure stops the sync with a notice that names the list. Nothing retries in a
 | "…the API token was refused… Replace it in Settings > Logwell." | Choose **Open settings** and choose another token. |
 | "…has 99 open tasks, the limit of TickTick's free plan." | Complete or move tasks in TickTick, then choose **Sync now**. |
 | "…no answer… (network error)." | Check your connection. |
-| "…too many tasks in "List" were completed at once to check them all." | In TickTick, reopen some of those tasks, then choose **Sync now**. Afterwards, complete them again fewer than 200 at a time. |
 
 See also [Troubleshooting](troubleshooting.md).

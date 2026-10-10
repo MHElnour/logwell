@@ -53,7 +53,7 @@ describe("errors (SYNC-12)", () => {
 		expect(s.tt.get(s.ttId)?.title).toBe("Call the bank at nine");
 	});
 
-	it("stops and reports rather than miss completions when the completed list is full and too many are left to check", async () => {
+	it("a full completed list never reads as gone: the rest of the pull is applied and nothing goes to Trash", async () => {
 		const s = await oneTask();
 		// Linked tasks completed in TickTick in one instant: the cut answer lacks more of them than can be looked up.
 		const ids: string[] = [];
@@ -64,9 +64,10 @@ describe("errors (SYNC-12)", () => {
 		s.tick();
 		s.tt.edit(s.ttId, { title: "Pulled" });
 		const r = await s.sync.sync();
-		expect(r.ok).toBe(false);
-		expect(r.error).toMatchObject({ listId: s.listId, kind: "too-many-completed" });
-		expect(s.h.app.store.state.tasks.get(s.id)?.title).toBe("Call the bank");
+		expect(r.error).toBeNull();
+		expect(r.needsConfirmation).toEqual([]);
+		expect(s.h.app.store.state.trash.size).toBe(0);
+		expect(s.h.app.store.state.tasks.get(s.id)?.title).toBe("Pulled");
 	});
 
 	it("a partly applied create is re-read: no duplicate on either side", async () => {

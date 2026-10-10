@@ -100,7 +100,7 @@ const OPEN_HASH = EMPTY_HASHES.status!;
 const EMPTY_TAGS = tagsHash([]);
 
 /** `list-limit`: TickTick refused a write to a list at its free plan's open-task limit. */
-export type SyncFailureKind = TickTickErrorKind | "too-many-completed" | "list-limit";
+export type SyncFailureKind = TickTickErrorKind | "list-limit";
 
 /** Why a sync stopped: the list it was working on and the reason. */
 export interface SyncFailure {
@@ -803,22 +803,24 @@ export class SyncService {
 		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written.
 		const pulls: ListPull[] = [];
 		const seen = new Map<string, TtTask>();
-		/** Lists whose completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
-		const cut = new Set<ID>();
+		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
+		let anyCut = false;
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
 				const data = await this.api.getProjectData(projectId);
 				let completed: TtTask[] = [];
 				const budget = { splits: 0 };
+				let thisCut = false;
 				if (l.link.lastPulledAt !== null) {
 					const from = Date.parse(l.link.lastPulledAt) - COMPLETED_OVERLAP_MS;
 					const to = Date.parse(this.store.now()) + COMPLETED_OVERLAP_MS;
 					const found = new Map<string, TtTask>();
-					if (await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found)) cut.add(l.listId);
+					thisCut = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found);
+					anyCut ||= thisCut;
 					completed = [...found.values()];
 				}
-				pulls.push({ ...l, projectId, data, splitCompleted: budget.splits > 0 || cut.has(l.listId) });
+				pulls.push({ ...l, projectId, data, splitCompleted: budget.splits > 0 || thisCut });
 				for (const t of completed) if (!seen.has(t.id)) seen.set(t.id, t);
 				// The open tasks are read first and win: a task reopened after its completion is open.
 				for (const t of data.tasks) seen.set(t.id, t);
@@ -835,8 +837,6 @@ export class SyncService {
 		const lookups = new Map<ID, number>();
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
-		/** Lists with a linked task not seen and not looked up (beyond LOOKUP_MAX). */
-		const unchecked = new Set<ID>();
 		{
 			const state = this.store.state;
 			const names = tagNamesOf(state.tags);
@@ -849,24 +849,31 @@ export class SyncService {
 				// An excluded link whose task no longer repeats resumes: it needs TickTick's current state.
 				const expectedOpen = link.base.status === OPEN_HASH;
 				if (link.mode !== "excluded" && !expectedOpen && sameBase(lwHashes(t, names), link.base)) continue;
-				const looked = lookups.get(pull.listId) ?? 0;
-				if (looked >= LOOKUP_MAX) {
-					// So many are gone that they need confirmation anyway: no more lookups.
-					missing.set(link.ttId, false);
-					unchecked.add(pull.listId);
-					continue;
+				// Its own project first. Not found there means not under it (a deleted task still reads), so the other
+				// linked projects are asked: it may have moved. Each call counts against its list's LOOKUP_MAX.
+				const projects = [link.ttProjectId, ...pulls.map((p) => p.projectId).filter((id) => id !== link.ttProjectId)];
+				/** Missing: true when found nowhere or open, false when the lookups ran out first; null when completed. */
+				let verdict: boolean | null = true;
+				for (const projectId of projects) {
+					const looked = lookups.get(pull.listId) ?? 0;
+					if (looked >= LOOKUP_MAX) {
+						// So many are gone that they need confirmation anyway: no more lookups.
+						verdict = false;
+						break;
+					}
+					lookups.set(pull.listId, looked + 1);
+					try {
+						const tt = await this.api.getTask(projectId, link.ttId);
+						lookedUp.set(link.ttId, tt);
+						verdict = statusFromTt(tt.status) === "completed" ? null : true;
+						if (verdict === null) seen.set(tt.id, tt);
+						break;
+					} catch (err) {
+						if (!isNotFound(err)) return failed(failureOf(err, pull));
+					}
 				}
-				lookups.set(pull.listId, looked + 1);
-				try {
-					const tt = await this.api.getTask(link.ttProjectId, link.ttId);
-					lookedUp.set(link.ttId, tt);
-					if (statusFromTt(tt.status) === "completed") seen.set(tt.id, tt);
-					else missing.set(link.ttId, true);
-				} catch (err) {
-					if (!isNotFound(err)) return failed(failureOf(err, pull));
-					lookedUp.set(link.ttId, null);
-					missing.set(link.ttId, true);
-				}
+				if (verdict === true && !lookedUp.has(link.ttId)) lookedUp.set(link.ttId, null);
+				if (verdict !== null) missing.set(link.ttId, verdict);
 			}
 			// Creates that TickTick answered but whose link was not written: their copy is looked up by its id when
 			// the pull did not see it (completed outside the window). Gone there, the entry is dropped and the
@@ -889,18 +896,10 @@ export class SyncService {
 				}
 			}
 		}
-		// A cut completed answer is applied only when every linked task it may lack was looked up: one left unchecked
-		// could be completed in TickTick and would be offered as gone (TickTick sync rule 23).
-		for (const p of pulls) {
-			if (!cut.has(p.listId) || !unchecked.has(p.listId)) continue;
-			return failed({
-				listId: p.listId,
-				listName: p.name,
-				kind: "too-many-completed",
-				message: `TickTick: too many tasks in "${p.name}" were completed at once to check them all.`,
-				retryAfterSec: null,
-			});
-		}
+		// A cut completed answer may lack completions, which would read as gone: no Trash verdict this sync, in any list.
+		// Everything else is applied and the window moves on; a hidden completion is found by a lookup at a later sync,
+		// and the verdicts come back once the window no longer covers the cut (TickTick sync rule 23).
+		if (anyCut) missing.clear();
 
 		// A tag name Logwell does not know, on a task the pull reads: TickTick's tags are read once, for its label
 		// and parent.
