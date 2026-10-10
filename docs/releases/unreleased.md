@@ -28,5 +28,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#22) Fixed the TickTick settings line "The last sync stopped" giving a different message for the same problem depending on how the sync failed; it now reads the same.
 - (#29) Fixed "Open conflict view" in the damaged-database notice not behaving like the other conflict notices when the database file had moved or gone missing.
 - (#42) Fixed the task details showing a planned duration as "90 min" while rows show "1h 30m"; both now read "1h 30m".
+- (#19) Fixed the Undo button on task notices and on the TickTick confirmation prompt doing nothing when the undo could not be done; it now says "Nothing to undo.", like the other Undo buttons.
 
 ## Security

@@ -2,6 +2,7 @@ import type { FocusService, OpenResult } from "../app/FocusService";
 import { type ActiveTimer, type FocusMoment, type FocusSetConfig, remainingSec } from "../domain/focus";
 import { pad2 } from "../domain/time";
 import type { Instant } from "../domain/types";
+import { NOTHING_TO_UNDO } from "../ui/format";
 import type { ButtonSpec } from "../ui/host";
 import { type NoticeAction, undoAction } from "./notices";
 
@@ -206,7 +207,7 @@ export class FocusHost {
 	private onShortDiscarded(sessionId: string): void {
 		const focus = this.focus;
 		this.ui.actionNotice("Focus under a minute was not saved", [
-			undoAction(async () => (await focus?.undoShortDiscard(sessionId)) ?? false, () => this.ui.notify("Nothing to undo.")),
+			undoAction(async () => (await focus?.undoShortDiscard(sessionId)) ?? false, () => this.ui.notify(NOTHING_TO_UNDO)),
 		]);
 	}
 
@@ -234,7 +235,7 @@ export class FocusHost {
 			if (choice === null || this.focus !== focus) return;
 			const applied = await focus.resolveRecovery(choice);
 			if (choice === "discard" && applied) {
-				this.ui.actionNotice("Focus timer discarded", [undoAction(() => focus.restoreDiscardedTimer(), () => this.ui.notify("Nothing to undo."))]);
+				this.ui.actionNotice("Focus timer discarded", [undoAction(() => focus.restoreDiscardedTimer(), () => this.ui.notify(NOTHING_TO_UNDO))]);
 			}
 		} catch (err) {
 			this.ui.error(err);

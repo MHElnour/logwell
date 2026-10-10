@@ -22,6 +22,9 @@ export function formatDateSpec(spec: DateSpec, zone: string, today: LocalDate): 
 	return local === null ? date : `${date} ${local.slice(11)}`;
 }
 
+/** What an Undo that cannot be done says. */
+export const NOTHING_TO_UNDO = "Nothing to undo.";
+
 export function formatDuration(min: number): string {
 	const h = Math.floor(min / 60);
 	const m = min % 60;

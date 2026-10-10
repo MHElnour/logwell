@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import { NOTHING_TO_UNDO } from "../ui/format";
 
 export interface NoticeAction {
 	label: string;
@@ -30,13 +31,13 @@ export function actionNotice(message: string, actions: NoticeAction[], timeout =
 
 /**
  * The Undo button of a notice. `undo` resolves false when there is nothing to undo any more; `onNothing` then
- * says so (callers that stay silent omit it). A thrown error reaches `showError` through `actionNotice`.
+ * says so (a plain notice unless the caller routes it elsewhere). A thrown error reaches `showError` through `actionNotice`.
  */
-export function undoAction(undo: () => Promise<boolean>, onNothing?: () => void): NoticeAction {
+export function undoAction(undo: () => Promise<boolean>, onNothing: () => void = () => void new Notice(NOTHING_TO_UNDO)): NoticeAction {
 	return {
 		label: "Undo",
 		run: async () => {
-			if (!(await undo())) onNothing?.();
+			if (!(await undo())) onNothing();
 		},
 	};
 }

@@ -13,6 +13,7 @@ import { FocusSection } from "./FocusSection";
 import { type HabitFocusRequest, HabitsSection, type HabitsSectionState, initialHabitsState } from "./HabitsSection";
 import type { SectionId, UiHost } from "./host";
 import { ICON } from "./icons";
+import { NOTHING_TO_UNDO } from "./format";
 import { useAppState, useQueryContext, useUniqueId } from "./hooks";
 import { MatrixSection, type MatrixSectionState, initialMatrixState } from "./MatrixSection";
 import { SearchSection, type SearchSectionState, initialSearchState } from "./SearchSection";
@@ -116,7 +117,7 @@ export function AppRoot(props: { host: UiHost; initialSection: SectionId | "toda
 		if (target.closest?.('.cp-qa, .cp-pop, [role="dialog"], [role="menu"]') != null) return;
 		e.preventDefault();
 		void host.app.store.undo().then(
-			(label) => host.notify(label === null ? "Nothing to undo." : `Undone: ${label}`),
+			(label) => host.notify(label === null ? NOTHING_TO_UNDO : `Undone: ${label}`),
 			(err: unknown) => (isDomainError(err) ? host.notify(err.message) : host.error(err)),
 		);
 	};
