@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportFileName, mergeCollections } from "../../src/app/DataService";
-import { buildCompleted, buildView, globalSearch, searchNoteContent, sidebarCounts } from "../../src/app/views";
+import { buildCompleted, buildView, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { serializeDb } from "../../src/persistence/serializer";
@@ -188,12 +188,34 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		const h = await appHarness();
 		h.notes.files.set("n.md", "Contains the Needle somewhere");
 		const { task } = await h.app.tasks.create({ title: "Hay", notePath: "n.md" });
-		const ids = await searchNoteContent(h.app.store.state, "needle", h.notes);
+		const links = linkedNotes(h.app.store.state.tasks);
+		expect([...links]).toEqual([["n.md", [task.id]]]);
+		const ids = await searchNoteContent(links, "needle", h.notes);
 		expect([...ids]).toEqual([task.id]);
 		const res = globalSearch(h.app.store.state, "needle", h.app.queryContext(), emptyFilter(), ids);
 		expect(res.tasks.map((e) => e.task.id)).toEqual([task.id]);
 		await h.saveNow();
 		expect(h.dbText()).not.toContain("Needle");
+	});
+
+	it("SRCH-01: linkedNotes keeps its result while the links are equal; an aborted search stops reading", async () => {
+		const h = await appHarness();
+		h.notes.files.set("n.md", "needle");
+		h.notes.files.set("m.md", "needle");
+		const a = (await h.app.tasks.create({ title: "A", notePath: "n.md" })).task;
+		await h.app.tasks.create({ title: "B", notePath: "m.md" });
+		const first = linkedNotes(h.app.store.state.tasks);
+		await h.app.tasks.update(a.id, { title: "A2" });
+		expect(linkedNotes(h.app.store.state.tasks, first)).toBe(first);
+		await h.app.tasks.unlinkNote(a.id);
+		const second = linkedNotes(h.app.store.state.tasks, first);
+		expect(second).not.toBe(first);
+		expect([...second.keys()]).toEqual(["m.md"]);
+		h.notes.reads.length = 0;
+		const stop = new AbortController();
+		stop.abort();
+		await searchNoteContent(first, "needle", h.notes, stop.signal);
+		expect(h.notes.reads).toEqual([]);
 	});
 });
 
