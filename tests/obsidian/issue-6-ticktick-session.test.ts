@@ -39,7 +39,7 @@ function dbText(projectId: string): string {
 function vault() {
 	const tt = new FakeTickTick(new FakeClock(NOW));
 	const project = tt.addProject("Work");
-	const methods: (keyof TickTickApi)[] = ["listProjects", "getProjectData", "listCompleted", "filterTasks", "getTask", "createTask", "updateTask", "completeTask", "deleteTask", "moveTasks", "batchTasks", "createProject", "createColumn"];
+	const methods: (keyof TickTickApi)[] = ["listProjects", "getProjectData", "listCompleted", "filterTasks", "getTask", "createTask", "updateTask", "deleteTask", "moveTasks", "batchTasks", "createProject", "createColumn"];
 	for (const m of methods) vi.spyOn(TickTickHttp.prototype, m).mockImplementation(((...args: never[]) => (tt[m] as (...a: never[]) => unknown)(...args)) as never);
 	const fake = fakeApp();
 	fake.files.set("A.cpbase", dbText(project.id));

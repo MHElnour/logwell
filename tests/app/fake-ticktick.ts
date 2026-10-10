@@ -353,14 +353,6 @@ export class FakeTickTick implements TickTickApi {
 		return this.copy(next);
 	}
 
-	async completeTask(projectId: string, taskId: string): Promise<void> {
-		const inj = await this.enter("completeTask", taskId);
-		const t = this.tasks.get(taskId);
-		if (t === undefined || t.projectId !== projectId) throw this.notFound();
-		this.write(t, { status: 2 });
-		if (inj !== null) throw inj.error;
-	}
-
 	async deleteTask(projectId: string, taskId: string): Promise<void> {
 		const inj = await this.enter("deleteTask", taskId);
 		const t = this.tasks.get(taskId);

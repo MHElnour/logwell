@@ -133,11 +133,6 @@ export class InboxAliasApi implements TickTickApi {
 		return this.task(await this.api.updateTask({ ...task, projectId: canonicalProjectId(task.projectId) }));
 	}
 
-	async completeTask(projectId: string, taskId: string): Promise<void> {
-		if (projectId !== INBOX_ALIAS) return this.api.completeTask(projectId, taskId);
-		return this.api.completeTask(await this.need([taskId]), taskId);
-	}
-
 	deleteTask(projectId: string, taskId: string): Promise<void> {
 		return this.api.deleteTask(canonicalProjectId(projectId), taskId);
 	}

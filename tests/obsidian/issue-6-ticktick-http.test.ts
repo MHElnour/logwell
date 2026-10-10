@@ -179,15 +179,6 @@ describe("requests", () => {
 		expect(t.title).toBe("Call the bank (renamed)");
 	});
 
-	it("completeTask: POST .../complete; an empty answer is fine", async () => {
-		const { api, calls, queue } = setup();
-		queue.push({ text: "" });
-		await expect(api.completeTask("p1", "t1")).resolves.toBeUndefined();
-		expect(first(calls).method).toBe("POST");
-		expect(first(calls).url).toBe(`${TICKTICK_API_BASE}/project/p1/task/t1/complete`);
-		expect(first(calls).body).toBeUndefined();
-	});
-
 	it("deleteTask: DELETE /project/{p}/task/{t}", async () => {
 		const { api, calls, queue } = setup();
 		queue.push({ text: "" });

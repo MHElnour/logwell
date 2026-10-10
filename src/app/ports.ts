@@ -229,7 +229,10 @@ export interface TickTickApi {
 	getProjectData(projectId: string): Promise<TtProjectData>;
 	/** POST /task/completed: completed tasks in a window (200 at most). */
 	listCompleted(query: TtCompletedQuery): Promise<TtTask[]>;
-	/** POST /task/filter */
+	/**
+	 * POST /task/filter. Unused by the sync today. It is the only bulk way to read "won't do" tasks (status -1), which
+	 * appear in neither the project data nor the completed list, should checking them one by one become too slow.
+	 */
 	filterTasks(filter: TtTaskFilter): Promise<TtTask[]>;
 	/** GET /project/{p}/task/{t}. Not found under the wrong project; a deleted task still reads. */
 	getTask(projectId: string, taskId: string): Promise<TtTask>;
@@ -237,8 +240,6 @@ export interface TickTickApi {
 	createTask(task: TtTaskCreate): Promise<TtTask>;
 	/** POST /task/{id}: a partial update. */
 	updateTask(task: TtTaskUpdate): Promise<TtTask>;
-	/** POST /project/{p}/task/{t}/complete */
-	completeTask(projectId: string, taskId: string): Promise<void>;
 	/** DELETE /project/{p}/task/{t} */
 	deleteTask(projectId: string, taskId: string): Promise<void>;
 	/** POST /task/move */
