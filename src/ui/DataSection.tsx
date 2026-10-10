@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { QueryContext } from "../domain/queries";
+import { RELOAD_LABEL, REPLACE_ALL_LABEL } from "../app/store";
 import type { BackupInfo } from "../persistence/backups";
 import { formatInstant } from "./format";
 import type { UiHost } from "./host";
@@ -20,8 +21,9 @@ const KIND_LABELS: Record<BackupInfo["kind"], string> = {
 /**
  * Data section: export, import, backups and conflicts.
  * Backups are listed when the section opens and after an action in it (restore, export, import, Keep mine, Keep
- * theirs), not on every store change: listing reads the backup files, so an edit, a focus round or a check-in made
- * elsewhere in the app does not repeat it. A snapshot taken while the section stays open shows when it is opened again.
+ * theirs) and when a status, reload or restore event says the files changed, not on every store change: listing reads
+ * the backup files, so an edit, a focus round or a check-in made elsewhere in the app does not repeat it. A snapshot
+ * taken while the section stays open shows when it is opened again.
  */
 export function DataSection({ host, ctx, visible }: { host: UiHost; ctx: QueryContext; visible: boolean }) {
 	const store = host.app.store;
@@ -45,6 +47,21 @@ export function DataSection({ host, ctx, visible }: { host: UiHost; ctx: QueryCo
 	}, [store, version, visible]);
 
 	const refresh = () => setVersion((v) => v + 1);
+
+	// Changes made outside the section while it is open: a damaged file or an incoming conflict (status), a reload or a
+	// restore or a resolved conflict from a notice (a reload or replacement, never an ordinary edit).
+	useEffect(() => {
+		if (!visible) return;
+		const bump = () => setVersion((v) => v + 1);
+		const offStatus = store.bus.on("status", bump);
+		const offChanged = store.bus.on("changed", (e) => {
+			if (e.label === RELOAD_LABEL || e.label === REPLACE_ALL_LABEL) bump();
+		});
+		return () => {
+			offStatus();
+			offChanged();
+		};
+	}, [store, visible]);
 	const run = async (fn: () => Promise<void>) => {
 		try {
 			await fn();

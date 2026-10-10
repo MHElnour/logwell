@@ -436,6 +436,60 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
+	it("issue 24: the Data section lists again when it becomes visible again", async () => {
+		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
+		try {
+			const { root } = await mount();
+			const rail = (name: string) => root.querySelector<HTMLButtonElement>(`.cp-rail [aria-label="${name}"]`)!;
+			rail("Data").click();
+			await settleUi();
+			const first = list.mock.calls.length;
+			rail("Tasks").click();
+			await settleUi();
+			expect(list.mock.calls.length).toBe(first);
+			rail("Data").click();
+			await settleUi();
+			expect(list.mock.calls.length).toBeGreaterThan(first);
+		} finally {
+			list.mockRestore();
+		}
+	});
+
+	it("issue 24: a status change or a reload while the Data section is open lists again, an ordinary edit does not", async () => {
+		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
+		const conflicts = vi.spyOn(CpbaseStore.prototype, "listConflicts");
+		try {
+			const { h, root } = await mount();
+			root.querySelector<HTMLButtonElement>('.cp-rail [aria-label="Data"]')!.click();
+			await settleUi();
+			expect(root.querySelector(".cp-data")?.textContent).toContain("No open conflicts.");
+			let calls = list.mock.calls.length;
+
+			// A conflict arrives from outside the section (a store event), then a notice resolves it.
+			conflicts.mockResolvedValue([{ path: "c/x.cpbase", kind: "conflict", revision: "r-abc", writtenAt: "2026-10-10T10:00:00.000Z", stamp: "1" }]);
+			h.app.store.notifyStatus();
+			await settleUi();
+			expect(list.mock.calls.length).toBeGreaterThan(calls);
+			expect(root.querySelector(".cp-data")?.textContent).toContain("Conflict copy r-abc");
+			calls = list.mock.calls.length;
+
+			conflicts.mockResolvedValue([]);
+			h.app.store.notifyReloaded();
+			h.app.store.notifyStatus();
+			await settleUi();
+			expect(list.mock.calls.length).toBeGreaterThan(calls);
+			expect(root.querySelector(".cp-data")?.textContent).toContain("No open conflicts.");
+			calls = list.mock.calls.length;
+
+			await h.app.tasks.create({ title: "Ordinary edit" });
+			await settleUi();
+			expect(list.mock.calls.length).toBe(calls);
+		} finally {
+			list.mockRestore();
+			conflicts.mockRestore();
+		}
+	});
+
 	it("review #16: export is disabled with a reason while read-only", async () => {
 		const { h, root } = await mount();
 		await makeReadOnly(h);
