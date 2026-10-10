@@ -499,6 +499,63 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(pull.filter((c) => c.startsWith("getTask")).length).toBeGreaterThan(0);
 	});
 
+	/** Two lists, each with 250 completed in one second and 600 over 12 hours, a month after the last sync. */
+	async function twoBusyLists(): Promise<SyncHarness & { lists: List[] }> {
+		const s = await imported(["Work", 852], ["Home", 852]);
+		s.tick(10 * DAY);
+		for (const l of s.lists) completeOver(s, l.ttIds.slice(0, 250), 0);
+		s.tick(HOUR);
+		for (const l of s.lists) completeOver(s, l.ttIds.slice(250, 850), 12 * HOUR);
+		s.tick(20 * DAY);
+		return s;
+	}
+
+	const pullCalls = (s: SyncHarness, before: number) => s.tt.calls.slice(before).filter((c) => /^(getProjectData|listCompleted|getTask)\b/.test(c));
+
+	it("the completed reads share the pull's 90 requests: a window past them counts as cut, and later syncs find the rest", async () => {
+		const s = await twoBusyLists();
+		const pulledAt = s.lists.map((l) => s.link("list", l.listId)!.lastPulledAt!);
+		const before = s.tt.calls.length;
+		const r = await s.sync.sync();
+		expect(r.error).toBeNull();
+		expect(r.needsConfirmation).toEqual([]);
+		expect(trashed(s)).toEqual([]);
+		// Every list gets its project and a first completed read even past the 90: 2 requests a list at most beyond.
+		expect(pullCalls(s, before).length).toBeLessThanOrEqual(90 + 2 * 2);
+		s.lists.forEach((l, i) => expect(s.link("list", l.listId)!.lastPulledAt! > pulledAt[i]!).toBe(true));
+		const done = () => s.lists.reduce((n, l) => n + completedIn(s, l), 0);
+		const hidden = 2 * 850 - done();
+		expect(hidden).toBeGreaterThan(0);
+		// The window has moved past them: each later sync looks up 50.
+		for (let sync = 0; sync < Math.ceil(hidden / LOOKUP_MAX); sync++) {
+			s.tick(5 * 60_000);
+			const later = s.tt.calls.length;
+			const next = await s.sync.sync();
+			expect(next.error).toBeNull();
+			expect(next.needsConfirmation).toEqual([]);
+			expect(pullCalls(s, later).length).toBeLessThanOrEqual(90);
+		}
+		expect(done()).toBe(2 * 850);
+		expect(trashed(s)).toEqual([]);
+	});
+
+	it("a 429 on a completed read stops the sync, writing nothing; the next sync catches up", async () => {
+		const s = await twoBusyLists();
+		const state = s.h.app.store.state;
+		let reads = 0;
+		s.tt.onCall = (m) => {
+			if (m === "listCompleted" && ++reads === 20) throw new TickTickError("rate-limited", "TickTick: too many requests (HTTP 429)", { status: 429, retryAfterSec: 30 });
+		};
+		const r = await s.sync.sync();
+		expect(r.error).toMatchObject({ kind: "rate-limited" });
+		expect(s.h.app.store.state).toBe(state);
+		s.tt.onCall = null;
+		s.tick(60_000);
+		const next = await s.sync.sync();
+		expect(next.error).toBeNull();
+		expect(s.lists.reduce((n, l) => n + completedIn(s, l), 0)).toBeGreaterThan(0);
+	});
+
 	it("a 429 during the lookups keeps the tasks found gone: the next sync looks up only the rest", async () => {
 		const s = await imported(["Work", 42]);
 		const list = s.lists[0]!;
@@ -564,14 +621,15 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(s.tasks("Work bill 0")).toHaveLength(1);
 	});
 
-	it("each list has its own budget: two lists that each need many splits both catch up", async () => {
-		const s = await imported(["Work", 2000], ["Home", 2000]);
+	it("each list has its own splits within the pull's requests: two lists that need many both catch up in one sync", async () => {
+		const s = await imported(["Work", 2000], ["Home", 450]);
 		s.tick(Math.floor((30 * DAY) / 3));
 		completeOver(s, s.lists[0]!.ttIds, 12 * HOUR);
-		completeOver(s, s.lists[1]!.ttIds, 12 * HOUR);
+		completeOver(s, s.lists[1]!.ttIds, 2 * HOUR);
 		s.tick(20 * DAY);
-		// One shared budget could not make more than 2 × 32 + 1 reads in all.
-		expect(await expectCatchUp(s)).toBeGreaterThan(2 * 32 + 1);
+		const reads = await expectCatchUp(s);
+		expect(reads).toBeGreaterThan(32);
+		expect(reads + 2).toBeLessThanOrEqual(90);
 	});
 
 	it("after a split pull, the next quiet sync reads the completed tasks once per list", async () => {

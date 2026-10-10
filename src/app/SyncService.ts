@@ -70,11 +70,15 @@ export const TICKTICK_TAGS_UNREAD_WARNING = "TickTick tags could not be read; ta
 export const MISSING_CONFIRM_MIN = 5;
 /** TickTick's name for the tasks of a kanban project that are in no column. */
 export const NOT_SECTIONED = "Not Sectioned";
-/** Per sync, all lists together: linked tasks missing from a pull that are looked up one by one (completed, won't do or gone). */
+/**
+ * Per sync, all lists together: the most lookups of linked tasks missing from the pull (completed, won't do or gone;
+ * a retry in another linked project is one more). The rest wait for the next sync and are never offered for Trash.
+ */
 export const LOOKUP_MAX = 50;
 /**
- * The pull's requests in one sync (project data, completed reads, lookups) past which no task is looked up, leaving
- * headroom under TickTick's rate limit of about 100 requests a minute. Lookups left out wait for the next sync.
+ * The pull's requests in one sync, to stay under TickTick's rate limit of about 100 a minute. It bounds the splits of
+ * completed reads (a window still full past it counts as cut) and the lookups (none past it). Each list still gets its
+ * project data and first completed read, so the pull makes at most this many requests plus two per linked list.
  */
 const PULL_REQUESTS_MAX = 90;
 /** Completions are re-read from a little before the last pull, so clock skew cannot drop one. */
@@ -783,18 +787,28 @@ export class SyncService {
 	/**
 	 * Adds the tasks of `projectId` completed in `[fromMs, toMs]` (whole seconds) to `found`, by id. TickTick answers
 	 * at most TICKTICK_COMPLETED_MAX per read, so a full answer may be cut: its window is read again in two halves
-	 * (TickTick sync rule 23). Only full reads count against `budget`. True when an answer stayed cut (a full window
-	 * too short to split, or no splits left): `found` then holds what was read, and may lack completions.
+	 * (TickTick sync rule 23). Only full reads count against `budget`; a split adds its two reads to `spent.requests`
+	 * before making them, and is not made past PULL_REQUESTS_MAX (the caller counts the first read). True when an
+	 * answer stayed cut (a full window too short to split, no splits left, or no requests left): `found` then holds
+	 * what was read, and may lack completions.
 	 */
-	private async completedIn(projectId: string, fromMs: number, toMs: number, budget: { splits: number }, found: Map<string, TtTask>): Promise<boolean> {
+	private async completedIn(
+		projectId: string,
+		fromMs: number,
+		toMs: number,
+		budget: { splits: number },
+		spent: { requests: number },
+		found: Map<string, TtTask>,
+	): Promise<boolean> {
 		const tasks = await this.api.listCompleted({ projectIds: [projectId], startDate: ttStamp(fromMs), endDate: ttStamp(toMs) });
 		for (const t of tasks) if (!found.has(t.id)) found.set(t.id, t);
 		if (tasks.length < TICKTICK_COMPLETED_MAX) return false;
-		if (toMs - fromMs <= 2 * COMPLETED_WINDOW_MIN_MS || budget.splits >= COMPLETED_READS_MAX) return true;
+		if (toMs - fromMs <= 2 * COMPLETED_WINDOW_MIN_MS || budget.splits >= COMPLETED_READS_MAX || spent.requests + 2 > PULL_REQUESTS_MAX) return true;
 		budget.splits++;
+		spent.requests += 2;
 		const mid = fromMs + wholeSecond((toMs - fromMs) / 2);
-		const left = await this.completedIn(projectId, fromMs, mid + COMPLETED_WINDOW_MIN_MS, budget, found);
-		const right = await this.completedIn(projectId, mid, toMs, budget, found);
+		const left = await this.completedIn(projectId, fromMs, mid + COMPLETED_WINDOW_MIN_MS, budget, spent, found);
+		const right = await this.completedIn(projectId, mid, toMs, budget, spent, found);
 		return left || right;
 	}
 
@@ -812,13 +826,16 @@ export class SyncService {
 		const seen = new Map<string, TtTask>();
 		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
 		let anyCut = false;
-		/** Requests made by the pull so far: project data and completed reads. */
-		let requests = 0;
+		/**
+		 * Requests made by the pull so far: project data and completed reads. Every list gets its project data and its
+		 * first completed read even past PULL_REQUESTS_MAX, so a list is never skipped; only splits stop there.
+		 */
+		const spent = { requests: 0 };
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
 				const data = await this.api.getProjectData(projectId);
-				requests++;
+				spent.requests++;
 				let completed: TtTask[] = [];
 				const budget = { splits: 0 };
 				let thisCut = false;
@@ -826,9 +843,8 @@ export class SyncService {
 					const from = Date.parse(l.link.lastPulledAt) - COMPLETED_OVERLAP_MS;
 					const to = Date.parse(this.store.now()) + COMPLETED_OVERLAP_MS;
 					const found = new Map<string, TtTask>();
-					thisCut = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, found);
-					// The first read, and two for each split.
-					requests += 1 + 2 * budget.splits;
+					spent.requests++;
+					thisCut = await this.completedIn(projectId, wholeSecond(from), wholeSecond(to), budget, spent, found);
 					anyCut ||= thisCut;
 					completed = [...found.values()];
 				}
@@ -850,7 +866,7 @@ export class SyncService {
 		const missing = new Set<string>();
 		/** Lists with linked tasks left for the next sync (beyond the lookups of this one). */
 		const waiting = new Set<ID>();
-		let lookupsLeft = Math.min(LOOKUP_MAX, Math.max(0, PULL_REQUESTS_MAX - requests));
+		let lookupsLeft = Math.min(LOOKUP_MAX, Math.max(0, PULL_REQUESTS_MAX - spent.requests));
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
 		// A cut answer may hide a completion of a task an earlier sync found gone (it came back and was completed in
