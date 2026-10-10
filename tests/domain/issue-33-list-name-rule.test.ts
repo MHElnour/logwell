@@ -110,7 +110,7 @@ describe("Quick Add #list", () => {
 	it("a name matching several lists is unknown and blocks saving", () => {
 		const r = parseQuickAdd("Sort #homework", withLists("Inbox", "Home work", "Home-work"));
 		expect(r.fields.categoryId).toBeUndefined();
-		expect(r.chips[0]).toMatchObject({ kind: "category", status: "unresolved", notice: "No list named homework" });
+		expect(r.chips[0]).toMatchObject({ kind: "category", status: "unresolved", notice: "\u201chomework\u201d matches several lists. Use the exact name." });
 		expect(r.blocking).toEqual([r.chips[0]?.id]);
 	});
 });

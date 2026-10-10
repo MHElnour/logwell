@@ -23,7 +23,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#30) Fixed a list whose stored name key no longer matched its name staying unreachable in Quick Add and task blocks; it is now repaired on load like a section.
-- (#33) Fixed task blocks not finding a list typed without its spaces or dashes ("homework" for "Home work"), the way Quick Add does.
+- (#30) Fixed a list whose stored name key no longer matched its name: task blocks could not find it, and a second list with the same name could be created. It is now repaired on load, as sections are.
+- (#33) Fixed task blocks not finding a list typed without its spaces or dashes ("homework" for "Home work"). Quick Add and task blocks now use one rule: the exact name wins, and a name that matches several lists asks you to pick instead of choosing one.
 
 ## Security

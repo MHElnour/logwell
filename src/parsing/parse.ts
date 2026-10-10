@@ -175,7 +175,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		take(t.span);
 		const match = resolveListName(ctx.categories, t.name);
 		if (match.kind === "one") drafts.push(draft(input, "category", t.span, "applied", { categoryId: match.list.id }));
-		else drafts.push(draft(input, "category", t.span, "unresolved", { notice: `No list named ${t.name}` }));
+		else {
+			const notice = match.kind === "several" ? `\u201c${t.name}\u201d matches several lists. Use the exact name.` : `No list named ${t.name}`;
+			drafts.push(draft(input, "category", t.span, "unresolved", { notice }));
+		}
 	}
 
 	const tagExists = (key: string): boolean => ctx.tags.some((x) => normalizeTagKey(x.key) === key);
