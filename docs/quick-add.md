@@ -38,7 +38,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
 | A deadline | `by friday`, `by Oct 9`, `by 5pm` | `by` right before a date makes it a deadline. |
 | A planned duration | `for 45m`, `for 1h30m`, `for 90 min`, `for 1.5 hours`, `for half an hour` | From 1 minute to 24 hours. A longer value shows an error chip. |
-| A list | `#Home`, `#Work` | Capitals, spaces, `-` and `_` do not matter. |
+| A list | `#Home`, `#Work` | The exact name wins. Otherwise capitals, spaces, `-` and `_` do not matter. If that finds several lists, the name counts as unknown. |
 | A tag | `@errands`, `@home/garden` | A new tag is created when you add the task. A name that another tag uses under another parent stays in the title. |
 | A linked note | `[[Budget]]`, `[[Home/Budget]]`, `[[Budget\|alias]]` | Matches the note by path, then by name. |
 | A priority | `!1` or `!high`, `!2` or `!medium`, `!3` or `!low` | It must be a separate word: `Wow!` and `!4` stay text. |

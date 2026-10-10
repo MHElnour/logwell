@@ -29,7 +29,7 @@ Write each filter as `key: value`. Capitals do not matter, and blank lines are i
 
 | Filter | What it matches | Example |
 | --- | --- | --- |
-| `list` | Tasks in the list with that name. Use `Inbox` for the Inbox. | `list: Home` |
+| `list` | Tasks in the list with that name. Use `Inbox` for the Inbox. Capitals, spaces, `-` and `_` do not matter, and an exact name wins, so `list: homework` finds "Home work". | `list: Home` |
 | `section` | Tasks in that section of the list. It needs a `list` line. | `section: Planning` |
 | `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. A leading `@` is fine. | `tag: errands` |
 | `due` | `today`, `overdue`, `this week` or `next 7 days`. A task's date and its deadline both count. | `due: today` |
@@ -79,6 +79,7 @@ If you open a different database, or close it, the blocks follow. If you turn Lo
 | The block says | What to do |
 | --- | --- |
 | No list named "Wrok". | Check the list name. Sections and tags say the same. |
+| "homework" matches several lists: Home work, Home-work. Use the exact name. | Two lists differ only by spaces, `-` or `_`. Type the full name of one. |
 | Unknown filter "colour". | Use one of the filters above. |
 | Unknown due value "soon". Use today, overdue, this week or next 7 days. | Use one of the values the message lists. Priority, quadrant and linked say the same for their values. |
 | Expected "key: value", got "...". | Add the colon after the filter name. |

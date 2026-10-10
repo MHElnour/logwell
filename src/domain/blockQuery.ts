@@ -1,7 +1,7 @@
 import type { BlockFilters } from "../parsing/blockQuery";
 import { type ListEntry, type QueryContext, type TaskFilter, arrangeHierarchy, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
-import { categoryNameKey, findListByName, isOpen } from "./tasks";
+import { categoryNameKey, isOpen, resolveListName } from "./tasks";
 import { hasTagOrChild, isUnderTag, normalizeTagKey } from "./tags";
 import { dateOf, dayNum, weekStartOfDay } from "./time";
 import type { Category, ID, Section, Tag, Task } from "./types";
@@ -81,8 +81,13 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	let listId: ID | null = null;
 	let sectionId: ID | null = null;
 	if (filters.list !== undefined) {
-		const list = findListByName(state.categories, filters.list);
-		if (list === undefined) return { kind: "error", message: `No list named \u201c${filters.list}\u201d.` };
+		const match = resolveListName(state.categories.values(), filters.list);
+		if (match.kind === "none") return { kind: "error", message: `No list named \u201c${filters.list}\u201d.` };
+		if (match.kind === "several") {
+			const names = match.lists.map((l) => l.name).join(", ");
+			return { kind: "error", message: `\u201c${filters.list}\u201d matches several lists: ${names}. Use the exact name.` };
+		}
+		const list = match.list;
 		listId = list.id;
 		if (filters.section !== undefined) {
 			const sectionKey = categoryNameKey(filters.section);
