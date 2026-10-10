@@ -145,7 +145,7 @@ export function HabitsSection(props: {
 					)}
 					{archived.length > 0 && (
 						<div class="cp-habits-foot">
-							<button type="button" onClick={() => setUi((s) => ({ ...s, showArchived: !archivedMode }))}>
+							<button type="button" onClick={() => setUi((s) => ({ ...s, showArchived: !s.showArchived }))}>
 								{archivedMode ? "Back to habits" : `Archived habits (${archived.length})`}
 							</button>
 						</div>

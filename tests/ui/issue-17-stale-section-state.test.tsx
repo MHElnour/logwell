@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { byLabel, click, mountCal, settle, type CalMount } from "./m3-helpers";
+import { mountHabits, openHabits, q, qa, rowOf, seedMockup } from "./m6-helpers";
 import { openViewMenu, pickItem } from "./view-menu-helpers";
 
 // Section state is written with an updater, never by spreading the `ui` object a render captured: a
@@ -73,5 +74,23 @@ describe("Search results opening a list", () => {
 		await settle();
 		expect(m.root.querySelector<HTMLInputElement>('.cp-tasks input[aria-label="Search this list"]')!.value).toBe("");
 		expect(tasksEl(m).querySelector(".cp-main-title")!.textContent).toContain("Work");
+	});
+});
+
+describe("Habits page after the selection changed", () => {
+	it("a week strip pick in the same turn keeps the habit that was selected meanwhile", async () => {
+		const m = await mountHabits();
+		mounted.push(m);
+		const habits = await seedMockup(m.h);
+		await m.rerender();
+		const el = await openHabits(m);
+		expect(rowOf(el, "Meditate").classList.contains("is-selected")).toBe(true);
+		const monday = qa<HTMLButtonElement>(el, ".cp-habit-day")[0]!;
+		// One synchronous turn: the selection moves to Read, then the older strip button is pressed.
+		m.handle.current!.showHabit(habits.read.id);
+		monday.click();
+		await settle();
+		expect(rowOf(el, "Read").classList.contains("is-selected")).toBe(true);
+		expect(q(el, ".cp-habit-day.is-selected").getAttribute("aria-label")).toContain("Mon 28");
 	});
 });
