@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#30) Fixed a list whose stored name key no longer matched its name staying unreachable in Quick Add and task blocks; it is now repaired on load like a section.
+
 ## Security

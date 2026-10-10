@@ -145,12 +145,16 @@ function readCategory(o: Obj, key: string, issues: string[]): Category {
 	const r: RecordReader = new RecordReader("categories", key, o);
 	const name = r.nonEmptyString("name");
 	const color = readTagColor(r, `List "${name}"`, issues);
+	const nameKey = categoryNameKey(name);
+	if (isNonEmptyString(o.nameKey) && o.nameKey !== nameKey) {
+		issues.push(`List "${name}" had a wrong name key; it was recomputed.`);
+	}
 	return {
 		id: r.nonEmptyString("id"),
 		name,
 		icon: r.optString("icon"),
 		color,
-		nameKey: isNonEmptyString(o.nameKey) ? o.nameKey : categoryNameKey(name),
+		nameKey,
 		isInbox: r.boolean("isInbox"),
 		sortKey: r.string("sortKey"),
 		createdAt: r.string("createdAt"),
@@ -162,8 +166,8 @@ function readCategory(o: Obj, key: string, issues: string[]): Category {
  * A damaged section is dropped with an issue instead of failing the
  * whole load. Its tasks are cleared by `repairReferences`. A section's stored
  * `nameKey` is never trusted: it is recomputed from the name, and a
- * different stored one is reported. (A list keeps a non-empty stored `nameKey`;
- * readCategory computes one only when it is missing.)
+ * different stored one is reported. A list's `nameKey` is treated the same way
+ * (readCategory).
  */
 function readSection(o: Obj, issues: string[]): Section | null {
 	const str = (f: string): string | null => {
