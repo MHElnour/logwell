@@ -1,6 +1,6 @@
 {
   "name": "logwell",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Personal productivity for Obsidian: tasks, categories, calendar, habits, focus and an Eisenhower matrix.",
   "private": true,
   "type": "module",

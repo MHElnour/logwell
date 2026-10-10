@@ -19,51 +19,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
-- **Tasks:** add tasks with a date or time, a deadline, a planned duration, a priority, a list and tags.
-- **Task details:** click a task to edit its title, dates, list, tags, matrix quadrant and subtasks in a details pane.
-- **Subtasks:** add subtasks one level deep; completing a parent with open subtasks offers to complete them too.
-- **Description notes:** link any note in your vault to a task as its long description, which Logwell never changes.
-- **Quick Add:** type a whole task on one line, such as `Pay rent friday #Home !1`, and see its date, list, tags and priority as chips.
-- **Undo:** most changes show an Undo notice, Cmd+Z (Ctrl+Z) reverts your last 50 changes, and deleted tasks wait 30 days in Trash.
-- **Lists:** group tasks into lists such as Work or Home; a task without a chosen list goes to Inbox.
-- **Sections:** split a list into sections, shown as board columns and as groups in the list layout.
-- **Tags:** label tasks with any number of tags, nested one level deep like Work/Meetings, with each tag name used once.
-- **Views:** open Today, Upcoming, Inbox, Completed, Trash, or any list or tag from the Tasks sidebar.
-- **Sort and group:** sort by your own order, date or priority, and group by date, section, list, priority or tag where a view offers it.
-- **Search:** find tasks, lists and habits, and narrow the results by list, tag, date, status, priority or quadrant.
-- **Performance:** long lists and board columns draw only the rows near the view, so large databases stay quick.
-- **Board:** show a view as columns of cards that you drag to another day or section, or reorder within a column.
-- **Repeating tasks:** repeat daily, weekly, monthly or on a custom interval, and type forms such as `every other week` in Quick Add.
-- **Repeat controls:** complete or skip an occurrence, count from the day you finish, and end a repeat on a date or after a set number of times.
-- **Repeat history:** each completed occurrence stays in Completed, where you can reopen it.
-- **Calendar:** see scheduled tasks by day and hour in week or month view, drag them to new times, and schedule unscheduled tasks.
-- **Eisenhower matrix:** sort tasks into four quadrants by urgent and important, and move them by drag, keyboard or menu.
-- **Focus timer:** run sets of focus rounds with breaks, on a task or on none, with Pause, Finish, Skip break and Stop.
-- **Focus record:** see your focus time today and in total, rounds by day, and fix or delete a round.
-- **Interrupted timers:** after a crash, reload or sleep, choose to resume, finish or discard the round that was running.
-- **Focus alerts:** hear a sound when a round or break starts and when a set ends, with the timer in the desktop status bar.
-- **Habits:** track yes-or-no habits, counts or amounts, on set days or a number of times a week, and see your streaks.
-- **Habit check-ins:** check in, add to a count or amount, and fill in a missed day, with Undo on each check-in.
-- **Habit reminders:** get a notice at a set time while a habit's goal is not met, with Check in or Snooze 10 min.
-- **Task block:** a `logwell` code block in any note shows a live list of open tasks, filtered by list, tag, date, priority or quadrant.
-- **TickTick sync:** off until you add your TickTick token and turn it on for one device, then link the lists to keep in step.
-- **Two-way sync:** titles, lists, sections, tags, subtasks, priority, one date and completion sync both ways; repeating tasks stay in Logwell.
-- **Sync conflicts:** if both sides change one field, TickTick's value is kept as a copy, and removals of five or more tasks ask first.
-- **Sync notes:** with "Create notes from TickTick descriptions" on, a task's description and checklist become a note linked to it.
-- **Sync privacy:** nothing is sent while sync is off; when it is on, only linked lists, the token and notes that sync created go to TickTick.
-- **Your data:** tasks, habits, focus rounds and the Trash live in one database file in your vault, and your notes are only linked.
-- **Backups:** snapshots are kept on this device, and you can restore one from the Data page.
-- **Export and import:** save the whole database as a backup file, then import it by merging or replacing everything.
-- **CSV export:** write tasks, lists, sections, tags, repeat occurrences, focus sessions, habits and check-ins to spreadsheet files.
-- **Vault sync:** if a sync service carries your vault, it carries the database too; use one device at a time, and a conflict copy is kept, never deleted.
-- **Settings:** choose the database, time zone, week start, evening time, date order, Upcoming days, focus sounds and accent color.
-- **Commands:** open each section, add a task, undo or start focus from the command palette; no hotkeys are set by default.
-- **Keyboard:** most actions work from the keyboard, including Cmd+Enter (Ctrl+Enter) to complete a task and Alt+arrows to move a board card.
-
 ## Changed
 
 ## Fixed
 
 ## Security
-
-## Removed
