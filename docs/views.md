@@ -98,7 +98,7 @@ Today, Upcoming, Inbox and lists have a **List** and **Board** switch in the hea
 
 Open **Search** from the rail, or run **Open search**, and type in the box. Results come under **Lists**, **Habits** and **Tasks**. Click a result to open it. When the results mix open and completed tasks, the completed ones sit in a collapsed **Completed** group at the end.
 
-Turn on **Also search description notes** to match linked notes too. Logwell never stores their text.
+Turn on **Also search description notes** to match linked notes too. Logwell never stores their text. Matches update when you type, when a linked note changes, and when you return to Search.
 
 Click **Show filters** to narrow the results by **Lists**, **Tags** (**Any** or **All** of them), **Date** (up to a **Date range**), **Status**, **Description note**, **Priority** and **Matrix** quadrant. A task must match every choice. **Sort by** picks **Default order** or **Priority**. **Clear filters** resets the filters and keeps the sort.
 

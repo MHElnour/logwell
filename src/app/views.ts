@@ -586,22 +586,39 @@ export function globalSearch(
 	};
 }
 
+/** The notes linked to tasks: note path to the IDs of the tasks that link it. Note text is not part of it. */
+export type LinkedNotes = ReadonlyMap<string, readonly ID[]>;
+
 /**
- * "Also search description notes": reads each linked note with the host's
- * cached read and returns matching task IDs. Note text is never stored.
+ * One pass over the tasks, grouping them by description-note path. When `previous` holds the same paths with
+ * the same task IDs, it is returned as is, so a caller can tell by identity that the links did not change.
  */
-export async function searchNoteContent(state: DbData, query: string, notes: NotePort): Promise<Set<ID>> {
+export function linkedNotes(tasks: DbData["tasks"], previous?: LinkedNotes): LinkedNotes {
+	const byPath = new Map<string, ID[]>();
+	for (const t of tasks.values()) {
+		if (t.descriptionNote === null) continue;
+		const list = byPath.get(t.descriptionNote.path);
+		if (list === undefined) byPath.set(t.descriptionNote.path, [t.id]);
+		else list.push(t.id);
+	}
+	if (previous === undefined || previous.size !== byPath.size) return byPath;
+	for (const [path, ids] of byPath) {
+		const before = previous.get(path);
+		if (before === undefined || before.length !== ids.length || before.some((id, i) => id !== ids[i])) return byPath;
+	}
+	return previous;
+}
+
+/**
+ * "Also search description notes": reads each linked note with the host's cached read and returns the
+ * matching task IDs. Note text is never stored. Reading stops once `signal` is aborted (the result is then partial).
+ */
+export async function searchNoteContent(byPath: LinkedNotes, query: string, notes: NotePort, signal?: AbortSignal): Promise<Set<ID>> {
 	const q = query.trim().toLocaleLowerCase();
 	const result = new Set<ID>();
 	if (q.length === 0) return result;
-	const byPath = new Map<string, ID[]>();
-	for (const t of state.tasks.values()) {
-		if (t.descriptionNote === null) continue;
-		const list = byPath.get(t.descriptionNote.path) ?? [];
-		list.push(t.id);
-		byPath.set(t.descriptionNote.path, list);
-	}
 	for (const [path, ids] of byPath) {
+		if (signal?.aborted) break;
 		const text = await notes.read(path);
 		if (text !== null && text.toLocaleLowerCase().includes(q)) for (const id of ids) result.add(id);
 	}

@@ -23,6 +23,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#16) Fixed Search reading every description note again after each change, even with the Search page closed.
 - (#17) Fixed a pick in the Tasks view menu that could undo a selection made a moment earlier.
 
 ## Security

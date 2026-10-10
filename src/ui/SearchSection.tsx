@@ -1,11 +1,11 @@
-import { useEffect, useState } from "preact/hooks";
-import { globalSearch, searchNoteContent } from "../app/views";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { type LinkedNotes, globalSearch, linkedNotes, searchNoteContent } from "../app/views";
 import { type QueryContext, type TaskFilter, emptyFilter } from "../domain/queries";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { FilterBar } from "./FilterBar";
 import { EmptyState } from "./common";
-import { useStableCallback, useSubtaskCounts, useUniqueId } from "./hooks";
+import { useActiveMemo, useStableCallback, useSubtaskCounts, useUniqueId } from "./hooks";
 import type { UiHost } from "./host";
 import { ICON, categoryText } from "./icons";
 import { DetailsPane } from "./TaskDetails";
@@ -22,6 +22,19 @@ export function initialSearchState(): SearchSectionState {
 	return { query: "", includeNotes: false, filter: emptyFilter("all"), selectedId: null };
 }
 
+/** Pause after the last change before the notes are read, as for typing. */
+const NOTE_SCAN_DELAY_MS = 300;
+const NO_IDS: ReadonlySet<ID> = new Set();
+const NO_LINKS: LinkedNotes = new Map();
+/** The task IDs whose linked note matched, with the query they were found for; no note text. */
+const NO_FOUND: { query: string; ids: ReadonlySet<ID> } = { query: "", ids: NO_IDS };
+
+function sameIds(a: ReadonlySet<ID>, b: ReadonlySet<ID>): boolean {
+	if (a.size !== b.size) return false;
+	for (const id of a) if (!b.has(id)) return false;
+	return true;
+}
+
 /** Global search: task titles, list names and habit names; optionally note content, never stored. */
 export function SearchSection(props: {
 	host: UiHost;
@@ -36,28 +49,81 @@ export function SearchSection(props: {
 	visible: boolean;
 }) {
 	const { host, state, ctx, ui, setUi } = props;
-	const [noteMatches, setNoteMatches] = useState<Set<ID>>(new Set());
+	const [found, setFound] = useState(NO_FOUND);
 	const categoriesId = useUniqueId("cp-search-categories");
 	const habitsId = useUniqueId("cp-search-habits");
 	const tasksId = useUniqueId("cp-search-tasks");
 
+	// Note matches refresh only while Search is shown with the toggle on and a query typed (App shell and views rule 24).
+	const query = ui.query.trim();
+	const active = props.visible && ui.includeNotes && query !== "";
+	const previousLinks = useRef<LinkedNotes>(NO_LINKS);
+	const links = useActiveMemo(active, () => (previousLinks.current = linkedNotes(state.tasks, previousLinks.current)), [state.tasks], NO_LINKS);
+
 	useEffect(() => {
-		if (!ui.includeNotes || ui.query.trim() === "") {
-			// The effect runs on every store change; an empty set that stays empty must not render again.
-			setNoteMatches((prev) => (prev.size === 0 ? prev : new Set()));
+		if (!active) {
+			// Toggle off or query cleared while shown: drop the matches. A hidden section keeps its last ones.
+			if (props.visible) setFound((f) => (f === NO_FOUND ? f : NO_FOUND));
 			return;
 		}
-		let cancelled = false;
-		const timer = window.setTimeout(() => {
-			void searchNoteContent(state, ui.query, host.app.notes).then((ids) => {
-				if (!cancelled) setNoteMatches(ids);
+		let timer: number | undefined;
+		let scan: AbortController | null = null;
+		let stopped = false;
+		// Linked notes that changed while the full scan ran: read again one by one once it is done.
+		const dirty = new Set<string>();
+		// Read one linked note again and update only the tasks that link it.
+		const readOne = async (path: string): Promise<void> => {
+			const ids = links.get(path);
+			if (ids === undefined) return;
+			const hit = await searchNoteContent(new Map([[path, ids]]), query, host.app.notes);
+			if (stopped) return;
+			setFound((f) => {
+				if (f.query !== query) return f;
+				const next = new Set(f.ids);
+				for (const id of ids) next.delete(id);
+				for (const id of hit) next.add(id);
+				return sameIds(f.ids, next) ? f : { query, ids: next };
 			});
-		}, 300);
+		};
+		// One full scan after a pause. Only a new query, toggle, set of links or visibility starts another one (this effect runs again).
+		timer = window.setTimeout(() => {
+			timer = undefined;
+			const mine = new AbortController();
+			scan = mine;
+			void (async () => {
+				try {
+					const ids = await searchNoteContent(links, query, host.app.notes, mine.signal);
+					if (mine.signal.aborted) return;
+					scan = null;
+					setFound((f) => (f.query === query && sameIds(f.ids, ids) ? f : { query, ids }));
+					for (const path of dirty) {
+						dirty.delete(path);
+						await readOne(path);
+						if (stopped) return;
+					}
+				} catch (err) {
+					scan = null;
+					dirty.clear();
+					host.error(err);
+				}
+			})();
+		}, NOTE_SCAN_DELAY_MS);
+		// A linked note changed in the vault. Before the full scan: it reads that note anyway. During it: read again afterwards. Otherwise: read just that note.
+		const stopListening = host.onNotesChanged((path) => {
+			if (!links.has(path) || timer !== undefined) return;
+			if (scan !== null) dirty.add(path);
+			else readOne(path).catch((err: unknown) => host.error(err));
+		});
 		return () => {
-			cancelled = true;
+			stopped = true;
+			stopListening();
+			scan?.abort();
 			window.clearTimeout(timer);
 		};
-	}, [ui.query, ui.includeNotes, state, host]);
+	}, [active, props.visible, query, links, host]);
+
+	// Matches belong to the query they were found for and to the toggle.
+	const noteMatches = ui.includeNotes && found.query === query ? found.ids : NO_IDS;
 
 	const results = globalSearch(state, ui.query, ctx, ui.filter, noteMatches);
 	const searching = ui.query.trim() !== "";
