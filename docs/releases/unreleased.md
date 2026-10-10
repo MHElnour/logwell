@@ -34,5 +34,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#25) Fixed month and weekday names changing language with the device on the Habits page and in rows and details, while the calendar and Quick Add stayed English. They are now English everywhere.
 - (#26) Fixed the four Eisenhower quadrants having different names in the matrix headings, menus and filters. They are now called "Urgent and important", "Important, not urgent", "Urgent, not important" and "Neither" everywhere, and the Quick Add menu joins the flags with a dot like a task row.
 - (#28) Fixed a linked note's name being written differently in the task details and in the Quick Add menu. Both now hide only the ".md" extension, so "Budget.md" reads "Budget" and "report.pdf" keeps its extension.
+- (#23) Fixed the focus length buttons jumping from 6 minutes to 1 when stepping down. Minus now goes to the multiple of 5 below (7 to 5, 6 to 5), then down by 1 at 5 or less.
 
 ## Security
