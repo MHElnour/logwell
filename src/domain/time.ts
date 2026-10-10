@@ -242,8 +242,9 @@ export function dateSpecSortValue(spec: DateSpec, displayZone: string): string {
 	return spec.kind === "date" ? spec.date : (dateSpecDisplayLocal(spec, displayZone) ?? spec.local);
 }
 
+/** 1 = Monday … 7 = Sunday of a date: the same arithmetic as `isoWeekdayOfDay`, no Luxon. */
 export function isoWeekdayOf(date: LocalDate): number {
-	return DateTime.fromISO(date, { zone: "UTC" }).weekday;
+	return isoWeekdayOfDay(dayNum(date));
 }
 
 // Day-number helpers (days since 1970-01-01), shared by the calendar, habit and recurrence engines, which

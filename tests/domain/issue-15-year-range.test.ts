@@ -1,10 +1,10 @@
 import fc from "fast-check";
-import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
 import { monthStats } from "../../src/domain/habits";
 import { occurrencesBetween } from "../../src/domain/recurrence";
-import { dateOf, dayNum, isValidDateSpec, isValidLocalDate, isoWeekdayOfDay } from "../../src/domain/time";
-import { monthGrid, shiftDateByMonths } from "../../src/ui/quickadd/calendar";
+import { weekStartOf } from "../../src/domain/calendar";
+import { dateOf, dayNum, isValidDateSpec, isValidLocalDate, isoWeekdayOf, isoWeekdayOfDay } from "../../src/domain/time";
+import { dayLabel, monthGrid, shiftDateByMonths } from "../../src/ui/quickadd/calendar";
 import { ci, habit, idx, ver } from "./habit-fixtures";
 import { rule, series } from "./recurrence-fixtures";
 
@@ -30,16 +30,47 @@ describe("day numbers over years 0000 to 9999 (#15)", () => {
 		expect(dateOf(LAST)).toBe("9999-12-31");
 	});
 
-	it("round-trips every day and agrees with Luxon on the weekday", () => {
+	// Boundary days checked on every run, beside the random ones: the range ends, leap days of years
+	// 0, 4, 100 and 400, the 0099/0100 turn and the epoch.
+	const BOUNDARY_DAYS = [FIRST, FIRST + 58, FIRST + 59, FIRST + 60, dayNum("0004-02-29"), dayNum("0099-12-31"), dayNum("0100-03-01"), dayNum("0400-02-29"), -1, 0, LAST];
+
+	it("round-trips every day and agrees with the JavaScript calendar on the weekday", () => {
+		const check = (n: number): void => {
+			const date = dateOf(n);
+			expect(dayNum(date)).toBe(n);
+			const y = Number(date.slice(0, 4));
+			const m = Number(date.slice(5, 7));
+			const d = Number(date.slice(8, 10));
+			const ref = new Date(0);
+			ref.setUTCFullYear(y, m - 1, d);
+			expect([ref.getUTCFullYear(), ref.getUTCMonth() + 1, ref.getUTCDate()]).toEqual([y, m, d]);
+			expect(isoWeekdayOfDay(n)).toBe(ref.getUTCDay() === 0 ? 7 : ref.getUTCDay());
+			expect(isoWeekdayOf(date)).toBe(isoWeekdayOfDay(n));
+		};
+		for (const n of BOUNDARY_DAYS) check(n);
 		fc.assert(
-			fc.property(fc.integer({ min: FIRST, max: LAST }), (n) => {
-				const date = dateOf(n);
-				expect(dayNum(date)).toBe(n);
-				expect(isoWeekdayOfDay(n)).toBe(DateTime.fromISO(date, { zone: "UTC" }).weekday);
-				expect(DateTime.fromISO(date, { zone: "UTC" }).toISODate()).toBe(date);
-			}),
-			{ numRuns: 5000 },
+			fc.property(fc.integer({ min: FIRST, max: LAST }), (n) => check(n)),
+			{ numRuns: 5000, examples: BOUNDARY_DAYS.map((n) => [n]) },
 		);
+	});
+
+	it("0000-02-29 is a Tuesday, and its week starts on the Monday before", () => {
+		expect(dateOf(FIRST + 59)).toBe("0000-02-29");
+		expect(isoWeekdayOfDay(dayNum("0000-02-29"))).toBe(2);
+		expect(isoWeekdayOf("0000-02-29")).toBe(2);
+		expect(weekStartOf("0000-02-29", "MO")).toBe("0000-02-28");
+		expect(weekStartOf("0000-02-29", "SU")).toBe("0000-02-27");
+		expect(dayLabel("0000-02-29")).toBe("Tuesday, February 29");
+	});
+
+	it("keeps the weekday of normal dates", () => {
+		expect(isoWeekdayOf("2026-10-10")).toBe(6);
+		expect(isoWeekdayOf("2026-10-11")).toBe(7);
+		expect(isoWeekdayOf("1970-01-01")).toBe(4);
+		expect(weekStartOf("2026-10-10", "MO")).toBe("2026-10-05");
+		expect(weekStartOf("2026-10-10", "SU")).toBe("2026-10-04");
+		expect(weekStartOf("2026-10-10", "SA")).toBe("2026-10-10");
+		expect(dayLabel("2026-10-01")).toBe("Thursday, October 1");
 	});
 });
 
