@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#16) Fixed Search reading every description note again after each change, even with the Search page closed.
+
 ## Security
