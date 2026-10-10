@@ -30,5 +30,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#42) Fixed the task details showing a planned duration as "90 min" while rows show "1h 30m"; both now read "1h 30m".
 - (#19) Fixed the Undo button on task notices and on the TickTick confirmation prompt doing nothing when the undo could not be done; it now says "Nothing to undo.", like the other Undo buttons.
 - (#18) Fixed focus time being written differently in the status bar, the timer and the "Focus set done" notice. The clock now reads "5:03" everywhere, the set summary reads "4 rounds · 2h focused", and short times are rounded to whole seconds.
+- (#21) Fixed habit reminders wording a habit's progress differently from the Habits page. A daily done-or-not habit now shows its schedule ("every day") in the reminder, and amounts are rounded the same way.
 
 ## Security

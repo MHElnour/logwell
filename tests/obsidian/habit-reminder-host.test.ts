@@ -7,10 +7,11 @@ import { MemoryReminderState, type ReminderStatePort, type SettingsPort } from "
 import { isDomainError } from "../../src/domain/errors";
 import { parseReminderState } from "../../src/domain/habitReminders";
 import type { HabitInput } from "../../src/domain/habits";
-import { HabitReminderHost, type ReminderApp, type ReminderHostUi, reminderProgress } from "../../src/obsidian/habitReminderHost";
+import { HabitReminderHost, type ReminderApp, type ReminderHostUi } from "../../src/obsidian/habitReminderHost";
 import type { NoticeAction } from "../../src/obsidian/notices";
 import { SystemNotifier } from "../../src/obsidian/systemNotification";
 import { FakeNotes, makeReadOnly } from "../app/harness";
+import { progressText } from "../../src/ui/habits/format";
 import { emptyDbText, harness } from "../persistence/fixtures";
 import { sequentialIds } from "../helpers";
 import { fakeApp, loadPlugin } from "./fake-vault";
@@ -172,10 +173,10 @@ describe("a reminder fires at its minute (D10)", () => {
 		await app.habits.toggle(gym.id, "2026-10-14", true);
 		const today = "2026-10-14";
 		const index = app.habits.index();
-		expect(reminderProgress(read, index, today)).toBe("20 of 30 min");
-		expect(reminderProgress(water, index, today)).toBe("5 of 8 glasses");
-		expect(reminderProgress(med, index, today)).toBe("not done yet");
-		expect(reminderProgress(gym, index, today)).toBe("1 of 3 this week");
+		expect(progressText(read, index, today)).toBe("20 of 30 min");
+		expect(progressText(water, index, today)).toBe("5 of 8 glasses");
+		expect(progressText(med, index, today)).toBe("every day");
+		expect(progressText(gym, index, today)).toBe("1 of 3 this week");
 		void h;
 	});
 });
@@ -186,7 +187,7 @@ describe("Check in from the notice (D10, D8)", () => {
 		const med = await app.habits.create(binary());
 		host.attach(r(app));
 		tickAt(AT_20);
-		expect(shown[0]!.message).toBe("Time for Meditate · not done yet");
+		expect(shown[0]!.message).toBe("Time for Meditate · every day");
 		const toggle = vi.spyOn(app.habits, "toggle");
 		await press(shown[0]!, "Check in");
 		expect(toggle).toHaveBeenCalledWith(med.id, "2026-10-14", true);

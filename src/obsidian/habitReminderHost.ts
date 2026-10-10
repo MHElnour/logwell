@@ -10,9 +10,10 @@ import {
 	parseReminderState,
 	snooze,
 } from "../domain/habitReminders";
-import { type HabitIndex, progressOn, versionAt } from "../domain/habits";
+import { type HabitIndex, versionAt } from "../domain/habits";
 import type { Clock } from "../domain/ports";
 import type { Habit, ID, LocalDate } from "../domain/types";
+import { progressText } from "../ui/habits/format";
 import type { NoticeAction } from "./notices";
 
 // The Obsidian side of habit reminders. No `obsidian` import: notices, the system notification and
@@ -56,10 +57,6 @@ interface KeptNotice {
 	notice: { hide(): void } | null;
 }
 
-function formatNumber(n: number): string {
-	return String(Number(n.toFixed(6)));
-}
-
 function hideQuietly(n: KeptNotice): void {
 	try {
 		n.notice?.hide();
@@ -70,18 +67,6 @@ function hideQuietly(n: KeptNotice): void {
 
 function messageOf(err: unknown): string {
 	return err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-}
-
-/** The row meta of the Habits page: "20 of 30 min", "5 of 8 glasses", "not done yet", "1 of 3 this week". */
-export function reminderProgress(habit: Habit, index: HabitIndex, date: LocalDate): string {
-	const p = progressOn(habit, index, date);
-	if (p === null) return "";
-	const goal = p.period.version.goal;
-	const unit = goal.type === "binary" ? "" : (goal.unit?.trim() ?? "");
-	const amount = `${formatNumber(p.value)} of ${formatNumber(p.target)}${unit === "" ? "" : ` ${unit}`}`;
-	if (goal.period === "week") return `${amount} this week`;
-	if (goal.type === "binary") return p.met ? "done" : "not done yet";
-	return amount;
 }
 
 export class HabitReminderHost {
@@ -235,7 +220,7 @@ export class HabitReminderHost {
 	}
 
 	private showOne(app: ReminderApp, habit: Habit, index: HabitIndex, date: LocalDate): void {
-		const progress = reminderProgress(habit, index, date);
+		const progress = progressText(habit, index, date);
 		const kept = this.keep(date);
 		const actions: NoticeAction[] = [
 			{ label: "Check in", run: () => this.checkIn(app, habit, kept) },
