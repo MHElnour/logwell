@@ -170,7 +170,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 		expect(headings(m)).toEqual(["No section:3", "Beta:0"]);
 		expect(undo).toHaveBeenCalledTimes(1);
 		expect((undo.mock.calls[0] as unknown[])[1]).toBe("Delete section");
-		expect(await m.h.app.store.undo()).toBe("Delete section");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta"]);
 		expect(taskOf(m, "A1").sectionId).toBe(sectionOf(m, "Alpha").id);
@@ -490,7 +490,7 @@ describe("row drag between sections (D7)", () => {
 		expect(order).toEqual([taskOf(m, "A1").id, taskOf(m, "A2").id, taskOf(m, "N1").id]);
 		expect(patch).toEqual({ sectionId: sectionOf(m, "Alpha").id });
 		expect(taskOf(m, "N1").sectionId).toBe(sectionOf(m, "Alpha").id);
-		expect(undo).toHaveBeenCalledWith('Moved "N1" to Alpha.', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "N1" to Alpha.', "Move task", expect.any(Number));
 		expect(await m.h.app.store.undo()).toBe("Move task");
 		expect(taskOf(m, "N1").sectionId).toBeNull();
 		await redraw();
@@ -510,7 +510,7 @@ describe("row drag between sections (D7)", () => {
 		expect(place.mock.calls[0]![2]).toEqual({});
 		expect(place.mock.calls[0]![1]).toEqual([taskOf(m, "A2").id, taskOf(m, "A1").id]);
 		expect(taskOf(m, "A2").sectionId).toBe(sectionOf(m, "Alpha").id);
-		expect(undo).toHaveBeenCalledWith('Moved "A2".', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "A2".', "Move task", expect.any(Number));
 	});
 
 	it("a subtask is not dragged to another section", async () => {
@@ -612,7 +612,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 		expect(place.mock.calls[0]![2]).toEqual({ sectionId: beta.id });
 		expect(taskOf(m, "A1").sectionId).toBe(beta.id);
 		expect(cardTitles(m.root, beta.id)).toEqual(["A1"]);
-		expect(undo).toHaveBeenCalledWith('Moved "A1" to Beta.', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "A1" to Beta.', "Move task", expect.any(Number));
 		// Back to No section.
 		const r2 = stubBoardRects(m.root);
 		await dragTo(item(m.root, "A1"), r2.card("A1"), r2.columns["none"]!);
@@ -678,8 +678,8 @@ describe("board columns (D6, answers 5 and 6)", () => {
 		expect(place.mock.calls[0]![0]).toBe(g);
 		expect(sectionNames(m)).toEqual(["Gamma", "Alpha", "Beta"]);
 		expect(columnTitles(m.root)).toEqual(["No section", "Gamma", "Alpha", "Beta"]);
-		expect(undo).toHaveBeenCalledWith('Moved section "Gamma".', "Move section");
-		expect(await m.h.app.store.undo()).toBe("Move section");
+		expect(undo).toHaveBeenCalledWith('Moved section "Gamma".', "Move section", expect.any(Number));
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta", "Gamma"]);
 	});
 

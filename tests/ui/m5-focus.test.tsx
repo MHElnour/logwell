@@ -723,7 +723,7 @@ describe("round menu (P4)", () => {
 		await settle();
 		expect(notify).toHaveBeenCalledTimes(2);
 		expect(notify.mock.calls[1]![1]).toBe(m.h.app.store.undoLabel);
-		await m.h.app.store.undoIfLatest(notify.mock.calls[1]![1]);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBe(other.id);
 	});
@@ -741,7 +741,7 @@ describe("round menu (P4)", () => {
 		const label = notify.mock.calls[0]![1];
 		expect(label).toBe("Delete focus record");
 		expect(m.h.app.store.undoLabel).toBe(label);
-		await m.h.app.store.undoIfLatest(label);
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		await settle();
 		expect(m.h.app.store.state.focusSessions.size).toBe(1);
 		expect(page.querySelectorAll(".cp-focus-set").length).toBe(1);

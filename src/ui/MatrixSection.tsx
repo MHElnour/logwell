@@ -144,8 +144,9 @@ export function MatrixSection(props: {
 		},
 		onDrop: (id, to) => {
 			const title = host.app.store.state.tasks.get(id)?.title ?? "Task";
+			const mark = host.app.store.undoMark();
 			void moveToQuadrant(host, id, to).then((moved) => {
-				if (moved) host.notifyUndo(`Moved "${title}" to ${LABEL.get(to) ?? to}.`, "Edit task");
+				if (moved) host.notifyUndo(`Moved "${title}" to ${LABEL.get(to) ?? to}.`, "Edit task", mark);
 			});
 		},
 	});

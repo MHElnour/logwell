@@ -287,7 +287,7 @@ describe("dragging a row to another group", () => {
 		expect(patch).toEqual({ priority: 1 });
 		expect(taskOf(m, "L1").priority).toBe(1);
 		expect(undo).toHaveBeenCalledTimes(1);
-		expect(undo).toHaveBeenCalledWith('Moved "L1" to High.', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "L1" to High.', "Move task", expect.any(Number));
 		expect(await m.h.app.store.undo()).toBe("Move task");
 		expect(taskOf(m, "L1").priority).toBe(3);
 	});
@@ -299,7 +299,7 @@ describe("dragging a row to another group", () => {
 		});
 		await dragTo(rowEl(root, "Timed"), { x: 100, y: tops.get("Timed")! }, { x: 100, y: tops.get("Mon")! + 15 });
 		expect(taskOf(m, "Timed").scheduled).toEqual({ kind: "datetime", local: "2026-10-05T09:30", tz: "Europe/Berlin" });
-		expect(undo).toHaveBeenCalledWith('Moved "Timed" to Mon, Oct 5.', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "Timed" to Mon, Oct 5.', "Move task", expect.any(Number));
 	});
 
 	it("date: a timed series dropped on another day keeps its time and the notice says it re-anchored (M7 D5)", async () => {
@@ -315,7 +315,7 @@ describe("dragging a row to another group", () => {
 		expect(gym.scheduled).toBeNull();
 		expect(m.h.app.effectiveSchedule(gym)).toEqual({ kind: "datetime", local: "2026-10-05T07:00", tz: "Europe/Berlin" });
 		expect(undo).toHaveBeenCalledTimes(1);
-		expect(undo).toHaveBeenCalledWith('"Gym" now repeats from Mon, Oct 5.', "Move task");
+		expect(undo).toHaveBeenCalledWith('"Gym" now repeats from Mon, Oct 5.', "Move task", expect.any(Number));
 		expect(m.h.app.store.undoLabel).toBe("Move task");
 	});
 
@@ -363,7 +363,7 @@ describe("dragging a row to another group", () => {
 		const work = taskOf(m, "W").categoryId;
 		expect(taskOf(m, "I").categoryId).toBe(work);
 		expect(taskOf(m, "I sub").categoryId).toBe(work);
-		expect(undo).toHaveBeenCalledWith('Moved "I" to Work.', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "I" to Work.', "Move task", expect.any(Number));
 	});
 
 	it("tag: a drop on another tag group is refused, and a row still reorders inside its group", async () => {
@@ -382,7 +382,7 @@ describe("dragging a row to another group", () => {
 		expect(place).toHaveBeenCalledTimes(1);
 		expect(place.mock.calls[0]![1]).toEqual([taskOf(m, "H2").id, taskOf(m, "H1").id]);
 		expect(place.mock.calls[0]![2]).toEqual({});
-		expect(undo).toHaveBeenCalledWith('Moved "H2".', "Move task");
+		expect(undo).toHaveBeenCalledWith('Moved "H2".', "Move task", expect.any(Number));
 	});
 
 	it("a subtask cannot change group alone, and its parent takes it along", async () => {
@@ -399,11 +399,11 @@ describe("dragging a row to another group", () => {
 		await dragTo(rowEl(root, "A sub"), { x: 100, y: tops.get("A sub")! }, { x: 100, y: tops.get("B")! });
 		for (const call of place.mock.calls) expect(call[2]).toEqual({});
 		expect(taskOf(m, "A sub").priority).toBe(3);
-		expect(undo).not.toHaveBeenCalledWith(expect.stringContaining("to Medium"), "Move task");
+		expect(undo).not.toHaveBeenCalledWith(expect.stringContaining("to Medium"), "Move task", expect.any(Number));
 	});
 
 	it("under another sort a row still crosses groups: one update, the sort key untouched, no place", async () => {
-		const { m, root, undo, tops } = await mountList({ kind: "inbox" }, "priority", seedPriority, false, "priority");
+		const { m, root, undo, host, tops } = await mountList({ kind: "inbox" }, "priority", seedPriority, false, "priority");
 		const before = taskOf(m, "L1").sortKey;
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const update = vi.spyOn(m.h.app.tasks, "update");
@@ -414,8 +414,8 @@ describe("dragging a row to another group", () => {
 		expect(taskOf(m, "L1").priority).toBe(1);
 		expect(taskOf(m, "L1").sortKey).toBe(before);
 		// The notice must carry the label the store recorded (`update` runs as "Edit task"), or its Undo throws.
-		expect(undo).toHaveBeenCalledWith('Moved "L1" to High.', "Edit task");
-		await expect(m.h.app.store.undoIfLatest("Edit task")).resolves.toBe(true);
+		expect(undo).toHaveBeenCalledWith('Moved "L1" to High.', "Edit task", expect.any(Number));
+		await expect(host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(taskOf(m, "L1").priority).toBe(3);
 	});
 

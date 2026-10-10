@@ -27,7 +27,12 @@ export async function mountHabits(): Promise<HabitMount> {
 	const dialogs: HabitDialogOptions[] = [];
 	const gestures = { n: 0 };
 	const opened: string[] = [];
-	Object.assign(m.host, { notifyUndo: (message: string, label: string) => void notices.push({ message, label }) });
+	Object.assign(m.host, {
+		notifyUndo: (message: string, label: string, mark: number) => {
+			notices.push({ message, label });
+			m.host.bindUndo(label, mark);
+		},
+	});
 	m.host.habitDialog = async (o) => void dialogs.push(o);
 	m.host.reminderGesture = () => void gestures.n++;
 	(m.host as unknown as { openSection: (s: string) => void }).openSection = (s) => void opened.push(s);

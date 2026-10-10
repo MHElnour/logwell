@@ -15,8 +15,9 @@ export const DEADLINE_CLEARED_TEXT = "The deadline was cleared: a repeating task
 /** Runs a write; errors go to the host. Resolves whether it succeeded (a no-op write counts as success). */
 export async function runWrite(host: UiHost, write: () => Promise<WriteResult>, message: (result: WriteResult) => string): Promise<boolean> {
 	try {
+		const mark = host.app.store.undoMark();
 		const result = await write();
-		notifyWrite(host, result, message(result));
+		notifyWrite(host, result, message(result), mark);
 		return true;
 	} catch (err) {
 		host.error(err);
@@ -32,11 +33,12 @@ export interface Reanchored {
 
 /**
  * A date change of a series re-anchors the whole series (there is no single-occurrence move), so say so with an Undo
- * notice. `label` is the store label the write ran under ("Edit task", or "Move task" for a board or list move).
+ * notice. `label` is the store label the write ran under ("Edit task", or "Move task" for a board or list move);
+ * `mark` is `store.undoMark()` taken right before it.
  */
-export function notifyReanchored(host: UiHost, task: Pick<Task, "title">, r: Reanchored, label: string): void {
+export function notifyReanchored(host: UiHost, task: Pick<Task, "title">, r: Reanchored, label: string, mark: number): void {
 	const end = r.endCleared ? " Its end was removed." : "";
-	host.notifyUndo(`"${task.title}" now repeats from ${formatDate(r.date, host.app.queryContext().today)}.${end}`, label);
+	host.notifyUndo(`"${task.title}" now repeats from ${formatDate(r.date, host.app.queryContext().today)}.${end}`, label, mark);
 }
 
 const today = (host: UiHost): LocalDate => host.app.queryContext().today;

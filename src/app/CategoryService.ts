@@ -6,6 +6,7 @@ import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, require
 import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { AppStore } from "./store";
 import type { Tx } from "./tx";
+import type { WriteResult } from "./writes";
 
 // Categories (lists) and tags.
 
@@ -188,23 +189,30 @@ export class TagService {
 		return n;
 	}
 
-	/** Removes the tag and its key from every task, including tasks in Trash, in one write. */
-	delete(key: string): Promise<number> {
-		return this.store.run("Delete tag", (tx) => {
-			let n = 0;
+	/**
+	 * Removes the tag and its key from every task, including tasks in Trash, in one write. `tasks` counts the tasks
+	 * changed; `wrote` is false when there was nothing to remove (the tag was already gone and unused).
+	 */
+	delete(key: string): Promise<WriteResult & { tasks: number }> {
+		const label = "Delete tag";
+		return this.store.run(label, (tx) => {
+			let tasks = 0;
+			let trashed = 0;
 			for (const t of tx.all("tasks")) {
 				if (!t.tagKeys.includes(key)) continue;
 				tx.put("tasks", { ...t, tagKeys: t.tagKeys.filter((k) => k !== key), modifiedAt: tx.now });
-				n++;
+				tasks++;
 			}
 			// Trashed tasks keep their state as deleted; only the dangling key goes.
 			for (const e of tx.all("trash")) {
 				if (!e.tasks.some((t) => t.tagKeys.includes(key))) continue;
-				const tasks = e.tasks.map((t) => (t.tagKeys.includes(key) ? { ...t, tagKeys: t.tagKeys.filter((k) => k !== key) } : t));
-				tx.put("trash", { ...e, tasks });
+				const kept = e.tasks.map((t) => (t.tagKeys.includes(key) ? { ...t, tagKeys: t.tagKeys.filter((k) => k !== key) } : t));
+				tx.put("trash", { ...e, tasks: kept });
+				trashed++;
 			}
+			const existed = tx.get("tags", key) !== undefined;
 			tx.remove("tags", key);
-			return n;
+			return { wrote: existed || tasks > 0 || trashed > 0, label, tasks };
 		});
 	}
 }

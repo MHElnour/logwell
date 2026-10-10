@@ -40,7 +40,7 @@ export interface ReminderHostUi {
 export interface ReminderApp {
 	readonly habits: Pick<HabitService, "list" | "index" | "toggle" | "add">;
 	readonly settings: Pick<SettingsPort, "zone">;
-	readonly store: Pick<AppStore, "undoIfLatest">;
+	readonly store: Pick<AppStore, "undoMark" | "undoFor">;
 	/** Where the device-local state is kept (`CheckpointApp.reminders`; one port per session). */
 	readonly reminders: ReminderStatePort;
 	/** The database's id, read on every check and save: a placeholder can get its real header later. */
@@ -280,12 +280,14 @@ export class HabitReminderHost {
 				this.ui.openHabits(habit.id, true);
 				return;
 			}
+			const mark = app.store.undoMark();
 			const result = type === "binary" ? await app.habits.toggle(habit.id, date, true) : await app.habits.add(habit.id, date, 1);
 			// The database may have closed or switched during the write; its Undo would be stale.
 			if (!result.wrote || this.app !== app) return;
 			const label = result.label;
 			// The Undo acts on the database written to, and only while the host still points at it.
-			const undo = (): Promise<boolean> => (this.app === app ? app.store.undoIfLatest(label) : Promise.resolve(false));
+			const undoWrite = app.store.undoFor(mark, label);
+			const undo = (): Promise<boolean> => (this.app === app ? undoWrite() : Promise.resolve(false));
 			this.ui.notifyUndo(`Checked in ${habit.name}.`, label, undo);
 		} catch (err) {
 			this.ui.error(err);

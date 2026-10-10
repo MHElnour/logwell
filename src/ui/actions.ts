@@ -20,18 +20,21 @@ import { moveToDate } from "../domain/calendar";
 
 /**
  * Completes a task; with open subtasks it asks first ("Complete all (N)" or Cancel) and then completes them
- * too. The result of the last write, or null when the user cancelled. Errors are the caller's.
+ * too. The result of the last write and the undo mark taken right before it (for its notice), or null when the
+ * user cancelled. Errors are the caller's.
  */
-export async function completeAsking(host: UiHost, task: Task): Promise<CompleteResult | null> {
-	const { tasks } = host.app;
+export async function completeAsking(host: UiHost, task: Task): Promise<{ result: CompleteResult; mark: number } | null> {
+	const { tasks, store } = host.app;
+	let mark = store.undoMark();
 	let result = await tasks.complete(task.id);
 	if (result.kind === "needs-confirmation") {
 		const n = result.openSubtasks;
 		const ok = await host.choose("Complete task", `"${task.title}" has ${n} open subtask${n === 1 ? "" : "s"}.`, [{ label: `Complete all (${n})`, value: true, cta: true }]);
 		if (ok !== true) return null;
+		mark = store.undoMark();
 		result = await tasks.complete(task.id, { includeSubtasks: true });
 	}
-	return result;
+	return { result, mark };
 }
 
 /** Complete or reopen, with the prompt for open subtasks: "Complete all (N)" or Cancel. */
@@ -66,8 +69,9 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
 		if (ok !== true) return false;
 	}
 	try {
+		const mark = host.app.store.undoMark();
 		await host.app.tasks.delete(task.id);
-		host.notifyUndo(`Moved "${task.title}" to Trash.`, "Delete task");
+		host.notifyUndo(`Moved "${task.title}" to Trash.`, "Delete task", mark);
 		return true;
 	} catch (err) {
 		host.error(err);
@@ -80,10 +84,11 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
  * undo entry), so a caller must not offer an Undo for it: that Undo would revert an earlier command.
  */
 export async function writeTask(host: UiHost, task: Task, patch: TaskPatch): Promise<"changed" | "same" | "failed"> {
+	const mark = host.app.store.undoMark();
 	const { outcome, reanchored } = await writeTaskResult(host, task, patch);
 	// A date change of a series re-anchors the whole series; say so (the caller's own notice, if any, is replaced
 	// by this one: use writeTaskResult to decide).
-	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, "Edit task");
+	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, "Edit task", mark);
 	return outcome;
 }
 
@@ -151,8 +156,9 @@ export function moveToSection(host: UiHost, task: Task, anchor: HTMLElement): vo
 
 export async function duplicateTask(host: UiHost, task: Task): Promise<Task | null> {
 	try {
+		const mark = host.app.store.undoMark();
 		const copy = await host.app.tasks.duplicate(task.id);
-		host.notifyUndo(`Duplicated "${task.title}".`, "Duplicate task");
+		host.notifyUndo(`Duplicated "${task.title}".`, "Duplicate task", mark);
 		return copy;
 	} catch (err) {
 		host.error(err);

@@ -423,7 +423,7 @@ describe("drag (D10, AS-13)", () => {
 		expect(moved.querySelector(".cp-meta-matrix")).toBeNull();
 		expect(m.host.messages.at(-1)).toBe('Moved "Sort photos" to Urgent and important.');
 		expect(matrix(m.root).querySelector(".cp-matrix-ghost")).toBeNull();
-		expect(await m.h.app.store.undo()).toBe("Edit task");
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 		expect(flags(m, "Sort photos")).toEqual({ urgent: false, important: false });
 		expect(task(m, "Sort photos").id).toBe(id);
 	});

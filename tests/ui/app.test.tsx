@@ -52,8 +52,11 @@ class FakeHost implements UiHost {
 	error(err: unknown) {
 		this.messages.push(err instanceof Error ? err.message : String(err));
 	}
-	notifyUndo(message: string) {
+	/** The Undo button of each notice, bound as the Obsidian host binds it (`store.undoFor`). */
+	readonly undoButtons: (() => Promise<boolean>)[] = [];
+	notifyUndo(message: string, label: string, mark: number) {
 		this.messages.push(message);
+		this.undoButtons.push(this.app.store.undoFor(mark, label));
 	}
 	async choose<T>(_t: string, message: string, buttons: ButtonSpec<T>[]): Promise<T | null> {
 		this.messages.push(message);

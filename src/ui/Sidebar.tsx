@@ -11,6 +11,7 @@ import { capitalize } from "./format";
 import { useUniqueId } from "./hooks";
 import type { MenuSpec, UiHost } from "./host";
 import { ICON, categoryIcon } from "./icons";
+import { notifyWrite } from "./writeNotice";
 
 // The Tasks section sidebar: Today, Upcoming, Inbox, categories,
 // tags, Completed, Trash.
@@ -230,9 +231,10 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 	);
 	if (ok !== true) return;
 	try {
+		const mark = host.app.store.undoMark();
 		await host.app.categories.delete(category.id);
 		onDeleted();
-		host.notifyUndo(`Deleted list "${category.name}".`, "Delete category");
+		host.notifyUndo(`Deleted list "${category.name}".`, "Delete category", mark);
 	} catch (err) {
 		host.error(err);
 	}
@@ -250,9 +252,11 @@ async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise
 	);
 	if (ok !== true) return;
 	try {
-		await host.app.tags.delete(tag.key);
+		const mark = host.app.store.undoMark();
+		const result = await host.app.tags.delete(tag.key);
 		onDeleted();
-		host.notifyUndo(`Deleted tag @${tag.displayName}.`, "Delete tag");
+		// A tag already gone and unused: nothing was written, so no notice and no Undo.
+		notifyWrite(host, result, `Deleted tag @${tag.displayName}.`, mark);
 	} catch (err) {
 		host.error(err);
 	}

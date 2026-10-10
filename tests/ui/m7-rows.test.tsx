@@ -109,6 +109,11 @@ describe("the row menu", () => {
 		expect(lastNotice(m)).toEqual({ message: 'Skipped "Weekly review" for Fri, Oct 9.', label: SKIP_OCCURRENCE_LABEL });
 		expect(m.h.app.store.undoLabel).toBe(SKIP_OCCURRENCE_LABEL);
 		expect(dateOf(rowFor(section, "Weekly review"))).toBe("Fri, Oct 16");
+		// The notice's own Undo, bound as the host binds it, reverts the skip.
+		await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
+		expect(m.h.app.store.undoLabel).not.toBe(SKIP_OCCURRENCE_LABEL);
+		menuItem(await contextMenu(m, rowFor(section, "Weekly review")), "Skip this occurrence").run();
+		await settle();
 		expect(taskById(m, t.id).recurrence?.endedAt).toBeNull();
 	});
 

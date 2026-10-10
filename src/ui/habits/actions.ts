@@ -11,7 +11,8 @@ import { currentVersion } from "./format";
 /** Runs a write; errors go to the host. Resolves whether it succeeded (a no-op write counts as success). */
 export async function runWrite(host: UiHost, write: () => Promise<WriteResult>, message: string): Promise<boolean> {
 	try {
-		notifyWrite(host, await write(), message);
+		const mark = host.app.store.undoMark();
+		notifyWrite(host, await write(), message, mark);
 		return true;
 	} catch (err) {
 		host.error(err);
@@ -59,12 +60,13 @@ export function habitDialogOptions(
 		save: async (input) => {
 			if (input.reminder !== null) host.reminderGesture();
 			try {
+				const mark = host.app.store.undoMark();
 				if (habit === undefined) {
 					const created = await host.app.habits.create(input);
-					host.notifyUndo(`Created ${created.name}.`, NEW_HABIT_LABEL);
+					host.notifyUndo(`Created ${created.name}.`, NEW_HABIT_LABEL, mark);
 					args.onSaved?.(created.id);
 				} else {
-					notifyWrite(host, await host.app.habits.update(habit.id, input), `Saved ${input.name.trim()}.`);
+					notifyWrite(host, await host.app.habits.update(habit.id, input), `Saved ${input.name.trim()}.`, mark);
 					args.onSaved?.(habit.id);
 				}
 				return null;
