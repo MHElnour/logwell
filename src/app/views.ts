@@ -1,4 +1,4 @@
-import { type CompletedScope, completedGroup, inCompletedScope, inViewScope, isKeptUnderParent } from "../domain/completed";
+import { type CompletedScope, completedGroup, inCompletedScope, isKeptUnderParent } from "../domain/completed";
 import {
 	type DoneOccurrence,
 	type GroupTone,
@@ -10,6 +10,7 @@ import {
 	completedEntries,
 	entryOf,
 	filterTasks,
+	inViewScope,
 	inUpcoming,
 	isDueByToday,
 	isOverdue,

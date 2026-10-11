@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type CompletedScope, completedGroup, inCompletedScope, inViewScope, isKeptUnderParent } from "../../src/domain/completed";
-import type { QueryContext } from "../../src/domain/queries";
+import { type CompletedScope, completedGroup, inCompletedScope, isKeptUnderParent } from "../../src/domain/completed";
+import { type QueryContext, inViewScope } from "../../src/domain/queries";
 import type { DateSpec, Task } from "../../src/domain/types";
 
 // Which completed tasks a view's Completed group holds.

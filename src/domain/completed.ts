@@ -2,28 +2,23 @@ import {
 	type DoneOccurrence,
 	type ListEntry,
 	type QueryContext,
+	type ViewScope,
 	completedRows,
 	hasPastDate,
-	inUpcoming,
 	inUpcomingRange,
+	inViewScope,
 	isDueByToday,
 	occurrenceDay,
 	scheduleOf,
 } from "./queries";
-import { isUnderTag } from "./tags";
 import { compareTasksBySortKey, isOpen } from "./tasks";
 import { dateSpecDate, instantDay } from "./time";
 import type { ID, LocalDate, OccurrenceRecord, Task } from "./types";
-import { INBOX_ID } from "./types";
 
 // Which completed tasks a view's Completed group holds. Pure.
 
-export type CompletedScope =
-	| { kind: "today" }
-	| { kind: "upcoming" }
-	| { kind: "inbox" }
-	| { kind: "category"; id: ID }
-	| { kind: "tag"; key: string };
+/** The views with a Completed group: the scope of the group is the view's own (`inViewScope`). */
+export type CompletedScope = ViewScope;
 
 /** The day a task was completed, in the display zone; null when it was never completed. */
 function completedDate(task: Task, zone: string): LocalDate | null {
@@ -44,38 +39,6 @@ export function inCompletedScope(task: Task, scope: CompletedScope, ctx: QueryCo
 	if (!hasPastDate(task, ctx)) return true;
 	// A past date may still sit beside a date of today (a deadline today, a schedule earlier).
 	return datesInclude(task, ctx.today, ctx) || completedDate(task, ctx.zone) === ctx.today;
-}
-
-/**
- * True when the view lists this task among its open rows, whatever its status (the caller checks it):
- * - Today: it is due by today (overdue or today);
- * - Upcoming: its key date is in the range and it is not due by today (Today owns those);
- * - Inbox, a list or a tag: it belongs there.
- * The tests of the view's open rows (`todayEntries`, `upcomingGroups`, `categoryEntries`, the tag rows).
- */
-export function inViewScope(task: Task, scope: CompletedScope, ctx: QueryContext): boolean {
-	switch (scope.kind) {
-		case "today":
-			return isDueByToday(task, ctx);
-		case "upcoming":
-			return inUpcoming(task, ctx);
-		default:
-			return inListScope(task, scope);
-	}
-}
-
-/** Inbox, a list or a tag: the task belongs there. False for the date scopes. */
-function inListScope(task: Task, scope: CompletedScope): boolean {
-	switch (scope.kind) {
-		case "inbox":
-			return task.categoryId === INBOX_ID;
-		case "category":
-			return task.categoryId === scope.id;
-		case "tag":
-			return task.tagKeys.some((k) => isUnderTag(k, scope.key));
-		default:
-			return false;
-	}
 }
 
 function datesInclude(task: Task, date: LocalDate, ctx: QueryContext): boolean {
@@ -103,7 +66,7 @@ function occurrenceInScope(task: Task, record: OccurrenceRecord, scope: Complete
 		case "upcoming":
 			return inUpcomingRange(day, ctx);
 		default:
-			return inListScope(task, scope);
+			return inViewScope(task, scope, ctx);
 	}
 }
 

@@ -1,8 +1,9 @@
 import { occurrenceSpec } from "./recurrence";
 import { addDays, dateSpecDate, dateSpecSortValue } from "./time";
 import { compareSortKeys } from "./sortKey";
+import { isUnderTag } from "./tags";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import type { DateSpec, ID, LocalDate, OccurrenceRecord, Priority, Task, WeekStart } from "./types";
+import { type DateSpec, type ID, INBOX_ID, type LocalDate, type OccurrenceRecord, type Priority, type Task, type WeekStart } from "./types";
 
 // List and filter queries. Pure functions
 // over task records; the app layer feeds them the current state.
@@ -200,9 +201,38 @@ export function arrangeHierarchy(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx
  */
 export type KeepPredicate = (task: Task) => boolean;
 
+/** A view that lists open tasks by a rule of its own (not Completed or Trash). */
+export type ViewScope = { kind: "today" } | { kind: "upcoming" } | { kind: "inbox" } | { kind: "category"; id: ID } | { kind: "tag"; key: string };
+
+const TODAY_SCOPE: ViewScope = { kind: "today" };
+const UPCOMING_SCOPE: ViewScope = { kind: "upcoming" };
+
+/**
+ * True when the view lists this task among its open rows, whatever its status (the caller checks it). The one
+ * test of the view's open rows (`todayEntries`, `upcomingGroups`, `categoryEntries`, the tag rows) and of its
+ * Completed scope outside Today:
+ * - Today: it is due by today (overdue or today);
+ * - Upcoming: its key date is in the range and it is not due by today (Today owns those);
+ * - Inbox, a list or a tag: it belongs there (a tag's view includes its child tags).
+ */
+export function inViewScope(task: Task, scope: ViewScope, ctx: QueryContext): boolean {
+	switch (scope.kind) {
+		case "today":
+			return isDueByToday(task, ctx);
+		case "upcoming":
+			return inUpcoming(task, ctx);
+		case "inbox":
+			return task.categoryId === INBOX_ID;
+		case "category":
+			return task.categoryId === scope.id;
+		case "tag":
+			return task.tagKeys.some((k) => isUnderTag(k, scope.key));
+	}
+}
+
 /** Today = overdue + today, open tasks and the completed ones `keep` holds, in sort-key order. Subtasks are prefixed. */
 export function todayEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, keep?: KeepPredicate): ListEntry[] {
-	const due = tasks.filter((t) => (isOpen(t) || keep?.(t) === true) && isDueByToday(t, ctx)).sort(compareTasksBySortKey);
+	const due = tasks.filter((t) => (isOpen(t) || keep?.(t) === true) && inViewScope(t, TODAY_SCOPE, ctx)).sort(compareTasksBySortKey);
 	return flatEntries(due, byId, ctx);
 }
 
@@ -240,7 +270,7 @@ export function upcomingGroups(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: 
 	for (const t of tasks) {
 		if (!isOpen(t) && keep?.(t) !== true) continue;
 		const d = keyDate(t, ctx);
-		if (d === null || !inUpcoming(t, ctx)) continue;
+		if (d === null || !inViewScope(t, UPCOMING_SCOPE, ctx)) continue;
 		const list = groups.get(d) ?? [];
 		list.push(t);
 		groups.set(d, list);
@@ -251,8 +281,9 @@ export function upcomingGroups(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: 
 }
 
 export function categoryEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, categoryId: ID, keep?: KeepPredicate): ListEntry[] {
+	const scope: ViewScope = { kind: "category", id: categoryId };
 	return arrangeHierarchy(
-		tasks.filter((t) => (isOpen(t) || keep?.(t) === true) && t.categoryId === categoryId),
+		tasks.filter((t) => (isOpen(t) || keep?.(t) === true) && inViewScope(t, scope, ctx)),
 		byId,
 		ctx,
 	);
