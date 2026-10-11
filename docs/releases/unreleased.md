@@ -24,5 +24,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 ## Fixed
 
 - (#40) Fixed "Next 7 days" covering a different set of days in the Eisenhower matrix than in the list filter and task blocks; it now means today and the next six days everywhere.
+- (#61) Fixed Undo notices piling up over the view's buttons after several changes in a row: they now last 4 seconds. Cmd/Ctrl+Z still undoes every change.
 
 ## Security
