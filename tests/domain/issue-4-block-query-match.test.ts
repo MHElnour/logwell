@@ -195,7 +195,7 @@ describe("block matcher: tag", () => {
 	});
 
 	it("a name that cannot be a tag key is an unknown tag", () => {
-		expect(run({ tag: "two words" }, { tasks })).toEqual({ kind: "error", message: "No tag named “two words”." });
+		expect(run({ tags: ["two words"] }, { tasks })).toEqual({ kind: "error", message: "No tag named “two words”." });
 	});
 });
 
@@ -261,7 +261,7 @@ describe("block matcher: linked", () => {
 	});
 });
 
-describe("block matcher: due", () => {
+describe("block matcher: scheduled", () => {
 	const at = (id: string, date: string | null, patch: Partial<Task> = {}) => task(id, { scheduled: date === null ? null : day(date), ...patch });
 	const tasks = [
 		at("old", "2026-10-01"),
@@ -280,74 +280,150 @@ describe("block matcher: due", () => {
 		task("mix", { scheduled: day("2026-10-20"), deadline: day("2026-10-13") }),
 	];
 
-	// Same rules as the app's date filter (matchesDate, isOverdue): the schedule or the deadline counts.
-	it("today: the schedule or the deadline is today", () => {
-		expect(sorted(ids("due: today", { tasks }))).toEqual(["deadline", "timed", "today"]);
+	// The schedule only: a task whose deadline falls in the range, but not its schedule, stays out.
+	it("today: the schedule is today", () => {
+		expect(sorted(ids("scheduled: today", { tasks }))).toEqual(["timed", "today"]);
 	});
 
-	it("overdue: open with a past schedule or a past deadline", () => {
-		expect(sorted(ids("due: overdue", { tasks }))).toEqual(["dlOld", "mix", "mon", "old", "yest"]);
+	it("overdue: open with a past schedule", () => {
+		expect(sorted(ids("scheduled: overdue", { tasks }))).toEqual(["mon", "old", "yest"]);
 	});
 
 	it("a timed schedule earlier today is not overdue", () => {
 		const f = { tasks: [task("t", { scheduled: { kind: "datetime", local: "2026-10-14T00:05", tz: ZONE } })] };
-		expect(ids("due: overdue", f)).toEqual([]);
-		expect(ids("due: today", f)).toEqual(["t"]);
+		expect(ids("scheduled: overdue", f)).toEqual([]);
+		expect(ids("scheduled: today", f)).toEqual(["t"]);
 	});
 
 	it("a timed schedule is read in the display zone", () => {
 		// 23:30 in Los Angeles on the 13th is 08:30 on the 14th in Berlin.
 		const f = { tasks: [task("t", { scheduled: { kind: "datetime", local: "2026-10-13T23:30", tz: "America/Los_Angeles" } })] };
-		expect(ids("due: today", f)).toEqual(["t"]);
-		expect(ids("due: overdue", f)).toEqual([]);
+		expect(ids("scheduled: today", f)).toEqual(["t"]);
+		expect(ids("scheduled: overdue", f)).toEqual([]);
 	});
 
 	it("next 7 days is today through today + 6", () => {
-		expect(sorted(ids("due: next 7 days", { tasks }))).toEqual(["d6", "deadline", "mix", "sat", "sun", "timed", "today"]);
+		expect(sorted(ids("scheduled: next 7 days", { tasks }))).toEqual(["d6", "mix", "sat", "sun", "timed", "today"]);
 	});
 
 	it("this week starts on Monday", () => {
-		expect(sorted(ids("due: this week", { tasks }, ctxOf("MO")))).toEqual(["deadline", "mix", "mon", "sat", "sun", "timed", "today", "yest"]);
+		expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("MO")))).toEqual(["mon", "sat", "sun", "timed", "today", "yest"]);
 	});
 
 	it("this week starts on Sunday", () => {
 		// Sunday 2026-10-11 to Saturday 2026-10-17: the 18th is next week.
-		expect(sorted(ids("due: this week", { tasks }, ctxOf("SU")))).toEqual(["deadline", "mix", "mon", "sat", "timed", "today", "yest"]);
+		expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("SU")))).toEqual(["mon", "sat", "timed", "today", "yest"]);
 	});
 
 	it("this week starts on Saturday", () => {
 		// Saturday 2026-10-10 to Friday 2026-10-16: Sat the 17th is next week.
-		expect(sorted(ids("due: this week", { tasks }, ctxOf("SA")))).toEqual(["deadline", "mix", "mon", "timed", "today", "yest"]);
+		expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("SA")))).toEqual(["mon", "timed", "today", "yest"]);
 	});
 
 	it("this week follows a week that crosses a month and year boundary", () => {
 		const ctx: QueryContext = { ...ctxOf("MO"), today: "2026-12-31" }; // Thursday; week is 12-28 to 01-03
 		const f = { tasks: [at("a", "2026-12-28"), at("b", "2027-01-03"), at("c", "2027-01-04"), at("d", "2026-12-27")] };
-		expect(sorted(ids("due: this week", f, ctx))).toEqual(["a", "b"]);
+		expect(sorted(ids("scheduled: this week", f, ctx))).toEqual(["a", "b"]);
 	});
 
-	it("a task with only a deadline is due by it", () => {
-		expect(ids("due: today", { tasks: [task("d", { deadline: day("2026-10-14") })] })).toEqual(["d"]);
-		expect(ids("due: overdue", { tasks: [task("d", { deadline: day("2026-10-01") })] })).toEqual(["d"]);
-		expect(ids("due: next 7 days", { tasks: [task("d", { deadline: day("2026-10-20") })] })).toEqual(["d"]);
-		expect(ids("due: this week", { tasks: [task("d", { deadline: day("2026-10-15") })] })).toEqual(["d"]);
+	it("a task with only a deadline never matches a scheduled filter", () => {
+		const f = { tasks: [task("d", { deadline: day("2026-10-14") }), task("o", { deadline: day("2026-10-01") })] };
+		for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`scheduled: ${value}`, f), value).toEqual([]);
 	});
 
-	it("a future schedule with a missed deadline is overdue, and a schedule of today with one too", () => {
-		const f = { tasks: [task("a", { scheduled: day("2026-10-20"), deadline: day("2026-10-01") }), task("b", { scheduled: day("2026-10-14"), deadline: day("2026-10-13") })] };
-		expect(sorted(ids("due: overdue", f))).toEqual(["a", "b"]);
-		expect(ids("due: today", f)).toEqual(["b"]);
+	it("a missed deadline does not make a future schedule overdue", () => {
+		const f = { tasks: [task("a", { scheduled: day("2026-10-20"), deadline: day("2026-10-01") })] };
+		expect(ids("scheduled: overdue", f)).toEqual([]);
 	});
 
-	it("a repeating task is overdue by its deadline too", () => {
-		const r = repeating(series("2026-10-20", rule()), { id: "r", deadline: day("2026-10-01") });
-		const f = { tasks: [r] };
-		const ctx = ctxOf("MO", { schedule: scheduleResolver(stateOf(f), ctxOf("MO")) });
-		expect(ids("due: overdue", f, ctx)).toEqual(["r"]);
+	it("a task without a date never matches a scheduled filter", () => {
+		for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`scheduled: ${value}`, { tasks: [task("n")] }), value).toEqual([]);
+	});
+});
+
+describe("block matcher: due is the deadline", () => {
+	const dl = (id: string, date: string | null, patch: Partial<Task> = {}) => task(id, { deadline: date === null ? null : day(date), ...patch });
+	const tasks = [
+		dl("old", "2026-10-01"),
+		dl("yest", "2026-10-13"),
+		dl("mon", "2026-10-12"),
+		dl("today", "2026-10-14"),
+		dl("sat", "2026-10-17"),
+		dl("sun", "2026-10-18"),
+		dl("d6", "2026-10-20"),
+		dl("d7", "2026-10-21"),
+		dl("nodate", null),
+		dl("done", "2026-10-14", { status: "completed", completedAt: TS }),
+		task("timed", { deadline: { kind: "datetime", local: "2026-10-14T08:00", tz: ZONE } }),
+		task("sched", { scheduled: day("2026-10-14") }),
+		task("schedOld", { scheduled: day("2026-10-01") }),
+		task("mix", { scheduled: day("2026-10-14"), deadline: day("2026-10-20") }),
+	];
+
+	it("today: the deadline is today, a schedule of today does not count", () => {
+		expect(sorted(ids("due: today", { tasks }))).toEqual(["timed", "today"]);
+	});
+
+	it("overdue: open with a missed deadline, a past schedule does not count", () => {
+		expect(sorted(ids("due: overdue", { tasks }))).toEqual(["mon", "old", "yest"]);
+	});
+
+	it("a timed deadline earlier today is today and not overdue, as the deadline rule reads the day", () => {
+		const f = { tasks: [task("t", { deadline: { kind: "datetime", local: "2026-10-14T00:05", tz: ZONE } })] };
+		expect(ids("due: overdue", f)).toEqual([]);
+		expect(ids("due: today", f)).toEqual(["t"]);
+	});
+
+	it("a timed deadline is read in the display zone", () => {
+		const f = { tasks: [task("t", { deadline: { kind: "datetime", local: "2026-10-13T23:30", tz: "America/Los_Angeles" } })] };
+		expect(ids("due: today", f)).toEqual(["t"]);
+		expect(ids("due: overdue", f)).toEqual([]);
+	});
+
+	it("next 7 days is today through today + 6", () => {
+		expect(sorted(ids("due: next 7 days", { tasks }))).toEqual(["d6", "mix", "sat", "sun", "timed", "today"]);
+	});
+
+	it("this week starts on Monday, Sunday or Saturday", () => {
+		expect(sorted(ids("due: this week", { tasks }, ctxOf("MO")))).toEqual(["mon", "sat", "sun", "timed", "today", "yest"]);
+		expect(sorted(ids("due: this week", { tasks }, ctxOf("SU")))).toEqual(["mon", "sat", "timed", "today", "yest"]);
+		expect(sorted(ids("due: this week", { tasks }, ctxOf("SA")))).toEqual(["mon", "timed", "today", "yest"]);
+	});
+
+	it("a task with only a schedule never matches a due filter", () => {
+		const f = { tasks: [task("s", { scheduled: day("2026-10-14") }), task("o", { scheduled: day("2026-10-01") })] };
+		for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${value}`, f), value).toEqual([]);
 	});
 
 	it("a task without a date never matches a due filter", () => {
-		for (const due of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${due}`, { tasks: [task("n")] }), due).toEqual([]);
+		for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${value}`, { tasks: [task("n")] }), value).toEqual([]);
+	});
+
+	it("a repeating task has no deadline, so due never matches it", () => {
+		const r = repeating(series("2026-10-10", rule()), { id: "r" });
+		const f = { tasks: [r] };
+		const ctx = ctxOf("MO", { schedule: scheduleResolver(stateOf(f), ctxOf("MO")) });
+		for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${value}`, f, ctx), value).toEqual([]);
+		expect(ids("scheduled: overdue", f, ctx)).toEqual(["r"]);
+	});
+});
+
+describe("block matcher: due and scheduled together", () => {
+	const tasks = [
+		task("both", { scheduled: day("2026-10-14"), deadline: day("2026-10-13") }),
+		task("schedOnly", { scheduled: day("2026-10-14") }),
+		task("dlOnly", { deadline: day("2026-10-13") }),
+		task("swapped", { scheduled: day("2026-10-13"), deadline: day("2026-10-14") }),
+	];
+
+	it("a task passes only when both keys accept their own date", () => {
+		expect(ids("due: overdue\nscheduled: today", { tasks })).toEqual(["both"]);
+		expect(ids("due: today\nscheduled: overdue", { tasks })).toEqual(["swapped"]);
+	});
+
+	it("each key alone lets in the tasks the other would have refused", () => {
+		expect(sorted(ids("due: overdue", { tasks }))).toEqual(["both", "dlOnly"]);
+		expect(sorted(ids("scheduled: today", { tasks }))).toEqual(["both", "schedOnly"]);
 	});
 });
 
@@ -359,45 +435,45 @@ describe("block matcher: repeating tasks use the current occurrence", () => {
 
 	it("an overdue occurrence is overdue", () => {
 		const f = { tasks: [daily("r", "2026-10-10")], records: [done("2026-10-10", "2026-10-10", "r")] };
-		expect(ids("due: overdue", f, resolved(f))).toEqual(["r"]);
-		expect(ids("due: today", f, resolved(f))).toEqual([]);
+		expect(ids("scheduled: overdue", f, resolved(f))).toEqual(["r"]);
+		expect(ids("scheduled: today", f, resolved(f))).toEqual([]);
 	});
 
 	it("the occurrence of today is due today", () => {
 		const f = { tasks: [daily("r", "2026-10-10")], records: ["10", "11", "12", "13"].map((d) => done(`2026-10-${d}`, `2026-10-${d}`, "r")) };
-		expect(ids("due: today", f, resolved(f))).toEqual(["r"]);
-		expect(ids("due: overdue", f, resolved(f))).toEqual([]);
+		expect(ids("scheduled: today", f, resolved(f))).toEqual(["r"]);
+		expect(ids("scheduled: overdue", f, resolved(f))).toEqual([]);
 	});
 
 	it("completing today's occurrence moves the task to tomorrow", () => {
 		const f = { tasks: [daily("r", "2026-10-14")], records: [done("2026-10-14", "2026-10-14", "r")] };
-		expect(ids("due: today", f, resolved(f))).toEqual([]);
-		expect(ids("due: next 7 days", f, resolved(f))).toEqual(["r"]);
-		expect(ids("due: this week", f, resolved(f))).toEqual(["r"]);
+		expect(ids("scheduled: today", f, resolved(f))).toEqual([]);
+		expect(ids("scheduled: next 7 days", f, resolved(f))).toEqual(["r"]);
+		expect(ids("scheduled: this week", f, resolved(f))).toEqual(["r"]);
 	});
 
 	it("an occurrence in a future week is not this week", () => {
 		const f = { tasks: [daily("r", "2026-10-19")] };
-		expect(ids("due: this week", f, resolved(f))).toEqual([]);
-		expect(ids("due: next 7 days", f, resolved(f))).toEqual(["r"]);
+		expect(ids("scheduled: this week", f, resolved(f))).toEqual([]);
+		expect(ids("scheduled: next 7 days", f, resolved(f))).toEqual(["r"]);
 	});
 
 	it("the occurrence entry carries the occurrence as its schedule", () => {
 		const f = { tasks: [daily("r", "2026-10-16")] };
-		const r = run("due: this week", f, resolved(f));
+		const r = run("scheduled: this week", f, resolved(f));
 		expect(r.kind === "ok" && r.entries[0]?.schedule).toEqual(day("2026-10-16"));
 	});
 
 	it("a series that ended has no date and never matches", () => {
 		const ended = repeating(series("2026-10-10", rule(), { kind: "never" }, "2026-10-12T09:00:00.000Z"), { id: "e" });
 		const f = { tasks: [ended] };
-		expect(ids("due: overdue", f, resolved(f))).toEqual([]); // completed status: hidden anyway
+		expect(ids("scheduled: overdue", f, resolved(f))).toEqual([]); // completed status: hidden anyway
 		expect(ids("", f, resolved(f))).toEqual([]);
 	});
 
 	it("without a resolver the stored schedule is read", () => {
 		const f = { tasks: [task("p", { scheduled: day("2026-10-14") })] };
-		expect(ids("due: today", f)).toEqual(["p"]);
+		expect(ids("scheduled: today", f)).toEqual(["p"]);
 	});
 });
 
@@ -413,7 +489,7 @@ describe("block matcher: filters combine with AND", () => {
 		task("wrongNote", { categoryId: "work", sectionId: "plan", tagKeys: ["calls"], scheduled: day("2026-10-15"), priority: 1, urgent: true, important: true }),
 		task("done", { categoryId: "work", sectionId: "plan", tagKeys: ["calls"], scheduled: day("2026-10-15"), priority: 1, urgent: true, important: true, descriptionNote: noteOf(NOTE), status: "completed", completedAt: TS }),
 	];
-	const source = "list: Work\nsection: Planning\ntag: Calls\ndue: this week\npriority: high, medium\nquadrant: 1\nlinked: this note";
+	const source = "list: Work\nsection: Planning\ntag: Calls\nscheduled: this week\npriority: high, medium\nquadrant: 1\nlinked: this note";
 
 	it("only the task that passes every filter is listed", () => {
 		expect(ids(source, { tasks })).toEqual(["hit"]);
@@ -426,7 +502,7 @@ describe("block matcher: filters combine with AND", () => {
 			"list: Work": ["wrongList", "wrongSection"],
 			"section: Planning": ["wrongSection"],
 			"tag: Calls": ["wrongTag"],
-			"due: this week": ["wrongDue"],
+			"scheduled: this week": ["wrongDue"],
 			"priority: high, medium": ["wrongPriority"],
 			"quadrant: 1": ["wrongQuadrant"],
 			"linked: this note": ["wrongNote"],
@@ -507,8 +583,9 @@ describe("block matcher: property", () => {
 		{
 			list: fc.constantFrom("Inbox", "work", "HOME"),
 			section: fc.constantFrom("Planning", "chores"),
-			tag: fc.constantFrom("calls", "programming", "programming/go", "programmingx"),
+			tags: fc.subarray(["calls", "programming", "programming/go", "programmingx"], { minLength: 1 }),
 			due: fc.constantFrom<"today" | "overdue" | "this-week" | "next-7-days">("today", "overdue", "this-week", "next-7-days"),
+			scheduled: fc.constantFrom<"today" | "overdue" | "this-week" | "next-7-days">("today", "overdue", "this-week", "next-7-days"),
 			priorities: fc.subarray<Priority>([0, 1, 2, 3], { minLength: 1 }),
 			quadrants: fc.subarray(["urgent-important", "important", "urgent", "neither"] as const, { minLength: 1 }),
 			linked: fc.constant(true),
@@ -534,28 +611,28 @@ describe("block matcher: property", () => {
 			const want = { planning: "plan", chores: "chores" }[f.section.toLowerCase() as "planning" | "chores"];
 			if (t.sectionId !== want) return false;
 		}
-		if (f.tag !== undefined && !t.tagKeys.some((k) => k === f.tag || k.startsWith(`${f.tag}/`))) return false;
+		// Any of the listed tags, a parent including its children.
+		if (f.tags !== undefined && !f.tags.some((tag) => t.tagKeys.some((k) => k === tag || k.startsWith(`${tag}/`)))) return false;
 		if (f.priorities !== undefined && !f.priorities.includes(t.priority)) return false;
 		if (f.quadrants !== undefined) {
 			const q = t.urgent && t.important ? "urgent-important" : t.important ? "important" : t.urgent ? "urgent" : "neither";
 			if (!f.quadrants.includes(q)) return false;
 		}
 		if (f.linked === true && t.descriptionNote?.path !== NOTE) return false;
-		if (f.due !== undefined) {
-			// The app's date filter: the schedule day and the deadline day, either one.
-			const s = t.scheduled === null ? null : t.scheduled.kind === "date" ? t.scheduled.date : t.scheduled.local.slice(0, 10);
-			const d = t.deadline === null ? null : t.deadline.kind === "date" ? t.deadline.date : t.deadline.local.slice(0, 10);
-			const days = [s, d].filter((x): x is string => x !== null);
-			const [from, to] = weekRange(weekStart);
-			const plus6 = ymd(msOf(TODAY) + 6 * 86_400_000);
-			const test = {
-				today: (x: string) => x === TODAY,
-				overdue: (x: string) => x < TODAY,
-				"this-week": (x: string) => x >= from && x <= to,
-				"next-7-days": (x: string) => x >= TODAY && x <= plus6,
-			}[f.due];
-			if (!days.some(test)) return false;
-		}
+		const [from, to] = weekRange(weekStart);
+		const plus6 = ymd(msOf(TODAY) + 6 * 86_400_000);
+		const test = {
+			today: (x: string) => x === TODAY,
+			overdue: (x: string) => x < TODAY,
+			"this-week": (x: string) => x >= from && x <= to,
+			"next-7-days": (x: string) => x >= TODAY && x <= plus6,
+		};
+		const dayOf = (spec: DateSpec | null) => (spec === null ? null : spec.kind === "date" ? spec.date : spec.local.slice(0, 10));
+		// `due` reads the deadline day only, `scheduled` the schedule day only.
+		const dueDay = dayOf(t.deadline);
+		if (f.due !== undefined && !(dueDay !== null && test[f.due](dueDay))) return false;
+		const schedDay = dayOf(t.scheduled);
+		if (f.scheduled !== undefined && !(schedDay !== null && test[f.scheduled](schedDay))) return false;
 		return true;
 	}
 
@@ -616,7 +693,7 @@ describe("compileBlockQuery: the per-task test behind runBlockQuery", () => {
 			task("d", { status: "completed", completedAt: TS }),
 			task("e"),
 		];
-		for (const source of ["", "list: Work", "list: Work\nsection: Planning", "tag: programming", "due: today", "due: overdue", "due: this week", "priority: high, low", "quadrant: 1", "linked: this note"]) {
+		for (const source of ["", "list: Work", "list: Work\nsection: Planning", "tag: programming", "scheduled: today", "scheduled: overdue", "scheduled: this week", "due: today", "due: overdue", "due: this week", "tag: calls, programming/go", "priority: high, low", "quadrant: 1", "linked: this note"]) {
 			const m = compile(source, { tasks });
 			if (m.kind !== "ok") throw new Error(source);
 			expect(tasks.filter((t) => m.matches(t)).map((t) => t.id)).toEqual(ids(source, { tasks }));

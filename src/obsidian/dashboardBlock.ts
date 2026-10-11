@@ -23,7 +23,7 @@ import type { BlockRowOps } from "../ui/TaskRow";
 //
 //  - One subscription for all blocks (BlockHub): the store's change event, and the plugin's session event for a
 //    database that opens, closes or is replaced. It is made when the first block loads and dropped with the last.
-//  - One interval (TICK_MS) while a block is loaded, so a day that rolls over redraws "due: today" with no change.
+//  - One interval (TICK_MS) while a block is loaded, so a day that rolls over redraws "due: today" or "scheduled: today" with no change.
 //    It only asks each block whether the day, the zone or the week changed; nothing else moves on a tick.
 //  - A change that cannot alter a block is skipped: a habit; a task change that no filter of the block accepts, before
 //    or after, and that is neither a shown task, nor its parent, nor its subtask. The rest redraw after REFRESH_MS,

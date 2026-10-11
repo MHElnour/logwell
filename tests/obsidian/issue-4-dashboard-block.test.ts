@@ -414,7 +414,7 @@ describe("refresh", () => {
 	it("a change of the day alone is picked up by the next change event", async () => {
 		const s = await setup();
 		await s.h.app.tasks.create({ title: "Due", scheduled: { kind: "date", date: "2026-10-02" } });
-		const { el } = s.block("due: today");
+		const { el } = s.block("scheduled: today");
 		expect(text(el)).toBe("No tasks found.");
 		s.h.clock.set("2026-10-02T10:00:00.000Z");
 		vi.useFakeTimers();
@@ -613,11 +613,22 @@ describe("the day rolling over", () => {
 		vi.useFakeTimers();
 		const s = await setup();
 		await s.h.app.tasks.create({ title: "Due", scheduled: { kind: "date", date: "2026-10-02" } });
-		const { el } = s.block("due: today");
+		const { el } = s.block("scheduled: today");
 		expect(text(el)).toBe("No tasks found.");
 		s.h.clock.set("2026-10-02T10:00:00.000Z");
 		await vi.advanceTimersByTimeAsync(TICK_MS + REFRESH_MS + 10);
 		expect(titles(el)).toEqual(["Due"]);
+	});
+
+	it("a due block follows the day for a deadline", async () => {
+		vi.useFakeTimers();
+		const s = await setup();
+		await s.h.app.tasks.create({ title: "Deadline", deadline: { kind: "date", date: "2026-10-02" }, scheduled: { kind: "date", date: "2026-10-01" } });
+		const { el } = s.block("due: today");
+		expect(text(el)).toBe("No tasks found.");
+		s.h.clock.set("2026-10-02T10:00:00.000Z");
+		await vi.advanceTimersByTimeAsync(TICK_MS + REFRESH_MS + 10);
+		expect(titles(el)).toEqual(["Deadline"]);
 	});
 
 	it("runs one interval for all blocks, about once a minute", async () => {
@@ -906,10 +917,10 @@ describe("changes that cannot alter the block", () => {
 		expect(text(el)).toBe("No tasks found.");
 	});
 
-	it("a task that enters through its date redraws a due block", async () => {
+	it("a task that enters through its date redraws a scheduled block", async () => {
 		const s = await setup();
 		const t = (await s.h.app.tasks.create({ title: "Later", scheduled: { kind: "date", date: "2026-12-01" } })).task;
-		const { el } = s.block("due: today");
+		const { el } = s.block("scheduled: today");
 		vi.useFakeTimers();
 		await s.h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-01" } });
 		await wait();

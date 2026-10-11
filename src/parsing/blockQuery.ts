@@ -5,8 +5,8 @@ import type { Quadrant } from "../domain/queries";
 // The source text of a `logwell` code block. One filter per line, `key: value`. Pure: it only
 // reads the text. Names (list, section, tag) are not resolved here; the domain matcher does that.
 
-/** The values `due:` accepts. */
-export type BlockDue = "today" | "overdue" | "this-week" | "next-7-days";
+/** The values `due:` and `scheduled:` accept. */
+export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days";
 
 /** The filters a block holds. A key that is absent (or had an error) leaves its field undefined. */
 export interface BlockFilters {
@@ -14,9 +14,12 @@ export interface BlockFilters {
 	list?: string;
 	/** A section name as typed; only set together with `list`. */
 	section?: string;
-	/** A tag name as typed, without a leading "@". */
-	tag?: string;
-	due?: BlockDue;
+	/** The tag names as typed, without a leading "@", repeats dropped; a task matches any of them. */
+	tags?: string[];
+	/** The deadline day. */
+	due?: BlockDate;
+	/** The schedule day (a repeating task's current occurrence). */
+	scheduled?: BlockDate;
 	/** One or more priorities (0 none, 1 high, 2 medium, 3 low); a task matches any of them. */
 	priorities?: Priority[];
 	/** One or more quadrants; a task matches any of them. */
@@ -31,10 +34,10 @@ export interface BlockParse {
 	errors: string[];
 }
 
-const KEYS = ["list", "section", "tag", "due", "priority", "quadrant", "linked"] as const;
+const KEYS = ["list", "section", "tag", "due", "scheduled", "priority", "quadrant", "linked"] as const;
 type Key = (typeof KEYS)[number];
 
-const DUE_VALUES: Readonly<Record<string, BlockDue>> = {
+const DATE_VALUES: Readonly<Record<string, BlockDate>> = {
 	today: "today",
 	overdue: "overdue",
 	"this week": "this-week",
@@ -91,6 +94,20 @@ function readList<T>(value: string, table: Readonly<Record<string, T>>, noun: st
 }
 
 /**
+ * Reads the `tag:` list: items trimmed, a leading "@" dropped, a repeat (ignoring case) dropped with the first typing
+ * kept. Returns null when an item is empty.
+ */
+function readTags(value: string): string[] | null {
+	const tags: string[] = [];
+	for (const raw of value.split(",")) {
+		const name = raw.replace(/^\s*@/, "").trim();
+		if (name === "") return null;
+		if (!tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+	}
+	return tags;
+}
+
+/**
  * Parses the source of a `logwell` block. Keys are case-insensitive; blank lines are ignored. Every
  * problem (unknown or duplicate key, bad value, `section` without `list`) adds one message and the
  * offending line is left out of `filters`.
@@ -134,13 +151,17 @@ export function parseBlockQuery(source: string): BlockParse {
 				sectionLine = true;
 				filters.section = value;
 				break;
-			case "tag":
-				filters.tag = name;
+			case "tag": {
+				const tags = readTags(value);
+				if (tags !== null) filters.tags = tags;
+				else errors.push(`A tag name is missing in \u201c${value}\u201d.`);
 				break;
-			case "due": {
-				const due = own(DUE_VALUES, keyword(value)) ? DUE_VALUES[keyword(value)] : undefined;
-				if (due !== undefined) filters.due = due;
-				else errors.push(`Unknown due value \u201c${value}\u201d. Use today, overdue, this week or next 7 days.`);
+			}
+			case "due":
+			case "scheduled": {
+				const date = own(DATE_VALUES, keyword(value)) ? DATE_VALUES[keyword(value)] : undefined;
+				if (date !== undefined) filters[key] = date;
+				else errors.push(`Unknown ${key} value \u201c${value}\u201d. Use today, overdue, this week or next 7 days.`);
 				break;
 			}
 			case "priority": {
@@ -171,7 +192,7 @@ export function parseBlockQuery(source: string): BlockParse {
 	return { filters, errors };
 }
 
-const DUE_TEXT: Readonly<Record<BlockDue, string>> = { today: "today", overdue: "overdue", "this-week": "this week", "next-7-days": "next 7 days" };
+const DATE_TEXT: Readonly<Record<BlockDate, string>> = { today: "today", overdue: "overdue", "this-week": "this week", "next-7-days": "next 7 days" };
 const QUADRANT_TEXT: Readonly<Record<Quadrant, string>> = {
 	"urgent-important": "urgent and important",
 	important: "important not urgent",
@@ -188,8 +209,9 @@ export function describeBlockFilters(filters: BlockFilters): string[] {
 	const chips: string[] = [];
 	if (filters.list !== undefined) chips.push(`list: ${filters.list}`);
 	if (filters.section !== undefined) chips.push(`section: ${filters.section}`);
-	if (filters.tag !== undefined) chips.push(`tag: ${filters.tag}`);
-	if (filters.due !== undefined) chips.push(`due: ${DUE_TEXT[filters.due]}`);
+	if (filters.tags !== undefined) chips.push(`tag: ${filters.tags.join(", ")}`);
+	if (filters.due !== undefined) chips.push(`due: ${DATE_TEXT[filters.due]}`);
+	if (filters.scheduled !== undefined) chips.push(`scheduled: ${DATE_TEXT[filters.scheduled]}`);
 	if (filters.priorities !== undefined) chips.push(`priority: ${filters.priorities.map((p) => PRIORITY_NAME[p]).join(", ")}`);
 	if (filters.quadrants !== undefined) chips.push(`quadrant: ${filters.quadrants.map((q) => QUADRANT_TEXT[q]).join(", ")}`);
 	if (filters.linked === true) chips.push("linked: this note");
