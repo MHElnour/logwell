@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import type { AppStore } from "../app/store";
 import type { ListEntry } from "../domain/queries";
 import type { ID, Task } from "../domain/types";
 
@@ -44,39 +45,57 @@ function useHolds(win: Window, ms: number) {
 	return { held, timers, release, hold };
 }
 
+/** What `useLingering` reads from the store: the tasks, the change count and the changes since a count. */
+export type ChangeFeed = Pick<AppStore, "state" | "version" | "changesSince">;
+
 /**
  * The tasks that went from open to completed during the last `ms`. A view keeps them among its open
- * rows for that long so the check animation can play, then they move into the Completed group
+ * rows for that long so the check animation can play, then they move into the Completed group.
  * A task seen open again is released at once, so completing it a second time starts a full
- * hold. The diff runs while rendering, once per new task map, so the held row is already in place in
+ * hold. The look runs while rendering, once per store change, so the held row is already in place in
  * the pass that completed it: the row never flashes into the group first, and the section renders
- * once for the change instead of once more from an effect. The held set is a ref that keeps its
- * identity until it changes; only the timer that ends a hold asks for a render.
+ * once for the change instead of once more from an effect. It reads only the tasks the store's changes
+ * since the last look wrote (`changesSince`), never every task: a task is held when it was open at the
+ * last look and is completed now. A change the store cannot list (a reload, a replacement of all records,
+ * more changes than its feed keeps) holds nothing; it only releases held tasks that are open again. The
+ * held set is a ref that keeps its identity until it changes; only the timer that ends a hold asks for a render.
  */
-export function useLingering(tasks: ReadonlyMap<ID, Task>, active: boolean, ms = LINGER_MS): ReadonlySet<ID> {
+export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, active: boolean, ms = LINGER_MS): ReadonlySet<ID> {
 	const { held, timers, release, hold } = useHolds(window, ms);
-	const status = useRef<Map<ID, Task["status"]> | null>(null);
-	const ran = useRef<{ tasks: ReadonlyMap<ID, Task>; active: boolean } | null>(null);
+	// The store's change count and the tasks at the last look; null while the section is hidden.
+	const ran = useRef<{ version: number; tasks: ReadonlyMap<ID, Task> } | null>(null);
 
-	// Compared once per new task map, and only while the section is shown: a hidden one takes no
-	// baseline, so on becoming shown it only takes one: what was completed meanwhile is already in place.
+	// A hidden section looks at nothing, so on becoming shown it only takes a baseline: what was completed
+	// meanwhile is already in place.
+	if (!active) {
+		ran.current = null;
+		return held.current;
+	}
+	const version = store.version;
 	const seen = ran.current;
-	if (seen === null || seen.tasks !== tasks || seen.active !== active) {
-		ran.current = { tasks, active };
-		if (!active) {
-			status.current = null;
-		} else {
-			const last = status.current;
-			const next = new Map<ID, Task["status"]>();
-			for (const t of tasks.values()) {
-				next.set(t.id, t.status);
-				if (t.status === "open") {
-					if (timers.current.has(t.id)) release(t.id, false);
-				} else if (t.status === "completed" && last?.get(t.id) === "open") {
-					hold(t.id);
-				}
-			}
-			status.current = next;
+	if (seen === null) {
+		ran.current = { version, tasks };
+		return held.current;
+	}
+	// Nothing changed since the last look; or a render of an older task map than the store's (a re-render of this
+	// section alone before the app's): the render of the current one reads the changes.
+	if ((seen.version === version && seen.tasks === tasks) || tasks !== store.state.tasks) return held.current;
+	ran.current = { version, tasks };
+	// The same change count with other tasks: they were written without a change event.
+	const changes = seen.version === version ? undefined : store.changesSince(seen.version);
+	if (changes === undefined) {
+		for (const id of [...timers.current.keys()]) if (tasks.get(id)?.status === "open") release(id, false);
+		return held.current;
+	}
+	// Each task written since the last look, with its status then (the `before` of its first change).
+	const before = new Map<ID, Task | undefined>();
+	for (const ch of changes) if (ch.c === "tasks" && !before.has(ch.id)) before.set(ch.id, ch.before as Task | undefined);
+	for (const [id, was] of before) {
+		const now = tasks.get(id);
+		if (now?.status === "open") {
+			if (timers.current.has(id)) release(id, false);
+		} else if (now?.status === "completed" && was?.status === "open") {
+			hold(id);
 		}
 	}
 	return held.current;

@@ -18,7 +18,7 @@ import { type FakeLayout, fakeLayout } from "../ui/virtual-layout";
 //     after an edit, and of `sidebarCounts`, with the index and without it (every task read);
 //   - the number of full passes over the task map during the edit command and during the section's redraw,
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
-//     with the source line that started each pass;
+//     with the source line that started each pass: the command copies the map once, the redraw reads none;
 //   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): once per build.
 // The time bounds are loose and pass on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and
 // sort counts are exact.
@@ -325,10 +325,9 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 				);
 			}
 			expect(container.textContent).toContain(`Edited ${RUNS + 1}`);
-			// The rows, the Completed group and the sidebar counts read the task index; the lingering rows and the
-			// subtask counts (`useSubtaskCounts` in hooks.ts) still read every task.
-			expect(redrawPasses, tally(redraw[0] ?? [])).toBe(2);
-			expect(redraw[0]?.every((p) => p.includes("src/ui/useLingering.ts") || p.includes("src/ui/hooks.ts")), tally(redraw[0] ?? [])).toBe(true);
+			// The rows, the Completed group, the sidebar counts and the subtask counts read the task index, and the
+			// lingering rows the store's changes since the last redraw: no pass over every task.
+			expect(redrawPasses, tally(redraw[0] ?? [])).toBe(0);
 			expect(commandPasses).toBeLessThanOrEqual(20);
 			// Inbox orders its rows once per redraw; Today has no hierarchy.
 			expect(sorts).toBe(open.view.kind === "inbox" ? 1 : 0);

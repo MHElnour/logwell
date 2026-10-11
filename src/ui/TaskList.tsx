@@ -117,7 +117,7 @@ export function TaskList(props: {
 		}
 	}, [request]);
 	const given = props.subtaskCounts;
-	const ownCounts = useSubtaskCounts(tasks, given === undefined);
+	const ownCounts = useSubtaskCounts(props.host, tasks, given === undefined);
 	const counts = given ?? ownCounts;
 	const [showDone, setShowDone] = useState(false);
 	const id = useUniqueId("cp-list");
