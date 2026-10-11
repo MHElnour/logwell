@@ -1,3 +1,4 @@
+import { collapseWhitespace } from "../text";
 import { type ConflictResolver, diffLines, mergeLines, mergeText, sameLines, textLines } from "../textMerge";
 import type { TtChecklistItem, TtChecklistItemWrite, TtTask, TtTaskWrite } from "./types";
 
@@ -395,7 +396,7 @@ export function writeNote(note: string, checklist: boolean, target: NoteDoc): st
 // -- merging -------------------------------------------------------------------------------------------------------
 
 function itemKey(line: string): string {
-	return (parseItemLine(line)?.title ?? line).toLowerCase().replace(/\s+/gu, " ").trim();
+	return collapseWhitespace((parseItemLine(line)?.title ?? line).toLowerCase());
 }
 
 /**

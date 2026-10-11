@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
+import { plural } from "../../domain/text";
 import { addDays, utcDay } from "../../domain/time";
 import type { Checkin, Habit, HabitVersion, LocalDate, TimeOfDay } from "../../domain/types";
 import { ICON } from "../icons";
@@ -40,7 +41,7 @@ export function amountText(n: number): string {
 /** "12 days", "1 day", "4 weeks". */
 export function streakText(n: number, unit: "days" | "weeks"): string {
 	const one = unit === "days" ? "day" : "week";
-	return `${n} ${n === 1 ? one : unit}`;
+	return plural(n, one, unit);
 }
 
 /** The accessible name of the quantity field: "Min to add", "Pages to add". */
