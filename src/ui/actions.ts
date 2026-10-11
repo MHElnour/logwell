@@ -1,5 +1,6 @@
 import { type CompleteResult, DST_WARNING_TEXT, type TaskPatch } from "../app/TaskService";
 import { addDays } from "../domain/time";
+import { plural } from "../domain/text";
 import { quadrantOf } from "../domain/queries";
 import { type LocalDate, PRIORITIES, type Priority, type Task } from "../domain/types";
 import { PRIORITY_NAME, capitalize } from "./format";
@@ -30,7 +31,7 @@ export async function completeAsking(host: UiHost, task: Task): Promise<{ result
 	let result = await tasks.complete(task.id);
 	if (result.kind === "needs-confirmation") {
 		const n = result.openSubtasks;
-		const ok = await host.choose("Complete task", `"${task.title}" has ${n} open subtask${n === 1 ? "" : "s"}.`, [{ label: `Complete all (${n})`, value: true, cta: true }]);
+		const ok = await host.choose("Complete task", `"${task.title}" has ${plural(n, "open subtask")}.`, [{ label: `Complete all (${n})`, value: true, cta: true }]);
 		if (ok !== true) return null;
 		mark = store.undoMark();
 		result = await tasks.complete(task.id, { includeSubtasks: true });
@@ -64,7 +65,7 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
 	if (subs > 0) {
 		const ok = await host.choose(
 			"Delete task",
-			`Move "${task.title}" to Trash? This also moves ${subs} subtask${subs === 1 ? "" : "s"} to Trash.`,
+			`Move "${task.title}" to Trash? This also moves ${plural(subs, "subtask")} to Trash.`,
 			[{ label: "Move to trash", value: true, warning: true }],
 		);
 		if (ok !== true) return false;

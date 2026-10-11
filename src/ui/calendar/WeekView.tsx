@@ -1,6 +1,7 @@
 import type { MutableRef } from "preact/hooks";
 import { useLayoutEffect, useMemo, useRef } from "preact/hooks";
 import { type CalendarContext, type DayHours, type TimedSegment, layoutWeek } from "../../domain/calendar";
+import { plural } from "../../domain/text";
 import { pad2 } from "../../domain/time";
 import type { ID, LocalDate, Task } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
@@ -176,7 +177,7 @@ export function WeekView(props: {
 					<button
 						type="button"
 						class="cp-cal-allday-more"
-						aria-label={`Show ${hidden} more all-day ${hidden === 1 ? "item" : "items"}`}
+						aria-label={`Show ${plural(hidden, "more all-day item")}`}
 						aria-expanded="false"
 						onClick={() => setExpanded(date, true)}
 					>

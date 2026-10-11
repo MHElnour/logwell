@@ -5,6 +5,7 @@ import { type LinkOption, type LinkTarget, countPushable, defaultOption, loadLin
 import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import { isListSynced } from "../app/syncMarks";
 import { DomainError } from "../domain/errors";
+import { plural } from "../domain/text";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { LinkFormDeps, PreviewFormDeps } from "./tickTickDialogs";
@@ -197,7 +198,7 @@ export class ConfirmationPrompter {
 		const ids = p.tasks.map((t) => t.id).filter((id) => missing.has(id));
 		if (ids.length === 0) return;
 		const n = ids.length;
-		const tasks = `${n} task${n === 1 ? "" : "s"}`;
+		const tasks = plural(n, "task");
 		if (choice === "trash") {
 			const mark = this.deps.undoMark();
 			const r = await this.deps.sync.trashMissing(p.listId, ids);

@@ -1,5 +1,6 @@
 import type { RecurrenceResult } from "../app/RecurrenceService";
 import type { ID, LocalDate, Task } from "../domain/types";
+import { plural } from "../domain/text";
 import { formatDate } from "./format";
 import type { UiHost } from "./host";
 import { type RepeatChoice, ruleText } from "./repeat";
@@ -41,7 +42,7 @@ export function completeOccurrence(host: UiHost, task: Task): Promise<boolean> {
 		() => host.app.recurrence.complete(task.id),
 		(r) => {
 			const result = r as RecurrenceResult;
-			const skipped = result.autoSkipped > 0 ? `, ${result.autoSkipped} earlier ${result.autoSkipped === 1 ? "date" : "dates"} skipped` : "";
+			const skipped = result.autoSkipped > 0 ? `, ${plural(result.autoSkipped, "earlier date")} skipped` : "";
 			return `Completed "${task.title}"${dateText(host, result.date)}${skipped}.${result.seriesEnded ? ENDED_TEXT : ""}`;
 		},
 	);

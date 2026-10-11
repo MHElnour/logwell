@@ -3,6 +3,7 @@ import { type CheckpointSettings, DEFAULT_SETTINGS, TICKTICK_PULL_RANGE } from "
 import { SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import type { SyncService } from "../app/SyncService";
 import type { TickTickDevicePort, TickTickSecretPort } from "../app/ports";
+import { plural } from "../domain/text";
 import type { DbData } from "../persistence/schema";
 import { formatAgo } from "../ui/format";
 import type { TickTickScheduler } from "./tickTickScheduler";
@@ -33,8 +34,6 @@ export interface TickTickSettingsDeps {
 
 export const ONE_DEVICE_TEXT = "TickTick sync is on for this device. Keep it off on your other devices: only one device should sync.";
 const LIMITS_NOTE = `A synced list holds at most ${SYNCED_LIST_OPEN_MAX} open tasks. TickTick's free plan allows 9 lists and 99 open tasks per list; Logwell cannot see your plan, so going over that shows an error.`;
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function linkedLists(state: DbData): { id: string; name: string }[] {
 	const out: { id: string; name: string }[] = [];

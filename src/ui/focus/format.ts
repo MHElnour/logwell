@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { isFinishedEarly } from "../../domain/focus";
+import { plural } from "../../domain/text";
 import type { FocusGap, FocusSession, Instant } from "../../domain/types";
 import { formatDuration, pad2 } from "../format";
 
@@ -22,7 +23,7 @@ export function focusedText(sec: number): string {
 
 /** "1 round", "4 rounds". */
 export function roundsText(n: number): string {
-	return `${n} ${n === 1 ? "round" : "rounds"}`;
+	return plural(n, "round");
 }
 
 /** The set-done summary: "4 rounds · 2h focused". */

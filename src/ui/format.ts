@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import { dateTone as dayTone } from "../app/views";
 import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, utcDay } from "../domain/time";
 import type { DateSpec, LocalDate, Priority, Task, WeekStart } from "../domain/types";
+import { plural } from "../domain/text";
 
 // Display formatting. Date-only values are shown as-is; timed values in the
 // display zone.
@@ -41,7 +42,7 @@ export function formatInstant(iso: string, zone: string): string {
 export function formatAgo(thenMs: number, nowMs: number): string {
 	const minutes = Math.floor(Math.max(0, nowMs - thenMs) / 60_000);
 	if (minutes < 1) return "just now";
-	const unit = (n: number, name: string) => `${n} ${name}${n === 1 ? "" : "s"} ago`;
+	const unit = (n: number, name: string) => `${plural(n, name)} ago`;
 	if (minutes < 60) return unit(minutes, "minute");
 	if (minutes < 1440) return unit(Math.floor(minutes / 60), "hour");
 	return unit(Math.floor(minutes / 1440), "day");

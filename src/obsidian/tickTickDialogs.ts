@@ -2,6 +2,7 @@ import type { App } from "obsidian";
 import { SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import type { LinkOption } from "../app/tickTickLink";
 import type { FirstSyncPlan, PendingTrash } from "../app/SyncService";
+import { plural } from "../domain/text";
 import { openFormModal } from "./formModal";
 
 // The dialogs of the TickTick sync. Each form is plain DOM built by a function
@@ -179,7 +180,7 @@ export function buildMissingForm(container: HTMLElement, deps: MissingFormDeps):
 	const { pending } = deps;
 	const n = pending.tasks.length;
 	if (pending.reason === "emptied") {
-		el(container, "p", "cp-tt-lead", `It had ${n} task${n === 1 ? "" : "s"} at the last sync. Move ${n === 1 ? "it" : `all ${n}`} to Trash in Logwell?`);
+		el(container, "p", "cp-tt-lead", `It had ${plural(n, "task")} at the last sync. Move ${n === 1 ? "it" : `all ${n}`} to Trash in Logwell?`);
 		const keep = el(container, "p", "cp-tt-lead");
 		el(keep, "b", "", "Keep");
 		keep.append(" keeps them in Logwell and unlinks the list, so nothing is deleted.");
