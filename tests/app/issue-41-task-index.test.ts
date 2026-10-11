@@ -259,6 +259,8 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		const version = app.store.version;
 		const seen = events.length;
 		const counts = index.subtaskCounts();
+		// What the handed-out map holds now: it must still hold exactly this after the command.
+		const handedOut = [...counts].map(([id, c]) => [id, c.total, c.done] as const);
 		try {
 			await command();
 		} catch (err) {
@@ -269,7 +271,7 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		run.steps = step;
 		if (!check(step, name)) return run;
 		const feed = feedProblem(app.store.changesSince(version), events.slice(seen), app.store.version - version);
-		const kept = index.rebuilds === rebuilds ? keptProblem(counts, index.subtaskCounts()) : null;
+		const kept = untouchedProblem(counts, handedOut) ?? (index.rebuilds === rebuilds ? keptProblem(counts, index.subtaskCounts()) : null);
 		if (feed !== null || kept !== null) {
 			run.failure = { step, command: name, diffs: [feed ?? kept ?? ""] };
 			return run;
@@ -300,6 +302,16 @@ function feedProblem(since: readonly Change[] | undefined, events: readonly (rea
 	const all = events.flatMap((e) => e ?? []);
 	if (since === undefined) return "changesSince gave nothing for changes it holds";
 	if (since.length !== all.length || since.some((ch, i) => ch !== all[i])) return "changesSince differs from the events";
+	return null;
+}
+
+/** A subtask count map once handed out must never change (null when it did not). */
+function untouchedProblem(map: ReadonlyMap<ID, SubtaskCount>, held: readonly (readonly [ID, number, number])[]): string | null {
+	if (map.size !== held.length) return `a handed-out subtask count map changed size: ${held.length} to ${map.size}`;
+	for (const [id, total, done] of held) {
+		const c = map.get(id);
+		if (c?.total !== total || c?.done !== done) return `a handed-out subtask count map changed for ${id}`;
+	}
 	return null;
 }
 
