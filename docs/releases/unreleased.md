@@ -25,6 +25,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 - (#40) Fixed "Next 7 days" covering a different set of days in the Eisenhower matrix than in the list filter and task blocks; it now means today and the next six days everywhere.
 - (#41) Fixed slow redraws after an edit in large vaults, in the Tasks views, the sidebar, the calendar, the Eisenhower matrix and Search.
+- (#66) Fixed the calendar's Unscheduled drawer being slow to open in large vaults; it now draws only the rows on screen.
 - (#61) Fixed Undo notices piling up over the view's buttons after several changes in a row: they now last 4 seconds. Cmd/Ctrl+Z still undoes every change.
 
 ## Security

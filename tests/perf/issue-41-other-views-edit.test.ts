@@ -116,7 +116,8 @@ describe(`one edit with the calendar, the matrix or Search at ${TASKS} tasks (is
 		document.body.appendChild(container);
 		dom.containers.push(container);
 		dom.layout = fakeLayout({
-			viewport: (el) => (el.classList.contains("cp-main") ? VIEWPORT : undefined),
+			// The drawer scrolls on its own: its rows are windowed like the Tasks lists' (#66).
+			viewport: (el) => (el.classList.contains("cp-main") || el.classList.contains("cp-cal-unscheduled") ? VIEWPORT : undefined),
 			height: (el) => (el.classList.contains("cp-task-row") ? ROW : undefined),
 		});
 		const passes: Record<string, number[]> = {};

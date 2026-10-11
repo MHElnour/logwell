@@ -244,6 +244,9 @@ export function CalendarSection(props: {
 						label="Unscheduled tasks"
 						subtaskCounts={subtaskCounts}
 						onSelect={select}
+						// Above VIRTUAL_THRESHOLD rows the drawer, its own scroller, draws only the rows near its viewport (#66).
+						virtualize={true}
+						scroller=".cp-cal-unscheduled"
 					/>
 				</aside>
 			)}
