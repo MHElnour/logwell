@@ -11,7 +11,7 @@ const TASKS = 50_000;
 // Same allowance as the other perf tests: CI runners are two to three times slower.
 const CI_SLACK = process.env.CI ? 4 : 1;
 const BUDGET_MS = 200 * CI_SLACK;
-const MAX_RATIO = 5;
+const MAX_RATIO = 3;
 const SAFETY_MS = 2000;
 const ZONES = ["Europe/Moscow", "America/New_York", "UTC"];
 const DISPLAY = "Europe/Berlin";
