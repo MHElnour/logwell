@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CompletedScope, completedGroup, inCompletedScope, isKeptUnderParent } from "../../src/domain/completed";
+import { type CompletedScope, completedGroup, inCompletedScope, inViewScope, isKeptUnderParent } from "../../src/domain/completed";
 import type { QueryContext } from "../../src/domain/queries";
 import type { DateSpec, Task } from "../../src/domain/types";
 
@@ -146,6 +146,39 @@ describe("a completed subtask and a parent that is not in the view (#98)", () =>
 		const tasks = [sub, parentOpen];
 		expect(completedGroup(tasks, byId, { kind: "inbox" }, ctx, new Set(), new Set()).map((e) => e.task.id)).toEqual(["s"]);
 		expect(completedGroup(tasks, byId, { kind: "inbox" }, ctx, new Set(), new Set(["p"]))).toEqual([]);
+	});
+	it("takes the shown rows as a test of the parent as well as a set of IDs (issue 41)", () => {
+		const asked: string[] = [];
+		const shown = (yes: boolean) => (t: Task) => (asked.push(t.id), yes);
+		expect(isKeptUnderParent(sub, byId, shown(true))).toBe(true);
+		expect(isKeptUnderParent(sub, byId, shown(false))).toBe(false);
+		expect(completedGroup([sub, parentOpen], byId, { kind: "inbox" }, ctx, new Set(), shown(false)).map((e) => e.task.id)).toEqual(["s"]);
+		expect(completedGroup([sub, parentOpen], byId, { kind: "inbox" }, ctx, new Set(), shown(true))).toEqual([]);
+		// Only the open parent is asked about, never the subtask itself.
+		expect(new Set(asked)).toEqual(new Set(["p"]));
+	});
+});
+
+describe("inViewScope: the open rows a view lists (issue 41)", () => {
+	const open = (patch: Partial<Task>) => task("o", { status: "open", completedAt: null, ...patch });
+	it("Today lists what is due by today; Upcoming what is dated in its range and not due by today", () => {
+		expect(inViewScope(open({ scheduled: day("2026-09-28") }), TODAY, ctx)).toBe(true);
+		expect(inViewScope(open({ deadline: day("2026-10-01") }), TODAY, ctx)).toBe(true);
+		expect(inViewScope(open({ scheduled: day("2026-10-02") }), TODAY, ctx)).toBe(false);
+		expect(inViewScope(open({ scheduled: day("2026-10-02") }), { kind: "upcoming" }, ctx)).toBe(true);
+		expect(inViewScope(open({ scheduled: day("2026-10-02"), deadline: day("2026-10-01") }), { kind: "upcoming" }, ctx)).toBe(false);
+		expect(inViewScope(open({ scheduled: day("2026-10-20") }), { kind: "upcoming" }, ctx)).toBe(false);
+		expect(inViewScope(open({}), { kind: "upcoming" }, ctx)).toBe(false);
+	});
+	it("Inbox, a list and a tag list what belongs there, a child tag included", () => {
+		expect(inViewScope(open({}), { kind: "inbox" }, ctx)).toBe(true);
+		expect(inViewScope(open({ categoryId: "l" }), { kind: "inbox" }, ctx)).toBe(false);
+		expect(inViewScope(open({ categoryId: "l" }), { kind: "category", id: "l" }, ctx)).toBe(true);
+		expect(inViewScope(open({ tagKeys: ["home/garden"] }), { kind: "tag", key: "home" }, ctx)).toBe(true);
+		expect(inViewScope(open({ tagKeys: ["homework"] }), { kind: "tag", key: "home" }, ctx)).toBe(false);
+	});
+	it("ignores the status: a completed task in the same place is in the same scope", () => {
+		expect(inViewScope(task("c", { categoryId: "l" }), { kind: "category", id: "l" }, ctx)).toBe(true);
 	});
 });
 

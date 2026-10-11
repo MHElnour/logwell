@@ -7,13 +7,13 @@ import { useFocus } from "../../src/ui/hooks";
 import { type CalMount, click, mountCal, settle } from "./m3-helpers";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not
-// change is not re-rendered. The counters wrap the pure functions the renders call: buildView (once per
+// change is not re-rendered. The counters wrap the pure functions the renders call: buildList (once per
 // Tasks section render that rebuilds its rows), globalSearch (once per Search section render) and the
 // format helper TaskRow calls on every render of a dated row.
 
 vi.mock("../../src/app/views", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/app/views")>();
-	return { ...actual, buildView: vi.fn(actual.buildView), globalSearch: vi.fn(actual.globalSearch) };
+	return { ...actual, buildList: vi.fn(actual.buildList), globalSearch: vi.fn(actual.globalSearch) };
 });
 vi.mock("../../src/ui/format", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/ui/format")>();
@@ -25,7 +25,7 @@ afterEach(() => {
 	for (const m of mounted.splice(0)) m.unmount();
 });
 
-const builds = () => vi.mocked(views.buildView).mock.calls.length;
+const builds = () => vi.mocked(views.buildList).mock.calls.length;
 const searches = () => vi.mocked(views.globalSearch).mock.calls.length;
 const rowRenders = () => vi.mocked(format.rowDateText).mock.calls.length;
 

@@ -413,9 +413,14 @@ export function sortEntriesByPriority(entries: ListEntry[]): ListEntry[] {
 	return ranked.flatMap((x) => x.b);
 }
 
+/** Whether one task passes a view's filter and search text: the test `filterTasks` applies to each task. */
+export function passesFilter(task: Task, f: TaskFilter, text: string, ctx: QueryContext): boolean {
+	return matchesText(task.title, text) && matchesFilter(task, f, ctx);
+}
+
 /** Filter first, then build the list, so nesting reflects what is shown. */
 export function filterTasks(tasks: Iterable<Task>, f: TaskFilter, text: string, ctx: QueryContext): Task[] {
 	const result: Task[] = [];
-	for (const t of tasks) if (matchesText(t.title, text) && matchesFilter(t, f, ctx)) result.push(t);
+	for (const t of tasks) if (passesFilter(t, f, text, ctx)) result.push(t);
 	return result;
 }
