@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
-    "test": "vitest run",
+    "test": "vitest run --project unit && vitest run --project perf",
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc -p e2e/tsconfig.json",

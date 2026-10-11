@@ -620,7 +620,7 @@ export async function openTaskContextMenu(section: WebdriverIO.Element, taskId: 
 	const target = section.$(`.cp-board-item[data-task-id="${taskId}"], .cp-task-row[data-task-id="${taskId}"]`);
 	await target.waitForExist({ timeout: 5000, timeoutMsg: `no row or card for ${taskId}` });
 	// A floating notice (an undo notice from the last step) can cover the target and take the click.
-	await browser.execute(() => document.querySelectorAll(".notice").forEach((n) => n.remove()));
+	await closeNotices();
 	await browser.execute((e) => (e as unknown as HTMLElement).scrollIntoView({ block: "nearest", inline: "nearest" }), await target.getElement());
 	await waitForStableRect(target);
 	await target.click({ button: "right" });
@@ -772,6 +772,11 @@ export async function clickModalButton(text: string): Promise<void> {
 /** The texts of the notices on screen. */
 export async function noticeTexts(): Promise<string[]> {
 	return browser.execute(() => Array.from(document.querySelectorAll<HTMLElement>(".notice")).map((n) => n.textContent ?? ""));
+}
+
+/** Removes every notice on screen, so a floating notice cannot cover the header control clicked next. */
+export async function closeNotices(): Promise<void> {
+	await browser.execute(() => document.querySelectorAll(".notice").forEach((n) => n.remove()));
 }
 
 /** Waits for a notice whose text contains `text` and returns the whole text. */
