@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 import { FEED_LIMIT } from "../../src/app/store";
 import type { TaskIndex } from "../../src/app/taskIndex";
 import type { Change } from "../../src/app/tx";
-import { type SidebarCounts, type TaskView, buildBoard, buildList, sidebarCounts } from "../../src/app/views";
+import { type SidebarCounts, type TaskView, buildBoard, buildList, calendarTasks, menuTasks, sidebarCounts, unscheduledTasks } from "../../src/app/views";
+import { type CalendarContext, layoutMonth, layoutWeek, monthGrid, weekDays } from "../../src/domain/calendar";
 import { DomainError } from "../../src/domain/errors";
 import { groupByOptions } from "../../src/domain/groupBy";
-import { type TaskFilter, type TaskSort, emptyFilter } from "../../src/domain/queries";
+import { matrixQuadrants } from "../../src/domain/matrix";
+import { type QueryContext, type TaskFilter, type TaskSort, emptyFilter, entryOf, filterTasks } from "../../src/domain/queries";
+import { indexOccurrenceRecords } from "../../src/domain/recurrence";
 import { tagPrefixes } from "../../src/domain/tags";
 import { type SubtaskCount, compareTasksBySortKey, subtaskCounts } from "../../src/domain/tasks";
 import { addDays } from "../../src/domain/time";
 import { type DateSpec, type ID, INBOX_ID, type Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
 import { type DbData, collectionsOf } from "../../src/persistence/schema";
-import type { AppHarness } from "./harness";
+import { type AppHarness, appHarness } from "./harness";
 import { seededRandom, seededState } from "./issue-41-seed";
 
 // Issue 41: the task index (which tasks can be in each Tasks view, and the open counts) is kept up to date from the
@@ -68,11 +71,73 @@ function builtOrders(index: TaskIndex): Map<ID, Task[]> {
 	return (index as unknown as { parts: { order: Map<ID, Task[]> } }).parts.order;
 }
 
+/**
+ * The view menus of the calendar and the matrix: the defaults (open; all), completed only, lists (the Inbox and one
+ * more), tags (any of two, all of two), and lists with tags.
+ */
+function menuFilters(state: DbData): TaskFilter[] {
+	const list = [...state.categories.keys()].find((id) => id !== INBOX_ID);
+	const lists = list === undefined ? [INBOX_ID] : [INBOX_ID, list];
+	return [
+		emptyFilter("open"),
+		emptyFilter("all"),
+		emptyFilter("completed"),
+		{ ...emptyFilter("open"), categoryIds: lists },
+		{ ...emptyFilter("all"), tagKeys: ["work", "home"] },
+		{ ...emptyFilter("open"), tagKeys: ["work", "work/meetings"], tagMode: "all" },
+		{ ...emptyFilter("all"), categoryIds: lists.slice(1), tagKeys: ["errands", "garden/roses"] },
+	];
+}
+
+const ids = (tasks: readonly Task[]) => tasks.map((t) => t.id).sort();
+
+/**
+ * Where the calendar and the matrix built from the index disagree with what they built before it: every task through
+ * the view menu (`filterTasks` over the task map), placed by the same layouts, the Unscheduled drawer as it was made.
+ */
+function menuViewDifferences(state: DbData, ctx: QueryContext, index: TaskIndex, held: ReadonlySet<ID>, now: string): string[] {
+	const out: string[] = [];
+	const records = indexOccurrenceRecords(state.occurrenceRecords);
+	const calCtx: CalendarContext = { zone: ctx.zone, today: ctx.today, now, weekStart: ctx.weekStart, records };
+	const week = weekDays(ctx.today, ctx.weekStart);
+	const nextWeek = weekDays(addDays(ctx.today, 7), ctx.weekStart);
+	const grid = monthGrid(ctx.today, ctx.weekStart);
+	const month = ctx.today.slice(0, 7);
+	for (const filter of menuFilters(state)) {
+		const name = serialize({ ...filter, sort: undefined });
+		// Before the index: the calendar passed every task through the menu to the layouts.
+		const before = filterTasks(state.tasks.values(), filter, "", ctx);
+		const cal = calendarTasks(state, ctx, filter, index);
+		const scan = calendarTasks(state, ctx, filter);
+		if (ids(cal.dated).join() !== ids(scan.dated).join()) out.push(`calendar dated ${name}`);
+		for (const days of [week, nextWeek]) {
+			if (serialize(layoutWeek(cal.dated, days, calCtx)) !== serialize(layoutWeek(before, days, calCtx))) out.push(`calendar week of ${days[0]} ${name}`);
+		}
+		if (serialize(layoutMonth(cal.dated, grid, month, calCtx)) !== serialize(layoutMonth(before, grid, month, calCtx))) out.push(`calendar month ${name}`);
+		// Before the index: the drawer's rows were the open tasks without a schedule or repeat rule, sorted; the count theirs.
+		const drawer = (tasks: readonly Task[]) => [...tasks].sort(compareTasksBySortKey).map((t) => entryOf(t, state.tasks, ctx));
+		const drawerBefore = drawer(before.filter((t) => t.scheduled === null && t.recurrence === null && t.status === "open"));
+		const unscheduled = unscheduledTasks(state, ctx, filter, index);
+		if (ids(unscheduled).join() !== ids(unscheduledTasks(state, ctx, filter)).join()) out.push(`calendar unscheduled ${name}`);
+		if (serialize(drawer(unscheduled)) !== serialize(drawerBefore)) out.push(`calendar unscheduled drawer ${name}`);
+		if (cal.unscheduledCount !== drawerBefore.length || scan.unscheduledCount !== drawerBefore.length) out.push(`calendar unscheduled count ${name}: ${cal.unscheduledCount}, ${scan.unscheduledCount} ≠ ${drawerBefore.length}`);
+		for (const hs of [new Set<ID>(), held]) {
+			const matrix = matrixQuadrants(menuTasks(state, ctx, filter, { index }), state.tasks, ctx, hs);
+			if (serialize(matrix) !== serialize(matrixQuadrants(before, state.tasks, ctx, hs))) out.push(`matrix ${name} ${hs.size}`);
+		}
+		for (const within of ["dated", "open"] as const) {
+			if (ids(menuTasks(state, ctx, filter, { index, within })).join() !== ids(menuTasks(state, ctx, filter, { within })).join()) out.push(`menu tasks ${within} ${name}`);
+		}
+	}
+	return out;
+}
+
 /** Where the index and the full scan disagree for the store's current state (empty when they agree). */
 function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): string[] {
 	const state = h.app.store.state;
 	const ctx = h.app.queryContext();
 	const out = index.verify(state).map((d) => `index: ${d}`);
+	out.push(...menuViewDifferences(state, ctx, index, held, h.app.clock.now().toISOString()));
 	// Each list's ids in sort order equal a fresh sort of its tasks (Inbox, every list, and an id that is no list).
 	for (const listId of new Set<ID>([INBOX_ID, ...state.categories.keys()])) {
 		const fresh = [...state.tasks.values()].filter((t) => t.categoryId === listId).sort(compareTasksBySortKey).map((t) => t.id);
@@ -125,7 +190,12 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 	const { h, held: seededHeld } = await seededState(seed, 120);
 	const app = h.app;
 	const index = app.tasks.lists;
+	// The view menus read the index's sets however many tasks they hold, so the fuzz checks them (by default a set
+	// that holds most tasks is not read).
+	index.candidatesMaxShare = 1;
 	const rnd = seededRandom(seed * 7919);
+	// The Eisenhower flags a title edit also sets: a stream of their own, so every other command stays as it was.
+	const flagRnd = seededRandom(seed * 104_729);
 	const pick = <T>(xs: readonly T[]): T | undefined => (xs.length === 0 ? undefined : xs[Math.floor(rnd() * xs.length)]);
 	const tasks = () => [...app.store.state.tasks.values()];
 	const task = () => pick(tasks());
@@ -157,7 +227,7 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 				});
 			},
 		],
-		["title", async () => app.tasks.update(need(task()).id, { title: `Call the plumber ${Math.floor(rnd() * 100)}` })],
+		["title", async () => app.tasks.update(need(task()).id, { title: `Call the plumber ${Math.floor(rnd() * 100)}`, urgent: flagRnd() < 0.5, important: flagRnd() < 0.5 })],
 		["schedule", async () => app.tasks.update(need(task()).id, { scheduled: dateSpec() })],
 		["deadline", async () => app.tasks.update(need(task()).id, { deadline: dateSpec() })],
 		["list", async () => app.tasks.update(need(task()).id, { categoryId: need(pick(lists())) })],
@@ -402,6 +472,31 @@ describe("the task index (issue 41)", () => {
 		expect(unchecked.failure!.diffs.some((d) => !d.startsWith("index:"))).toBe(true);
 	}, 300_000);
 
+	it("catches open tasks the index does not list: the calendar and the matrix miss them", async () => {
+		// A task that becomes open (created, reopened, restored) never reaches the index's open tasks.
+		const missOpened = (index: TaskIndex) => {
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void; parts: { openTasks: Set<ID> } };
+			const original = target.onChanged.bind(index);
+			target.onChanged = (changes, base) => {
+				original(changes, base);
+				for (const ch of changes ?? []) {
+					if (ch.c === "tasks" && (ch.after as Task | undefined)?.status === "open" && (ch.before as Task | undefined)?.status !== "open") target.parts.openTasks.delete(ch.id);
+				}
+			};
+		};
+		const run = await fuzz(41, 300, missOpened);
+		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with opened tasks left out: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
+		expect(run.failure).not.toBeNull();
+		expect(run.failure!.diffs.some((d) => d.startsWith("index: openTasks"))).toBe(true);
+		const unchecked = await fuzz(41, 300, (index) => {
+			missOpened(index);
+			index.verify = () => [];
+		});
+		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 same, views only: caught at step ${unchecked.failure?.step} (${unchecked.failure?.command}): ${unchecked.failure?.diffs.join("; ")}\n`);
+		expect(unchecked.failure).not.toBeNull();
+		expect(unchecked.failure!.diffs.some((d) => d.startsWith("calendar") || d.startsWith("matrix"))).toBe(true);
+	}, 300_000);
+
 	it("catches an index that does not put a task in its new place when its sort key changes", async () => {
 		// The index sees every task with its old sort key: a moved task stays where it was in its list's order.
 		const keepSortKeys = (index: TaskIndex) => {
@@ -506,6 +601,52 @@ describe("the task index (issue 41)", () => {
 		expect(run.failure!.diffs.some((d) => d.startsWith("index: subtasks"))).toBe(true);
 		expect(run.failure!.diffs).toContain("subtask counts");
 	}, 300_000);
+
+	it("gives a view menu the smallest set its lists, tags, status or subset allow, and none that holds most tasks", async () => {
+		const h = await appHarness();
+		const app = h.app;
+		const index = app.tasks.lists;
+		const work = (await app.categories.create("Work")).id;
+		const make = async (title: string, extra: { categoryId?: ID; newTags?: string[]; scheduled?: DateSpec; done?: boolean } = {}) => {
+			const t = (await app.tasks.create({ title, categoryId: extra.categoryId, newTags: extra.newTags, scheduled: extra.scheduled ?? null })).task;
+			if (extra.done === true) await app.tasks.complete(t.id);
+			return t.id;
+		};
+		const today: DateSpec = { kind: "date", date: app.queryContext().today };
+		const call = await make("Call the bank", { categoryId: work, newTags: ["Home", "Errands"], scheduled: today });
+		const milk = await make("Buy milk", { newTags: ["Errands"] });
+		const rent = await make("Pay rent", { categoryId: work, newTags: ["Home"], done: true });
+		const plants = await make("Water the plants", { done: true });
+		const dentist = await make("Book the dentist", { done: true });
+		const trip = await make("Plan the trip", { done: true });
+		const state = app.store.state;
+		const pick = (filter: Partial<TaskFilter>, within?: "dated" | "open") => index.filterCandidates(state, { ...emptyFilter(), ...filter }, within)?.map((t) => t.id).sort();
+		const sorted = (...xs: ID[]) => [...xs].sort();
+		// Nothing narrows: every task is read.
+		expect(pick({})).toBeUndefined();
+		// The open tasks (2 of 6); the completed ones are 4 of 6, more than half: every task is read.
+		expect(pick({ status: "open" })).toEqual(sorted(call, milk));
+		expect(pick({}, "open")).toEqual(sorted(call, milk));
+		expect(pick({ status: "completed" })).toBeUndefined();
+		// The dated task, the tasks of a list, of either tag (each once), of both tags (the smaller set).
+		expect(pick({}, "dated")).toEqual([call]);
+		expect(pick({ categoryIds: [work, work] })).toEqual(sorted(call, rent));
+		expect(pick({ tagKeys: ["home", "errands"] })).toBeUndefined();
+		expect(pick({ tagKeys: ["home"] })).toEqual(sorted(call, rent));
+		expect(pick({ tagKeys: ["home", "errands"], tagMode: "all" })).toEqual(sorted(call, rent));
+		// The smallest of several: the list (2) over the completed tasks (4); the dated task (1) over the list and the open tasks.
+		expect(pick({ status: "completed", categoryIds: [work] })).toEqual(sorted(call, rent));
+		expect(pick({ status: "open", categoryIds: [work] }, "dated")).toEqual([call]);
+		// A list or tag without tasks: nothing to read.
+		expect(pick({ categoryIds: ["no-such-list"] })).toEqual([]);
+		expect(pick({ tagKeys: ["garden"], tagMode: "all" })).toEqual([]);
+		// With no limit on the share, the completed tasks are read through their set.
+		index.candidatesMaxShare = 1;
+		expect(pick({ status: "completed" })).toEqual(sorted(rent, plants, dentist, trip));
+		expect(pick({ tagKeys: ["home", "errands"] })).toEqual(sorted(call, milk, rent));
+		// Another state than the store's: undefined, the caller reads every task.
+		expect(index.filterCandidates({ ...state, tasks: new Map(state.tasks) }, emptyFilter("open"))).toBeUndefined();
+	});
 
 	it("reads every task again after a write that bypassed the store, and only for the store's current state", async () => {
 		const { h } = await seededState(7, 40);
