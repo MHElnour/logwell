@@ -16,7 +16,7 @@ import { seededRandom, seededState } from "./issue-41-seed";
 // Issue 41: the task index (which tasks can be in each Tasks view, and the open counts) is kept up to date from the
 // store's change events. A seeded run of service commands (every kind of task edit, completion, repeating
 // completion, delete, restore, Undo, list, section and tag deletion, a reload, a replacement of all records, the
-// next day) checks after every step that the index equals one built from the state, and that every view, grouping,
+// next day, a save, a write that skips the store followed by a command) checks after every step that the index equals one built from the state, and that every view, grouping,
 // sort and held set, the boards and the sidebar counts come out the same with the index as without it (the full
 // scan). A run with one index update left out shows the check catches it.
 
@@ -197,10 +197,25 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 			},
 		],
 		["next day", async () => h.clock.advance(DAY_MS)],
+		// A save gives the state a new revision and keeps its task map.
+		["save", async () => h.store.flush()],
+		[
+			"skip the store",
+			async () => {
+				// A write straight to persistence (no change event), then a command before any read.
+				const data = h.store.data;
+				const t = need(pick(tasks()));
+				const changed: Task = { ...t, title: `${t.title} (outside)`, scheduled: rnd() < 0.5 ? null : { kind: "date", date: app.queryContext().today } };
+				h.store.commit({ ...data, tasks: new Map(data.tasks).set(t.id, changed) }, [{ c: "tasks", id: t.id, v: changed }]);
+				return app.tasks.create({ title: `Buy bread ${Math.floor(rnd() * 100)}` });
+			},
+		],
 	];
 	// Edits more often than the rare whole-state commands.
 	const weights = new Map<string, number>([
 		["reload", 0.3],
+		["save", 0.5],
+		["skip the store", 0.3],
 		["replace all", 0.3],
 		["next day", 0.3],
 		["list delete", 0.3],
@@ -232,6 +247,7 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		const [name, command] = choose();
 		const state = app.store.state;
 		const today = app.queryContext().today;
+		const { drops, rebuilds } = index;
 		try {
 			await command();
 		} catch (err) {
@@ -241,6 +257,21 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		if (app.store.state !== state || app.queryContext().today !== today) run.ran.set(name, (run.ran.get(name) ?? 0) + 1);
 		run.steps = step;
 		if (!check(step, name)) return run;
+		// Only a write that skipped the store puts the index out of step, and a save never rebuilds it.
+		const unexpected =
+			name === "skip the store"
+				? index.drops === drops
+					? "the index was patched over a write it never saw"
+					: null
+				: index.drops !== drops
+					? "the index fell out of step"
+					: name === "save" && index.rebuilds !== rebuilds
+						? "a save rebuilt the index"
+						: null;
+		if (unexpected !== null) {
+			run.failure = { step, command: name, diffs: [unexpected] };
+			return run;
+		}
 	}
 	return run;
 }
@@ -253,18 +284,24 @@ describe("the task index (issue 41)", () => {
 		expect(run.failure, JSON.stringify(ran)).toBeNull();
 		expect(run.steps).toBe(300);
 		// Every kind of command wrote at least once.
-		for (const name of ["create", "title", "schedule", "deadline", "list", "section", "parent", "tags", "complete", "reopen", "repeat complete", "repeat set", "delete", "restore", "undo", "section delete", "list delete", "tag delete", "reload", "replace all", "next day"]) {
+		for (const name of ["create", "title", "schedule", "deadline", "list", "section", "parent", "tags", "complete", "reopen", "repeat complete", "repeat set", "delete", "restore", "undo", "section delete", "list delete", "tag delete", "reload", "replace all", "next day", "save", "skip the store"]) {
 			expect(run.ran.get(name) ?? 0, `${name} in ${JSON.stringify(ran)}`).toBeGreaterThan(0);
 		}
 	}, 300_000);
 
 	it("catches an index that misses one kind of update", async () => {
-		// Schedule edits never reach the index: a task scheduled for today is missing from Today's candidates.
+		// Schedule edits never reach the index (it sees the old schedule): a task scheduled for today is missing from
+		// Today's candidates.
 		const skipSchedules = (index: TaskIndex) => {
-			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined) => void };
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
 			const original = target.onChanged.bind(index);
-			target.onChanged = (changes) =>
-				original(changes?.filter((ch) => !(ch.c === "tasks" && ch.before !== undefined && ch.after !== undefined && serialize((ch.before as Task).scheduled) !== serialize((ch.after as Task).scheduled))));
+			const stale = (ch: Change): Change => {
+				const before = ch.before as Task | undefined;
+				const after = ch.after as Task | undefined;
+				if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
+				return { ...ch, after: { ...after, scheduled: before.scheduled } };
+			};
+			target.onChanged = (changes, base) => original(changes?.map(stale), base);
 		};
 		const run = await fuzz(41, 300, skipSchedules);
 		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with schedule edits skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
@@ -297,6 +334,42 @@ describe("the task index (issue 41)", () => {
 		const moved: Task = { ...t, scheduled: null };
 		h.store.commit({ ...data, tasks: new Map(data.tasks).set(t.id, moved) }, [{ c: "tasks", id: t.id, v: moved }]);
 		expect(index.candidates(h.app.store.state, today)?.some((x) => x.id === t.id)).toBe(false);
+		expect(index.verify(h.app.store.state)).toEqual([]);
+	});
+
+	it("stays current through a save, which replaces the state but not its tasks", async () => {
+		const { h } = await seededState(8, 40);
+		const index = h.app.tasks.lists;
+		const ctx = h.app.queryContext();
+		const today: TaskView = { kind: "today" };
+		buildList(h.app.store.state, today, ctx, emptyFilter(), "", undefined, { index });
+		const open = [...h.app.store.state.tasks.values()].find((t) => t.status === "open" && t.recurrence === null)!;
+		await h.app.tasks.complete(open.id);
+		const edited = h.app.store.state;
+		await h.store.flush();
+		// The save gave the state a new revision: a new object, with the same tasks.
+		expect(h.app.store.state).not.toBe(edited);
+		expect(h.app.store.state.tasks).toBe(edited.tasks);
+		const rebuilds = index.rebuilds;
+		expect(buildList(h.app.store.state, today, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(h.app.store.state, today, ctx, emptyFilter(), ""));
+		expect(index.verify(h.app.store.state)).toEqual([]);
+		expect(index.rebuilds).toBe(rebuilds);
+	});
+
+	it("is not patched over tasks written without a change event: the next command drops it", async () => {
+		const { h } = await seededState(9, 40);
+		const index = h.app.tasks.lists;
+		const ctx = h.app.queryContext();
+		const today: TaskView = { kind: "today" };
+		const titles = () => buildList(h.app.store.state, today, ctx, emptyFilter(), "", undefined, { index }).groups.flatMap((g) => g.entries.map((e) => e.task.title));
+		titles();
+		// A write straight to persistence moves an undated task to today; then a command, before any read.
+		const data = h.store.data;
+		const t = [...data.tasks.values()].find((x) => x.status === "open" && x.scheduled === null && x.deadline === null && x.recurrence === null)!;
+		const moved: Task = { ...t, title: "Water the plants today", scheduled: { kind: "date", date: ctx.today } };
+		h.store.commit({ ...data, tasks: new Map(data.tasks).set(t.id, moved) }, [{ c: "tasks", id: t.id, v: moved }]);
+		await h.app.tasks.create({ title: "Buy milk" });
+		expect(titles()).toContain("Water the plants today");
 		expect(index.verify(h.app.store.state)).toEqual([]);
 	});
 });

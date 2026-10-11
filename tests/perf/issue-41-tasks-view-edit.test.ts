@@ -225,6 +225,39 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		expect(completed.get("a list"), report).toBe(1_250);
 	}, 120_000);
 
+	it("reads Today from the index after a task is completed and saved, without building it again", async () => {
+		const { h } = await bigHarness();
+		const index = h.app.tasks.lists;
+		const today: TaskView = { kind: "today" };
+		buildList(h.app.store.state, today, h.app.queryContext(), emptyFilter(), "", undefined, { index });
+		const rebuilds = index.rebuilds;
+		const times: number[] = [];
+		const scans: number[] = [];
+		for (let run = 0; run < RUNS + 1; run++) {
+			// Complete a task due today, then the save lands (a new state with the same tasks) before the view
+			// redraws when the check animation ends.
+			await h.app.tasks.complete(taskId(run * 20 + 1));
+			const edited = h.app.store.state;
+			await h.store.flush();
+			expect(h.app.store.state).not.toBe(edited);
+			const state = h.app.store.state;
+			const ctx = h.app.queryContext();
+			const start = performance.now();
+			const list = buildList(state, today, ctx, emptyFilter(), "", undefined, { index });
+			const ms = performance.now() - start;
+			const scanStart = performance.now();
+			const reference = buildList(state, today, ctx, emptyFilter(), "");
+			const scanMs = performance.now() - scanStart;
+			expect(list).toEqual(reference);
+			if (run > 0) times.push(ms);
+			if (run > 0) scans.push(scanMs);
+		}
+		const report = `Today after complete and save: ${median(times).toFixed(2)} ms with the index, ${median(scans).toFixed(2)} ms without; index rebuilds ${index.rebuilds - rebuilds}`;
+		if (LOG) process.stderr.write(`issue-41: ${report}\n`);
+		expect(index.rebuilds - rebuilds, report).toBe(0);
+		expect(median(times), report).toBeLessThan(CANDIDATES_BUDGET_MS);
+	}, 120_000);
+
 	for (const open of [
 		{ name: "Inbox", view: { kind: "inbox" } },
 		{ name: "Today", view: { kind: "today" } },

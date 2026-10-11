@@ -7,6 +7,8 @@ import type { AppStore } from "./store";
 import type { Change, Tx } from "./tx";
 import type { TaskView } from "./views";
 
+type Tasks = DbData["tasks"];
+
 /** The most open tasks a list synced with TickTick holds (TickTick's per-list limit). */
 export const SYNCED_LIST_OPEN_MAX = 999;
 
@@ -119,51 +121,67 @@ export interface IndexCounts {
  * store's change events. A Tasks view reads only its candidates, the sidebar counts without a pass over all tasks,
  * the sync reads the tasks of the linked lists, and the synced-list cap is checked. Each task change takes the
  * record out as it was before and puts it in as it is after. A change event without `changes` (a reload, a
- * replacement of all records) drops the index; the next read builds it again in one pass. A read also builds it
- * again when the store's state is not the one it describes (a write that did not go through the store).
+ * replacement of all records) drops the index; the next read builds it again in one pass. Every part is a function of
+ * the task records alone, so the index is current while the store's task map is the one it describes, whatever else
+ * the state holds (a save gives the state a new revision and keeps the task map). A change event whose command did
+ * not start from that task map, or that replaced a record other than the one the index holds, drops it too (a write
+ * that did not go through the store); so does a read that finds another task map.
  *
  * Candidates are a superset of what a view shows: the view still applies its full test to each one.
  */
 export class TaskIndex {
 	private parts: Parts = emptyParts();
-	/** The state the parts describe; null when they must be built again. */
-	private built: DbData | null = null;
-	/** How often a change event found the index out of step with the state (tests check it stays 0). */
-	private missed = 0;
+	/** The task map the parts describe; null when they must be built again. */
+	private built: Tasks | null = null;
+	/** Tests only: how often the index was built from all tasks. */
+	rebuilds = 0;
+	/** Tests only: how often a change event found the index out of step with the tasks and dropped it. */
+	drops = 0;
 
 	constructor(private readonly store: AppStore) {
-		store.bus.on("changed", (e) => this.onChanged(e.changes));
+		store.bus.on("changed", (e) => this.onChanged(e.changes, e.base));
 	}
 
-	private onChanged(changes: readonly Change[] | undefined): void {
+	private onChanged(changes: readonly Change[] | undefined, base: DbData | undefined): void {
 		if (changes === undefined) {
 			this.built = null;
 			return;
 		}
-		// Not built, or already built from this state by a read made before this listener ran.
-		if (this.built === null || this.built === this.store.state) return;
+		const built = this.built;
+		const now = this.store.state.tasks;
+		// Not built, or already built from these tasks by a read made before this listener ran.
+		if (built === null || built === now) return;
+		const tasks = changes.filter((ch) => ch.c === "tasks");
+		// No task written: the task map is unchanged, or was changed by a write the index never saw (a read compares).
+		if (tasks.length === 0) return;
+		// The command must have started from the tasks the index describes, and replaced the records it holds.
+		if ((base !== undefined && base.tasks !== built) || tasks.some((ch) => built.get(ch.id) !== ch.before)) {
+			this.drop();
+			return;
+		}
 		const p = this.parts;
-		for (const ch of changes) {
-			if (ch.c !== "tasks") continue;
+		for (const ch of tasks) {
 			const before = ch.before as Task | undefined;
 			const after = ch.after as Task | undefined;
 			if (before !== undefined) remove(p, before, after);
 			if (after !== undefined) add(p, after);
 		}
-		if (p.size === this.store.state.tasks.size) {
-			this.built = this.store.state;
-		} else {
-			// A write reached the state without a change event: build again on the next read.
-			this.built = null;
-			this.missed++;
-		}
+		if (p.size === now.size) this.built = now;
+		else this.drop();
+	}
+
+	/** Out of step with the tasks: build again on the next read. */
+	private drop(): void {
+		this.built = null;
+		this.drops++;
 	}
 
 	private index(): Parts {
-		const state = this.store.state;
-		if (this.built !== state) {
-			this.parts = build(state);
-			this.built = state;
+		const tasks = this.store.state.tasks;
+		if (this.built !== tasks) {
+			this.parts = build(this.store.state);
+			this.built = tasks;
+			this.rebuilds++;
 		}
 		return this.parts;
 	}
@@ -186,10 +204,10 @@ export class TaskIndex {
 	/**
 	 * The tasks that can be in `view`: Inbox and a list their own tasks, Today and Upcoming the dated tasks, a tag
 	 * the tasks with it or a tag under it, Completed the completed tasks, Trash none. Any status. Undefined when
-	 * `state` is not the store's current state: the caller then reads every task.
+	 * `state` does not hold the store's current tasks: the caller then reads every task.
 	 */
 	candidates(state: DbData, view: TaskView): Task[] | undefined {
-		if (state !== this.store.state) return undefined;
+		if (state.tasks !== this.store.state.tasks) return undefined;
 		const p = this.index();
 		const get = (id: ID) => state.tasks.get(id);
 		switch (view.kind) {
@@ -213,9 +231,9 @@ export class TaskIndex {
 		}
 	}
 
-	/** The sidebar's list, tag and completed counts and its dated tasks; undefined when `state` is not the store's current state. */
+	/** The sidebar's list, tag and completed counts and its dated tasks; undefined when `state` does not hold the store's current tasks. */
 	counts(state: DbData): IndexCounts | undefined {
-		if (state !== this.store.state) return undefined;
+		if (state.tasks !== this.store.state.tasks) return undefined;
 		const p = this.index();
 		// Copies: a caller cannot change the index through them.
 		return { lists: new Map(p.open), tags: new Map(p.tagOpen), completed: p.completed.size, dated: tasksIn(state, p.dated) };
@@ -227,9 +245,8 @@ export class TaskIndex {
 	 */
 	verify(state: DbData): string[] {
 		const out: string[] = [];
-		if (this.missed > 0) out.push(`out of step with the state after ${this.missed} change events`);
 		if (this.built === null) return out;
-		if (this.built !== state) return [...out, "the index describes another state"];
+		if (this.built !== state.tasks) return ["the index describes other tasks"];
 		const fresh = build(state);
 		const sets = (name: string, a: ReadonlySet<ID>, b: ReadonlySet<ID>) => {
 			for (const id of a) if (!b.has(id)) out.push(`${name}: extra ${id}`);
