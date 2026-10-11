@@ -19,7 +19,7 @@ import { type FakeLayout, fakeLayout } from "../ui/virtual-layout";
 //   - the number of full passes over the task map during the edit command and during the section's redraw,
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
 //     with the source line that started each pass: the command copies the map once, the redraw reads none;
-//   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): once per build.
+//   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): never with the index, which keeps each list's ids in sort order; once per build without it.
 // The time bounds are loose and pass on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and
 // sort counts are exact.
 //
@@ -34,9 +34,17 @@ const RUNS = 5;
 const BIG = 40_000;
 const CI_SLACK = process.env.CI ? 4 : 1;
 const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild is far below it today
-// With the index, Today and a list read only their candidates: about 1 ms is the target, bounded loosely here.
-const CANDIDATES_BUDGET_MS = 5 * CI_SLACK;
-const COUNTS_BUDGET_MS = 2 * CI_SLACK; // the target is 0.5 ms
+// Times depend on how busy the machine is, so a view with the index is compared with the same view read through every
+// task, measured in the same run (the fastest of several interleaved runs of each, so load hits both alike). The exact
+// checks are the candidate counts and the sort counts; the absolute bound is only a safety net.
+const SAFETY_NET_MS = 50 * CI_SLACK;
+// Measured alone: Inbox about 0.5 of the full read (22,500 rows to make either way; no sort with the index), Today 0.15
+// (2,500 dated tasks are its candidates), a list 0.3, the sidebar counts 0.12.
+const INBOX_RATIO = 0.8;
+const TODAY_RATIO = 0.5;
+const LIST_RATIO = 0.6;
+const COUNTS_RATIO = 0.5;
+const fastest = (xs: number[]) => Math.min(...xs);
 const LOG = Boolean(process.env.CHECKPOINT_PERF_LOG);
 
 beforeAll(() => {
@@ -115,7 +123,7 @@ function completedKind(i: number): "task" | "subtask" | null {
 	return null;
 }
 
-async function bigHarness() {
+async function bigHarness(oneBigList = false) {
 	const h = await appHarness();
 	const lists: ID[] = [];
 	for (let i = 0; i < LISTS; i++) lists.push((await h.app.categories.create(`List ${i}`)).id);
@@ -128,8 +136,8 @@ async function bigHarness() {
 		const t = makeTask(taskId(i + 1), {
 			// The search "step" matches the subtasks and every fourth task, never a subtask's parent.
 			title: kind === "subtask" || i % 4 === 0 ? `Task ${i} step` : `Task ${i}`,
-			sortKey: `V${i.toString(36).padStart(4, "0")}`,
-			categoryId: i % 2 === 0 ? "inbox" : lists[i % LISTS],
+			sortKey: `V${((i * 7919) % TASKS).toString(36).padStart(4, "0")}`,
+			categoryId: i % 2 === 0 ? "inbox" : lists[oneBigList ? 0 : i % LISTS],
 			parentId: kind === "subtask" ? taskId(i + 1 - (i % 2 === 0 ? 2 : 10)) : null,
 			scheduled: i % 20 === 0 ? { kind: "date", date: today } : null,
 			status: kind === null ? "open" : "completed",
@@ -157,7 +165,7 @@ afterEach(() => {
 });
 
 describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
-	it("times buildList for Inbox, Today and a list on the state after an edit, each ordering its rows once", async () => {
+	it("times buildList for Inbox, Today and a list on the state after an edit, ordering no rows", async () => {
 		const { h, lists } = await bigHarness();
 		const views: { name: string; view: TaskView; text: string }[] = [
 			{ name: "Inbox", view: { kind: "inbox" }, text: "" },
@@ -214,16 +222,64 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		].join("; ");
 		if (LOG) process.stderr.write(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}\n`);
 		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
-		expect(median(times.get("Today") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
-		expect(median(times.get("a list") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
-		expect(median(counts), report).toBeLessThan(COUNTS_BUDGET_MS);
-		// A list orders its rows once for the open rows and the Completed group together; Today has no hierarchy.
-		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, "Inbox searching": 1, Today: 0, "a list": 1 });
+		// The index reads only the view's candidates: the Inbox half the tasks, Today the dated tasks, a list its own.
+		const state = h.app.store.state;
+		expect(index.candidates(state, { kind: "inbox" })?.length, report).toBe(TASKS / 2);
+		expect(index.candidates(state, { kind: "today" })?.length, report).toBe(TASKS / 20);
+		expect(index.candidates(state, { kind: "category", id: lists[1] as ID })?.length, report).toBe(TASKS / LISTS);
+		const ratio = (name: string) => fastest(times.get(name) ?? []) / fastest(scanTimes.get(name) ?? []);
+		const ratios = `Inbox ${ratio("Inbox").toFixed(2)}, Today ${ratio("Today").toFixed(2)}, a list ${ratio("a list").toFixed(2)}, sidebar counts ${(fastest(counts) / fastest(scanCounts)).toFixed(2)} of the full read`;
+		if (LOG) process.stderr.write(`issue-41: fastest with the index over fastest without: ${ratios}\n`);
+		expect(ratio("Inbox"), `${ratios}; ${report}`).toBeLessThan(INBOX_RATIO);
+		expect(ratio("Today"), `${ratios}; ${report}`).toBeLessThan(TODAY_RATIO);
+		expect(ratio("a list"), `${ratios}; ${report}`).toBeLessThan(LIST_RATIO);
+		expect(fastest(counts) / fastest(scanCounts), `${ratios}; ${report}`).toBeLessThan(COUNTS_RATIO);
+		for (const name of ["Inbox", "Today", "a list"]) expect(fastest(times.get(name) ?? []), report).toBeLessThan(SAFETY_NET_MS);
+		expect(fastest(counts), report).toBeLessThan(SAFETY_NET_MS);
+		// With the index no list sorts its rows (it walks the index's order); Today has no hierarchy.
+		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 0, "Inbox searching": 0, Today: 0, "a list": 0 });
 		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
 		expect(completed.get("Inbox"), report).toBe(2_500);
 		expect(completed.get("Inbox searching"), report).toBe(2_500);
 		expect(completed.get("a list"), report).toBe(1_250);
 	}, 120_000);
+
+	it("deletes a list of 25,000 tasks and restores it with the Inbox and the list viewed, at about the cost without kept orders", async () => {
+		// Deleting a list moves its tasks to the Inbox in one event, and Undo moves them back: the index must not move
+		// each task in the long orders of the Inbox and the list (that copies an array per task).
+		const run = async (viewed: boolean) => {
+			const { h, lists } = await bigHarness(true);
+			const big = lists[0] as ID;
+			const index = h.app.tasks.lists;
+			const ctx = h.app.queryContext();
+			const inbox: TaskView = { kind: "inbox" };
+			const list: TaskView = { kind: "category", id: big };
+			if (viewed) for (const view of [inbox, list]) buildList(h.app.store.state, view, ctx, emptyFilter(), "", undefined, { index });
+			const timed = async (fn: () => Promise<unknown>) => {
+				const start = performance.now();
+				await fn();
+				return performance.now() - start;
+			};
+			const deleteMs = await timed(() => h.app.categories.delete(big));
+			expect(index.verify(h.app.store.state)).toEqual([]);
+			const inboxMs = await timed(async () => buildList(h.app.store.state, inbox, ctx, emptyFilter(), "", undefined, { index }));
+			const undoMs = await timed(() => h.app.store.undo());
+			expect(index.verify(h.app.store.state)).toEqual([]);
+			const state = h.app.store.state;
+			expect(buildList(state, list, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(state, list, ctx, emptyFilter(), ""));
+			expect(buildList(state, inbox, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(state, inbox, ctx, emptyFilter(), ""));
+			return { deleteMs, undoMs, inboxMs };
+		};
+		// The faster of two runs without kept orders is the cost to compare with (one slow run is a pause, not the cost).
+		const [first, second] = [await run(false), await run(false)] as const;
+		const plain = { deleteMs: Math.min(first.deleteMs, second.deleteMs), undoMs: Math.min(first.undoMs, second.undoMs), inboxMs: Math.min(first.inboxMs, second.inboxMs) };
+		const kept = await run(true);
+		const report = `delete ${kept.deleteMs.toFixed(0)} ms and Undo ${kept.undoMs.toFixed(0)} ms with the orders built (${plain.deleteMs.toFixed(0)} and ${plain.undoMs.toFixed(0)} ms without), then the Inbox ${kept.inboxMs.toFixed(0)} ms (${plain.inboxMs.toFixed(0)} ms)`;
+		if (LOG) process.stderr.write(`issue-41: bulk list delete at ${TASKS} tasks: ${report}\n`);
+		// Moving 25,000 tasks one by one took about 800 ms each way.
+		expect(kept.deleteMs, report).toBeLessThan((plain.deleteMs * 2 + 100) * CI_SLACK);
+		expect(kept.undoMs, report).toBeLessThan((plain.undoMs * 2 + 100) * CI_SLACK);
+	}, 300_000);
 
 	it("reads Today from the index after a task is completed and saved, without building it again", async () => {
 		const { h } = await bigHarness();
@@ -255,7 +311,8 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		const report = `Today after complete and save: ${median(times).toFixed(2)} ms with the index, ${median(scans).toFixed(2)} ms without; index rebuilds ${index.rebuilds - rebuilds}`;
 		if (LOG) process.stderr.write(`issue-41: ${report}\n`);
 		expect(index.rebuilds - rebuilds, report).toBe(0);
-		expect(median(times), report).toBeLessThan(CANDIDATES_BUDGET_MS);
+		expect(fastest(times) / fastest(scans), report).toBeLessThan(TODAY_RATIO);
+		expect(fastest(times), report).toBeLessThan(SAFETY_NET_MS);
 	}, 120_000);
 
 	for (const open of [
@@ -329,8 +386,8 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 			// lingering rows the store's changes since the last redraw: no pass over every task.
 			expect(redrawPasses, tally(redraw[0] ?? [])).toBe(0);
 			expect(commandPasses).toBeLessThanOrEqual(20);
-			// Inbox orders its rows once per redraw; Today has no hierarchy.
-			expect(sorts).toBe(open.view.kind === "inbox" ? 1 : 0);
+			// Inbox and Today sort no rows: the index keeps the order.
+			expect(sorts).toBe(0);
 		}, 120_000);
 	}
 });

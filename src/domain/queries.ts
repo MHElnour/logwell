@@ -169,9 +169,11 @@ export function flatEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: Que
 
 /**
  * Orders tasks by sort key with subtasks nested under their parent when the
- * parent is in the same list; other subtasks get a "Parent ›" prefix.
+ * parent is in the same list; other subtasks get a "Parent ›" prefix. `presorted`: `tasks` already come in sort
+ * order (`compareTasksBySortKey`), so the roots and each parent's subtasks, taken from them in turn, are in it too
+ * and nothing is sorted. Wrong for tasks in any other order.
  */
-export function arrangeHierarchy(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext): ListEntry[] {
+export function arrangeHierarchy(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, presorted = false): ListEntry[] {
 	const included = new Set(tasks.map((t) => t.id));
 	const children = new Map<ID, Task[]>();
 	const roots: Task[] = [];
@@ -184,11 +186,12 @@ export function arrangeHierarchy(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx
 			roots.push(t);
 		}
 	}
-	roots.sort(compareTasksBySortKey);
+	if (!presorted) roots.sort(compareTasksBySortKey);
 	const result: ListEntry[] = [];
 	for (const root of roots) {
 		result.push(entryOf(root, byId, ctx));
-		for (const child of (children.get(root.id) ?? []).sort(compareTasksBySortKey)) {
+		const subtasks = children.get(root.id) ?? [];
+		for (const child of presorted ? subtasks : subtasks.sort(compareTasksBySortKey)) {
 			result.push(entryOf(child, byId, ctx, 1));
 		}
 	}
@@ -280,12 +283,13 @@ export function upcomingGroups(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: 
 		.map(([date, list]) => ({ date, entries: flatEntries(list.sort(compareTasksBySortKey), byId, ctx) }));
 }
 
-export function categoryEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, categoryId: ID, keep?: KeepPredicate): ListEntry[] {
+export function categoryEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, categoryId: ID, keep?: KeepPredicate, presorted = false): ListEntry[] {
 	const scope: ViewScope = { kind: "category", id: categoryId };
 	return arrangeHierarchy(
 		tasks.filter((t) => (isOpen(t) || keep?.(t) === true) && inViewScope(t, scope, ctx)),
 		byId,
 		ctx,
+		presorted,
 	);
 }
 
