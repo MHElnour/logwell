@@ -135,9 +135,19 @@ export function isDueByToday(task: Task, ctx: QueryContext): boolean {
 
 /** A date before today, whatever the status. A completed task "was overdue" when it was ticked late. */
 export function hasPastDate(task: Task, ctx: QueryContext): boolean {
-	const s = specDate(scheduleOf(task, ctx), ctx.zone);
 	const d = specDate(task.deadline, ctx.zone);
-	return (s !== null && s < ctx.today) || (d !== null && d < ctx.today);
+	return hasPastSchedule(task, ctx) || (d !== null && d < ctx.today);
+}
+
+/** The effective schedule day is before today, whatever the status. */
+function hasPastSchedule(task: Task, ctx: QueryContext): boolean {
+	const s = specDate(scheduleOf(task, ctx), ctx.zone);
+	return s !== null && s < ctx.today;
+}
+
+/** The schedule (a repeating task's current occurrence) has passed and the task is still open. */
+export function isScheduleMissed(task: Task, ctx: QueryContext): boolean {
+	return isOpen(task) && hasPastSchedule(task, ctx);
 }
 
 export function isOverdue(task: Task, ctx: QueryContext): boolean {
@@ -418,13 +428,24 @@ function matchesFilter(task: Task, f: TaskFilter, ctx: QueryContext): boolean {
 	return matchesTaskDate(task, f, ctx);
 }
 
+/** Which of a task's two dates a date criterion reads: either one (Search, filters), the schedule only, or the deadline only. */
+export type DateField = "either" | "schedule" | "deadline";
+
 /**
- * The date criterion of a filter on one task: the effective schedule day and the deadline day, either one
- * (`overdue` is `isOverdue`). Only `date`, `from` and `to` are read. Shared with the dashboard block.
+ * The date criterion of a filter on one task: by default the effective schedule day and the deadline day, either one
+ * (`overdue` is `isOverdue`). `field` narrows it to the schedule day (`overdue` is `isScheduleMissed`) or the
+ * deadline day (`overdue` is `isDeadlineMissed`). Only `date`, `from` and `to` are read. Shared with the dashboard block.
  */
-export function matchesTaskDate(task: Task, f: Pick<TaskFilter, "date" | "from" | "to">, ctx: QueryContext): boolean {
+export function matchesTaskDate(task: Task, f: Pick<TaskFilter, "date" | "from" | "to">, ctx: QueryContext, field: DateField = "either"): boolean {
 	if (f.date === "any") return true;
-	return matchesDate(f, ctx, specDate(scheduleOf(task, ctx), ctx.zone), specDate(task.deadline, ctx.zone), () => isOverdue(task, ctx));
+	const s = field === "deadline" ? null : specDate(scheduleOf(task, ctx), ctx.zone);
+	const d = field === "schedule" ? null : specDate(task.deadline, ctx.zone);
+	const overdue = (): boolean => {
+		if (field === "deadline") return isDeadlineMissed(task, ctx);
+		if (field === "schedule") return isScheduleMissed(task, ctx);
+		return isOverdue(task, ctx);
+	};
+	return matchesDate(f, ctx, s, d, overdue);
 }
 
 /** The display-zone day of one occurrence of a repeating task. */

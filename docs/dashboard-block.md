@@ -17,7 +17,7 @@ Type a code block with the language `logwell`, and write one filter per line:
 ```logwell
 list: Work
 section: Planning
-due: this week
+scheduled: this week
 ```
 ````
 
@@ -31,15 +31,16 @@ Write each filter as `key: value`. Capitals do not matter, and blank lines are i
 | --- | --- | --- |
 | `list` | Tasks in the list with that name. Use `Inbox` for the Inbox. Capitals, spaces, `-` and `_` do not matter, and an exact name wins, so `list: homework` finds "Home work". | `list: Home` |
 | `section` | Tasks in that section of the list. It needs a `list` line. | `section: Planning` |
-| `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. Write a nested tag by its own name (`tag: garden`) or its full path. A leading `@` is fine. Renaming a tag does not change `tag:` lines in your notes; edit them yourself. | `tag: errands` |
-| `due` | `today`, `overdue`, `this week` or `next 7 days`. A task's date and its deadline both count. | `due: today` |
+| `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. Write a nested tag by its own name (`tag: garden`) or its full path. A leading `@` is fine. Renaming a tag does not change `tag:` lines in your notes; edit them yourself. Separate several tags with commas: a task with any of them shows. | `tag: errands` or `tag: home, work` |
+| `due` | `today`, `overdue`, `this week` or `next 7 days`. Matches a task's deadline only. | `due: overdue` |
+| `scheduled` | The same values. Matches a task's planned date only; for a repeating task, its current occurrence. | `scheduled: today` |
 | `priority` | `high`, `medium`, `low` or `none`. | `priority: high, medium` |
 | `quadrant` | A quadrant of the [Eisenhower matrix](matrix.md): `1` to `4`, or `urgent and important`, `important not urgent`, `urgent not important`, `neither`. | `quadrant: 1` |
 | `linked` | `this note`: tasks whose [description note](tasks.md) is the note that holds the block. | `linked: this note` |
 
-For `priority` and `quadrant`, separate several values with commas: a task matches any of them.
+For `tag`, `priority` and `quadrant`, separate several values with commas: a task matches any of them.
 
-`due` works like the Date filter in [Search](views.md), using a repeating task's current occurrence. `this week` runs from the first to the last day of the current week, as set by **Week starts on** (see [Settings and commands](settings-and-commands.md)).
+`due` and `scheduled` each look at one date, so `due: overdue` means the deadline has passed and `scheduled: overdue` means the planned date has passed. A repeating task has no deadline, so `due` never shows it; `scheduled` uses its current occurrence. Write both lines to ask for both: a task then needs a deadline and a planned date that each match. (The Date filter in [Search](views.md) still looks at both dates at once.) `this week` runs from the first to the last day of the current week, as set by **Week starts on** (see [Settings and commands](settings-and-commands.md)).
 
 In an embedded note, `linked: this note` means the embedded note. Renaming the note does not break the block.
 
@@ -58,7 +59,7 @@ The row stays a moment so you see the check, then leaves. Tick it again in that 
 ## Open a task or the app
 
 - Click a row to open the task in Logwell, in its list, with its details pane open.
-- Click **Open in Logwell** in the header to open the app on the view closest to your filters: the list when there is a `list` line, otherwise the tag, otherwise Today or Upcoming for a `due` line. Otherwise the button only opens the app.
+- Click **Open in Logwell** in the header to open the app on the view closest to your filters: the list when there is a `list` line, otherwise the tag (when the `tag` line comes down to one tag; a child tag listed with its parent counts as the parent), otherwise Today or Upcoming for a `due` or `scheduled` line. Otherwise the button only opens the app.
 
 In Live Preview, clicking a row, a checkbox or **Open in Logwell** leaves the cursor where it was, so the block stays drawn.
 
@@ -70,7 +71,7 @@ Tab to a row and use Up and Down to move between rows. Enter or Space opens the 
 
 The block redraws a moment after any change to your tasks. There is nothing to refresh. A block in a collapsed callout or on a tab you are not looking at waits until you see it.
 
-After midnight, a block that depends on the date, such as `due: today`, moves on to the new day by itself within a minute.
+After midnight, a block that depends on the date, such as `scheduled: today` or `due: today`, moves on to the new day by itself within a minute.
 
 If you open a different database, or close it, the blocks follow. If you turn Logwell off while a note with a block is open, the block says "Logwell is not running.".
 
@@ -81,7 +82,8 @@ If you open a different database, or close it, the blocks follow. If you turn Lo
 | No list named "Wrok". | Check the list name. Sections and tags say the same. |
 | "homework" matches several lists: Home work, Home-work. Use the exact name. | Two lists differ only by spaces, `-` or `_`. Type the full name of one. |
 | Unknown filter "colour". | Use one of the filters above. |
-| Unknown due value "soon". Use today, overdue, this week or next 7 days. | Use one of the values the message lists. Priority, quadrant and linked say the same for their values. |
+| Unknown due value "soon". Use today, overdue, this week or next 7 days. | Use one of the values the message lists. Scheduled, priority, quadrant and linked say the same for their values. |
+| A tag name is missing in "home,". | A comma has nothing after or before it. Remove it or write the tag name. |
 | Expected "key: value", got "...". | Add the colon after the filter name. |
 | Duplicate filter "list". | Keep one line for each filter. |
 | The "tag" filter needs a value. | Write a value after the colon. |
@@ -111,11 +113,29 @@ linked: this note
   <img src="images/block-meeting-light.png" alt="A meeting note with a task block set to linked: this note, listing the three tasks linked to the note">
 </picture>
 
-Errands that are overdue:
+Errands whose planned date has passed:
 
 ````
 ```logwell
 tag: errands
+scheduled: overdue
+```
+````
+
+Home and work tasks planned for today:
+
+````
+```logwell
+tag: home, work
+scheduled: today
+```
+````
+
+Tasks in the Home list whose deadline has passed:
+
+````
+```logwell
+list: Home
 due: overdue
 ```
 ````

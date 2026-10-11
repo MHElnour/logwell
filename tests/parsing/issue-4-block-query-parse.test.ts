@@ -12,7 +12,7 @@ describe("block query parser: shape", () => {
 	it("reads one filter per line and ignores blank lines", () => {
 		const r = parseBlockQuery("list: Work\n\nsection: Planning\n   \ntag: Calls");
 		expect(r.errors).toEqual([]);
-		expect(r.filters).toEqual({ list: "Work", section: "Planning", tag: "Calls" });
+		expect(r.filters).toEqual({ list: "Work", section: "Planning", tags: ["Calls"] });
 	});
 
 	it("accepts CRLF line endings", () => {
@@ -45,7 +45,7 @@ describe("block query parser: shape", () => {
 		expect(r.filters).toEqual({
 			list: "Work",
 			section: "Planning",
-			tag: "Calls",
+			tags: ["Calls"],
 			due: "this-week",
 			priorities: [1, 2],
 			quadrants: ["urgent-important"],
@@ -79,7 +79,7 @@ describe("block query parser: errors in the lines", () => {
 	});
 
 	it("an empty value", () => {
-		for (const key of ["list", "tag", "due", "priority", "quadrant", "linked"]) {
+		for (const key of ["list", "tag", "due", "scheduled", "priority", "quadrant", "linked"]) {
 			const r = parseBlockQuery(`${key}:`);
 			expect(r.errors, key).toEqual([`The “${key}” filter needs a value.`]);
 			expect(r.filters, key).toEqual({});
@@ -110,8 +110,8 @@ describe("block query parser: errors in the lines", () => {
 
 describe("block query parser: tag", () => {
 	it("with or without a leading @", () => {
-		expect(parseBlockQuery("tag: @Calls").filters.tag).toBe("Calls");
-		expect(parseBlockQuery("tag: Calls").filters.tag).toBe("Calls");
+		expect(parseBlockQuery("tag: @Calls").filters.tags).toEqual(["Calls"]);
+		expect(parseBlockQuery("tag: Calls").filters.tags).toEqual(["Calls"]);
 	});
 
 	it("a lone @ is an empty value", () => {
@@ -119,7 +119,7 @@ describe("block query parser: tag", () => {
 	});
 
 	it("keeps a path", () => {
-		expect(parseBlockQuery("tag: @programming/go").filters.tag).toBe("programming/go");
+		expect(parseBlockQuery("tag: @programming/go").filters.tags).toEqual(["programming/go"]);
 	});
 });
 

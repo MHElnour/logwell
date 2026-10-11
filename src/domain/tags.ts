@@ -259,6 +259,20 @@ export function resolveTagName(names: TagNames, typed: string): string | null {
 }
 
 /**
+ * `resolveTagName` over a typed list (the `tag:` filter of a task block): the keys in typed order with a repeated key
+ * dropped, or the first typed name that is no tag, as typed.
+ */
+export function resolveTagNames(names: TagNames, typed: readonly string[]): { keys: string[] } | { unknown: string } {
+	const keys: string[] = [];
+	for (const name of typed) {
+		const key = resolveTagName(names, name);
+		if (key === null) return { unknown: name };
+		if (!keys.includes(key)) keys.push(key);
+	}
+	return { keys };
+}
+
+/**
  * How a tag is shown: its own name (`Calls` for `home/calls`), in the casing it was created with. A name that more than
  * one tag uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
  * Not for exports, which keep the full path.

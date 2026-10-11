@@ -2,7 +2,7 @@ import type { BlockFilters } from "../parsing/blockQuery";
 import { type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, inViewScope, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, isOpen, resolveListName } from "./tasks";
-import { isUnderTag, resolveTagName, tagNamesOf } from "./tags";
+import { isUnderTag, resolveTagNames, tagNamesOf } from "./tags";
 import { dateOf, dayNum, weekStartOfDay } from "./time";
 import type { Category, ID, Section, Tag, Task } from "./types";
 
@@ -32,11 +32,11 @@ function normalizeNotePath(path: string): string {
 }
 
 /**
- * `due:` as the app's date filter (`TaskFilter.date`): today, overdue and next 7 days are its own criteria,
+ * `due:` and `scheduled:` as the app's date filter (`TaskFilter.date`): today, overdue and next 7 days are its own criteria,
  * "this week" is its range from the first to the last day of the week that holds today.
  */
-function dueCriterion(due: NonNullable<BlockFilters["due"]>, ctx: QueryContext): Pick<TaskFilter, "date" | "from" | "to"> {
-	switch (due) {
+function dateCriterion(value: NonNullable<BlockFilters["due"]>, ctx: QueryContext): Pick<TaskFilter, "date" | "from" | "to"> {
+	switch (value) {
 		case "today":
 			return { date: "today", from: null, to: null };
 		case "overdue":
@@ -96,24 +96,28 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 			sectionId = found.id;
 		}
 	}
-	let tagKey: string | null = null;
-	if (filters.tag !== undefined) {
-		// A tag by its full key, its own name, or as the parent of tags (the filter then includes the children).
-		tagKey = resolveTagName(tagNamesOf(state.tags), filters.tag);
-		if (tagKey === null) return { kind: "error", message: `No tag named \u201c${filters.tag}\u201d.` };
+	let tagKeys: string[] | null = null;
+	if (filters.tags !== undefined) {
+		// Each tag by its full key, its own name, or as the parent of tags (the filter then includes the children).
+		const r = resolveTagNames(tagNamesOf(state.tags), filters.tags);
+		if ("unknown" in r) return { kind: "error", message: `No tag named \u201c${r.unknown}\u201d.` };
+		tagKeys = r.keys;
 	}
+	const selectedTags = tagKeys;
 
 	// -- compile the rest into plain lookups --
 	const listScope: ViewScope | null = listId === null ? null : { kind: "category", id: listId };
 	const priorities = filters.priorities === undefined ? null : new Set(filters.priorities);
 	const quadrants = filters.quadrants === undefined ? null : new Set(filters.quadrants);
 	const note = filters.linked === true ? normalizeNotePath(notePath) : null;
-	const due = filters.due === undefined ? null : dueCriterion(filters.due, ctx);
+	const due = filters.due === undefined ? null : dateCriterion(filters.due, ctx);
+	const scheduled = filters.scheduled === undefined ? null : dateCriterion(filters.scheduled, ctx);
 	const underTag = new Map<string, boolean>();
-	const inTag = (taskKey: string, parent: string): boolean => {
+	/** Whether a task's tag is one of the selected tags or under one. Cached per tag: a few hundred keys serve every task. */
+	const inTag = (taskKey: string, selected: readonly string[]): boolean => {
 		let hit = underTag.get(taskKey);
 		if (hit === undefined) {
-			hit = isUnderTag(taskKey, parent);
+			hit = selected.some((parent) => isUnderTag(taskKey, parent));
 			underTag.set(taskKey, hit);
 		}
 		return hit;
@@ -126,9 +130,10 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 		if (priorities !== null && !priorities.has(task.priority)) return false;
 		if (quadrants !== null && !quadrants.has(quadrantOf(task))) return false;
 		if (note !== null && (task.descriptionNote === null || normalizeNotePath(task.descriptionNote.path) !== note)) return false;
-		if (tagKey !== null && !task.tagKeys.some((k) => inTag(k, tagKey))) return false;
-		// The app's own date rule: the effective schedule (a repeating task's current occurrence) or the deadline.
-		if (due !== null && !matchesTaskDate(task, due, ctx)) return false;
+		if (selectedTags !== null && !task.tagKeys.some((k) => inTag(k, selectedTags))) return false;
+		// The app's own date rule on one date: the deadline for `due`, the effective schedule (a repeating task's current occurrence) for `scheduled`.
+		if (due !== null && !matchesTaskDate(task, due, ctx, "deadline")) return false;
+		if (scheduled !== null && !matchesTaskDate(task, scheduled, ctx, "schedule")) return false;
 		return true;
 	};
 	return { kind: "ok", matches };

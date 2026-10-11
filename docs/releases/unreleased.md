@@ -21,6 +21,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 - (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks.
 - (#7) Create a tag from the sidebar: the **New tag** button next to Tags opens a dialog with a name, an optional parent and a color. The name is checked as you type.
+- (#52) `tag:` in a task block takes several tags separated by commas; a task with any of them shows.
+- (#52) A task block has a new `scheduled:` filter for a task's planned date (a repeating task's current one), with the values `today`, `overdue`, `this week` and `next 7 days`.
 - (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag. Undo of a new or renamed tag is refused once a synced task uses it, so no task is left with a tag that no longer exists.
 
 ## Changed
@@ -30,6 +32,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#11) Tags now show just their own name, like `@calls`, wherever they appear outside the sidebar tree. Two older tags that share a name still show their full paths, and the message for a name that is already used no longer names a parent.
 
 - (#9) A parent tag is now a tag of its own: creating `@home/calls` also creates `home`, and every tag in the sidebar has a color and the full menu. Adding a task from a parent's view gives it that tag. Deleting a parent moves its child tags to the top level (`home/calls` becomes `calls`) on every task, including tasks in the Trash, in one step with Undo.
+
+- (#52) In a task block, `due:` now matches only a task's deadline. Use the new `scheduled:` filter, with the same values, for a task's planned date (a repeating task's current one). A block that used `due:` for planned dates needs `scheduled:` instead.
 
 ## Fixed
 
