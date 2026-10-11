@@ -106,12 +106,12 @@ export function viewTitle(view: TaskView, state: DbData): string {
 }
 
 /** Presets for tasks added while a view is shown (category, Today's date, tag). */
-export function viewPreset(view: TaskView, ctx: QueryContext, state?: DbData): { addCategoryId: ID; addDate: LocalDate | null; addTagKeys: string[] } {
+export function viewPreset(view: TaskView, ctx: QueryContext): { addCategoryId: ID; addDate: LocalDate | null; addTagKeys: string[] } {
 	return {
 		addCategoryId: view.kind === "category" ? view.id : INBOX_ID,
 		addDate: view.kind === "today" ? ctx.today : null,
-		// An implicit parent tag has no record to preset, so it presets nothing.
-		addTagKeys: view.kind === "tag" && (state === undefined || state.tags.has(view.key)) ? [view.key] : [],
+		// Every tag view presets its tag, a parent's too (Lists, sections and tags rule 26).
+		addTagKeys: view.kind === "tag" ? [view.key] : [],
 	};
 }
 

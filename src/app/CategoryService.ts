@@ -4,15 +4,16 @@ import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
 import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
-	hasTagOrChild,
 	isUnderTag,
 	newTagProblem,
 	normalizeTagKey,
 	requireTagDepth,
 	requireTagKey,
 	requireUniqueTagName,
+	tagDisplayLeaf,
 	tagDisplayName,
 	tagDisplayPath,
+	tagLeaf,
 	tagPath,
 } from "../domain/tags";
 import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
@@ -153,13 +154,20 @@ export class CategoryService {
 /** The store labels of the tag writes; a notice's Undo names its write by them. */
 export const CREATE_TAG_LABEL = "Create tag";
 export const EDIT_TAG_LABEL = "Edit tag";
+export const DELETE_TAG_LABEL = "Delete tag";
+
+/** A tag key that a write moved (an edit, or a parent's delete moving a child to the top level): before and after. */
+export interface TagMove {
+	from: string;
+	to: string;
+}
 
 /**
- * Throws when `parent` cannot take a tag: NotFound when no tag is at or under it, InvalidTag when it is not top-level
- * or is the tag being edited (`self`).
+ * Throws when `parent` cannot take a tag: NotFound when it is not a tag, InvalidTag when it is not top-level or is the
+ * tag being edited (`self`).
  */
 function requireTagParent(tags: ReadonlyMap<string, Tag>, parent: string, self: string | null): void {
-	if (!hasTagOrChild(tags.keys(), parent)) throw new DomainError("NotFound", "The parent tag no longer exists.");
+	if (!tags.has(parent)) throw new DomainError("NotFound", "The parent tag no longer exists.");
 	if (parent.includes("/") || parent === self) throw new DomainError("InvalidTag", "Pick a top-level tag as the parent.");
 }
 
@@ -182,8 +190,8 @@ export class TagService {
 	}
 
 	/**
-	 * The New tag dialog: `name` under `parent` (a top-level tag or implicit parent, or null) with `color` (null = none).
-	 * Unlike `create`, a tag that exists already is refused. An implicit parent stays implicit.
+	 * The New tag dialog: `name` under `parent` (a top-level tag, or null) with `color` (null = none). Unlike `create`,
+	 * a tag that exists already is refused.
 	 */
 	add(name: string, parent: string | null, color: TagColor | null): Promise<Tag> {
 		return this.store.run(CREATE_TAG_LABEL, (tx) => {
@@ -196,24 +204,69 @@ export class TagService {
 		});
 	}
 
-	/** `create` inside the caller's transaction (Quick Add makes its new tags in the task's write). */
+	/**
+	 * `create` inside the caller's transaction (Quick Add makes its new tags in the task's write). A missing parent is
+	 * created first, with the next palette color (rule 26); `color` is the new tag's own.
+	 */
 	static createIn(tx: Tx, raw: string, color?: TagColor | null): Tag {
 		const key = requireTagKey(raw);
 		const existing = tx.get("tags", key);
 		if (existing !== undefined) return existing;
 		requireTagDepth(key);
-		// A name is used once, whatever its parent.
+		// A name is used once, whatever its parent; a missing parent's name is checked too.
 		requireUniqueTagName(tx.map("tags"), key);
-		// No color given: rotate through the palette by the number of tags. An explicit null means none.
+		const typed = tagDisplayName(raw).split("/");
+		const path = tagPath(key);
+		if (path.length === 1) return TagService.putNew(tx, key, typed.join("/"), color);
+		// The parent's part of the display name is the parent's own, so a child always reads as its parent does.
+		const parentKey = path.slice(0, -1).join("/");
+		const parent = tx.get("tags", parentKey) ?? TagService.putNew(tx, parentKey, typed.slice(0, -1).join("/"), undefined);
+		return TagService.putNew(tx, key, `${parent.displayName}/${typed[typed.length - 1]!}`, color);
+	}
+
+	/** Writes a new tag record. No color given: the palette color by the number of tags. An explicit null means none. */
+	private static putNew(tx: Tx, key: string, displayName: string, color: TagColor | null | undefined): Tag {
 		const tag: Tag = {
 			key,
-			displayName: tagDisplayName(raw),
+			displayName,
 			color: color === undefined ? paletteColor(tx.all("tags").length) : color,
 			createdAt: tx.now,
 			modifiedAt: tx.now,
 		};
 		tx.put("tags", tag);
 		return tag;
+	}
+
+	/**
+	 * Gives every live task (modifiedAt now) and trashed task (modifiedAt kept) holding a moving key its new key, or
+	 * drops the key where the new one is null, each key once. Returns the number of live tasks and trash entries changed.
+	 */
+	private static rekeyTasks(tx: Tx, moves: ReadonlyMap<string, string | null>): { tasks: number; trash: number } {
+		let tasks = 0;
+		let trash = 0;
+		if (moves.size === 0) return { tasks, trash };
+		const holds = (keys: readonly string[]) => keys.some((k) => moves.has(k));
+		const rekey = (keys: readonly string[]): string[] => {
+			const out = new Set<string>();
+			for (const k of keys) {
+				const to = moves.get(k);
+				if (to === undefined) out.add(k);
+				else if (to !== null) out.add(to);
+			}
+			return [...out];
+		};
+		for (const t of tx.all("tasks")) {
+			if (!holds(t.tagKeys)) continue;
+			tx.put("tasks", { ...t, tagKeys: rekey(t.tagKeys), modifiedAt: tx.now });
+			tasks++;
+		}
+		// Trashed tasks keep their state as deleted; only the keys change.
+		for (const e of tx.all("trash")) {
+			if (!e.tasks.some((t) => holds(t.tagKeys))) continue;
+			tx.put("trash", { ...e, tasks: e.tasks.map((t) => (holds(t.tagKeys) ? { ...t, tagKeys: rekey(t.tagKeys) } : t)) });
+			trash++;
+		}
+		return { tasks, trash };
 	}
 
 	setColor(key: string, color: TagColor | null): Promise<void> {
@@ -275,16 +328,7 @@ export class TagService {
 			if (next.length === 0) return { wrote: false, label, key };
 			for (const old of keyMoves.keys()) tx.remove("tags", old);
 			for (const t of next) tx.put("tags", t);
-			if (keyMoves.size > 0) {
-				const holds = (keys: readonly string[]) => keys.some((k) => keyMoves.has(k));
-				const rekey = (keys: readonly string[]) => [...new Set(keys.map((k) => keyMoves.get(k) ?? k))];
-				for (const t of tx.all("tasks")) if (holds(t.tagKeys)) tx.put("tasks", { ...t, tagKeys: rekey(t.tagKeys), modifiedAt: tx.now });
-				// Trashed tasks keep their state as deleted; only the keys change.
-				for (const e of tx.all("trash")) {
-					if (!e.tasks.some((t) => holds(t.tagKeys))) continue;
-					tx.put("trash", { ...e, tasks: e.tasks.map((t) => (holds(t.tagKeys) ? { ...t, tagKeys: rekey(t.tagKeys) } : t)) });
-				}
-			}
+			TagService.rekeyTasks(tx, keyMoves);
 			return { wrote: true, label, key: newKey };
 		});
 	}
@@ -296,29 +340,28 @@ export class TagService {
 	}
 
 	/**
-	 * Removes the tag and its key from every task, including tasks in Trash, in one write. `tasks` counts the tasks
-	 * changed; `wrote` is false when there was nothing to remove (the tag was already gone and unused).
+	 * Removes the tag and its key from every task, including tasks in Trash, in one write. Its child tags move to the
+	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). `tasks` counts
+	 * the live tasks changed; `moves` lists the children moved; `wrote` is false when there was nothing to remove (the
+	 * tag was already gone and unused).
 	 */
-	delete(key: string): Promise<WriteResult & { tasks: number }> {
-		const label = "Delete tag";
+	delete(key: string): Promise<WriteResult & { tasks: number; moves: TagMove[] }> {
+		const label = DELETE_TAG_LABEL;
 		return this.store.run(label, (tx) => {
-			let tasks = 0;
-			let trashed = 0;
-			for (const t of tx.all("tasks")) {
-				if (!t.tagKeys.includes(key)) continue;
-				tx.put("tasks", { ...t, tagKeys: t.tagKeys.filter((k) => k !== key), modifiedAt: tx.now });
-				tasks++;
-			}
-			// Trashed tasks keep their state as deleted; only the dangling key goes.
-			for (const e of tx.all("trash")) {
-				if (!e.tasks.some((t) => t.tagKeys.includes(key))) continue;
-				const kept = e.tasks.map((t) => (t.tagKeys.includes(key) ? { ...t, tagKeys: t.tagKeys.filter((k) => k !== key) } : t));
-				tx.put("trash", { ...e, tasks: kept });
-				trashed++;
+			const keyMoves = new Map<string, string | null>([[key, null]]);
+			const moves: TagMove[] = [];
+			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
+			for (const t of children.sort((a, b) => (a.key < b.key ? -1 : 1))) {
+				const to = tagLeaf(t.key);
+				keyMoves.set(t.key, to);
+				moves.push({ from: t.key, to });
 			}
 			const existed = tx.get("tags", key) !== undefined;
 			tx.remove("tags", key);
-			return { wrote: existed || tasks > 0 || trashed > 0, label, tasks };
+			for (const t of children) tx.remove("tags", t.key);
+			for (const t of children) tx.put("tags", { ...t, key: tagLeaf(t.key), displayName: tagDisplayLeaf(t), modifiedAt: tx.now });
+			const changed = TagService.rekeyTasks(tx, keyMoves);
+			return { wrote: existed || changed.tasks > 0 || changed.trash > 0, label, tasks: changed.tasks, moves };
 		});
 	}
 }

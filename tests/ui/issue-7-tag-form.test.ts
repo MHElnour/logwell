@@ -14,6 +14,7 @@ const TS = "2026-10-01T10:00:00Z";
 const tags = new Map<string, Tag>(
 	[
 		["calls", "Calls"],
+		["home", "Home"],
 		["home/garden", "Home/Garden"],
 	].map(([key, displayName]) => [key!, { key: key!, displayName: displayName!, color: null, createdAt: TS, modifiedAt: TS }]),
 );

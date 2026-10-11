@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { CREATE_TAG_LABEL } from "../app/CategoryService";
+import { CREATE_TAG_LABEL, type TagMove } from "../app/CategoryService";
 import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
@@ -9,7 +9,6 @@ import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
 	type TagNode,
-	hasTagOrChild,
 	isUnderTag,
 	newTagProblem,
 	tagDisplayLeaf,
@@ -94,7 +93,7 @@ function Item(props: ItemProps) {
 
 /**
  * One node of the Tags tree. A node with children has a fold button beside its row (never inside
- * it: a button cannot hold a button). An implicit parent (no tag record) has no color and no menu.
+ * it: a button cannot hold a button). Every node is a tag, with its color and the same menu.
  */
 function TagBranch(props: {
 	host: UiHost;
@@ -134,9 +133,9 @@ function TagBranch(props: {
 					count={node.count}
 					active={sameView(props.view, { kind: "tag", key: node.key })}
 					onClick={() => props.onView({ kind: "tag", key: node.key })}
-					onContextMenu={tag === null ? undefined : props.menuFor(tag)}
+					onContextMenu={props.menuFor(tag)}
 				>
-					<span class={`cp-tag-dot cp-tag-${tag?.color ?? "none"}`} aria-hidden="true" />
+					<span class={`cp-tag-dot cp-tag-${tag.color ?? "none"}`} aria-hidden="true" />
 				</ItemButton>
 			</div>
 			{hasChildren && open && (
@@ -251,7 +250,7 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 	}
 }
 
-/** The Parent choices of the tag dialog: the top-level nodes of the tree (implicit parents too) by name, never `self`. */
+/** The Parent choices of the tag dialog: the top-level tags of the tree by name, never `self`. */
 function tagParents(tree: TagNode[], self: string | null): { key: string; label: string }[] {
 	// A key with an empty segment ("a//b") is one flat tag, not a parent.
 	return tree.filter((n) => !n.key.includes("/") && n.key !== self).map((n) => ({ key: n.key, label: n.name }));
@@ -289,8 +288,8 @@ async function newTag(host: UiHost, parents: { key: string; label: string }[]): 
 	});
 }
 
-/** Edit tag: rename, parent and color in one write. `onMoved` gets the old and new key when the key changed. */
-async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: string }[], onMoved: (from: string, to: string) => void): Promise<void> {
+/** Edit tag: rename, parent and color in one write. `onMoved` gets the move when the key changed. */
+async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: string }[], onMoved: (moves: readonly TagMove[]) => void): Promise<void> {
 	if (host.tagDialog === undefined) return;
 	const tags = () => host.app.store.state.tags;
 	const path = tagPath(tag.key);
@@ -310,7 +309,7 @@ async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: st
 				const before = tagLabel(tags(), tag.key);
 				const mark = host.app.store.undoMark();
 				const result = await host.app.tags.edit(tag.key, { name: values.name, parentKey: values.parent, color: values.color });
-				if (result.key !== tag.key) onMoved(tag.key, result.key);
+				if (result.key !== tag.key) onMoved([{ from: tag.key, to: result.key }]);
 				const after = tagLabel(tags(), result.key);
 				notifyWrite(host, result, values.name !== name ? `Renamed tag @${before} to @${after}.` : `Updated tag @${after}.`, mark);
 				return null;
@@ -321,22 +320,26 @@ async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: st
 	});
 }
 
-async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise<void> {
+/** Delete tag: one write; a parent's child tags move to the top level. `onDeleted` gets the children's moves. */
+async function deleteTag(host: UiHost, tag: Tag, onDeleted: (moves: readonly TagMove[]) => void): Promise<void> {
 	const n = host.app.tags.usage(tag.key);
 	const tasks = plural(n, "task");
 	const label = tagLabel(host.app.store.state.tags, tag.key);
-	// A parent tag with child tags: only this key goes, so the message says what stays.
+	// A parent tag with child tags: the message says where they go.
 	const isParent = [...host.app.store.state.tags.keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
 	const ok = await host.choose(
 		"Delete tag",
-		isParent ? `Remove the tag "${label}" from ${tasks}? Its child tags are kept.` : `Delete @${label}? It is removed from ${tasks}.`,
+		// No "removed from 0 tasks" when no task holds the tag itself.
+		n === 0
+			? `Delete @${label}?${isParent ? " Its child tags move to the top level." : ""}`
+			: `Delete @${label}? It is removed from ${tasks}${isParent ? ", and its child tags move to the top level" : ""}.`,
 		[{ label: "Delete", value: true, warning: true }],
 	);
 	if (ok !== true) return;
 	try {
 		const mark = host.app.store.undoMark();
 		const result = await host.app.tags.delete(tag.key);
-		onDeleted();
+		onDeleted(result.moves);
 		// A tag already gone and unused: nothing was written, so no notice and no Undo.
 		notifyWrite(host, result, `Deleted tag @${label}.`, mark);
 	} catch (err) {
@@ -405,29 +408,25 @@ export function Sidebar(props: {
 					]),
 		]);
 
-	// After a delete: an open tag view with no tag record left at or under its key has nothing to show.
-	const leaveDeletedTagView = () => {
-		if (view.kind !== "tag") return;
-		const key = view.key;
-		if (!hasTagOrChild(host.app.store.state.tags.keys(), key)) toInbox();
-	};
-
-	// After an edit that moved keys: an open tag view at or under the old key follows to the new one (the latest view,
-	// since the dialog stays open across renders); a view on an implicit parent the move emptied goes to Inbox.
+	// After an edit or a delete: an open tag view at or under a moved key follows to the new one (the latest view,
+	// since the dialog stays open across renders); a view whose tag is gone goes to Inbox.
 	const viewRef = useRef(view);
 	viewRef.current = view;
-	const followMovedTag = (from: string, to: string) => {
+	const followMovedTags = (moves: readonly TagMove[]) => {
 		const current = viewRef.current;
 		if (current.kind !== "tag") return;
-		if (isUnderTag(current.key, from)) onView({ kind: "tag", key: to + current.key.slice(from.length) });
-		else if (!hasTagOrChild(host.app.store.state.tags.keys(), current.key)) toInbox();
+		// The view's own tag, else its closest moved ancestor: a delete moves each child to the top on its own.
+		let move: TagMove | undefined;
+		for (const m of moves) if (isUnderTag(current.key, m.from) && (move === undefined || m.from.length > move.from.length)) move = m;
+		if (move !== undefined) onView({ kind: "tag", key: move.to + current.key.slice(move.from.length) });
+		else if (!host.app.store.state.tags.has(current.key)) toInbox();
 	};
 
 	const tagMenu = (t: Tag) => (e: MouseEvent) =>
 		host.showMenu(e, [
 			...(host.tagDialog === undefined
 				? []
-				: [{ title: "Edit", icon: "pencil", run: () => void editTag(host, t, tagParents(tree, t.key), followMovedTag) }, "separator" as const]),
+				: [{ title: "Edit", icon: "pencil", run: () => void editTag(host, t, tagParents(tree, t.key), followMovedTags) }, "separator" as const]),
 			...[null, ...TAG_COLORS].map((color) => ({
 				title: color === null ? "No color" : `Color: ${color}`,
 				checked: t.color === color,
@@ -438,7 +437,7 @@ export function Sidebar(props: {
 				title: "Delete",
 				icon: "trash-2",
 				warning: true,
-				run: () => void deleteTag(host, t, leaveDeletedTagView),
+				run: () => void deleteTag(host, t, followMovedTags),
 			},
 		]);
 

@@ -18,6 +18,7 @@ async function seeded(): Promise<AppHarness & { ids: Record<string, string> }> {
 		put("home/calls", "Home/Calls", "blue");
 		put("home/garden", "Home/Garden");
 		put("errands", "Errands");
+		put("work", "Work");
 		put("work/desk", "Work/Desk");
 	});
 	const ids: Record<string, string> = {};
@@ -158,11 +159,12 @@ describe("TagService.edit: parent", () => {
 		expect(task(h, h.ids["Weed"]!).tagKeys).toEqual(["garden"]);
 	});
 
-	it("moves under an implicit parent, which stays implicit", async () => {
+	it("moves under a parent in its casing, leaving the parent as it is", async () => {
 		const h = await seeded();
+		const work = h.app.store.state.tags.get("work");
 		expect((await h.app.tags.edit("errands", { name: "Errands", parentKey: "work", color: null })).key).toBe("work/errands");
 		expect(h.app.store.state.tags.get("work/errands")!.displayName).toBe("Work/Errands");
-		expect(h.app.store.state.tags.has("work")).toBe(false);
+		expect(h.app.store.state.tags.get("work")).toBe(work);
 	});
 
 	it("refuses a parent for a tag with children, a parent that is not top-level, itself, or gone", async () => {

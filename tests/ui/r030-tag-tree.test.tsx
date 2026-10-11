@@ -42,7 +42,7 @@ describe("sidebar tag tree", () => {
 		expect(depth("Python")).toBe(true);
 	});
 
-	it("an implicit parent counts each descendant task once; children count their own", async () => {
+	it("a parent counts each descendant task once; children count their own", async () => {
 		const m = await mount();
 		const count = (l: string) => rowFor(m, l).querySelector(".cp-count")?.textContent;
 		expect(count("Programming")).toBe("3");
@@ -74,7 +74,7 @@ describe("sidebar tag tree", () => {
 		expect(sidebar(m).querySelector(".cp-tag-tree")!.getAttribute("aria-label")).toBeNull();
 	});
 
-	it("clicking the implicit parent opens its view with both tasks; a child shows its own", async () => {
+	it("clicking the parent opens its view with both tasks; a child shows its own", async () => {
 		const m = await mount();
 		await click(rowFor(m, "Programming"));
 		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Programming");
@@ -84,17 +84,17 @@ describe("sidebar tag tree", () => {
 		expect(rowTitles(m)).toEqual(["Both", "Go task"]);
 	});
 
-	it("an implicit parent has no color dot and no menu; a real tag keeps both", async () => {
+	it("a parent made by its first child is a tag with a color dot and a menu, like a child", async () => {
 		const m = await mount();
 		const dot = (l: string) => rowFor(m, l).querySelector(".cp-tag-dot")!;
-		expect(dot("Programming").classList.contains("cp-tag-none")).toBe(true);
+		expect(dot("Programming").classList.contains("cp-tag-none")).toBe(false);
 		expect(dot("Go").classList.contains("cp-tag-none")).toBe(false);
 		rowFor(m, "Programming").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 		await settle();
-		expect(m.host.menus).toHaveLength(0);
+		expect(m.host.menus).toHaveLength(1);
 		rowFor(m, "Go").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 		await settle();
-		expect(m.host.menus).toHaveLength(1);
+		expect(m.host.menus).toHaveLength(2);
 	});
 
 	it("task rows show the tag by its own name", async () => {
@@ -113,16 +113,9 @@ describe("tag tree: delete and expansion (review fixes 9-11)", () => {
 	};
 	const deleteItem = (menu: Awaited<ReturnType<typeof menuOf>>) => menuItem(menu, "Delete");
 
-	it("deleting the open tag goes back to Inbox; deleting a tag whose children remain keeps its view", async () => {
+	it("deleting the open tag goes back to Inbox", async () => {
 		const m = await mount();
-		await m.h.app.tags.create("Programming");
-		await settle();
 		m.host.choose = (async () => true) as unknown as typeof m.host.choose;
-		// A real parent with children: the open view stays (the implicit parent is still there).
-		await click(rowFor(m, "Programming"));
-		deleteItem(await menuOf(m, "Programming")).run();
-		await settle();
-		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Programming");
 		// A leaf: its view goes away, so the list returns to Inbox.
 		await click(rowFor(m, "Go"));
 		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Go");
@@ -140,7 +133,7 @@ describe("tag tree: delete and expansion (review fixes 9-11)", () => {
 		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("Inbox");
 	});
 
-	it("the confirmation on a real parent says the child tags are kept, with the exact-key count", async () => {
+	it("the confirmation on a parent says the child tags move to the top level, with the exact-key count", async () => {
 		const m = await mount();
 		await m.h.app.tasks.create({ title: "Parent only", newTags: ["Programming"] });
 		await settle();
@@ -153,7 +146,7 @@ describe("tag tree: delete and expansion (review fixes 9-11)", () => {
 		await settle();
 		deleteItem(await menuOf(m, "Errands")).run();
 		await settle();
-		expect(messages[0]).toBe('Remove the tag "Programming" from 1 task? Its child tags are kept.');
+		expect(messages[0]).toBe("Delete @Programming? It is removed from 1 task, and its child tags move to the top level.");
 		expect(messages[1]).toBe("Delete @Errands? It is removed from 1 task.");
 	});
 

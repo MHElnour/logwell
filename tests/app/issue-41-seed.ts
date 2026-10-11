@@ -50,7 +50,7 @@ export async function seededState(seed = 41, count = 240): Promise<SeededState> 
 	await addSection(lists[0]!, "Admin");
 	await addSection(lists[2]!, "Shops");
 	for (const raw of ["Work", "Work/Meetings", "Home", "Errands", "Garden/Roses"]) await app.tags.create(raw);
-	// "garden" has no record of its own: an implicit parent tag.
+	// "Garden/Roses" makes its parent "garden" too.
 	const tagKeys = ["work", "work/meetings", "home", "errands", "garden/roses"];
 	const today = app.queryContext().today;
 

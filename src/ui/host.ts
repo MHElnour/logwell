@@ -75,7 +75,7 @@ export interface HabitDialogOptions {
 export interface TagDialogValues {
 	/** The tag's own name, trimmed (no parent path). */
 	name: string;
-	/** The key of a top-level tag (or implicit parent), or null for none. */
+	/** The key of a top-level tag, or null for none. */
 	parent: string | null;
 	/** One of the theme colors; null = the "Default" swatch, which means no color. */
 	color: TagColor | null;

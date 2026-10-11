@@ -9,15 +9,16 @@ const map = (...tags: Tag[]) => new Map(tags.map((t) => [t.key, t]));
 const namesOf = (...tags: Tag[]) => TagNames.of(tags);
 
 describe("resolveTagName", () => {
-	const names = namesOf(tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
+	const names = namesOf(tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
 
 	it("an exact key resolves to itself", () => {
 		expect(resolveTagName(names, "home/calls")).toBe("home/calls");
 		expect(resolveTagName(names, "errands")).toBe("errands");
 	});
 
-	it("an implicit parent resolves to itself", () => {
+	it("a parent resolves to itself; a parent with no record does not resolve", () => {
 		expect(resolveTagName(names, "home")).toBe("home");
+		expect(resolveTagName(namesOf(tag("home/calls", "Home/Calls")), "home")).toBeNull();
 	});
 
 	it("a name alone finds the child tag", () => {
@@ -62,8 +63,8 @@ describe("tagLabel", () => {
 		expect(tagLabel(tags, "errands")).toBe("Errands");
 	});
 
-	it("an implicit parent shows its own name", () => {
-		expect(tagLabel(map(tag("home/calls", "Home/calls")), "home")).toBe("Home");
+	it("a parent shows its own name", () => {
+		expect(tagLabel(map(tag("home", "Home"), tag("home/calls", "Home/calls")), "home")).toBe("Home");
 	});
 
 	it("a name two tags use shows the full path, so each label finds its own tag", () => {
@@ -98,10 +99,11 @@ describe("tagLabel", () => {
 });
 
 describe("TagNames.count and tagNamesOf", () => {
-	it("count is how many nodes use a name", () => {
-		const names = namesOf(tag("home/calls", "Home/Calls"), tag("work/calls", "Work/Calls"));
+	it("count is how many tags use a name", () => {
+		const names = namesOf(tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("work/calls", "Work/Calls"));
 		expect(names.count("calls")).toBe(2);
 		expect(names.count("home")).toBe(1);
+		expect(names.count("work")).toBe(0);
 		expect(names.count("nope")).toBe(0);
 	});
 

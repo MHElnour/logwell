@@ -32,10 +32,10 @@ describe("tag views with descendants", () => {
 		expect(titles(h, "programmingx")).toEqual(["Lookalike"]);
 	});
 
-	it("an implicit parent (no tag record) still lists its descendants' tasks", async () => {
+	it("a parent made with its first child lists that child's tasks", async () => {
 		const h = await appHarness();
 		await h.app.tasks.create({ title: "Go task", newTags: ["Programming/Go"] });
-		expect(h.app.store.state.tags.has("programming")).toBe(false);
+		expect(h.app.store.state.tags.has("programming")).toBe(true);
 		expect(titles(h, "programming")).toEqual(["Go task"]);
 	});
 
@@ -48,7 +48,7 @@ describe("tag views with descendants", () => {
 		expect(buildList(h.app.store.state, { kind: "tag", key: "programming/python" }, h.app.queryContext(), emptyFilter(), "").completed).toEqual([]);
 	});
 
-	it("counts include descendants, each task once, with implicit parents counted", async () => {
+	it("counts include descendants, each task once", async () => {
 		const h = await seed();
 		const counts = sidebarCounts(h.app.store.state, h.app.queryContext()).tags;
 		expect(counts.get("programming")).toBe(4);
@@ -57,14 +57,14 @@ describe("tag views with descendants", () => {
 		expect(counts.get("programmingx")).toBe(1);
 	});
 
-	it("a tag view is titled by the tag's own name, and Quick Add from it presets no tag", async () => {
+	it("a tag view is titled by the tag's own name, and Quick Add from it presets that tag, a parent's too", async () => {
 		const h = await appHarness();
 		await h.app.tasks.create({ title: "Go task", newTags: ["Programming/Go"] });
 		const state = h.app.store.state;
 		expect(viewTitle({ kind: "tag", key: "programming" }, state)).toBe("@Programming");
 		expect(viewTitle({ kind: "tag", key: "programming/go" }, state)).toBe("@Go");
 		const ctx = h.app.queryContext();
-		expect(viewPreset({ kind: "tag", key: "programming" }, ctx, state).addTagKeys).toEqual([]);
-		expect(viewPreset({ kind: "tag", key: "programming/go" }, ctx, state).addTagKeys).toEqual(["programming/go"]);
+		expect(viewPreset({ kind: "tag", key: "programming" }, ctx).addTagKeys).toEqual(["programming"]);
+		expect(viewPreset({ kind: "tag", key: "programming/go" }, ctx).addTagKeys).toEqual(["programming/go"]);
 	});
 });

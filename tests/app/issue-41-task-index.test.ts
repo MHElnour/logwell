@@ -45,7 +45,7 @@ function serialize(value: unknown): string {
 
 const counted = (c: SidebarCounts) => serialize(c);
 
-/** Every view of the state: Inbox, each list, Today, Upcoming, each tag (implicit parents too), Completed, Trash. */
+/** Every view of the state: Inbox, each list, Today, Upcoming, each tag and every path prefix of a task's tags, Completed, Trash. */
 function viewsOf(state: DbData): TaskView[] {
 	const tags = new Set<string>(state.tags.keys());
 	for (const t of state.tasks.values()) for (const k of t.tagKeys) for (const p of tagPrefixes(k)) tags.add(p);

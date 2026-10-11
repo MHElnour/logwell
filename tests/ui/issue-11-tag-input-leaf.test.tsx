@@ -47,7 +47,7 @@ describe("TagInput: a tag by its own name", () => {
 		input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 		await settleUi();
 		expect(m.changes).toEqual([["home/calls"]]);
-		expect(m.h.app.tags.list()).toHaveLength(1);
+		expect(m.h.app.tags.list().map((t) => t.key)).toEqual(["home", "home/calls"]);
 	});
 
 	it("the Add button adds the child tag", async () => {
@@ -80,8 +80,8 @@ describe("TagInput: a tag by its own name", () => {
 		render(<TagInput app={m.h.app} value={[]} onChange={() => undefined} onError={() => undefined} normalize={normalizeTagKey} />, m.root);
 		await settleUi();
 		const options = [...m.root.querySelectorAll<HTMLOptionElement>("datalist option")];
-		expect(options.map((o) => o.value)).toEqual(["Calls"]);
+		expect(options.map((o) => o.value)).toEqual(["Calls", "Home"]);
 		// The full path is the option's label, so typing `home/` still finds the tag.
-		expect(options.map((o) => o.getAttribute("label"))).toEqual(["Home/Calls"]);
+		expect(options.map((o) => o.getAttribute("label"))).toEqual(["Home/Calls", "Home"]);
 	});
 });

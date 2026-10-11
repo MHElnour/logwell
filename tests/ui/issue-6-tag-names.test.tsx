@@ -47,7 +47,7 @@ describe("TagInput unique tag names", () => {
 		expect(m.root.querySelector(".cp-hint")?.textContent).toBe('The name "Calls" is already used by another tag.');
 		input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 		await settleUi();
-		expect(m.h.app.tags.list()).toHaveLength(1);
+		expect(m.h.app.tags.list()).toHaveLength(2);
 		expect(m.changes).toEqual([]);
 	});
 

@@ -2,6 +2,7 @@
 // services; every DOM read is scoped to the visible Tasks section (background tabs keep hidden copies).
 import { browser, expect } from "@wdio/globals";
 import {
+	clickModalButton,
 	clickUndoNotice,
 	closeNotices,
 	createTask,
@@ -127,5 +128,58 @@ describe("Parent tags (P6)", function () {
 		await domClick(fold);
 		await browser.waitUntil(async () => (await treeLabels(section)).length === 1, { timeout: 5000, timeoutMsg: "the tree did not fold" });
 		expect(await section.$('.cp-tag-fold[data-tag-label="Programming"]').getAttribute("aria-expanded")).toBe("false");
+	});
+});
+
+describe("Parent tags are tags (#9)", function () {
+	beforeEach(async function () {
+		await freshDatabase();
+		await detachAppLeaves();
+		await createTask("Ring mum", { newTags: ["Home/Calls"] });
+		await createTask("Weed the beds", { newTags: ["Home/Garden"] });
+		await flush();
+	});
+
+	it("a parent is a tag: its row has the menu and takes a color (#9)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		const wasNative = await useDomMenus();
+		try {
+			const home = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await home.click({ button: "right" });
+			await pickMenuItem("Color: purple");
+			await browser.waitUntil(async () => ((await home.$(".cp-tag-dot").getAttribute("class")) ?? "").includes("cp-tag-purple"), {
+				timeout: 5000,
+				timeoutMsg: "the parent did not take the color",
+			});
+			const color = await browser.executeObsidian(({ plugins }) => {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				return ((plugins as any).logwell.session.app.store.state.tags.get("home")?.color ?? null) as string | null;
+			});
+			expect(color).toBe("purple");
+		} finally {
+			await restoreMenus(wasNative);
+		}
+	});
+
+	it("deleting a parent moves its child tags to the top level in one write; Undo brings it back (#9)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		const wasNative = await useDomMenus();
+		try {
+			await closeNotices();
+			const home = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await home.click({ button: "right" });
+			await pickMenuItem("Delete");
+			await clickModalButton("Delete");
+			await browser.waitUntil(async () => !(await treeLabels(section)).includes("Home"), { timeout: 5000, timeoutMsg: "the parent was not deleted" });
+			expect(await treeLabels(section)).toEqual(["Calls", "Garden"]);
+			await waitForNotice("Deleted tag @Home.");
+			await clickUndoNotice();
+			await browser.waitUntil(async () => (await treeLabels(section)).includes("Home"), { timeout: 5000, timeoutMsg: "Undo did not restore the parent" });
+			expect(await treeLabels(section)).toEqual(["Home", "Calls", "Garden"]);
+		} finally {
+			await restoreMenus(wasNative);
+		}
 	});
 });

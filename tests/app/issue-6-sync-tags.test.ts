@@ -10,14 +10,6 @@ import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
 const pushes = (s: SyncHarness) => s.tt.count("batchTasks") + s.tt.count("updateTask") + s.tt.count("createTask") + s.tt.count("createTag");
 
-/** `home/calls` (January) and `work/home` (February): the name "home" is used twice, `home` has no record. */
-function seedHomeDuplicate(s: SyncHarness): Promise<void> {
-	return s.h.app.store.run("Seed", (tx) => {
-		tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" });
-		tx.put("tags", { key: "work/home", displayName: "Work/Home", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
-	});
-}
-
 async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
 	const s = await syncHarness();
 	const { listId, projectId } = await linkedList(s);
@@ -120,18 +112,6 @@ describe("push", () => {
 		expect(pushes(s)).toBe(n);
 		// The Logwell task keeps its tags.
 		expect(s.task("Ring the office").tagKeys).toEqual(["work/calls", "plain"]);
-	});
-
-	it("creating the record of an implicit parent keeps its children synced", async () => {
-		const s = await setup();
-		await seedHomeDuplicate(s);
-		const { task } = await s.h.app.tasks.create({ title: "Ring mum", categoryId: s.listId, tagKeys: ["home/calls"] });
-		await s.sync.sync();
-		s.tick();
-		await s.h.app.tags.create("Home");
-		await s.sync.sync();
-		expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["calls"]);
-		expect(s.sync.unsyncedTagKeys(task.id)).toEqual([]);
 	});
 
 	it("a tag record TickTick refuses stops that list only (SYNC-12), and the next sync sends it", async () => {
@@ -252,9 +232,9 @@ describe("pull", () => {
 		expect(s.tt.count("listTags")).toBe(1);
 	});
 
-	it("a pulled name that is a Logwell implicit parent with an older duplicate stays on the TickTick task", async () => {
+	it("a pulled name that is a Logwell parent tag maps to that tag and stays on the TickTick task", async () => {
 		const s = await setup();
-		await seedHomeDuplicate(s);
+		await s.h.app.tags.create("Home/Calls");
 		s.tt.add(s.projectId, { title: "Clean", tags: ["home"] });
 		await s.sync.sync();
 		s.tick();

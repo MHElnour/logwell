@@ -85,7 +85,7 @@ const EMPTY_TEXT: Record<TaskView["kind"], string> = {
 
 /** Inline "Add task" bar: the same parser, chips and keyboard rules as Quick Add. */
 function AddBar({ host, view, state, ctx }: { host: UiHost; view: TaskView; state: DbData; ctx: QueryContext }) {
-	const preset = viewPreset(view, ctx, state);
+	const preset = viewPreset(view, ctx);
 	return (
 		<InlineAddBar
 			host={host}
@@ -153,7 +153,7 @@ export function TasksSection(props: {
 	);
 	const subtaskCounts = useSubtaskCounts(host, state.tasks, props.visible && view.kind !== "trash");
 	const modeLabelId = `${useUniqueId("cp-mode")}-label`;
-	const preset = viewPreset(view, ctx, state);
+	const preset = viewPreset(view, ctx);
 	const readOnly = host.app.store.readOnlyState !== null;
 	// Inbox and lists have sections; "Add section" (view menu) asks the list or the board to open its name field.
 	const sectionList: ID | null = view.kind === "inbox" ? INBOX_ID : view.kind === "category" ? view.id : null;

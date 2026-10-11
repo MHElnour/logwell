@@ -66,7 +66,7 @@ export function tagPath(key: string): string[] {
 	return parts.some((p) => p === "") ? [key] : parts;
 }
 
-/** The node keys on the way to `key`, itself last: `a/b/c` gives `a`, `a/b`, `a/b/c`. */
+/** The path prefixes of `key`, itself last: `a/b/c` gives `a`, `a/b`, `a/b/c`. */
 export function tagPrefixes(key: string): string[] {
 	const path = tagPath(key);
 	return path.map((_, i) => path.slice(0, i + 1).join("/"));
@@ -82,18 +82,12 @@ export function isUnderTag(key: string, parentKey: string): boolean {
 	return path.length >= parent.length && parent.every((segment, i) => path[i] === segment);
 }
 
-/** Whether a tag exists at `key` or under it: as a record, or as the path prefix of one (a parent). */
-export function hasTagOrChild(keys: Iterable<string>, key: string): boolean {
-	for (const k of keys) if (isUnderTag(k, key)) return true;
-	return false;
-}
-
 export interface TagNode {
 	key: string;
 	/** The last path segment, in the user's casing. */
 	name: string;
-	/** The tag record; null for an implicit parent (a path prefix that is not a tag). */
-	tag: Tag | null;
+	/** The tag record: every node is a tag. */
+	tag: Tag;
 	/** Open tasks under this key, taken from the caller's counts (descendants included). */
 	count: number;
 	children: TagNode[];
@@ -112,29 +106,22 @@ export function tagDisplayLeaf(tag: Tag): string {
 	return displaySegments(tag, path)[path.length - 1]!;
 }
 
-/** The tag list as a tree, with an implicit node for every path prefix that is not a tag. Siblings sort by name. */
+/**
+ * The tag records as a tree: each tag under its parent's record. A child whose parent has no record (a broken file)
+ * shows at the top rather than not at all. Siblings sort by name.
+ */
 export function tagTree(tags: Iterable<Tag>, counts: ReadonlyMap<string, number>): TagNode[] {
 	const nodes = new Map<string, TagNode>();
-	const roots: TagNode[] = [];
-	const sorted = [...tags].sort((a, b) => a.displayName.localeCompare(b.displayName));
-	for (const tag of sorted) {
+	for (const tag of tags) {
+		// A key with an empty segment (an older file) is named by its key: its display name splits differently.
 		const path = tagPath(tag.key);
-		const names = displaySegments(tag, path);
-		let siblings = roots;
-		const prefixes = tagPrefixes(tag.key);
-		prefixes.forEach((key, i) => {
-			let node = nodes.get(key);
-			if (node === undefined) {
-				node = { key, name: names[i]!, tag: null, count: counts.get(key) ?? 0, children: [] };
-				nodes.set(key, node);
-				siblings.push(node);
-			}
-			if (i === prefixes.length - 1) {
-				node.tag = tag;
-				node.name = names[i]!;
-			}
-			siblings = node.children;
-		});
+		nodes.set(tag.key, { key: tag.key, name: displaySegments(tag, path)[path.length - 1]!, tag, count: counts.get(tag.key) ?? 0, children: [] });
+	}
+	const roots: TagNode[] = [];
+	for (const node of nodes.values()) {
+		const path = tagPath(node.key);
+		const parent = path.length > 1 ? nodes.get(path.slice(0, -1).join("/")) : undefined;
+		(parent?.children ?? roots).push(node);
 	}
 	const sort = (list: TagNode[]) => {
 		list.sort((a, b) => a.name.localeCompare(b.name));
@@ -144,21 +131,14 @@ export function tagTree(tags: Iterable<Tag>, counts: ReadonlyMap<string, number>
 	return roots;
 }
 
-/** The full display name of a tag key: its record's, or for an implicit parent the prefix of a descendant's. */
+/** The full display name of a tag key: its record's, or the key when there is no record. */
 export function tagDisplayPath(tags: ReadonlyMap<string, Tag>, key: string): string {
-	const record = tags.get(key);
-	if (record !== undefined) return record.displayName;
-	const prefix = tagPath(key).length;
-	for (const t of [...tags.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))) {
-		if (!isUnderTag(t.key, key)) continue;
-		return displaySegments(t, tagPath(t.key)).slice(0, prefix).join("/");
-	}
-	return key;
+	return tags.get(key)?.displayName ?? key;
 }
 
 // A tag NAME (the last segment of its key: `calls` in `home/calls`) is used once, whatever its parent.
-// Keys are lowercase, so names compare case-insensitively. An implicit parent (a path prefix with no record) is a name
-// too. Duplicates already in a file keep working; the oldest tag owns the name. A tag never repeats its parent's name.
+// Keys are lowercase, so names compare case-insensitively. Duplicates already in a file keep working; the oldest tag owns
+// the name. A tag never repeats its parent's name.
 
 export const TAG_REPEAT_MESSAGE = "A tag can't have the same name as its parent.";
 
@@ -174,11 +154,11 @@ export function tagLeaf(key: string): string {
 	return path[path.length - 1]!;
 }
 
-/** The tag names in use: each node of the tag tree (records and implicit parents) by its name. */
+/** The tag names in use: each tag record by its name. */
 export class TagNames {
-	/** Node key -> the oldest `createdAt` of its record and the records under it: what the node owns its name by. */
-	private readonly nodes = new Map<string, string>();
-	/** Name -> the node keys that use it (more than one only for duplicates already in a file). */
+	/** Tag key -> its record's `createdAt`: what the tag owns its name by. */
+	private readonly since = new Map<string, string>();
+	/** Name -> the tag keys that use it (more than one only for duplicates already in a file). */
 	private readonly byName = new Map<string, Set<string>>();
 
 	static of(tags: Iterable<{ key: string; createdAt?: string }>): TagNames {
@@ -187,70 +167,69 @@ export class TagNames {
 		return names;
 	}
 
-	/** Adds a tag key and its parent nodes. */
+	/** Adds a tag key under its name. */
 	add(key: string, createdAt = ""): void {
-		const path = tagPath(key);
-		tagPrefixes(key).forEach((node, i) => {
-			const since = this.nodes.get(node);
-			if (since === undefined || createdAt < since) this.nodes.set(node, createdAt);
-			let set = this.byName.get(path[i]!);
-			if (set === undefined) this.byName.set(path[i]!, (set = new Set()));
-			set.add(node);
-		});
+		const name = tagLeaf(key);
+		this.since.set(key, createdAt);
+		let set = this.byName.get(name);
+		if (set === undefined) this.byName.set(name, (set = new Set()));
+		set.add(key);
 	}
 
 	clone(): TagNames {
 		const copy = new TagNames();
-		for (const [k, v] of this.nodes) copy.nodes.set(k, v);
+		for (const [k, v] of this.since) copy.since.set(k, v);
 		for (const [k, v] of this.byName) copy.byName.set(k, new Set(v));
 		return copy;
 	}
 
-	/** Whether the key is a node of the tree (a tag or an implicit parent). */
+	/** Whether the key is a tag. */
 	has(key: string): boolean {
-		return this.nodes.has(key);
+		return this.since.has(key);
 	}
 
-	/** How many nodes use a name (more than one only for duplicates already in a file). */
+	/** How many tags use a name (more than one only for duplicates already in a file). */
 	count(name: string): number {
 		return this.byName.get(name)?.size ?? 0;
 	}
 
-	/**
-	 * The node that owns a name: the oldest of those that use it (then the smaller key); undefined when unused. A node
-	 * is as old as the older of its record and its oldest child, so giving an implicit parent a record never moves its
-	 * name (and stops its children from syncing).
-	 */
+	/** The tag that owns a name: the oldest of those that use it (then the smaller key); undefined when unused. */
 	owner(name: string): string | undefined {
 		const set = this.byName.get(name);
 		if (set === undefined) return undefined;
-		const since = (key: string): string => this.nodes.get(key)!;
+		const age = (key: string): string => this.since.get(key)!;
 		let best: string | undefined;
 		for (const key of set) {
 			if (best === undefined) best = key;
 			else {
-				const a = since(key);
-				const b = since(best);
+				const a = age(key);
+				const b = age(best);
 				if (a < b || (a === b && key < best)) best = key;
 			}
 		}
 		return best;
 	}
 
-	/** Whether a new key adds a node whose name is longer than `TAG_NAME_MAX`. Existing nodes keep any length. */
+	/**
+	 * Whether a new key, or the missing parent created with it, has a name longer than `TAG_NAME_MAX`. Existing tags
+	 * keep any length.
+	 */
 	tooLong(key: string): boolean {
 		const path = tagPath(key);
-		return tagPrefixes(key).some((node, i) => !this.nodes.has(node) && path[i]!.length > TAG_NAME_MAX);
+		return tagPrefixes(key).some((prefix, i) => !this.since.has(prefix) && path[i]!.length > TAG_NAME_MAX);
 	}
 
-	/** The existing node whose name a new key would use again (checked for the key's new nodes only), or null. */
+	/**
+	 * The existing tag whose name a new key would use again, or null. A missing parent is created with the key, so its
+	 * name is checked too; an existing parent is not.
+	 */
 	clash(key: string): string | null {
 		const path = tagPath(key);
 		const prefixes = tagPrefixes(key);
 		for (let i = 0; i < prefixes.length; i++) {
-			const node = prefixes[i]!;
-			if (this.nodes.has(node)) continue;
-			for (const other of this.byName.get(path[i]!) ?? []) if (other !== node) return other;
+			const prefix = prefixes[i]!;
+			if (this.since.has(prefix)) continue;
+			for (const other of this.byName.get(path[i]!) ?? []) if (other !== prefix) return other;
 		}
 		return null;
 	}
@@ -268,9 +247,9 @@ export function tagNamesOf(tags: ReadonlyMap<string, Tag>): TagNames {
 }
 
 /**
- * What a typed tag name stands for (Quick Add `@tag`, the tag field, the `tag:` filter of a task block): the node key,
- * or null. An exact node wins (a tag, or the parent of one); else a name alone (`calls`) finds the node that owns it,
- * the oldest when older files use it twice. A path that is no node (`work/calls`) finds nothing.
+ * What a typed tag name stands for (Quick Add `@tag`, the tag field, the `tag:` filter of a task block): the tag key,
+ * or null. An exact key wins; else a name alone (`calls`) finds the tag that owns it, the oldest when older files use
+ * it twice. A path that is no tag (`work/calls`) finds nothing.
  */
 export function resolveTagName(names: TagNames, typed: string): string | null {
 	const key = normalizeTagKey(typed);
@@ -281,28 +260,20 @@ export function resolveTagName(names: TagNames, typed: string): string | null {
 
 /**
  * How a tag is shown: its own name (`Calls` for `home/calls`), in the casing it was created with. A name that more than
- * one node uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
+ * one tag uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
  * Not for exports, which keep the full path.
  */
 export function tagLabel(tags: ReadonlyMap<string, Tag>, key: string): string {
 	const path = tagPath(key);
 	const names = tagNamesOf(tags);
-	if (path.length === 1 || names.count(path[path.length - 1]!) > 1 || !names.has(key)) return tags.get(key)?.displayName ?? tagDisplayPath(tags, key);
 	const record = tags.get(key);
-	const shown = record !== undefined ? displaySegments(record, path) : tagDisplayPath(tags, key).split("/");
-	return shown[shown.length - 1]!;
+	if (record === undefined || path.length === 1 || names.count(path[path.length - 1]!) > 1) return tagDisplayPath(tags, key);
+	return tagDisplayLeaf(record);
 }
 
 /** Every tag with its label, sorted by label: the order of a tag menu or list, which shows labels. */
 export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: string }[] {
 	return [...tags.values()].map((tag) => ({ tag, label: tagLabel(tags, tag.key) })).sort((a, b) => a.label.localeCompare(b.label));
-}
-
-/** The existing tag node whose name a new key would repeat, or null. */
-export function tagNameClash(keys: Iterable<string>, key: string): string | null {
-	const names = new TagNames();
-	for (const k of keys) names.add(k);
-	return names.clash(key);
 }
 
 /**
@@ -352,7 +323,7 @@ export function tagNameTextProblem(typed: string, allowPath = false): string | n
 }
 
 /**
- * Why `name` under `parent` (a top-level node key, or null) cannot be saved, or null: the one check of the New tag and
+ * Why `name` under `parent` (a top-level tag key, or null) cannot be saved, or null: the one check of the New tag and
  * Edit tag dialogs and of `TagService.add` and `edit`. `except` is the key of the tag being edited: it and its children
  * leave the names in use, so its own name is allowed, and each child keeps its name under the new one. An unchanged
  * stored name skips the text and length rules, so a name from an older file is never refused.
@@ -377,7 +348,7 @@ export function newTagProblem(tags: ReadonlyMap<string, Tag>, name: string, pare
 		}
 		pool = remaining;
 	}
-	// A tag or an implicit parent already at this key: the name is in use (a rename never merges two tags).
-	if (hasTagOrChild(pool.keys(), key)) return tagNameClashMessage(pool, key);
+	// A tag already at this key: the name is in use (a rename never merges two tags).
+	if (pool.has(key)) return tagNameClashMessage(pool, key);
 	return tagNameRefusal(pool, key, own);
 }

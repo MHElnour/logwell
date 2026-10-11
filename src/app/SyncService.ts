@@ -1873,9 +1873,9 @@ function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefi
 
 /**
  * The tag side of a pull. A TickTick name maps to the Logwell tag that owns it, keeping Logwell's key and
- * casing (an implicit parent gets its record). An unknown name becomes a new tag, named and nested from TickTick's
- * record when there is one (`remote`): its label, and its parent (created too when Logwell lacks it), one level only;
- * a parent whose name a Logwell child tag owns is not nested under.
+ * casing. An unknown name becomes a new tag, named and nested from TickTick's record when there is one (`remote`): its
+ * label, and its parent (created first when Logwell lacks it), one level only; a parent whose name a Logwell child tag
+ * owns is not nested under.
  */
 function pullTags(tx: Tx, remote: ReadonlyMap<string, TtTag> | null): PullTags {
 	// The state's names (whose hashes are memoized) until the pull creates a tag; then a copy that takes it in.
@@ -1899,10 +1899,7 @@ function pullTags(tx: Tx, remote: ReadonlyMap<string, TtTag> | null): PullTags {
 	};
 	const keyFor = (name: string): string | null => {
 		const owner = names.owner(name);
-		if (owner !== undefined) {
-			ensure(owner, display(owner));
-			return owner;
-		}
+		if (owner !== undefined) return owner;
 		let parentKey: string | null = null;
 		const parentRaw = remote?.get(name)?.parent;
 		const parentName = parentRaw === undefined ? null : ttTagName(parentRaw);
@@ -1912,7 +1909,6 @@ function pullTags(tx: Tx, remote: ReadonlyMap<string, TtTag> | null): PullTags {
 				ensure(parentName, labelOf(parentName));
 				parentKey = parentName;
 			} else if (tagPath(parentOwner).length === 1 && isSyncedTag(names, parentOwner)) {
-				ensure(parentOwner, display(parentOwner));
 				parentKey = parentOwner;
 			}
 		}

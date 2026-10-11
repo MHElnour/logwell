@@ -55,7 +55,7 @@ describe("sidebar New tag", () => {
 		expect([...sidebar(m).querySelectorAll(".cp-sidebar-heading")].some((h) => h.textContent.includes("Tags"))).toBe(true);
 	});
 
-	it("opens New tag with the next palette color and the top-level tags, implicit parents included, as parents", async () => {
+	it("opens New tag with the next palette color and the top-level tags as parents", async () => {
 		const { m, opened } = await scripted(async (m) => {
 			await m.h.app.tags.create("Errands");
 			await m.h.app.tags.create("Home/Calls");
@@ -65,7 +65,7 @@ describe("sidebar New tag", () => {
 		const o = opened[0]!;
 		expect(o.title).toBe("New tag");
 		expect(o.submit).toBe("Create");
-		expect(o.initial).toEqual({ name: "", parent: null, color: paletteColor(3) });
+		expect(o.initial).toEqual({ name: "", parent: null, color: paletteColor(4) });
 		expect(o.parentLock).toBeNull();
 		// A key with an empty segment is one flat tag and cannot be a parent.
 		expect(o.parents).toEqual([

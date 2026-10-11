@@ -28,11 +28,12 @@ describe("TagService.add", () => {
 		expect((await h.app.tags.add("Plain", null, null)).color).toBeNull();
 	});
 
-	it("creates under an implicit parent with the parent's casing; the parent stays implicit", async () => {
+	it("creates under a parent made with a child, in the parent's casing, leaving the parent as it is", async () => {
 		const h = await seeded();
+		const home = h.app.store.state.tags.get("home");
 		const tag = await h.app.tags.add("Garden", "home", "red");
-		expect(tag).toMatchObject({ key: "home/garden", displayName: "Home/Garden" });
-		expect(h.app.store.state.tags.has("home")).toBe(false);
+		expect(tag).toMatchObject({ key: "home/garden", displayName: "Home/Garden", color: "red" });
+		expect(h.app.store.state.tags.get("home")).toBe(home);
 	});
 
 	it("creates under a tag record", async () => {

@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import type { RepeatRule } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
-import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName } from "../domain/tags";
+import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
 import { findDates, resolveDateSpec, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
@@ -203,8 +203,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		const names = namesOfTags();
 		// A new name longer than 64 characters stays in the title too.
 		if (names.tooLong(key) || names.clash(key) !== null) return false;
-		// A new tag of this input is newer than every existing one, so it never takes a name from them.
-		names.add(key, "￿");
+		// A new tag of this input is newer than every existing one, so it never takes a name from them. Its parent is
+		// created with it when missing (Lists, sections and tags rule 26), so the parent's name is taken too.
+		for (const node of tagPrefixes(key)) if (!names.has(node)) names.add(node, "￿");
 		return true;
 	})) {
 		take(t.span);

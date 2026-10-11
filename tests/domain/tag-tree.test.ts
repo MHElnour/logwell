@@ -45,12 +45,12 @@ describe("tagPath and isUnderTag", () => {
 });
 
 describe("tagTree", () => {
-	it("builds an implicit parent with its children, shown by their last segment", () => {
-		const tree = tagTree([tag("Programming/Python"), tag("Programming/Go")], new Map());
+	it("nests children under their parent tag, shown by their last segment", () => {
+		const tree = tagTree([tag("Programming/Python"), tag("Programming/Go"), tag("Programming")], new Map());
 		expect(tree).toHaveLength(1);
 		const parent = tree[0]!;
-		expect(parent).toMatchObject({ key: "programming", name: "Programming", tag: null });
-		expect(parent.children.map((c) => [c.key, c.name, c.tag?.key])).toEqual([
+		expect(parent).toMatchObject({ key: "programming", name: "Programming", tag: { key: "programming" } });
+		expect(parent.children.map((c) => [c.key, c.name, c.tag.key])).toEqual([
 			["programming/go", "Go", "programming/go"],
 			["programming/python", "Python", "programming/python"],
 		]);
@@ -58,43 +58,42 @@ describe("tagTree", () => {
 
 	it("a prefix that is also a tag record is a real parent with its color", () => {
 		const tree = tagTree([tag("Programming", "red"), tag("Programming/Go")], new Map());
-		expect(tree[0]!.tag?.color).toBe("red");
+		expect(tree[0]!.tag.color).toBe("red");
 		expect(tree[0]!.children.map((c) => c.key)).toEqual(["programming/go"]);
 	});
 
-	it("nests deeper paths with an implicit node at every level", () => {
-		const tree = tagTree([tag("A/B/C")], new Map());
+	it("nests a deeper path from an older file under each level's tag", () => {
+		const tree = tagTree([tag("A/B/C"), tag("A"), tag("A/B")], new Map());
 		expect(tree.map((n) => n.key)).toEqual(["a"]);
 		expect(tree[0]!.children.map((n) => n.key)).toEqual(["a/b"]);
-		expect(tree[0]!.children[0]!.children.map((n) => [n.key, n.name, n.tag !== null])).toEqual([["a/b/c", "C", true]]);
-		expect(tree[0]!.children[0]!.tag).toBeNull();
+		expect(tree[0]!.children[0]!.children.map((n) => [n.key, n.name])).toEqual([["a/b/c", "C"]]);
 	});
 
 	it("sorts siblings by display name, ignoring case, and keeps plain tags flat", () => {
-		const tree = tagTree([tag("zeta"), tag("Alpha"), tag("beta/x")], new Map());
+		const tree = tagTree([tag("zeta"), tag("Alpha"), tag("beta"), tag("beta/x")], new Map());
 		expect(tree.map((n) => n.name)).toEqual(["Alpha", "beta", "zeta"]);
 		expect(tree[0]!.children).toEqual([]);
 	});
 
 	it("takes each node's count from the counts map, 0 when absent", () => {
 		const counts = new Map([["programming", 3], ["programming/go", 2]]);
-		const tree = tagTree([tag("Programming/Go"), tag("Programming/Python")], counts);
+		const tree = tagTree([tag("Programming"), tag("Programming/Go"), tag("Programming/Python")], counts);
 		expect(tree[0]!.count).toBe(3);
 		expect(tree[0]!.children.map((c) => c.count)).toEqual([2, 0]);
 	});
 
-	it("takes an implicit parent's casing from its first descendant, and does not confuse programmingx", () => {
-		const tree = tagTree([tag("Programming/Go"), tag("programmingx")], new Map());
+	it("does not confuse programmingx with a child of programming", () => {
+		const tree = tagTree([tag("Programming"), tag("Programming/Go"), tag("programmingx")], new Map());
 		expect(tree.map((n) => [n.key, n.name])).toEqual([["programming", "Programming"], ["programmingx", "programmingx"]]);
 		expect(tree[1]!.children).toEqual([]);
 	});
 });
 
 describe("tagDisplayPath", () => {
-	it("is the record's display name, or built from a descendant for an implicit parent", () => {
+	it("is the record's display name, or the key without a record", () => {
 		const tags = new Map([["programming/go", tag("Programming/Go")]]);
 		expect(tagDisplayPath(tags, "programming/go")).toBe("Programming/Go");
-		expect(tagDisplayPath(tags, "programming")).toBe("Programming");
+		expect(tagDisplayPath(tags, "programming")).toBe("programming");
 		expect(tagDisplayPath(tags, "unknown")).toBe("unknown");
 	});
 });
