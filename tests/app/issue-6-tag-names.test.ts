@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveTagName, tagLabel, tagNamesOf } from "../../src/domain/tags";
 import { appHarness } from "./harness";
 
 // A tag name is used once, whatever its parent, case-insensitively, on every create path. Duplicates
@@ -13,6 +14,16 @@ describe("TagService.create", () => {
 		await expect(h.app.tags.create("Work/CALLS")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Calls" is already used by another tag.' });
 		await expect(h.app.tags.create("calls")).rejects.toMatchObject({ code: "InvalidTag" });
 		expect(h.app.tags.list().map((t) => t.key)).toEqual(["home/calls"]);
+	});
+
+	it("a refused create leaves the labels and name lookups of the committed tags unchanged", async () => {
+		const h = await appHarness();
+		await h.app.tags.create("Home/Calls");
+		await expect(h.app.tags.create("Work/Calls")).rejects.toMatchObject({ code: "InvalidTag" });
+		const tags = h.app.store.state.tags;
+		expect(tagLabel(tags, "home/calls")).toBe("Calls");
+		expect(resolveTagName(tagNamesOf(tags), "calls")).toBe("home/calls");
+		expect(tagNamesOf(tags).count("calls")).toBe(1);
 	});
 
 	it("refuses a child whose name is a root tag", async () => {

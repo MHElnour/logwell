@@ -5,7 +5,7 @@ import { resolveTagName, TagNames } from "../../src/domain/tags";
 
 // The @tag suggester shows and inserts a tag by its own name, and what it inserts finds the same tag (#11).
 
-type Tags = { key: string; label: string }[];
+type Tags = { key: string; label: string; path: string }[];
 
 function make(value: string, tags: Tags) {
 	const input = document.createElement("input");
@@ -26,7 +26,7 @@ function make(value: string, tags: Tags) {
 
 describe("@tag suggester: a tag by its own name", () => {
 	it("shows @Calls for Home/Calls and inserts @Calls", () => {
-		const { suggest, input, lookup, render, bound } = make("Ring mum @ca", [{ key: "home/calls", label: "Calls" }]);
+		const { suggest, input, lookup, render, bound } = make("Ring mum @ca", [{ key: "home/calls", label: "Calls", path: "Home/Calls" }]);
 		const items = lookup("Ring mum @ca");
 		expect(items).toHaveLength(1);
 		expect(render(items[0])).toBe("@Calls");
@@ -36,10 +36,34 @@ describe("@tag suggester: a tag by its own name", () => {
 		expect(bound).toMatchObject([{ kind: "tag", key: "home/calls", text: "@Calls" }]);
 	});
 
+	it("a typed path still finds the tag; the shown and inserted text stays its own name", () => {
+		const tags: Tags = [
+			{ key: "home/calls", label: "Calls", path: "Home/Calls" },
+			{ key: "errands", label: "Errands", path: "Errands" },
+		];
+		for (const typed of ["@home/", "@home/ca", "@Home/Calls"]) {
+			const { suggest, input, lookup, render } = make(`x ${typed}`, tags);
+			const items = lookup(`x ${typed}`);
+			expect(items).toHaveLength(1);
+			expect(render(items[0])).toBe("@Calls");
+			suggest.selectSuggestion(items[0] as never);
+			expect(input.value).toBe("x @Calls");
+		}
+	});
+
+	it("a name match comes before a path match", () => {
+		const tags: Tags = [
+			{ key: "calls/x", label: "X", path: "Calls/X" },
+			{ key: "home/calls", label: "Calls", path: "Home/Calls" },
+		];
+		const { lookup, render } = make("@calls", tags);
+		expect(lookup("@calls").map(render)).toEqual(["@Calls", "@X"]);
+	});
+
 	it("a name two tags use shows and inserts the full path, which finds its own tag", () => {
 		const tags: Tags = [
-			{ key: "home/calls", label: "Home/Calls" },
-			{ key: "work/calls", label: "Work/Calls" },
+			{ key: "home/calls", label: "Home/Calls", path: "Home/Calls" },
+			{ key: "work/calls", label: "Work/Calls", path: "Work/Calls" },
 		];
 		const { suggest, input, lookup, render } = make("x @wor", tags);
 		const items = lookup("x @wor");

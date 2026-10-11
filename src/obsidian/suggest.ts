@@ -10,7 +10,7 @@ type Token = NonNullable<ReturnType<typeof tokenAtCursor>>;
 
 export type SuggestItem =
 	| { kind: "category"; id: string; name: string; icon: string | null }
-	| { kind: "tag"; key: string; label: string }
+	| { kind: "tag"; key: string; label: string; path: string }
 	| { kind: "note"; path: string; basename: string; insert: string };
 
 /** #category, @tag and [[note]] suggestions for the Quick Add input. */
@@ -32,8 +32,8 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 		private readonly cpInput: HTMLInputElement,
 		private readonly cpLists: {
 			categories: () => { id: string; name: string; icon: string | null }[];
-			/** `label` is how the tag is shown (`tagLabel`): what is listed and what is inserted, and it finds the same tag. */
-			tags: () => { key: string; label: string }[];
+			/** `label` is how the tag is shown (`tagLabel`): what is listed and what is inserted, and it finds the same tag. `path` is its full name, which a typed path matches. */
+			tags: () => { key: string; label: string; path: string }[];
 		},
 		private readonly cpOnBind: (decision: SpanDecision) => void,
 	) {
@@ -82,8 +82,11 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 			return filterByQuery(items, (i) => (i.kind === "category" ? i.name : ""), token.query);
 		}
 		if (token.kind === "tag") {
-			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, label: t.label }));
-			return filterByQuery(items, (i) => (i.kind === "tag" ? i.label : ""), token.query);
+			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, label: t.label, path: t.path }));
+			// Names first, then tags only a typed path (`home/ca`) finds.
+			const byName = filterByQuery(items, (i) => (i.kind === "tag" ? i.label : ""), token.query);
+			const byPath = filterByQuery(items.filter((i) => !byName.includes(i)), (i) => (i.kind === "tag" ? i.path : ""), token.query);
+			return [...byName, ...byPath].slice(0, 20);
 		}
 		return suggestNotes(this.app.vault.getMarkdownFiles(), token.query).map((n): SuggestItem => ({ kind: "note", ...n }));
 	}
@@ -130,7 +133,7 @@ export function attachTokenSuggest(
 		input,
 		{
 			categories: () => app.categories.list().map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
-			tags: () => tagsByLabel(app.store.state.tags).map(({ tag, label }) => ({ key: tag.key, label })),
+			tags: () => tagsByLabel(app.store.state.tags).map(({ tag, label }) => ({ key: tag.key, label, path: tag.displayName })),
 		},
 		onBind,
 	);

@@ -284,9 +284,13 @@ export function tagNameClash(keys: Iterable<string>, key: string): string | null
 	return names.clash(key);
 }
 
-/** `The name "Calls" is already used by another tag.`, with the existing tag shown as `tagLabel` does. */
+/**
+ * `The name "Calls" is already used by another tag.`: the name only, in the existing tag's casing. It reads no memoized
+ * names, because `tags` may be the working map of a write that is still changing.
+ */
 export function tagNameClashMessage(tags: ReadonlyMap<string, Tag>, existingKey: string): string {
-	return `The name "${tagLabel(tags, existingKey)}" is already used by another tag.`;
+	const name = tagDisplayPath(tags, existingKey).split("/").pop() ?? existingKey;
+	return `The name "${name}" is already used by another tag.`;
 }
 
 /** Why a new key cannot be created (its name is taken, or it repeats its parent's), or null. */

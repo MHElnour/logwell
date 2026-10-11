@@ -87,7 +87,8 @@ export function TagInput(props: {
 					{tagsByLabel(tags)
 						.filter((t) => !value.includes(t.tag.key))
 						.map((t) => (
-							<option key={t.tag.key} value={t.label} />
+							// The label is what is inserted; the full path as the option's label lets a typed path find it.
+							<option key={t.tag.key} value={t.label} label={t.tag.displayName} />
 						))}
 				</datalist>
 				{exists && (

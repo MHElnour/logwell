@@ -19,9 +19,11 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
-- (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks. Tags now show just their name.
+- (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks.
 
 ## Changed
+
+- (#11) Tags now show just their own name, like `@calls`, wherever they appear outside the sidebar tree. Two older tags that share a name still show their full paths, and the message for a name that is already used no longer names a parent.
 
 ## Fixed
 

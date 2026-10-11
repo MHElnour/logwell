@@ -79,6 +79,9 @@ describe("TagInput: a tag by its own name", () => {
 		render(null, m.root);
 		render(<TagInput app={m.h.app} value={[]} onChange={() => undefined} onError={() => undefined} normalize={normalizeTagKey} />, m.root);
 		await settleUi();
-		expect([...m.root.querySelectorAll("datalist option")].map((o) => (o as HTMLOptionElement).value)).toEqual(["Calls"]);
+		const options = [...m.root.querySelectorAll<HTMLOptionElement>("datalist option")];
+		expect(options.map((o) => o.value)).toEqual(["Calls"]);
+		// The full path is the option's label, so typing `home/` still finds the tag.
+		expect(options.map((o) => o.getAttribute("label"))).toEqual(["Home/Calls"]);
 	});
 });
