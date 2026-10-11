@@ -4,3 +4,8 @@
 export function plural(n: number, word: string, many = `${word}s`): string {
 	return `${n} ${n === 1 ? word : many}`;
 }
+
+/** Runs of whitespace become one space and the ends are trimmed. */
+export function collapseWhitespace(s: string): string {
+	return s.replace(/\s+/gu, " ").trim();
+}

@@ -57,9 +57,5 @@ export function tokenRunEnd(s: string, from: number): number {
 	return i;
 }
 
-export function collapseWhitespace(s: string): string {
-	return s.replace(/\s+/gu, " ").trim();
-}
-
 /** The replacement for masked text. U+FFFC is not whitespace, so chrono cannot bridge it. */
 export const MASK_CHAR = "\uFFFC";
