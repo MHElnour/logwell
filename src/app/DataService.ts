@@ -3,6 +3,7 @@ import { DomainError } from "../domain/errors";
 import { focusedSec } from "../domain/focus";
 import { currentOccurrence, describeRule, indexOccurrenceRecords } from "../domain/recurrence";
 import { compareSortKeys } from "../domain/sortKey";
+import { tagDisplayPath } from "../domain/tags";
 import type { Task, WeekStart } from "../domain/types";
 import { type LoadResult, loadText } from "../persistence/CpbaseStore";
 import { serializeRecord } from "../persistence/serializer";
@@ -140,7 +141,7 @@ export class DataService {
 		const state = this.store.state;
 		const listName = (id: string): string => state.categories.get(id)?.name ?? id;
 		const habitName = (id: string): string => state.habits.get(id)?.name ?? "";
-		const tagName = (key: string): string => state.tags.get(key)?.displayName ?? key;
+		const tagName = (key: string): string => tagDisplayPath(state.tags, key);
 		const records = indexOccurrenceRecords(state.occurrenceRecords);
 		// The engine reads no clock (the current occurrence does not move with the date), so any date will do.
 		const today = this.store.now().slice(0, 10);

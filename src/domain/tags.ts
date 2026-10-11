@@ -93,10 +93,15 @@ export interface TagNode {
 	children: TagNode[];
 }
 
+/** A tag's display name split into one part per key segment, or null when it splits differently (an older file). */
+export function tagDisplaySegments(tag: Tag): string[] | null {
+	const parts = tag.displayName.split("/");
+	return parts.length === tagPath(tag.key).length ? parts : null;
+}
+
 /** The display segments of a tag: its display name split like its key, or the key's own segments. */
 function displaySegments(tag: Tag, path: string[]): string[] {
-	const parts = tag.displayName.split("/");
-	return parts.length === path.length ? parts : path;
+	return tagDisplaySegments(tag) ?? path;
 }
 
 /** A tag's own name in its casing (`Calls` for `Home/Calls`): the Edit tag dialog's name. A flat key keeps its whole name. */
@@ -281,7 +286,8 @@ export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: 
  * names, because `tags` may be the working map of a write that is still changing.
  */
 export function tagNameClashMessage(tags: ReadonlyMap<string, Tag>, existingKey: string): string {
-	const name = tagDisplayPath(tags, existingKey).split("/").pop() ?? existingKey;
+	const record = tags.get(existingKey);
+	const name = record === undefined ? existingKey : tagDisplayLeaf(record);
 	return `The name "${name}" is already used by another tag.`;
 }
 
@@ -305,6 +311,9 @@ export function requireUniqueTagName(tags: ReadonlyMap<string, Tag>, key: string
 
 // The name typed in the New tag and Edit tag dialogs: one word of letters, digits, "-" and "_".
 
+/** What the New tag and Edit tag dialogs say for an empty name. */
+export const TAG_NAME_EMPTY_MESSAGE = "Enter a name.";
+
 const TAG_NAME_RE = /^[\p{L}\p{N}_-]+$/u;
 
 /**
@@ -313,7 +322,7 @@ const TAG_NAME_RE = /^[\p{L}\p{N}_-]+$/u;
  */
 export function tagNameTextProblem(typed: string, allowPath = false): string | null {
 	const name = typed.normalize("NFC").trim();
-	if (name === "") return "Enter a name.";
+	if (name === "") return TAG_NAME_EMPTY_MESSAGE;
 	if (/\s/u.test(name)) return "Use one word: spaces are not allowed. Try a hyphen, like phone-calls.";
 	if (!allowPath && name.includes("/")) return 'Pick a parent below instead of typing "/".';
 	if (name.startsWith("@")) return 'Leave out the "@"; it is added for you.';
