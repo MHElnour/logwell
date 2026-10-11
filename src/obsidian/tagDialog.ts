@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import { TAG_NAME_MAX } from "../domain/tags";
+import { TAG_NAME_EMPTY_MESSAGE, TAG_NAME_MAX } from "../domain/tags";
 import type { TagDialogOptions, TagDialogValues } from "../ui/host";
 import { el } from "./dom";
 import { openFormModal } from "./formModal";
@@ -12,7 +12,6 @@ import { buildColorRow } from "./modals";
 let formSeq = 0;
 
 const TAG_NAME_HINT = "Each tag name can be used only once in Logwell. Use letters, digits, hyphens (-) and underscores (_).";
-const EMPTY_MESSAGE = "Enter a name.";
 
 export interface TagFormDeps {
 	submitLabel: "Create" | "Save";
@@ -89,7 +88,7 @@ export function buildTagForm(container: HTMLElement, deps: TagFormDeps): { focus
 	/** One check for typing and for submit: the first problem shows, and the button stays off while there is one. */
 	const check = (): string | null => {
 		const problem = deps.check(name.value, parentValue());
-		showError(touched || problem !== EMPTY_MESSAGE ? problem : null);
+		showError(touched || problem !== TAG_NAME_EMPTY_MESSAGE ? problem : null);
 		submitButton.disabled = busy || problem !== null;
 		return problem;
 	};

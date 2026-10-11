@@ -17,7 +17,7 @@ describe("TagService.add", () => {
 		const h = await seeded();
 		expect(CREATE_TAG_LABEL).toBe("Create tag");
 		const tag = await h.app.tags.add("Garden", null, "green");
-		expect(tag).toMatchObject({ key: "garden", displayName: "Garden", color: "green" });
+		expect(tag).toMatchObject({ key: "garden", displayName: "Garden", color: "green", wrote: true, label: CREATE_TAG_LABEL });
 		expect(h.app.store.undoLabel).toBe(CREATE_TAG_LABEL);
 		expect(await h.app.store.undo()).toBe(CREATE_TAG_LABEL);
 		expect(h.app.store.state.tags.has("garden")).toBe(false);

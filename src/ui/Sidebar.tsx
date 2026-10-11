@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { CREATE_TAG_LABEL, type TagMove } from "../app/CategoryService";
+import type { TagMove } from "../app/CategoryService";
 import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
@@ -279,7 +279,7 @@ async function newTag(host: UiHost, parents: { key: string; label: string }[]): 
 			try {
 				const mark = host.app.store.undoMark();
 				const tag = await host.app.tags.add(values.name, values.parent, values.color);
-				host.notifyUndo(`Created tag @${tagLabel(tags(), tag.key)}.`, CREATE_TAG_LABEL, mark);
+				notifyWrite(host, tag, `Created tag @${tagLabel(tags(), tag.key)}.`, mark);
 				return null;
 			} catch (err) {
 				return dialogMessage(host, err);

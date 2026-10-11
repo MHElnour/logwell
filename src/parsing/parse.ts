@@ -187,8 +187,6 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const namesOfTags = (): TagNames => (tagNames ??= TagNames.of(ctx.tags.map((x) => ({ key: normalizeTagKey(x.key), createdAt: x.createdAt ?? "" }))));
 	// The existing tag a typed name stands for: its full key, or its name alone (`@calls` for `home/calls`).
 	const tagFor = (key: string): ParseContext["tags"][number] | undefined => {
-		const exact = ctx.tags.find((x) => normalizeTagKey(x.key) === key);
-		if (exact !== undefined) return exact;
 		const resolved = resolveTagName(namesOfTags(), key);
 		return resolved === null ? undefined : ctx.tags.find((x) => normalizeTagKey(x.key) === resolved);
 	};

@@ -13,6 +13,7 @@ import {
 	tagDisplayLeaf,
 	tagDisplayName,
 	tagDisplayPath,
+	tagDisplaySegments,
 	tagLeaf,
 	tagPath,
 } from "../domain/tags";
@@ -193,14 +194,16 @@ export class TagService {
 	 * The New tag dialog: `name` under `parent` (a top-level tag, or null) with `color` (null = none). Unlike `create`,
 	 * a tag that exists already is refused.
 	 */
-	add(name: string, parent: string | null, color: TagColor | null): Promise<Tag> {
+	add(name: string, parent: string | null, color: TagColor | null): Promise<Tag & WriteResult> {
 		return this.store.run(CREATE_TAG_LABEL, (tx) => {
 			const tags = tx.map("tags");
 			if (parent !== null) requireTagParent(tags, parent, null);
 			const problem = newTagProblem(tags, name, parent);
 			if (problem !== null) throw new DomainError("InvalidTag", problem);
 			const display = tagDisplayName(name);
-			return TagService.createIn(tx, parent === null ? display : `${tagDisplayPath(tags, parent)}/${display}`, color);
+			// The tag is new (a repeat was refused above), so this always wrote.
+			const tag = TagService.createIn(tx, parent === null ? display : `${tagDisplayPath(tags, parent)}/${display}`, color);
+			return { ...tag, wrote: true, label: CREATE_TAG_LABEL };
 		});
 	}
 
@@ -305,8 +308,8 @@ export class TagService {
 			const leaf = normalizeTagKey(name);
 			const newKey = parentKey === null ? leaf : `${parentKey}/${leaf}`;
 			// The parent's part of the display name: the tag's own while the parent stays, else the parent's.
-			const own = tag.displayName.split("/");
-			const prefix = parentKey === null ? null : parentKey === currentParent && own.length === path.length ? own.slice(0, -1).join("/") : tagDisplayPath(tags, parentKey);
+			const own = tagDisplaySegments(tag);
+			const prefix = parentKey === null ? null : parentKey === currentParent && own !== null ? own.slice(0, -1).join("/") : tagDisplayPath(tags, parentKey);
 			const newDisplay = prefix === null ? tagDisplayName(name) : `${prefix}/${tagDisplayName(name)}`;
 
 			const keyMoves = new Map<string, string>();
@@ -315,9 +318,7 @@ export class TagService {
 				const k = t.key === key ? newKey : newKey + t.key.slice(key.length);
 				let display = newDisplay;
 				if (t.key !== key) {
-					const segments = t.displayName.split("/");
-					const tPath = tagPath(t.key);
-					display = `${newDisplay}/${(segments.length === tPath.length ? segments : tPath).slice(path.length).join("/")}`;
+					display = `${newDisplay}/${(tagDisplaySegments(t) ?? tagPath(t.key)).slice(path.length).join("/")}`;
 				}
 				const c = t.key === key ? color : t.color;
 				if (k === t.key && display === t.displayName && c === t.color) continue;
