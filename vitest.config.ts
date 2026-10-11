@@ -1,6 +1,15 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+// Files with fixed time budgets run in their own project, one file at a time (`npm test` runs it after the unit project),
+// so the rest of the suite does not load the machine while they are timed.
+const timed = [
+	"tests/perf/**/*.test.ts",
+	"tests/perf/**/*.test.tsx",
+	"tests/ui/performance.test.tsx",
+	"tests/ui/perf-virtual-list.test.tsx",
+];
+
 export default defineConfig({
 	oxc: {
 		jsx: { runtime: "automatic", importSource: "preact" },
@@ -10,7 +19,25 @@ export default defineConfig({
 		alias: { obsidian: fileURLToPath(new URL("./tests/app/obsidian-stub.ts", import.meta.url)) },
 	},
 	test: {
-		include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-		environment: "node",
+		projects: [
+			{
+				extends: true,
+				test: {
+					name: "unit",
+					include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+					exclude: ["**/node_modules/**", ...timed],
+					environment: "node",
+				},
+			},
+			{
+				extends: true,
+				test: {
+					name: "perf",
+					include: timed,
+					environment: "node",
+					fileParallelism: false,
+				},
+			},
+		],
 	},
 });
