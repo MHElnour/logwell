@@ -449,9 +449,9 @@ export class QuickAddModel {
 	}
 
 	tagKeysValue(): string[] {
-		if (this.tagKeys !== null) return this.tagKeys;
 		const tags = this.env.app.store.state.tags;
-		return (this.env.preset.tagKeys ?? []).filter((k) => tags.has(k));
+		// A tag renamed or deleted while the form was open drops out, so the save does not refuse the task.
+		return (this.tagKeys ?? this.env.preset.tagKeys ?? []).filter((k) => tags.has(k));
 	}
 
 	setDate(date: string): void {

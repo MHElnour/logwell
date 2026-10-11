@@ -201,7 +201,8 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		if (tagFor(key) !== undefined) return true;
 		if (digitsOnly(key) || !hasAllowedTagDepth(key) || hasRepeatedTagName(key)) return false;
 		const names = namesOfTags();
-		if (names.clash(key) !== null) return false;
+		// A new name longer than 64 characters stays in the title too.
+		if (names.tooLong(key) || names.clash(key) !== null) return false;
 		// A new tag of this input is newer than every existing one, so it never takes a name from them.
 		names.add(key, "￿");
 		return true;

@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { CheckpointApp } from "../app/App";
-import { TAG_DEPTH_MESSAGE, hasAllowedTagDepth, isValidTagKey, resolveTagName, tagLabel, tagNameRefusal, tagNamesOf, tagsByLabel } from "../domain/tags";
+import { TAG_DEPTH_MESSAGE, hasAllowedTagDepth, isValidTagKey, resolveTagName, tagLabel, tagNameRefusal, tagNameTextProblem, tagNamesOf, tagsByLabel } from "../domain/tags";
 import { useUniqueId } from "./hooks";
 
 /**
@@ -102,7 +102,7 @@ export function TagInput(props: {
 					</button>
 				)}
 				{key !== "" && !exists && !canCreate && (
-					<span class="cp-hint">{tooDeep ? TAG_DEPTH_MESSAGE : refusal !== null ? refusal : "Letters, digits, - _ / only"}</span>
+					<span class="cp-hint">{tooDeep ? TAG_DEPTH_MESSAGE : (refusal ?? tagNameTextProblem(typed, true))}</span>
 				)}
 			</div>
 		</div>

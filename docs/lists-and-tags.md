@@ -71,7 +71,17 @@ In a list, the board shows each section as a column of cards that you drag betwe
 - In the details pane, click **Add tag** (the plus button) under **Tags** and type a name. Click **Add** for an existing tag or **New tag: name** to create one. The × on a tag removes it.
 - In the add bar, open **Priority, list, tags and note**, then **Tags**, to pick existing tags.
 
-A tag name may contain letters, digits, `-`, `_` and `/`. Tags ignore capitals: `@Home` and `@home` are the same tag, shown with the spelling you used first.
+A tag name may contain letters, digits, `-`, `_` and `/`, and a new name has at most 64 characters. Tags ignore capitals: `@Home` and `@home` are the same tag, shown with the spelling you used first. In Quick Add, a name that is too long stays in the title as text. A longer tag already in your database keeps working.
+
+## Create a tag
+
+1. Click **New tag**, the plus button next to Tags in the sidebar. The Tags heading shows even before you have a tag.
+2. Type a **Name**: one word of letters, digits, hyphens (-) and underscores (_), such as `phone-calls`. Leave out the `@`.
+3. Pick a **Parent**, or **None** for a top-level tag. Any top-level tag can be a parent.
+4. Pick a **Color**. The next palette color is preselected. **Default** means no color.
+5. Choose **Create**. The notice offers **Undo**.
+
+The name is checked as you type, and **Create** stays off until it is valid. A message under the name says what to change, such as "The name "Calls" is already used by another tag."
 
 ## Nest tags
 
@@ -82,7 +92,7 @@ A slash makes a path: `@home/garden` sits under home. Tags nest one level deep. 
   <img src="images/tags-light.png" alt="The Home tag selected in the sidebar with Garden nested under it, and the tasks that carry Home or Garden">
 </picture>
 
-- The sidebar shows a Tags tree once you have a tag. The chevron beside a parent folds its children.
+- The sidebar shows your tags as a tree under the Tags heading. The chevron beside a parent folds its children.
 - Click a tag to see its tasks. A parent's view and its count of open tasks include its children, and each task counts once.
 - A parent you never created as a tag shows while a child exists. It has no color and no menu.
 - `@home/garden` does not also tag a task `@home`.
@@ -91,10 +101,23 @@ A slash makes a path: `@home/garden` sits under home. Tags nest one level deep. 
 
 A tag name is used once, whatever its parent. If `home/calls` exists, you cannot create `work/calls`: Logwell says "The name "calls" is already used by another tag." A tag cannot repeat its parent's name either, as in `home/home`. In Quick Add, such an `@name` stays in the title as text. Tags that already share a name keep working.
 
+## Edit a tag
+
+Right-click a tag in the sidebar, or focus it and press the context-menu key or Shift+F10, and choose **Edit**. The dialog is the one from **New tag**, filled in:
+
+- Change the **Name** to rename the tag on every task, including tasks in the Trash. Renaming a parent renames its children's paths too: `@home/garden` becomes `@house/garden`.
+- Change the **Parent** to move the tag under a top-level tag, or choose **None** to move it to the top. A tag with child tags has no parent, so its Parent stays **None**.
+- Change the **Color**.
+- Choose **Save**. Everything changes in one step, and the notice, such as "Renamed tag @Calls to @Phone.", offers **Undo**.
+
+A name that another tag already uses is refused: two tags are never merged. If the tag's view is open, it stays open under the new name.
+
+Renaming a tag does not change `tag:` lines in your notes; edit them yourself. See [Task block](dashboard-block.md). With [TickTick sync](ticktick-sync.md), the tasks go up with the new name, and nothing is renamed in TickTick.
+
 ## Color or delete a tag
 
 Right-click a tag in the sidebar, or focus it and press the context-menu key or Shift+F10. Choose **No color** or a color, such as **Color: green**, or **Delete**.
 
-Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent keeps its children. Tags cannot be renamed.
+Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent keeps its children.
 
 To show only tasks with chosen tags in Search, the calendar or the matrix, see [Views](views.md).

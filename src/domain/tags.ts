@@ -27,6 +27,12 @@ export function requireTagKey(raw: string): string {
 
 export const TAG_DEPTH_MESSAGE = "Tags can be nested one level deep, like work/calls.";
 
+/** The longest name a NEW tag may have, in UTF-16 code units (the dialog input's `maxlength`). Stored names keep any length. */
+export const TAG_NAME_MAX = 64;
+export const TAG_LENGTH_MESSAGE = `Use at most ${TAG_NAME_MAX} characters.`;
+/** Tags nest one level deep, so a tag with children stays at the top (the Edit tag dialog's locked Parent). */
+export const TAG_WITH_CHILDREN_MESSAGE = "A tag with child tags has no parent.";
+
 /**
  * A NEW key has at most one "/" (counted as characters, so "a//b" is refused). Keys already
  * in a file may be deeper and keep working, so callers check this only when they would create the tag.
@@ -95,6 +101,13 @@ export interface TagNode {
 function displaySegments(tag: Tag, path: string[]): string[] {
 	const parts = tag.displayName.split("/");
 	return parts.length === path.length ? parts : path;
+}
+
+/** A tag's own name in its casing (`Calls` for `Home/Calls`): the Edit tag dialog's name. A flat key keeps its whole name. */
+export function tagDisplayLeaf(tag: Tag): string {
+	const path = tagPath(tag.key);
+	if (path.length === 1) return tag.displayName;
+	return displaySegments(tag, path)[path.length - 1]!;
 }
 
 /** The tag list as a tree, with an implicit node for every path prefix that is not a tag. Siblings sort by name. */
@@ -222,6 +235,12 @@ export class TagNames {
 		return best;
 	}
 
+	/** Whether a new key adds a node whose name is longer than `TAG_NAME_MAX`. Existing nodes keep any length. */
+	tooLong(key: string): boolean {
+		const path = tagPath(key);
+		return tagPrefixes(key).some((node, i) => !this.nodes.has(node) && path[i]!.length > TAG_NAME_MAX);
+	}
+
 	/** The existing node whose name a new key would use again (checked for the key's new nodes only), or null. */
 	clash(key: string): string | null {
 		const path = tagPath(key);
@@ -293,10 +312,15 @@ export function tagNameClashMessage(tags: ReadonlyMap<string, Tag>, existingKey:
 	return `The name "${name}" is already used by another tag.`;
 }
 
-/** Why a new key cannot be created (its name is taken, or it repeats its parent's), or null. */
-export function tagNameRefusal(tags: ReadonlyMap<string, Tag>, key: string): string | null {
+/**
+ * Why a new key cannot be created (it repeats its parent's name, a new name is longer than 64 characters, or its name
+ * is taken), or null. `keepLength` skips the length rule, for a stored name that is kept as it is.
+ */
+export function tagNameRefusal(tags: ReadonlyMap<string, Tag>, key: string, keepLength = false): string | null {
 	if (hasRepeatedTagName(key)) return TAG_REPEAT_MESSAGE;
-	const clash = tagNameClash(tags.keys(), key);
+	const names = TagNames.of(tags.values());
+	if (!keepLength && names.tooLong(key)) return TAG_LENGTH_MESSAGE;
+	const clash = names.clash(key);
 	return clash === null ? null : tagNameClashMessage(tags, clash);
 }
 
@@ -304,4 +328,54 @@ export function tagNameRefusal(tags: ReadonlyMap<string, Tag>, key: string): str
 export function requireUniqueTagName(tags: ReadonlyMap<string, Tag>, key: string): void {
 	const refusal = tagNameRefusal(tags, key);
 	if (refusal !== null) throw new DomainError("InvalidTag", refusal);
+}
+
+// The name typed in the New tag and Edit tag dialogs: one word of letters, digits, "-" and "_".
+
+const TAG_NAME_RE = /^[\p{L}\p{N}_-]+$/u;
+
+/**
+ * The first problem of a typed tag name, or null: empty, spaces, "/" (unless `allowPath`, for the tag field), a
+ * leading "@", other characters, then more than 64 characters (per segment with a path).
+ */
+export function tagNameTextProblem(typed: string, allowPath = false): string | null {
+	const name = typed.normalize("NFC").trim();
+	if (name === "") return "Enter a name.";
+	if (/\s/u.test(name)) return "Use one word: spaces are not allowed. Try a hyphen, like phone-calls.";
+	if (!allowPath && name.includes("/")) return 'Pick a parent below instead of typing "/".';
+	if (name.startsWith("@")) return 'Leave out the "@"; it is added for you.';
+	if (!(allowPath ? TAG_KEY_RE : TAG_NAME_RE).test(name)) return "Only letters, digits, hyphens (-) and underscores (_) are allowed.";
+	if (name.split("/").some((segment) => segment.length > TAG_NAME_MAX)) return TAG_LENGTH_MESSAGE;
+	return null;
+}
+
+/**
+ * Why `name` under `parent` (a top-level node key, or null) cannot be saved, or null: the one check of the New tag and
+ * Edit tag dialogs and of `TagService.add` and `edit`. `except` is the key of the tag being edited: it and its children
+ * leave the names in use, so its own name is allowed, and each child keeps its name under the new one. An unchanged
+ * stored name skips the text and length rules, so a name from an older file is never refused.
+ */
+export function newTagProblem(tags: ReadonlyMap<string, Tag>, name: string, parent: string | null, except: string | null = null): string | null {
+	const leaf = normalizeTagKey(name);
+	const own = except !== null && leaf === tagLeaf(except);
+	if (!own) {
+		const text = tagNameTextProblem(name);
+		if (text !== null) return text;
+	}
+	const key = parent === null ? leaf : `${parent}/${leaf}`;
+	// The same key (a new casing or color only): the tree's names do not change, so even an older duplicate is kept.
+	if (key === except) return null;
+	let pool = tags;
+	if (except !== null) {
+		const remaining = new Map<string, Tag>();
+		for (const [k, t] of tags) {
+			if (!isUnderTag(k, except)) remaining.set(k, t);
+			// A child keeps its name under the new one: `home/calls` cannot become `calls/calls`.
+			else if (k !== except && hasRepeatedTagName(key + k.slice(except.length))) return tagNameClashMessage(tags, k);
+		}
+		pool = remaining;
+	}
+	// A tag or an implicit parent already at this key: the name is in use (a rename never merges two tags).
+	if (hasTagOrChild(pool.keys(), key)) return tagNameClashMessage(pool, key);
+	return tagNameRefusal(pool, key, own);
 }

@@ -71,6 +71,32 @@ export interface HabitDialogOptions {
 	save(input: HabitInput): Promise<string | null>;
 }
 
+/** What the New tag and Edit tag dialog returns. */
+export interface TagDialogValues {
+	/** The tag's own name, trimmed (no parent path). */
+	name: string;
+	/** The key of a top-level tag (or implicit parent), or null for none. */
+	parent: string | null;
+	/** One of the theme colors; null = the "Default" swatch, which means no color. */
+	color: TagColor | null;
+}
+
+/** What the New tag and Edit tag dialog needs from its caller. */
+export interface TagDialogOptions {
+	title: "New tag" | "Edit tag";
+	submit: "Create" | "Save";
+	/** The values to start from: empty with the next palette color (New), or the tag's own (Edit). */
+	initial: TagDialogValues;
+	/** The Parent choices after None, by key and shown name. */
+	parents: { key: string; label: string }[];
+	/** A tag with child tags takes no parent: the select is off, with a hint. */
+	parentLocked: boolean;
+	/** The first problem of a name under a parent, or null (`newTagProblem`); runs on every keystroke. */
+	check(name: string, parent: string | null): string | null;
+	/** Resolves a message to show inline (the dialog stays open, values kept), or null once saved (it closes), as NewListOptions.create. */
+	save(values: TagDialogValues): Promise<string | null>;
+}
+
 /** What the TickTick sync shows and starts from the Tasks section. */
 export interface TickTickUi {
 	/** A token is chosen and the switch for this device is on. */
@@ -118,6 +144,11 @@ export interface UiHost {
 	 * Optional so lightweight test hosts need not stub it; the sidebar then falls back to a name prompt.
 	 */
 	newList?(options: NewListOptions): Promise<void>;
+	/**
+	 * The New tag / Edit tag dialog; resolves when it is gone (saved or dismissed). Optional so lightweight test hosts
+	 * need not stub it; without it the sidebar shows no New tag button and no Edit item.
+	 */
+	tagDialog?(options: TagDialogOptions): Promise<void>;
 	quickAdd(preset?: QuickAddPreset): void;
 	/** #category, @tag and [[note]] suggestions on a Quick Add input. Disposed with the view. */
 	attachTokenSuggest(input: HTMLInputElement, onBind: (decision: SpanDecision) => void): { isOpen(): boolean; dispose(): void };

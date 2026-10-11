@@ -4175,33 +4175,40 @@ body.is-mobile .checkpoint-view .cp-app {
 }
 
 /* The New list dialog reuses the icon picker's tokens and grid. */
-.checkpoint-new-list .cp-new-list {
+.checkpoint-new-list .cp-new-list,
+.checkpoint-tag-dialog .cp-new-list {
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-4-2);
 }
 
-.checkpoint-new-list .cp-new-list-label {
+.checkpoint-new-list .cp-new-list-label,
+.checkpoint-tag-dialog .cp-new-list-label {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	font-weight: var(--font-semibold);
 }
 
-.checkpoint-new-list .cp-new-list-name {
+.checkpoint-new-list .cp-new-list-name,
+.checkpoint-tag-dialog .cp-new-list-name,
+.checkpoint-tag-dialog .cp-tag-form-parent {
 	width: 100%;
 }
 
-.checkpoint-new-list .cp-new-list-name[aria-invalid="true"] {
+.checkpoint-new-list .cp-new-list-name[aria-invalid="true"],
+.checkpoint-tag-dialog .cp-new-list-name[aria-invalid="true"] {
 	border-color: var(--color-red);
 }
 
-.checkpoint-new-list .cp-new-list-error {
+.checkpoint-new-list .cp-new-list-error,
+.checkpoint-tag-dialog .cp-new-list-error {
 	margin: 0;
 	color: var(--color-red);
 	font-size: var(--font-ui-small);
 }
 
-.checkpoint-new-list .cp-new-list-error[hidden] {
+.checkpoint-new-list .cp-new-list-error[hidden],
+.checkpoint-tag-dialog .cp-new-list-error[hidden] {
 	display: none;
 }
 
@@ -4215,13 +4222,15 @@ body.is-mobile .checkpoint-view .cp-app {
 	color: var(--cp-accent);
 }
 
-.checkpoint-new-list .cp-color-row {
+.checkpoint-new-list .cp-color-row,
+.checkpoint-tag-dialog .cp-color-row {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-2);
 }
 
-.checkpoint-new-list .cp-color-choice {
+.checkpoint-new-list .cp-color-choice,
+.checkpoint-tag-dialog .cp-color-choice {
 	width: 32px;
 	height: 32px;
 	padding: 0;
@@ -4231,27 +4240,40 @@ body.is-mobile .checkpoint-view .cp-app {
 	background: var(--cp-swatch, var(--background-modifier-border));
 }
 
-.checkpoint-new-list .cp-color-choice.is-default {
+.checkpoint-new-list .cp-color-choice.is-default,
+.checkpoint-tag-dialog .cp-color-choice.is-default {
 	background: var(--background-modifier-hover);
 	border-color: var(--background-modifier-border);
 }
 
-.checkpoint-new-list .cp-color-choice[aria-pressed="true"] {
+.checkpoint-new-list .cp-color-choice[aria-pressed="true"],
+.checkpoint-tag-dialog .cp-color-choice[aria-pressed="true"] {
 	border-color: var(--text-normal);
 	box-shadow: 0 0 0 2px var(--background-primary) inset;
 }
 
 .checkpoint-new-list .cp-color-choice:focus-visible,
-.checkpoint-new-list .cp-new-list-name:focus-visible {
+.checkpoint-new-list .cp-new-list-name:focus-visible,
+.checkpoint-tag-dialog .cp-color-choice:focus-visible,
+.checkpoint-tag-dialog .cp-new-list-name:focus-visible,
+.checkpoint-tag-dialog .cp-tag-form-parent:focus-visible {
 	outline: 2px solid var(--cp-accent);
 	outline-offset: 2px;
 }
 
-.checkpoint-new-list .cp-new-list-actions {
+.checkpoint-new-list .cp-new-list-actions,
+.checkpoint-tag-dialog .cp-new-list-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--size-4-2);
 	margin-top: var(--size-4-2);
+}
+
+/* The New tag / Edit tag dialog (the New list form's classes, plus its hints). */
+.checkpoint-tag-dialog .cp-tag-form-hint {
+	margin: 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
 }
 
 /* == end K1b sections == */

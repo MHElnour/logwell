@@ -2,11 +2,17 @@
 // services; every DOM read is scoped to the visible Tasks section (background tabs keep hidden copies).
 import { browser, expect } from "@wdio/globals";
 import {
+	clickUndoNotice,
+	closeNotices,
 	createTask,
 	domClick,
 	flush,
 	freshDatabase,
+	pickMenuItem,
+	restoreMenus,
+	useDomMenus,
 	visibleTasksSection,
+	waitForNotice,
 } from "../helpers";
 
 async function detachAppLeaves(): Promise<void> {
@@ -55,6 +61,62 @@ describe("Parent tags (P6)", function () {
 			timeoutMsg: "the child view did not open",
 		});
 		expect(await titlesShown(section)).toEqual(["Go task"]);
+	});
+
+	it("New tag: the + beside Tags creates a tag under a parent in one write; Undo removes it (#7)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		await domClick(section.$('.cp-sidebar [aria-label="New tag"]'));
+		const dialog = browser.$(".checkpoint-tag-dialog");
+		await dialog.waitForExist({ timeout: 5000, timeoutMsg: "the New tag dialog did not open" });
+		const create = dialog.$("button.mod-cta");
+		await expect(create).toBeDisabled();
+		// A name in use is refused as typed.
+		await dialog.$("input.cp-new-list-name").setValue("go");
+		await dialog.$(".cp-new-list-error").waitForDisplayed({ timeout: 5000 });
+		await expect(dialog.$(".cp-new-list-error")).toHaveText('The name "Go" is already used by another tag.');
+		await expect(create).toBeDisabled();
+		await dialog.$("input.cp-new-list-name").setValue("Rust");
+		await dialog.$("select.cp-tag-form-parent").selectByAttribute("value", "programming");
+		await domClick(dialog.$('.cp-color-choice[aria-label="Green"]'));
+		await expect(create).toBeEnabled();
+		await domClick(create);
+		await dialog.waitForExist({ timeout: 5000, reverse: true, timeoutMsg: "the dialog did not close on Create" });
+		await browser.waitUntil(async () => (await treeLabels(section)).includes("Rust"), { timeout: 5000, timeoutMsg: "the new tag is not in the tree" });
+		expect(await treeLabels(section)).toEqual(["Programming", "Go", "Python", "Rust"]);
+		await waitForNotice("Created tag @Rust.");
+		await clickUndoNotice();
+		await browser.waitUntil(async () => !(await treeLabels(section)).includes("Rust"), { timeout: 5000, timeoutMsg: "Undo did not remove the tag" });
+	});
+
+	it("Edit: renaming a tag renames it on its tasks in one write; Undo restores it (#8)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		const wasNative = await useDomMenus();
+		try {
+			const go = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[1]!;
+			await domClick(go);
+			await browser.waitUntil(async () => (await section.$(".cp-main-title").getText()) === "@Go", { timeout: 5000, timeoutMsg: "the Go view did not open" });
+			await closeNotices();
+			await go.click({ button: "right" });
+			await pickMenuItem("Edit");
+			const dialog = browser.$(".checkpoint-tag-dialog");
+			await dialog.waitForExist({ timeout: 5000, timeoutMsg: "the Edit tag dialog did not open" });
+			await expect(dialog.$("input.cp-new-list-name")).toHaveValue("Go");
+			await dialog.$("input.cp-new-list-name").setValue("Golang");
+			await domClick(dialog.$("button.mod-cta"));
+			await dialog.waitForExist({ timeout: 5000, reverse: true, timeoutMsg: "the dialog did not close on Save" });
+			await waitForNotice("Renamed tag @Go to @Golang.");
+			// The open view follows the rename, and the task row shows the new name.
+			await browser.waitUntil(async () => (await section.$(".cp-main-title").getText()) === "@Golang", { timeout: 5000, timeoutMsg: "the view did not follow" });
+			await expect(section.$(".cp-task-row .cp-tag-pill")).toHaveText("@Golang");
+			expect(await treeLabels(section)).toEqual(["Programming", "Golang", "Python"]);
+			await clickUndoNotice();
+			await browser.waitUntil(async () => (await treeLabels(section)).includes("Go"), { timeout: 5000, timeoutMsg: "Undo did not restore the name" });
+			expect(await treeLabels(section)).toEqual(["Programming", "Go", "Python"]);
+		} finally {
+			await restoreMenus(wasNative);
+		}
 	});
 
 	it("the fold arrow hides and shows the children", async function () {
