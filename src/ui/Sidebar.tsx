@@ -1,10 +1,22 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { CREATE_TAG_LABEL } from "../app/CategoryService";
 import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
 import { plural } from "../domain/text";
-import { type TagNode, hasTagOrChild, isUnderTag, tagLabel, tagPath, tagTree } from "../domain/tags";
+import {
+	TAG_FLAT_PARENT_MESSAGE,
+	TAG_WITH_CHILDREN_MESSAGE,
+	type TagNode,
+	hasTagOrChild,
+	isUnderTag,
+	newTagProblem,
+	tagDisplayLeaf,
+	tagLabel,
+	tagPath,
+	tagTree,
+} from "../domain/tags";
 import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, IconButton, SrOnly, hueClass } from "./common";
@@ -151,9 +163,7 @@ async function newCategory(host: UiHost): Promise<void> {
 				await host.app.categories.create(values.name, values.icon, values.color);
 				return null;
 			} catch (err) {
-				if (isDomainError(err)) return err.message;
-				host.error(err);
-				return null;
+				return dialogMessage(host, err);
 			}
 		},
 	});
@@ -239,6 +249,76 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 	} catch (err) {
 		host.error(err);
 	}
+}
+
+/** The Parent choices of the tag dialog: the top-level nodes of the tree (implicit parents too) by name, never `self`. */
+function tagParents(tree: TagNode[], self: string | null): { key: string; label: string }[] {
+	// A key with an empty segment ("a//b") is one flat tag, not a parent.
+	return tree.filter((n) => !n.key.includes("/") && n.key !== self).map((n) => ({ key: n.key, label: n.name }));
+}
+
+/** A dialog refusal (a rule broken since the dialog opened) goes back to the dialog as text; anything else to the host. */
+function dialogMessage(host: UiHost, err: unknown): string | null {
+	if (isDomainError(err)) return err.message;
+	host.error(err);
+	return null;
+}
+
+/** New tag: one create call, so one undo entry; the dialog stays open on a refusal. */
+async function newTag(host: UiHost, parents: { key: string; label: string }[]): Promise<void> {
+	if (host.tagDialog === undefined) return;
+	const tags = () => host.app.store.state.tags;
+	await host.tagDialog({
+		title: "New tag",
+		submit: "Create",
+		// The swatch that starts selected is the palette color the tag would get; "Default" means none.
+		initial: { name: "", parent: null, color: paletteColor(tags().size) },
+		parents,
+		parentLock: null,
+		check: (name, parent) => newTagProblem(tags(), name, parent),
+		save: async (values) => {
+			try {
+				const mark = host.app.store.undoMark();
+				const tag = await host.app.tags.add(values.name, values.parent, values.color);
+				host.notifyUndo(`Created tag @${tagLabel(tags(), tag.key)}.`, CREATE_TAG_LABEL, mark);
+				return null;
+			} catch (err) {
+				return dialogMessage(host, err);
+			}
+		},
+	});
+}
+
+/** Edit tag: rename, parent and color in one write. `onMoved` gets the old and new key when the key changed. */
+async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: string }[], onMoved: (from: string, to: string) => void): Promise<void> {
+	if (host.tagDialog === undefined) return;
+	const tags = () => host.app.store.state.tags;
+	const path = tagPath(tag.key);
+	const name = tagDisplayLeaf(tag);
+	const hasChildren = [...tags().keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
+	// The same reasons, in the same order, as TagService.edit refuses a new parent.
+	const flat = path.length === 1 && tag.key.includes("/");
+	await host.tagDialog({
+		title: "Edit tag",
+		submit: "Save",
+		initial: { name, parent: path.length > 1 ? path.slice(0, -1).join("/") : null, color: tag.color },
+		parents,
+		parentLock: flat ? TAG_FLAT_PARENT_MESSAGE : hasChildren ? TAG_WITH_CHILDREN_MESSAGE : null,
+		check: (typed, parent) => newTagProblem(tags(), typed, parent, tag.key),
+		save: async (values) => {
+			try {
+				const before = tagLabel(tags(), tag.key);
+				const mark = host.app.store.undoMark();
+				const result = await host.app.tags.edit(tag.key, { name: values.name, parentKey: values.parent, color: values.color });
+				if (result.key !== tag.key) onMoved(tag.key, result.key);
+				const after = tagLabel(tags(), result.key);
+				notifyWrite(host, result, values.name !== name ? `Renamed tag @${before} to @${after}.` : `Updated tag @${after}.`, mark);
+				return null;
+			} catch (err) {
+				return dialogMessage(host, err);
+			}
+		},
+	});
 }
 
 async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise<void> {
@@ -332,8 +412,22 @@ export function Sidebar(props: {
 		if (!hasTagOrChild(host.app.store.state.tags.keys(), key)) toInbox();
 	};
 
+	// After an edit that moved keys: an open tag view at or under the old key follows to the new one (the latest view,
+	// since the dialog stays open across renders); a view on an implicit parent the move emptied goes to Inbox.
+	const viewRef = useRef(view);
+	viewRef.current = view;
+	const followMovedTag = (from: string, to: string) => {
+		const current = viewRef.current;
+		if (current.kind !== "tag") return;
+		if (isUnderTag(current.key, from)) onView({ kind: "tag", key: to + current.key.slice(from.length) });
+		else if (!hasTagOrChild(host.app.store.state.tags.keys(), current.key)) toInbox();
+	};
+
 	const tagMenu = (t: Tag) => (e: MouseEvent) =>
 		host.showMenu(e, [
+			...(host.tagDialog === undefined
+				? []
+				: [{ title: "Edit", icon: "pencil", run: () => void editTag(host, t, tagParents(tree, t.key), followMovedTag) }, "separator" as const]),
 			...[null, ...TAG_COLORS].map((color) => ({
 				title: color === null ? "No color" : `Color: ${color}`,
 				checked: t.color === color,
@@ -393,27 +487,28 @@ export function Sidebar(props: {
 					/>
 				))}
 			</ul>
-			{state.tags.size > 0 && (
-				<>
-					<div class="cp-sidebar-heading">
-						<span>Tags</span>
-					</div>
-					<ul class="cp-sidebar-list cp-tag-tree">
-							{tree.map((n) => (
-								<TagBranch
-									key={n.key}
-									host={host}
-									node={n}
-									depth={0}
-									view={view}
-									folded={folded}
-									onFold={toggleFold}
-									onView={onView}
-									menuFor={tagMenu}
-								/>
-							))}
-						</ul>
-				</>
+			<div class="cp-sidebar-heading">
+				<span>Tags</span>
+				{host.tagDialog !== undefined && (
+					<IconButton host={host} icon={ICON.add} label="New tag" cls="cp-sidebar-add" onClick={() => void newTag(host, tagParents(tree, null))} />
+				)}
+			</div>
+			{tree.length > 0 && (
+				<ul class="cp-sidebar-list cp-tag-tree">
+					{tree.map((n) => (
+						<TagBranch
+							key={n.key}
+							host={host}
+							node={n}
+							depth={0}
+							view={view}
+							folded={folded}
+							onFold={toggleFold}
+							onView={onView}
+							menuFor={tagMenu}
+						/>
+					))}
+				</ul>
 			)}
 			<ul class="cp-sidebar-list cp-sidebar-footer">
 				<Item host={host} icon={ICON.completed} label="Completed" active={is({ kind: "completed" })} onClick={() => onView({ kind: "completed" })} />

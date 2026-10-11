@@ -1,7 +1,20 @@
 import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
 import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
-import { requireTagDepth, requireTagKey, requireUniqueTagName, tagDisplayName } from "../domain/tags";
+import {
+	TAG_FLAT_PARENT_MESSAGE,
+	TAG_WITH_CHILDREN_MESSAGE,
+	hasTagOrChild,
+	isUnderTag,
+	newTagProblem,
+	normalizeTagKey,
+	requireTagDepth,
+	requireTagKey,
+	requireUniqueTagName,
+	tagDisplayName,
+	tagDisplayPath,
+	tagPath,
+} from "../domain/tags";
 import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
 import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { AppStore } from "./store";
@@ -137,6 +150,19 @@ export class CategoryService {
 	}
 }
 
+/** The store labels of the tag writes; a notice's Undo names its write by them. */
+export const CREATE_TAG_LABEL = "Create tag";
+export const EDIT_TAG_LABEL = "Edit tag";
+
+/**
+ * Throws when `parent` cannot take a tag: NotFound when no tag is at or under it, InvalidTag when it is not top-level
+ * or is the tag being edited (`self`).
+ */
+function requireTagParent(tags: ReadonlyMap<string, Tag>, parent: string, self: string | null): void {
+	if (!hasTagOrChild(tags.keys(), parent)) throw new DomainError("NotFound", "The parent tag no longer exists.");
+	if (parent.includes("/") || parent === self) throw new DomainError("InvalidTag", "Pick a top-level tag as the parent.");
+}
+
 export class TagService {
 	constructor(private readonly store: AppStore) {}
 
@@ -152,7 +178,22 @@ export class TagService {
 
 	/** Explicit creation. An existing key is returned unchanged. */
 	create(raw: string, color?: TagColor | null): Promise<Tag> {
-		return this.store.run("Create tag", (tx) => TagService.createIn(tx, raw, color));
+		return this.store.run(CREATE_TAG_LABEL, (tx) => TagService.createIn(tx, raw, color));
+	}
+
+	/**
+	 * The New tag dialog: `name` under `parent` (a top-level tag or implicit parent, or null) with `color` (null = none).
+	 * Unlike `create`, a tag that exists already is refused. An implicit parent stays implicit.
+	 */
+	add(name: string, parent: string | null, color: TagColor | null): Promise<Tag> {
+		return this.store.run(CREATE_TAG_LABEL, (tx) => {
+			const tags = tx.map("tags");
+			if (parent !== null) requireTagParent(tags, parent, null);
+			const problem = newTagProblem(tags, name, parent);
+			if (problem !== null) throw new DomainError("InvalidTag", problem);
+			const display = tagDisplayName(name);
+			return TagService.createIn(tx, parent === null ? display : `${tagDisplayPath(tags, parent)}/${display}`, color);
+		});
 	}
 
 	/** `create` inside the caller's transaction (Quick Add makes its new tags in the task's write). */
@@ -176,10 +217,75 @@ export class TagService {
 	}
 
 	setColor(key: string, color: TagColor | null): Promise<void> {
-		return this.store.run("Edit tag", (tx) => {
+		return this.store.run(EDIT_TAG_LABEL, (tx) => {
 			const tag = tx.get("tags", key);
 			if (tag === undefined) throw new DomainError("NotFound", "The tag no longer exists.");
 			tx.put("tags", { ...tag, color, modifiedAt: tx.now });
+		});
+	}
+
+	/**
+	 * The Edit tag dialog: rename, move under a top-level tag or to the top, and recolor, in one write. The tag's
+	 * children move with it, and every live task (modifiedAt now) and trashed task (modifiedAt kept) holding a moving key
+	 * gets the new one. A name in use is refused (two tags are never merged); a tag with children takes no new parent.
+	 * `key` is the tag's key after the edit. An edit that changes nothing writes nothing.
+	 */
+	edit(key: string, values: { name: string; parentKey: string | null; color: TagColor | null }): Promise<WriteResult & { key: string }> {
+		const label = EDIT_TAG_LABEL;
+		return this.store.run(label, (tx) => {
+			const tag = tx.get("tags", key);
+			if (tag === undefined) throw new DomainError("NotFound", "The tag no longer exists.");
+			const { name, parentKey, color } = values;
+			const tags = tx.map("tags");
+			const path = tagPath(key);
+			const currentParent = path.length > 1 ? path.slice(0, -1).join("/") : null;
+			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
+			// Keeping the current parent is always allowed, so a deeper tag from an older file can still be renamed.
+			if (parentKey !== currentParent && parentKey !== null) {
+				if (path.length === 1 && key.includes("/")) throw new DomainError("InvalidTag", TAG_FLAT_PARENT_MESSAGE);
+				if (children.length > 0) throw new DomainError("InvalidTag", TAG_WITH_CHILDREN_MESSAGE);
+				requireTagParent(tags, parentKey, key);
+			}
+			const problem = newTagProblem(tags, name, parentKey, key);
+			if (problem !== null) throw new DomainError("InvalidTag", problem);
+
+			const leaf = normalizeTagKey(name);
+			const newKey = parentKey === null ? leaf : `${parentKey}/${leaf}`;
+			// The parent's part of the display name: the tag's own while the parent stays, else the parent's.
+			const own = tag.displayName.split("/");
+			const prefix = parentKey === null ? null : parentKey === currentParent && own.length === path.length ? own.slice(0, -1).join("/") : tagDisplayPath(tags, parentKey);
+			const newDisplay = prefix === null ? tagDisplayName(name) : `${prefix}/${tagDisplayName(name)}`;
+
+			const keyMoves = new Map<string, string>();
+			const next: Tag[] = [];
+			for (const t of [tag, ...children]) {
+				const k = t.key === key ? newKey : newKey + t.key.slice(key.length);
+				let display = newDisplay;
+				if (t.key !== key) {
+					const segments = t.displayName.split("/");
+					const tPath = tagPath(t.key);
+					display = `${newDisplay}/${(segments.length === tPath.length ? segments : tPath).slice(path.length).join("/")}`;
+				}
+				const c = t.key === key ? color : t.color;
+				if (k === t.key && display === t.displayName && c === t.color) continue;
+				if (k !== t.key) keyMoves.set(t.key, k);
+				// createdAt stays: it is what a tag owns its name by (rule 22).
+				next.push({ ...t, key: k, displayName: display, color: c, modifiedAt: tx.now });
+			}
+			if (next.length === 0) return { wrote: false, label, key };
+			for (const old of keyMoves.keys()) tx.remove("tags", old);
+			for (const t of next) tx.put("tags", t);
+			if (keyMoves.size > 0) {
+				const holds = (keys: readonly string[]) => keys.some((k) => keyMoves.has(k));
+				const rekey = (keys: readonly string[]) => [...new Set(keys.map((k) => keyMoves.get(k) ?? k))];
+				for (const t of tx.all("tasks")) if (holds(t.tagKeys)) tx.put("tasks", { ...t, tagKeys: rekey(t.tagKeys), modifiedAt: tx.now });
+				// Trashed tasks keep their state as deleted; only the keys change.
+				for (const e of tx.all("trash")) {
+					if (!e.tasks.some((t) => holds(t.tagKeys))) continue;
+					tx.put("trash", { ...e, tasks: e.tasks.map((t) => (holds(t.tagKeys) ? { ...t, tagKeys: rekey(t.tagKeys) } : t)) });
+				}
+			}
+			return { wrote: true, label, key: newKey };
 		});
 	}
 

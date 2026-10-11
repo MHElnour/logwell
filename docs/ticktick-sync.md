@@ -51,7 +51,7 @@ Title, list, section, subtask parent, priority, open or completed, tags and one 
 
 **Dates.** TickTick keeps one date. Logwell sends the deadline if there is one, otherwise the schedule. A task that comes from TickTick gets its date as both. A time range is not kept.
 
-**Tags.** Tags sync by name. TickTick allows each name once and nests one level deep, so a tag with a duplicate name or deeper nesting stays in Logwell only. Sync never renames, recolors or deletes a tag in TickTick. Deleting a tag in Logwell removes it from its tasks, and those tasks go up without it.
+**Tags.** Tags sync by name. TickTick allows each name once and nests one level deep, so a tag with a duplicate name or deeper nesting stays in Logwell only. Sync never renames, recolors or deletes a tag in TickTick. Deleting a tag in Logwell removes it from its tasks, and those tasks go up without it. Renaming a tag in Logwell renames nothing in TickTick: its tasks go up with the new name, the old TickTick tag stays, and a TickTick task that still carries the old name brings it back to Logwell as a new tag.
 
 **Not synced.** Repeating tasks, on either side, and TickTick notes. Such a task in a linked list shows **Not synced**. A task that starts repeating syncs again once neither copy repeats. See [Repeating tasks](repeating-tasks.md).
 

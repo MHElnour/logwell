@@ -225,6 +225,23 @@ export function recordId(collection: CollectionName, record: unknown): string {
 	return COLLECTION_SPECS[collection].idOf(record as Record<string, unknown>);
 }
 
+/**
+ * Why removing these records of `c` would leave a reference to them behind in `data`, or null. A tag key is held by
+ * live tasks and by the tasks of trash entries. Undo checks it on the state after a revert, before committing.
+ */
+export function referenceProblem(data: DbCollections, c: CollectionName, removed: ReadonlySet<string>): string | null {
+	switch (c) {
+		case "tags": {
+			const holds = (task: Task) => task.tagKeys.some((k) => removed.has(k));
+			for (const t of data.tasks.values()) if (holds(t)) return "a task now uses this tag.";
+			for (const e of data.trash.values()) if (e.tasks.some(holds)) return "a task now uses this tag.";
+			return null;
+		}
+		default:
+			return null;
+	}
+}
+
 /** A `[]` or `{}` default matches any empty list or object. */
 function isDefault(value: unknown, def: unknown): boolean {
 	if (Array.isArray(def)) return Array.isArray(value) && value.length === 0;

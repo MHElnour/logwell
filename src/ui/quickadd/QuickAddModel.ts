@@ -1,7 +1,8 @@
 import type { CheckpointApp } from "../../app/App";
 import { DST_WARNING_TEXT } from "../../app/TaskService";
+import { tagLabel, tagLeaf } from "../../domain/tags";
 import { DURATION_RANGE_MESSAGE, isDurationMinutes } from "../../domain/tasks";
-import { type DateSpec, type ID, INBOX_ID, type LocalDate, type Priority, type RepeatRule, type Task, isPriority } from "../../domain/types";
+import { type DateSpec, type ID, INBOX_ID, type LocalDate, type Priority, type RepeatRule, type Tag, type Task, isPriority } from "../../domain/types";
 import {
 	type Chip,
 	type DateLocale,
@@ -78,6 +79,10 @@ export class QuickAddModel {
 	};
 	/** Manually chosen tags; null means "the preset's tags". */
 	tagKeys: string[] | null = null;
+	/** The tags the picked tags' pills were last drawn with, to name a tag that is gone as its pill did. */
+	private shownTags: ReadonlyMap<string, Tag> | null = null;
+	/** The "Pick it again" message while it shows, so picking tags clears it and nothing else. */
+	private goneTagsMessage: string | null = null;
 	urgent = false;
 	important = false;
 	message: string | null = null;
@@ -156,6 +161,20 @@ export class QuickAddModel {
 
 	/** Re-reads categories, tags and notes (they changed elsewhere). */
 	refresh(): void {
+		// A picked tag renamed or deleted elsewhere leaves the pills, and the message says to pick it again.
+		const tags = this.env.app.store.state.tags;
+		if (this.tagKeys !== null) {
+			const gone = this.tagKeys.filter((k) => !tags.has(k));
+			if (gone.length > 0) {
+				this.tagKeys = this.tagKeys.filter((k) => tags.has(k));
+				// Named as the pill showed it, from the tags it was drawn with.
+				const shown = this.shownTags ?? tags;
+				const names = gone.map((k) => `"${shown.has(k) ? tagLabel(shown, k) : tagLeaf(k)}"`).join(", ");
+				this.message = gone.length === 1 ? `The tag ${names} was renamed or deleted. Pick it again.` : `The tags ${names} were renamed or deleted. Pick them again.`;
+				this.goneTagsMessage = this.message;
+			}
+		}
+		this.shownTags = tags;
 		this.update();
 	}
 
@@ -449,9 +468,9 @@ export class QuickAddModel {
 	}
 
 	tagKeysValue(): string[] {
-		if (this.tagKeys !== null) return this.tagKeys;
 		const tags = this.env.app.store.state.tags;
-		return (this.env.preset.tagKeys ?? []).filter((k) => tags.has(k));
+		// A tag renamed or deleted while the form was open drops out, so the save does not refuse the task.
+		return (this.tagKeys ?? this.env.preset.tagKeys ?? []).filter((k) => tags.has(k));
 	}
 
 	setDate(date: string): void {
@@ -530,6 +549,10 @@ export class QuickAddModel {
 
 	setTags(keys: string[]): void {
 		this.tagKeys = keys;
+		this.shownTags = this.env.app.store.state.tags;
+		// Picking tags again answers "Pick it again"; any other message stays.
+		if (this.goneTagsMessage !== null && this.message === this.goneTagsMessage) this.message = null;
+		this.goneTagsMessage = null;
 		this.notify();
 	}
 
@@ -542,6 +565,7 @@ export class QuickAddModel {
 		this.manual.clear();
 		this.vals = { date: "", time: "", deadline: "", duration: "", categoryId: null, notePath: null, priority: 0, repeat: null };
 		this.tagKeys = null;
+		this.goneTagsMessage = null;
 		this.urgent = this.env.preset.urgent ?? false;
 		this.important = this.env.preset.important ?? false;
 		if (this.parent !== undefined) {

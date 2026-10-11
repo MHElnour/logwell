@@ -9,10 +9,11 @@ import { isOpen } from "../domain/tasks";
 import type { ID } from "../domain/types";
 import type CheckpointPlugin from "../main";
 import type { SpanDecision } from "../parsing";
-import type { ButtonSpec, HabitDialogOptions, MenuSpec, NewListOptions, QuickAddPreset, SectionId, TickTickUi, UiHost } from "../ui/host";
+import type { ButtonSpec, HabitDialogOptions, MenuSpec, NewListOptions, QuickAddPreset, SectionId, TagDialogOptions, TickTickUi, UiHost } from "../ui/host";
 import type { CheckpointView } from "./CheckpointView";
 import { CHECKPOINT_VIEW_TYPE } from "./CheckpointView";
 import { habitDialog } from "./habitDialog";
+import { tagDialog } from "./tagDialog";
 import { showImportPreview } from "./ImportModal";
 import { type PromptField, choose, newListDialog, pick, pickFolder, pickJsonFile, pickListIcon, pickNote, prompt } from "./modals";
 import { accentClass } from "../ui/accent";
@@ -155,6 +156,10 @@ export class ViewHost implements UiHost {
 
 	habitDialog(options: HabitDialogOptions): Promise<void> {
 		return habitDialog(this.plugin.app, options, accentClass(this.plugin.settings));
+	}
+
+	tagDialog(options: TagDialogOptions): Promise<void> {
+		return tagDialog(this.plugin.app, options, accentClass(this.plugin.settings));
 	}
 
 	/** Asks the Notification permission from this user gesture (once per plugin lifetime). */

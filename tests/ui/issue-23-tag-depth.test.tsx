@@ -74,6 +74,6 @@ describe("TagInput tag depth", () => {
 	it("keeps the character hint for an invalid character", async () => {
 		const m = await mount();
 		await typeInto(m.root, "a$b");
-		expect(m.root.querySelector(".cp-hint")?.textContent).toBe("Letters, digits, - _ / only");
+		expect(m.root.querySelector(".cp-hint")?.textContent).toBe("Only letters, digits, hyphens (-) and underscores (_) are allowed.");
 	});
 });
