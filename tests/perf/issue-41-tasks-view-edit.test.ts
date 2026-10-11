@@ -99,6 +99,18 @@ const tally = (passes: string[]) => {
 	return [...counts].map(([where, n]) => `${n}x ${where}`).join("; ");
 };
 
+/**
+ * Which completed task `i` is, if any: completed in lists[3] (every tenth task, as before), completed subtasks of an
+ * open parent two rows up in the Inbox and ten rows up in lists[1] (they stay under the parent, and go to the
+ * Completed group when a search leaves the parent out), and completed top-level tasks in both.
+ */
+function completedKind(i: number): "task" | "subtask" | null {
+	if (i % 10 === 3) return "task";
+	if (i % 20 === 4 || i % 40 === 11) return "subtask";
+	if (i % 20 === 6 || i % 40 === 31) return "task";
+	return null;
+}
+
 async function bigHarness() {
 	const h = await appHarness();
 	const lists: ID[] = [];
@@ -108,13 +120,16 @@ async function bigHarness() {
 	const tasks = new Map(data.tasks);
 	const ops: JournalOp[] = [];
 	for (let i = 0; i < TASKS; i++) {
+		const kind = completedKind(i);
 		const t = makeTask(taskId(i + 1), {
-			title: `Task ${i}`,
+			// The search "step" matches the subtasks and every fourth task, never a subtask's parent.
+			title: kind === "subtask" || i % 4 === 0 ? `Task ${i} step` : `Task ${i}`,
 			sortKey: `V${i.toString(36).padStart(4, "0")}`,
 			categoryId: i % 2 === 0 ? "inbox" : lists[i % LISTS],
+			parentId: kind === "subtask" ? taskId(i + 1 - (i % 2 === 0 ? 2 : 10)) : null,
 			scheduled: i % 20 === 0 ? { kind: "date", date: today } : null,
-			status: i % 10 === 3 ? "completed" : "open",
-			completedAt: i % 10 === 3 ? "2026-09-30T18:00:00.000Z" : null,
+			status: kind === null ? "open" : "completed",
+			completedAt: kind === null ? null : `2026-09-${i % 3 === 0 ? 29 : 30}T18:${String(i % 60).padStart(2, "0")}:00.000Z`,
 		});
 		tasks.set(t.id, t);
 		ops.push({ c: "tasks", id: t.id, v: t });
@@ -140,25 +155,30 @@ afterEach(() => {
 describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 	it("times buildList for Inbox, Today and a list on the state after an edit, each ordering its rows once", async () => {
 		const { h, lists } = await bigHarness();
-		const views: { name: string; view: TaskView }[] = [
-			{ name: "Inbox", view: { kind: "inbox" } },
-			{ name: "Today", view: { kind: "today" } },
-			{ name: "a list", view: { kind: "category", id: lists[1] as ID } },
+		const views: { name: string; view: TaskView; text: string }[] = [
+			{ name: "Inbox", view: { kind: "inbox" }, text: "" },
+			// The search leaves every parent of a completed subtask out: those subtasks go to the Completed group.
+			{ name: "Inbox searching", view: { kind: "inbox" }, text: "step" },
+			{ name: "Today", view: { kind: "today" }, text: "" },
+			{ name: "a list", view: { kind: "category", id: lists[1] as ID }, text: "" },
 		];
 		const ctx = h.app.queryContext();
 		const times = new Map<string, number[]>();
 		const rows = new Map<string, string>();
+		const completed = new Map<string, number>();
 		const sorts = new Map<string, number>();
 		let counts: number[] = [];
 		for (let run = 0; run < RUNS + 1; run++) {
 			// The edit command, then the view work its change triggers.
 			await h.app.tasks.update(taskId(run * 1000 + 1), { title: `Edited ${run}` });
 			const state = h.app.store.state;
-			for (const { name, view } of views) {
+			for (const { name, view, text } of views) {
 				const start = performance.now();
-				const list = buildList(state, view, ctx, emptyFilter(), "");
+				const list = buildList(state, view, ctx, emptyFilter(), text);
 				const ms = performance.now() - start;
-				rows.set(name, `${list.groups.reduce((n, g) => n + g.entries.length, 0)} rows, ${list.completed.length} completed`);
+				const shown = list.groups.flatMap((g) => g.entries);
+				rows.set(name, `${shown.length} rows (${shown.filter((e) => e.task.status === "completed").length} completed under a parent), ${list.completed.length} in the Completed group`);
+				completed.set(name, list.completed.length);
 				if (run > 0) times.set(name, [...(times.get(name) ?? []), ms]);
 			}
 			const start = performance.now();
@@ -166,7 +186,7 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 			if (run > 0) counts = [...counts, performance.now() - start];
 		}
 		// Outside the timed runs: the sort counter's stack reads would cost more than the sorts.
-		for (const { name, view } of views) sorts.set(name, (await countHierarchySorts(() => buildList(h.app.store.state, view, ctx, emptyFilter(), ""))).sorts);
+		for (const { name, view, text } of views) sorts.set(name, (await countHierarchySorts(() => buildList(h.app.store.state, view, ctx, emptyFilter(), text))).sorts);
 		const report = [
 			...views.map(({ name }) => `${name} ${median(times.get(name) ?? []).toFixed(1)} ms (${rows.get(name)}; rows ordered ${sorts.get(name)}x)`),
 			`sidebar counts ${median(counts).toFixed(1)} ms`,
@@ -175,7 +195,11 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
 		expect(median(counts), report).toBeLessThan(VIEW_BUDGET_MS);
 		// A list orders its rows once for the open rows and the Completed group together; Today has no hierarchy.
-		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, Today: 0, "a list": 1 });
+		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, "Inbox searching": 1, Today: 0, "a list": 1 });
+		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
+		expect(completed.get("Inbox"), report).toBe(2_500);
+		expect(completed.get("Inbox searching"), report).toBe(2_500);
+		expect(completed.get("a list"), report).toBe(1_250);
 	}, 120_000);
 
 	for (const open of [
