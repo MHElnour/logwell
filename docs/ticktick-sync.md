@@ -11,6 +11,24 @@ TickTick sync keeps the lists you choose in step with TickTick, both ways. It st
 
 Turn sync on for one device only. Edits from your other devices still reach TickTick through it, because they reach the database first. While sync is on, the group shows the last sync with a **Sync now** button, and each linked list with **Unlink**. See [Settings and commands](settings-and-commands.md#ticktick-sync) for every setting.
 
+## How Logwell connects to TickTick
+
+TickTick offers two ways for another app to read and change your tasks:
+
+- **The official Open API.** You create a token in TickTick's settings and give it to Logwell. The token reaches only what the Open API allows, and deleting it in TickTick cuts Logwell off at once.
+- **TickTick's private app API**, the one its own web and phone apps use. It can return everything that changed since the last sync in one request. But it needs your TickTick username and password, it is undocumented and can change without notice, it does not work for accounts that sign in with Google or Apple, and TickTick does not offer it to other apps.
+
+**Logwell uses only the official Open API.** It never asks for or stores your TickTick password.
+
+The official API has one limitation: it has no "everything that changed" request. Logwell reads open tasks and recently completed tasks list by list, and TickTick returns at most 200 completed tasks per request. Logwell handles that as follows:
+
+- After a large burst of completions, Logwell splits the time range into smaller pieces until each answer is complete.
+- When a burst cannot be split, such as hundreds of tasks completed in the same second, Logwell looks up the remaining tasks one by one over the next few syncs.
+- A task missing from TickTick is looked up before anything happens to it. Only tasks Logwell checked and could not find in any linked list are offered for the Trash, so nothing goes to the Trash on a guess.
+- Each sync keeps within TickTick's request limit.
+
+In practice, a very large change, or sync turned off for a long time, catches up over a few syncs instead of one.
+
 ## Link a list
 
 1. Right-click a list in the sidebar (Inbox too) and choose **Sync with TickTick…**.
