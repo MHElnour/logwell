@@ -11,6 +11,7 @@ import { browser, expect } from "@wdio/globals";
 import {
 	appToday,
 	appZone,
+	closeNotices,
 	createHabit,
 	createTask,
 	freshDatabase,
@@ -214,6 +215,7 @@ describe("Habits (M6)", function () {
 		await expect(habitRow(habits, "Read").$(".cp-habit-progress")).toHaveText("25 of 30 min");
 
 		// Edit the habit: target 20 applies from today.
+		await closeNotices();
 		await habits.$('.cp-habit-detail button[aria-label="Edit habit"]').click();
 		await browser.$(".checkpoint-habit-dialog").waitForExist({ timeout: 5000 });
 		await setModalInput(".cp-habit-target", "20");

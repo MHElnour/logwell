@@ -18,6 +18,7 @@ import {
 	categoryCount,
 	centerOf,
 	clickModalButton,
+	closeNotices,
 	clickRowCheckbox,
 	closeLeftoverMenus,
 	closeOpenModals,
@@ -534,6 +535,7 @@ describe("Acceptance suite AS-01 to AS-13, in one vault", function () {
 		await expect(habitRow(habits, "AS-11 read")).not.toHaveElementClass("is-done");
 
 		// The target changes to 20 from today; yesterday is still evaluated against 30.
+		await closeNotices();
 		await habits.$('.cp-habit-detail button[aria-label="Edit habit"]').click();
 		await browser.$(".checkpoint-habit-dialog").waitForExist({ timeout: 5000 });
 		await setModalInput(".cp-habit-target", "20");

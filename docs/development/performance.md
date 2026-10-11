@@ -51,7 +51,7 @@ The limit of a dimension is its last `pass` step, rounded down. Between the last
 
 ## What the unit perf tests cover
 
-These run in `npm test`, in Node or happy-dom, not in Obsidian. With `CI` set, each budget is four times larger. `CHECKPOINT_PERF_LOG=1` prints the measured times.
+These run in `npm test`, in Node or happy-dom, not in Obsidian. They live in their own vitest project (`perf`: `tests/perf`, `tests/ui/performance.test.tsx`, `tests/ui/perf-virtual-list.test.tsx`), which `npm test` runs after the other tests, one file at a time, so parallel test files do not skew the timings. With `CI` set, each budget is four times larger. `CHECKPOINT_PERF_LOG=1` prints the measured times.
 
 | Test | What it checks |
 | --- | --- |
@@ -77,7 +77,7 @@ These run in `npm test`, in Node or happy-dom, not in Obsidian. With `CI` set, e
 Use a quiet machine, one run at a time, and keep the mouse off the Obsidian window. The `device` column is read with `sysctl`; where that is missing it reads `unknown CPU`.
 
 1. Keep the latest run: `mkdir -p docs/development/performance/results/<YYYY-MM-DD>-<label>`, then copy `tests/limits/limits-matrix.csv` into it. The harness overwrites that file.
-2. Run the unit perf tests: `npx vitest run tests/perf tests/ui/perf- tests/ui/issue-6-perf-renders tests/ui/performance.test.tsx tests/limits`.
+2. Run the unit perf tests: `npx vitest run --project perf` and `npx vitest run tests/ui/issue-6-perf-renders tests/limits`.
 3. Build the release bundle and run the matrix:
    `npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e/limits/limits.e2e.ts`.
    The harness is not part of `npm run e2e`. To run part of it, set `LIMITS_MAX_STEP` (the highest step, default 5) or `LIMITS_ONLY` (a comma list of dimensions).
