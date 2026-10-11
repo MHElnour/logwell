@@ -1,6 +1,7 @@
 import { categoryText } from "../ui/icons";
 import { AbstractInputSuggest, type App } from "obsidian";
 import type { CheckpointApp } from "../app/App";
+import { tagsByLabel } from "../domain/tags";
 import type { SpanDecision } from "../parsing";
 import { tokenAtCursor } from "../parsing";
 import { applyTokenChoice, filterByQuery, suggestNotes } from "./tokenChoice";
@@ -9,7 +10,7 @@ type Token = NonNullable<ReturnType<typeof tokenAtCursor>>;
 
 export type SuggestItem =
 	| { kind: "category"; id: string; name: string; icon: string | null }
-	| { kind: "tag"; key: string; displayName: string }
+	| { kind: "tag"; key: string; label: string }
 	| { kind: "note"; path: string; basename: string; insert: string };
 
 /** #category, @tag and [[note]] suggestions for the Quick Add input. */
@@ -31,7 +32,8 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 		private readonly cpInput: HTMLInputElement,
 		private readonly cpLists: {
 			categories: () => { id: string; name: string; icon: string | null }[];
-			tags: () => { key: string; displayName: string }[];
+			/** `label` is how the tag is shown (`tagLabel`): what is listed and what is inserted, and it finds the same tag. */
+			tags: () => { key: string; label: string }[];
 		},
 		private readonly cpOnBind: (decision: SpanDecision) => void,
 	) {
@@ -80,15 +82,15 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 			return filterByQuery(items, (i) => (i.kind === "category" ? i.name : ""), token.query);
 		}
 		if (token.kind === "tag") {
-			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, displayName: t.displayName }));
-			return filterByQuery(items, (i) => (i.kind === "tag" ? i.displayName : ""), token.query);
+			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, label: t.label }));
+			return filterByQuery(items, (i) => (i.kind === "tag" ? i.label : ""), token.query);
 		}
 		return suggestNotes(this.app.vault.getMarkdownFiles(), token.query).map((n): SuggestItem => ({ kind: "note", ...n }));
 	}
 
 	renderSuggestion(item: SuggestItem, el: HTMLElement): void {
 		if (item.kind === "category") el.setText(categoryText(item));
-		else if (item.kind === "tag") el.setText(`@${item.displayName}`);
+		else if (item.kind === "tag") el.setText(`@${item.label}`);
 		else el.setText(item.path.replace(/\.md$/i, ""));
 	}
 
@@ -98,7 +100,7 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 			this.close();
 			return;
 		}
-		const insert = item.kind === "category" ? `#${item.name}` : item.kind === "tag" ? `@${item.displayName}` : `[[${item.insert}]]`;
+		const insert = item.kind === "category" ? `#${item.name}` : item.kind === "tag" ? `@${item.label}` : `[[${item.insert}]]`;
 		const result = applyTokenChoice(this.cpInput.value, token, insert);
 		this.close();
 		this.cpHold = true;
@@ -128,7 +130,7 @@ export function attachTokenSuggest(
 		input,
 		{
 			categories: () => app.categories.list().map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
-			tags: () => app.tags.list().map((t) => ({ key: t.key, displayName: t.displayName })),
+			tags: () => tagsByLabel(app.store.state.tags).map(({ tag, label }) => ({ key: tag.key, label })),
 		},
 		onBind,
 	);

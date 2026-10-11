@@ -3,7 +3,7 @@ import type { TargetedEvent } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { type QueryContext, isDeadlineMissed, isOverdue, quadrantOf } from "../domain/queries";
 import { describeRule, explicitRule, versionAt } from "../domain/recurrence";
-import { normalizeTagKey } from "../domain/tags";
+import { normalizeTagKey, tagLabel } from "../domain/tags";
 import { noteDisplayName } from "../domain/notes";
 import { DURATION_RANGE_MESSAGE, MAX_DURATION_MIN, isDurationMinutes, subtasksOf } from "../domain/tasks";
 import { dateSpecDate } from "../domain/time";
@@ -272,11 +272,11 @@ export function TaskDetails(props: {
 				<div class="cp-tag-row">
 					{task.tagKeys.map((k) => (
 						<span key={k} class={`cp-tag-pill ${hueClass(state.tags.get(k)?.color)}`}>
-							@{state.tags.get(k)?.displayName ?? k}
+							@{tagLabel(state.tags, k)}
 							<button
 								type="button"
 								class="cp-tag-remove"
-								aria-label={`Remove tag ${state.tags.get(k)?.displayName ?? k}`}
+								aria-label={`Remove tag ${tagLabel(state.tags, k)}`}
 								onClick={() => void updateTask(host, task, { tagKeys: task.tagKeys.filter((x) => x !== k) })}
 							>
 								×

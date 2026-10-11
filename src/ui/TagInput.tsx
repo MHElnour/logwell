@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { CheckpointApp } from "../app/App";
-import { TAG_DEPTH_MESSAGE, hasAllowedTagDepth, isValidTagKey, tagNameRefusal } from "../domain/tags";
+import { TAG_DEPTH_MESSAGE, hasAllowedTagDepth, isValidTagKey, resolveTagName, tagLabel, tagNameRefusal, tagNamesOf, tagsByLabel } from "../domain/tags";
 import { useUniqueId } from "./hooks";
 
 /**
@@ -21,8 +21,12 @@ export function TagInput(props: {
 	const [text, setText] = useState("");
 	const listId = useUniqueId("cp-tags");
 	const tags = app.store.state.tags;
-	const key = props.normalize(text);
-	const exists = key !== "" && tags.has(key);
+	const typed = props.normalize(text);
+	// A tag by its full key or by its own name (`calls` for `home/calls`); the parent of a tag is not a tag.
+	const resolved = typed === "" ? null : resolveTagName(tagNamesOf(tags), typed);
+	const found = resolved !== null && tags.has(resolved) ? resolved : null;
+	const key = found ?? typed;
+	const exists = found !== null;
 	const validKey = isValidTagKey(key);
 	const tooDeep = validKey && !hasAllowedTagDepth(key);
 	// A name is used once, whatever its parent.
@@ -49,11 +53,11 @@ export function TagInput(props: {
 			<div class="cp-chips">
 				{value.map((k) => (
 					<span key={k} class={`cp-chip cp-tag cp-tag-${tags.get(k)?.color ?? "none"}`}>
-						@{tags.get(k)?.displayName ?? k}
+						@{tagLabel(tags, k)}
 						<button
 							type="button"
 							class="cp-chip-remove"
-							aria-label={`Remove tag ${tags.get(k)?.displayName ?? k}`}
+							aria-label={`Remove tag ${tagLabel(tags, k)}`}
 							onClick={() => props.onChange(value.filter((x) => x !== k))}
 						>
 							×
@@ -80,10 +84,10 @@ export function TagInput(props: {
 					}}
 				/>
 				<datalist id={listId}>
-					{[...tags.values()]
-						.filter((t) => !value.includes(t.key))
+					{tagsByLabel(tags)
+						.filter((t) => !value.includes(t.tag.key))
 						.map((t) => (
-							<option key={t.key} value={t.displayName} />
+							<option key={t.tag.key} value={t.label} />
 						))}
 				</datalist>
 				{exists && (

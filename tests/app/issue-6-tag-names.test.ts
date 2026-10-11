@@ -10,7 +10,7 @@ describe("TagService.create", () => {
 	it("refuses a name used under another parent, with no write", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Home/Calls");
-		await expect(h.app.tags.create("Work/CALLS")).rejects.toMatchObject({ code: "InvalidTag", message: "A tag named Calls already exists under Home." });
+		await expect(h.app.tags.create("Work/CALLS")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Calls" is already used by another tag.' });
 		await expect(h.app.tags.create("calls")).rejects.toMatchObject({ code: "InvalidTag" });
 		expect(h.app.tags.list().map((t) => t.key)).toEqual(["home/calls"]);
 	});
@@ -18,7 +18,7 @@ describe("TagService.create", () => {
 	it("refuses a child whose name is a root tag", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Errands");
-		await expect(h.app.tags.create("home/errands")).rejects.toMatchObject({ message: "A tag named Errands already exists." });
+		await expect(h.app.tags.create("home/errands")).rejects.toMatchObject({ message: 'The name "Errands" is already used by another tag.' });
 	});
 
 	it("refuses a tag named like its parent", async () => {

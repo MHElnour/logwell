@@ -31,7 +31,7 @@ Write each filter as `key: value`. Capitals do not matter, and blank lines are i
 | --- | --- | --- |
 | `list` | Tasks in the list with that name. Use `Inbox` for the Inbox. Capitals, spaces, `-` and `_` do not matter, and an exact name wins, so `list: homework` finds "Home work". | `list: Home` |
 | `section` | Tasks in that section of the list. It needs a `list` line. | `section: Planning` |
-| `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. A leading `@` is fine. | `tag: errands` |
+| `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. Write a nested tag by its own name (`tag: garden`) or its full path. A leading `@` is fine. | `tag: errands` |
 | `due` | `today`, `overdue`, `this week` or `next 7 days`. A task's date and its deadline both count. | `due: today` |
 | `priority` | `high`, `medium`, `low` or `none`. | `priority: high, medium` |
 | `quadrant` | A quadrant of the [Eisenhower matrix](matrix.md): `1` to `4`, or `urgent and important`, `important not urgent`, `urgent not important`, `neither`. | `quadrant: 1` |

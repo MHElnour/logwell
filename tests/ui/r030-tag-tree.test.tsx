@@ -97,11 +97,11 @@ describe("sidebar tag tree", () => {
 		expect(m.host.menus).toHaveLength(1);
 	});
 
-	it("task rows keep the full display name of the tag", async () => {
+	it("task rows show the tag by its own name", async () => {
 		const m = await mount();
 		await click(rowFor(m, "Go"));
 		const pill = m.root.querySelector(".cp-tasks .cp-task-row .cp-tag-pill")!;
-		expect(pill.textContent).toContain("Programming/Go");
+		expect(pill.textContent).toBe("@Go");
 	});
 });
 
@@ -125,7 +125,7 @@ describe("tag tree: delete and expansion (review fixes 9-11)", () => {
 		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Programming");
 		// A leaf: its view goes away, so the list returns to Inbox.
 		await click(rowFor(m, "Go"));
-		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Programming/Go");
+		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Go");
 		deleteItem(await menuOf(m, "Go")).run();
 		await settle();
 		expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("Inbox");

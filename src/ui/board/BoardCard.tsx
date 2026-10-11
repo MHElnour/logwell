@@ -2,6 +2,7 @@ import type { TargetedKeyboardEvent } from "preact";
 import { useRef } from "preact/hooks";
 import type { BoardCard as BoardCardData } from "../../domain/board";
 import type { ListEntry, QueryContext } from "../../domain/queries";
+import { tagLabel } from "../../domain/tags";
 import type { SubtaskCount } from "../../domain/tasks";
 import type { ID } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
@@ -59,7 +60,7 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 			{showCategory && category !== undefined && listMark(category)}
 			{task.tagKeys.map((key) => (
 				<span key={key} class={`cp-tag-pill ${hueClass(state.tags.get(key)?.color)}`}>
-					@{state.tags.get(key)?.displayName ?? key}
+					@{tagLabel(state.tags, key)}
 				</span>
 			))}
 			{task.descriptionNote !== null && noteMark(host, task.descriptionNote.path)}

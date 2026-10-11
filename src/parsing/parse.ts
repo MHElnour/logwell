@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import type { RepeatRule } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
-import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey } from "../domain/tags";
+import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName } from "../domain/tags";
 import { findDates, resolveDateSpec, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
@@ -182,25 +182,33 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		}
 	}
 
-	const tagExists = (key: string): boolean => ctx.tags.some((x) => normalizeTagKey(x.key) === key);
-	// The names in use: the existing tags, then each new tag this input accepts, in order.
+	// The names in use: the existing tags, then each new tag this input accepts, in order. Built when a tag is not found by its key.
 	let tagNames: TagNames | null = null;
+	const namesOfTags = (): TagNames => (tagNames ??= TagNames.of(ctx.tags.map((x) => ({ key: normalizeTagKey(x.key), createdAt: x.createdAt ?? "" }))));
+	// The existing tag a typed name stands for: its full key, or its name alone (`@calls` for `home/calls`).
+	const tagFor = (key: string): ParseContext["tags"][number] | undefined => {
+		const exact = ctx.tags.find((x) => normalizeTagKey(x.key) === key);
+		if (exact !== undefined) return exact;
+		const resolved = resolveTagName(namesOfTags(), key);
+		return resolved === null ? undefined : ctx.tags.find((x) => normalizeTagKey(x.key) === resolved);
+	};
 	for (const t of findWordTokens(input, "@", isTaken, (name) => {
 		const key = normalizeTagKey(name);
 		if (!isValidTagKey(key)) return false;
 		// A key too deep to create is not a token (it stays in the title) unless the tag already exists.
 		// So is a new key whose name another tag (or an earlier new tag of this input) already uses
 		// under another parent, or that repeats its parent's name.
-		if (tagExists(key)) return true;
+		if (tagFor(key) !== undefined) return true;
 		if (digitsOnly(key) || !hasAllowedTagDepth(key) || hasRepeatedTagName(key)) return false;
-		tagNames ??= TagNames.of(ctx.tags.map((x) => ({ key: normalizeTagKey(x.key) })));
-		if (tagNames.clash(key) !== null) return false;
-		tagNames.add(key);
+		const names = namesOfTags();
+		if (names.clash(key) !== null) return false;
+		// A new tag of this input is newer than every existing one, so it never takes a name from them.
+		names.add(key, "￿");
 		return true;
 	})) {
 		take(t.span);
 		const key = normalizeTagKey(t.name);
-		const existing = ctx.tags.find((x) => normalizeTagKey(x.key) === key);
+		const existing = tagFor(key);
 		if (existing) drafts.push(draft(input, "tag", t.span, "applied", { tagKey: existing.key }));
 		else drafts.push(draft(input, "tag", t.span, "applied", { tagKey: key, newTag: true }));
 	}

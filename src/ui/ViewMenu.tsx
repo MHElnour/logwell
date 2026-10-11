@@ -2,6 +2,7 @@ import type { Ref } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { GROUP_BY_TITLE, type GroupBy } from "../domain/groupBy";
 import type { TaskFilter, TaskSort } from "../domain/queries";
+import { tagsByLabel } from "../domain/tags";
 import { Icon } from "./common";
 import type { MenuSpec, UiHost } from "./host";
 import { categoryText } from "./icons";
@@ -163,12 +164,12 @@ export function ScopeMenuButton(props: {
 		show(at, items);
 	};
 	const showTags = (at: Anchor) => {
-		const tags = host.app.tags.list();
+		const tags = tagsByLabel(host.app.store.state.tags);
 		const items: MenuSpec =
 			tags.length === 0
 				? [{ title: "No tags yet", disabled: true, run: () => undefined }]
-				: tags.map((t) => ({
-						title: `@${t.displayName}`,
+				: tags.map(({ tag: t, label }) => ({
+						title: `@${label}`,
 						checked: filterRef.current.tagKeys.includes(t.key),
 						run: () => {
 							change((f) => ({ ...f, tagKeys: toggle(f.tagKeys, t.key) }));

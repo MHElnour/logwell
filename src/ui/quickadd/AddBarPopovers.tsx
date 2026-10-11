@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
+import { tagsByLabel } from "../../domain/tags";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
 import { addDays } from "../../domain/time";
 import { noteDisplayName } from "../../domain/notes";
@@ -440,7 +441,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 	const [sub, setSub] = useState<"list" | "tags" | "quadrant" | null>(null);
 	const app = model.env.app;
 	const categories = app.categories.list();
-	const tags = app.tags.list();
+	const tags = tagsByLabel(app.store.state.tags);
 	const current = model.priorityValue();
 	const categoryName = categories.find((c) => c.id === model.categoryValue())?.name ?? INBOX_NAME;
 	const tagKeys = model.tagKeysValue();
@@ -580,7 +581,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 						(tags.length === 0 ? (
 							<p class="cp-pop-empty">No tags yet. Type @name in the bar to create one.</p>
 						) : (
-							tags.map((t) => {
+							tags.map(({ tag: t, label }) => {
 								const on = tagKeys.includes(t.key);
 								return (
 									<button
@@ -590,7 +591,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 										aria-pressed={on}
 										onClick={() => model.setTags(on ? tagKeys.filter((k) => k !== t.key) : [...tagKeys, t.key])}
 									>
-										{t.displayName}
+										{label}
 									</button>
 								);
 							})

@@ -1,5 +1,6 @@
 import { Component, type FunctionComponent, h } from "preact";
 import type { ListEntry, QueryContext } from "../domain/queries";
+import { tagLabel } from "../domain/tags";
 import type { SubtaskCount } from "../domain/tasks";
 import { sameDateSpec } from "../domain/time";
 import type { Task } from "../domain/types";
@@ -49,10 +50,14 @@ export function sameDay(a: QueryContext, b: QueryContext): boolean {
 	return a === b || (a.today === b.today && a.zone === b.zone);
 }
 
-/** The records of `task`'s list and tags in both states are the same objects. */
+/**
+ * The records of `task`'s list and tags in both states are the same objects, and so are the labels the row shows for
+ * its tags (a label depends on the other tags: deleting a duplicate gives the remaining tag its own name back).
+ */
 export function sameLookups(prev: DbData, next: DbData, task: Task): boolean {
 	if (prev.categories.get(task.categoryId) !== next.categories.get(task.categoryId)) return false;
 	for (const key of task.tagKeys) if (prev.tags.get(key) !== next.tags.get(key)) return false;
+	if (prev.tags !== next.tags) for (const key of task.tagKeys) if (tagLabel(prev.tags, key) !== tagLabel(next.tags, key)) return false;
 	return true;
 }
 

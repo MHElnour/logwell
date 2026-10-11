@@ -643,7 +643,7 @@ describe("token highlighting and chips", () => {
 	});
 
 	it("priority chip labels read 'High priority', 'Medium priority' and 'Low priority'", () => {
-		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: [] };
+		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: new Map() };
 		const chip = (priority: 1 | 2 | 3) => ({ kind: "priority", status: "applied", priority, text: `!${priority}` }) as never;
 		expect(chipLabel(chip(1), env)).toBe("High priority");
 		expect(chipLabel(chip(2), env)).toBe("Medium priority");

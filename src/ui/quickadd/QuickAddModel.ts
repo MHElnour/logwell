@@ -136,7 +136,7 @@ export class QuickAddModel {
 			locale: this.env.locale(),
 			...(this.env.eveningTime ? { eveningTime: this.env.eveningTime() } : {}),
 			categories: app.categories.list().map((c) => ({ id: c.id, name: c.name })),
-			tags: app.tags.list().map((t) => ({ key: t.key, displayName: t.displayName })),
+			tags: app.tags.list().map((t) => ({ key: t.key, displayName: t.displayName, createdAt: t.createdAt })),
 			resolveNote: (t) => this.env.resolveNote(t),
 			decisions: this.decisions,
 			manual: this.manual,

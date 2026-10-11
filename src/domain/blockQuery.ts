@@ -2,7 +2,7 @@ import type { BlockFilters } from "../parsing/blockQuery";
 import { type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, inViewScope, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, isOpen, resolveListName } from "./tasks";
-import { hasTagOrChild, isUnderTag, normalizeTagKey } from "./tags";
+import { isUnderTag, resolveTagName, tagNamesOf } from "./tags";
 import { dateOf, dayNum, weekStartOfDay } from "./time";
 import type { Category, ID, Section, Tag, Task } from "./types";
 
@@ -98,8 +98,9 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	}
 	let tagKey: string | null = null;
 	if (filters.tag !== undefined) {
-		tagKey = normalizeTagKey(filters.tag);
-		if (!hasTagOrChild(state.tags.keys(), tagKey)) return { kind: "error", message: `No tag named \u201c${filters.tag}\u201d.` };
+		// A tag by its full key, its own name, or as the parent of tags (the filter then includes the children).
+		tagKey = resolveTagName(tagNamesOf(state.tags), filters.tag);
+		if (tagKey === null) return { kind: "error", message: `No tag named \u201c${filters.tag}\u201d.` };
 	}
 
 	// -- compile the rest into plain lookups --

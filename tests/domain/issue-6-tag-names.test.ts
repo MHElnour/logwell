@@ -45,12 +45,12 @@ describe("tag names (D29)", () => {
 		expect(() => requireUniqueTagName(tags, "calls")).toThrow(DomainError);
 	});
 
-	it("the message names the existing tag and its parent, in its own casing", () => {
+	it("the message names the existing tag by its own name, in its own casing", () => {
 		const tags = map(tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
-		expect(tagNameClashMessage(tags, "home/calls")).toBe("A tag named Calls already exists under Home.");
-		expect(tagNameClashMessage(tags, "errands")).toBe("A tag named Errands already exists.");
-		expect(tagNameClashMessage(tags, "home")).toBe("A tag named Home already exists.");
-		expect(() => requireUniqueTagName(tags, "work/errands")).toThrow("A tag named Errands already exists.");
+		expect(tagNameClashMessage(tags, "home/calls")).toBe('The name "Calls" is already used by another tag.');
+		expect(tagNameClashMessage(tags, "errands")).toBe('The name "Errands" is already used by another tag.');
+		expect(tagNameClashMessage(tags, "home")).toBe('The name "Home" is already used by another tag.');
+		expect(() => requireUniqueTagName(tags, "work/errands")).toThrow('The name "Errands" is already used by another tag.');
 	});
 
 	it("a tag owns by the older of its own date and its oldest child's, so a parent that gets a record keeps its name", () => {

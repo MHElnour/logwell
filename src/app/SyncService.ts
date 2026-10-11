@@ -1,6 +1,6 @@
 import { DomainError, isDomainError } from "../domain/errors";
 import { compareSortKeys, keyBetween } from "../domain/sortKey";
-import { TagNames, normalizeTagKey, tagDisplayPath, tagPath } from "../domain/tags";
+import { TagNames, normalizeTagKey, tagDisplayPath, tagNamesOf, tagPath } from "../domain/tags";
 import { categoryNameKey, requireTitle } from "../domain/tasks";
 import {
 	type SyncFields,
@@ -30,7 +30,7 @@ import {
 	type TtTaskUpdate,
 	type TtTaskWrite,
 } from "../domain/ticktick/types";
-import { type ID, type Instant, type SyncLink, type Tag, type Task, paletteColor, syncLinkId } from "../domain/types";
+import { type ID, type Instant, type SyncLink, type Task, paletteColor, syncLinkId } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorKind } from "./ports";
 import type { SectionService } from "./SectionService";
@@ -254,17 +254,6 @@ function sameBase(a: Record<string, string>, b: Record<string, string>): boolean
 	const ka = Object.keys(a);
 	if (ka.length !== Object.keys(b).length) return false;
 	return ka.every((k) => a[k] === b[k]);
-}
-
-/** The tag names of the state's tags, memoized per tags map (a committed state's maps never change). */
-const namesMemo = new WeakMap<ReadonlyMap<string, Tag>, TagNames>();
-function tagNamesOf(tags: ReadonlyMap<string, Tag>): TagNames {
-	let names = namesMemo.get(tags);
-	if (names === undefined) {
-		names = TagNames.of(tags.values());
-		namesMemo.set(tags, names);
-	}
-	return names;
 }
 
 /**

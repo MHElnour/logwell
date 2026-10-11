@@ -1,4 +1,5 @@
 import { DST_WARNING_TEXT } from "../../app/TaskService";
+import { tagLabel } from "../../domain/tags";
 import type { Category, LocalDate, Priority, Tag } from "../../domain/types";
 import type { Chip } from "../../parsing";
 import { formatDateSpec, formatDuration } from "../format";
@@ -10,7 +11,7 @@ interface LabelEnv {
 	zone: string;
 	today: LocalDate;
 	categories: readonly Category[];
-	tags: readonly Tag[];
+	tags: ReadonlyMap<string, Tag>;
 	/** The date a typed repeat starts from (the picked date, else today); it names "on the 9th" for "every month". */
 	anchor?: LocalDate;
 }
@@ -40,8 +41,7 @@ export function chipLabel(chip: Chip, env: LabelEnv): string {
 		}
 		case "tag": {
 			if (chip.newTag === true) return `New tag: ${chip.text.replace(/^@/u, "")}`;
-			const name = env.tags.find((t) => t.key === chip.tagKey)?.displayName;
-			return `@${name ?? chip.tagKey ?? chip.text}`;
+			return chip.tagKey === undefined ? `@${chip.text}` : `@${tagLabel(env.tags, chip.tagKey)}`;
 		}
 		case "note":
 			if (chip.status === "applied") return `Note: ${chip.notePath ?? chip.text}`;
