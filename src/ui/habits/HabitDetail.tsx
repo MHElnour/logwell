@@ -7,7 +7,8 @@ import { ICON } from "../icons";
 import { CheckinLog } from "./CheckinLog";
 import { HabitIcon } from "./HabitRow";
 import { MonthCalendar } from "./MonthCalendar";
-import { habitDialogOptions, runWrite } from "./actions";
+import { runWrite } from "../writeNotice";
+import { habitDialogOptions } from "./actions";
 import { currentVersion, detailLine, monthOf, shiftMonth, streakText, totalText } from "./format";
 
 // The right column of the Habits page: the selected habit's goal in words, four tiles, the
