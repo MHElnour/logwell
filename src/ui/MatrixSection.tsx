@@ -66,14 +66,14 @@ export function MatrixSection(props: {
 	const [announcement, setAnnouncement] = useState("");
 
 	// A task completed a moment ago stays in its date group until its check animation ends.
-	const held = useLingering(state.tasks, props.visible);
+	const held = useLingering(host.app.store, state.tasks, props.visible);
 	const quadrants = useActiveMemo(
 		props.visible,
 		() => matrixQuadrants(filterTasks(state.tasks.values(), ui.filter, "", ctx), state.tasks, ctx, held),
 		[state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart, held],
 		NO_GROUPS,
 	);
-	const counts = useSubtaskCounts(state.tasks, props.visible);
+	const counts = useSubtaskCounts(host, state.tasks, props.visible);
 
 	const select = useStableCallback((id: ID | null) => setUi((s) => ({ ...s, selectedId: id })));
 

@@ -122,7 +122,7 @@ export function TasksSection(props: {
 	);
 	const { view } = ui;
 	// A task completed a moment ago stays among the open rows until its check animation ends.
-	const held = useLingering(state.tasks, props.visible);
+	const held = useLingering(host.app.store, state.tasks, props.visible);
 	const viewKey = JSON.stringify(view);
 	const boardOn = BOARD_VIEWS.has(view.kind) && ui.boardMode[viewKey] === true;
 	// The grouping of the list; the board has fixed columns, so it ignores this.
@@ -151,7 +151,7 @@ export function TasksSection(props: {
 				: groups.reduce((n, g) => n + g.entries.length, 0),
 		[boardOn, columns, groups],
 	);
-	const subtaskCounts = useSubtaskCounts(state.tasks, props.visible && view.kind !== "trash");
+	const subtaskCounts = useSubtaskCounts(host, state.tasks, props.visible && view.kind !== "trash");
 	const modeLabelId = `${useUniqueId("cp-mode")}-label`;
 	const preset = viewPreset(view, ctx, state);
 	const readOnly = host.app.store.readOnlyState !== null;

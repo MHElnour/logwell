@@ -55,9 +55,14 @@ export function useStableCallback<A extends unknown[], R>(fn: (...args: A) => R)
 
 const NO_SUBTASK_COUNTS: ReadonlyMap<ID, SubtaskCount> = new Map();
 
-/** The subtask counts of every task (a full pass), recomputed only while `active` and only when `tasks` changed. */
-export function useSubtaskCounts(tasks: DbData["tasks"], active = true): ReadonlyMap<ID, SubtaskCount> {
-	return useActiveMemo(active, () => subtaskCounts(tasks.values()), [tasks], NO_SUBTASK_COUNTS);
+/**
+ * The subtask counts of every task, read only while `active` and only when `tasks` changed. For the store's current
+ * tasks they come from the task index, kept per change (a parent whose counts did not move keeps its count object);
+ * for any other task map, from a pass over every task.
+ */
+export function useSubtaskCounts(host: Pick<UiHost, "app">, tasks: DbData["tasks"], active = true): ReadonlyMap<ID, SubtaskCount> {
+	const app = host.app;
+	return useActiveMemo(active, () => (tasks === app.store.state.tasks ? app.tasks.lists.subtaskCounts() : subtaskCounts(tasks.values())), [tasks], NO_SUBTASK_COUNTS);
 }
 
 let idSeq = 0;

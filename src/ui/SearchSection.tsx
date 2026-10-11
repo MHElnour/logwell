@@ -128,7 +128,7 @@ export function SearchSection(props: {
 	const results = globalSearch(state, ui.query, ctx, ui.filter, noteMatches);
 	const searching = ui.query.trim() !== "";
 	// Counted only while the results are shown: the list below would otherwise scan every task on each store change of a hidden section.
-	const subtaskCounts = useSubtaskCounts(state.tasks, props.visible && searching);
+	const subtaskCounts = useSubtaskCounts(host, state.tasks, props.visible && searching);
 	const select = useStableCallback((id: ID | null) => setUi((s) => ({ ...s, selectedId: id })));
 
 	return (

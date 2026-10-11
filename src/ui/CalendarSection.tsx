@@ -92,7 +92,7 @@ export function CalendarSection(props: {
 		{ zone: ctx.zone, today: ctx.today, now: nowIso, weekStart, records },
 	);
 	// Only the open Unscheduled drawer lists tasks with a subtask count.
-	const subtaskCounts = useSubtaskCounts(state.tasks, props.visible && ui.unscheduledOpen);
+	const subtaskCounts = useSubtaskCounts(host, state.tasks, props.visible && ui.unscheduledOpen);
 	const titleId = useUniqueId("cp-cal-title");
 	const unscheduledTitleId = useUniqueId("cp-cal-unscheduled-title");
 	const scrollMemo = useRef<number | null>(null);

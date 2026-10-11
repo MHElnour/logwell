@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import { isUnderTag, tagPrefixes } from "../domain/tags";
-import { isOpen } from "../domain/tasks";
+import { type SubtaskCount, isOpen, subtaskCounts } from "../domain/tasks";
 import { type ID, INBOX_ID, type Task, syncLinkId } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { AppStore } from "./store";
@@ -28,10 +28,18 @@ interface Parts {
 	tagOpen: Map<string, number>;
 	/** How many tasks the parts hold. */
 	size: number;
+	/**
+	 * The subtask counts of every parent with a subtask (`subtaskCounts`). Copy on write once handed out: a change
+	 * puts a new map with new count objects for the parents whose counts it changed, and every other parent keeps its
+	 * object.
+	 */
+	subtasks: Map<ID, SubtaskCount>;
+	/** `subtasks` was handed out by `subtaskCounts()` and must not change any more. */
+	subtasksShared: boolean;
 }
 
 function emptyParts(): Parts {
-	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), completed: new Set(), tagOpen: new Map(), size: 0 };
+	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), completed: new Set(), tagOpen: new Map(), size: 0, subtasks: new Map(), subtasksShared: false };
 }
 
 function addId<K>(map: Map<K, Set<ID>>, key: K, id: ID): void {
@@ -98,9 +106,32 @@ function remove(p: Parts, t: Task, next: Task | undefined): void {
 	p.size--;
 }
 
+/** One more (`delta` 1) or one fewer (-1) subtask of `t.parentId`, done when `t` is completed. */
+function countSubtask(p: Parts, t: Task, delta: 1 | -1): void {
+	if (t.parentId === null) return;
+	if (p.subtasksShared) {
+		p.subtasks = new Map(p.subtasks);
+		p.subtasksShared = false;
+	}
+	const c = p.subtasks.get(t.parentId);
+	const total = (c?.total ?? 0) + delta;
+	const done = (c?.done ?? 0) + (t.status === "completed" ? delta : 0);
+	// A parent left without subtasks leaves the map, as in a count of all tasks.
+	if (total === 0) p.subtasks.delete(t.parentId);
+	else p.subtasks.set(t.parentId, { total, done });
+}
+
+/** Moves one task's change into the subtask counts; a change that keeps its parent and its done state moves none. */
+function countSubtasks(p: Parts, before: Task | undefined, after: Task | undefined): void {
+	if (before !== undefined && after !== undefined && before.parentId === after.parentId && (before.status === "completed") === (after.status === "completed")) return;
+	if (before !== undefined) countSubtask(p, before, -1);
+	if (after !== undefined) countSubtask(p, after, 1);
+}
+
 function build(state: DbData): Parts {
 	const p = emptyParts();
 	for (const t of state.tasks.values()) add(p, t);
+	p.subtasks = subtaskCounts(state.tasks.values());
 	return p;
 }
 
@@ -117,8 +148,9 @@ export interface IndexCounts {
 }
 
 /**
- * Which tasks can be in each Tasks view, and the open-task counts of lists and tags, kept up to date from the
- * store's change events. A Tasks view reads only its candidates, the sidebar counts without a pass over all tasks,
+ * Which tasks can be in each Tasks view, the open-task counts of lists and tags, and the subtask counts of every
+ * parent, kept up to date from the store's change events. A Tasks view reads only its candidates and its rows' subtask
+ * counts, the sidebar counts without a pass over all tasks,
  * the sync reads the tasks of the linked lists, and the synced-list cap is checked. Each task change takes the
  * record out as it was before and puts it in as it is after. A change event without `changes` (a reload, a
  * replacement of all records) drops the index; the next read builds it again in one pass. Every part is a function of
@@ -165,6 +197,7 @@ export class TaskIndex {
 			const after = ch.after as Task | undefined;
 			if (before !== undefined) remove(p, before, after);
 			if (after !== undefined) add(p, after);
+			countSubtasks(p, before, after);
 		}
 		if (p.size === now.size) this.built = now;
 		else this.drop();
@@ -240,6 +273,17 @@ export class TaskIndex {
 	}
 
 	/**
+	 * The subtask counts of every parent in the store's current tasks, as `subtaskCounts` counts them. The map never
+	 * changes once returned: a later change that moves a count gives a new map, in which only the parents whose
+	 * counts moved have new count objects; a change that moves none keeps the same map.
+	 */
+	subtaskCounts(): ReadonlyMap<ID, SubtaskCount> {
+		const p = this.index();
+		p.subtasksShared = true;
+		return p.subtasks;
+	}
+
+	/**
 	 * Tests only: the differences between the index as maintained and one built from `state` (empty when they agree).
 	 * Builds nothing when the index was dropped; the next read builds it.
 	 */
@@ -266,6 +310,11 @@ export class TaskIndex {
 		setMaps("byTag", p.byTag, fresh.byTag);
 		sets("completed", p.completed, fresh.completed);
 		counts("tagOpen", p.tagOpen, fresh.tagOpen);
+		for (const id of new Set([...p.subtasks.keys(), ...fresh.subtasks.keys()])) {
+			const a = p.subtasks.get(id);
+			const b = fresh.subtasks.get(id);
+			if (a?.total !== b?.total || a?.done !== b?.done) out.push(`subtasks ${id}: ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`);
+		}
 		if (p.size !== fresh.size) out.push(`size: ${p.size} ≠ ${fresh.size}`);
 		return out;
 	}

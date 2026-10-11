@@ -95,7 +95,7 @@ export function BoardView(props: {
 	const { host, state, ctx, columns } = props;
 	const baseId = useUniqueId("cp-board");
 	const rootRef = useRef<HTMLDivElement>(null);
-	const ownCounts = useSubtaskCounts(state.tasks, props.subtaskCounts === undefined);
+	const ownCounts = useSubtaskCounts(host, state.tasks, props.subtaskCounts === undefined);
 	const counts = props.subtaskCounts ?? ownCounts;
 	const [collapsed, setCollapsed] = useState<ReadonlySet<ID>>(new Set());
 	const [announcement, setAnnouncement] = useState("");
