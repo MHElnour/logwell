@@ -1,4 +1,5 @@
 import type { QueryContext } from "./queries";
+import { plural } from "./text";
 import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidZone, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
@@ -445,10 +446,6 @@ export function ordinal(n: number): string {
 /** The weekday of a date. */
 export function weekdayOf(date: LocalDate): Weekday {
 	return WEEKDAYS[isoWeekday(dayNum(date)) - 1]!;
-}
-
-function plural(n: number, unit: string): string {
-	return `${n} ${unit}${n === 1 ? "" : "s"}`;
 }
 
 function describeVersion(r: RepeatRule, anchor: LocalDate): string {

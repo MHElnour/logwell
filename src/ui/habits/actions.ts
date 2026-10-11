@@ -1,4 +1,4 @@
-import { NEW_HABIT_LABEL, type WriteResult } from "../../app/HabitService";
+import { NEW_HABIT_LABEL } from "../../app/HabitService";
 import type { HabitInput } from "../../domain/habits";
 import { type Habit, type ID, type TagColor, paletteColor } from "../../domain/types";
 import type { HabitDialogOptions, UiHost } from "../host";
@@ -7,18 +7,6 @@ import { currentVersion } from "./format";
 
 // Writes of the Habits page, the Today block and the Today column. Every write goes through app.habits; the
 // Undo notice carries the label the service wrote under and shows only when something was written.
-
-/** Runs a write; errors go to the host. Resolves whether it succeeded (a no-op write counts as success). */
-export async function runWrite(host: UiHost, write: () => Promise<WriteResult>, message: string): Promise<boolean> {
-	try {
-		const mark = host.app.store.undoMark();
-		notifyWrite(host, await write(), message, mark);
-		return true;
-	} catch (err) {
-		host.error(err);
-		return false;
-	}
-}
 
 export const checkedInText = (habit: Pick<Habit, "name">): string => `Checked in ${habit.name}.`;
 

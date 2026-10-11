@@ -1,5 +1,6 @@
 import { TRASH_RETENTION_DAYS } from "../app/settings";
 import type { QueryContext } from "../domain/queries";
+import { plural } from "../domain/text";
 import type { DbData } from "../persistence/schema";
 import { EmptyState } from "./common";
 import { ICON } from "./icons";
@@ -12,7 +13,7 @@ export function TrashList({ host, state, ctx }: { host: UiHost; state: DbData; c
 	const restore = async (batchId: string) => {
 		try {
 			const n = await host.app.tasks.restore(batchId);
-			host.notify(`Restored ${n} task${n === 1 ? "" : "s"}.`);
+			host.notify(`Restored ${plural(n, "task")}.`);
 		} catch (err) {
 			host.error(err);
 		}
@@ -52,7 +53,7 @@ export function TrashList({ host, state, ctx }: { host: UiHost; state: DbData; c
 								<div class="cp-task-title">{title}</div>
 								<div class="cp-hint">
 									Deleted {formatInstant(e.deletedAt, ctx.zone)}
-									{subs.length > 0 && ` · with ${subs.length} subtask${subs.length === 1 ? "" : "s"}`}
+									{subs.length > 0 && ` · with ${plural(subs.length, "subtask")}`}
 								</div>
 							</div>
 							<button type="button" onClick={() => void restore(e.batchId)}>

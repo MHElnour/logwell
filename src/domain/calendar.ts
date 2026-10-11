@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import { isDeadlineMissed } from "./queries";
 import { occurrenceSpec, projectOccurrences } from "./recurrence";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, pad2, wallTimeToDateTime, weekStartOfDay } from "./time";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallTimeToDateTime, weekStartOfDay } from "./time";
 import type { DateSpec, ID, LocalDate, OccurrenceRecord, Task, WeekStart } from "./types";
 
 // Calendar layout. Pure: the caller filters
@@ -154,10 +154,6 @@ function wallMinutes(local: string): number {
  */
 const ZONE_SHIFT_DAYS = 2;
 
-function fmtWall(min: number): string {
-	return `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
-}
-
 function compareAllDay(a: AllDayEntry, b: AllDayEntry): number {
 	if (a.kind !== b.kind) return a.kind === "date" ? -1 : 1;
 	return compareTasksBySortKey(a.task, b.task);
@@ -276,7 +272,7 @@ export function layoutWeek(tasks: Iterable<Task>, days: LocalDate[], ctx: Calend
 						const endMs = startDt.toMillis() + durationMin * 60_000;
 						past = isOpenWork() && endMs < nowMs;
 						const end = DateTime.fromMillis(endMs, { zone: ctx.zone });
-						endLocal = fmtWall(end.isValid ? end.hour * 60 + end.minute : (startMin + durationMin) % DAY_MIN);
+						endLocal = fmtMin(end.isValid ? end.hour * 60 + end.minute : (startMin + durationMin) % DAY_MIN);
 					}
 					const from = i === 0 ? startMin : 0;
 					const length = i === 0 ? firstLen : Math.min(DAY_MIN, durationMin - firstLen - DAY_MIN * (i - 1));
@@ -379,7 +375,7 @@ const LAST_SLOT_MIN = DAY_MIN - DRAG_SNAP_MIN;
 
 const snapSlot = (min: number): number => Math.min(LAST_SLOT_MIN, Math.max(0, Math.floor(min / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN));
 
-const wallAt = (date: LocalDate, min: number): string => `${date}T${fmtWall(min)}`;
+const wallAt = (date: LocalDate, min: number): string => `${date}T${fmtMin(min)}`;
 
 /** A timed value at `minute` of `date` in `zone`, snapped to 15 minutes and clamped to 00:00..23:45. */
 export function slotSpec(date: LocalDate, minute: number, zone: string): DateSpec {
@@ -425,5 +421,5 @@ export function slotRange(local: string, durationMin: number | null, zone: strin
 	const start = local.slice(11, 16);
 	if (durationMin === null || durationMin <= 0) return start;
 	const end = DateTime.fromISO(local, { zone }).plus({ minutes: durationMin });
-	return `${start}–${end.isValid ? end.toFormat("HH:mm") : fmtWall((wallMinutes(local) + durationMin) % DAY_MIN)}`;
+	return `${start}–${end.isValid ? end.toFormat("HH:mm") : fmtMin((wallMinutes(local) + durationMin) % DAY_MIN)}`;
 }

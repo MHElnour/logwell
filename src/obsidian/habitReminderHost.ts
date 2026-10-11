@@ -12,6 +12,7 @@ import {
 } from "../domain/habitReminders";
 import { type HabitIndex, versionAt } from "../domain/habits";
 import type { Clock } from "../domain/ports";
+import { instantFromNow } from "../domain/time";
 import type { Habit, ID, LocalDate } from "../domain/types";
 import { progressText } from "../ui/habits/format";
 import type { NoticeAction } from "./notices";
@@ -288,7 +289,7 @@ export class HabitReminderHost {
 			if (dbId !== this.loadedFor) this.load(app, dbId);
 			const current = this.state;
 			if (current === null) return;
-			const until = new Date(this.clock.now().getTime() + SNOOZE_MIN * 60_000).toISOString();
+			const until = instantFromNow(this.clock, SNOOZE_MIN * 60_000);
 			const next = snooze(current, id, until);
 			this.state = next;
 			this.save(app, dbId, next);

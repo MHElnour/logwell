@@ -5,7 +5,7 @@ import { IconButton } from "../common";
 import { formatDate } from "../format";
 import type { UiHost } from "../host";
 import { ICON } from "../icons";
-import { runWrite } from "./actions";
+import { runWrite } from "../writeNotice";
 import { checkinText, checkinWhen, hasAmount, newestFirst, parseAmount, amountText } from "./format";
 
 // The check-in log of the selected habit: newest first, 50 at a time, with Edit and Delete. A check-in

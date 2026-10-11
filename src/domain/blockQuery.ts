@@ -1,5 +1,5 @@
 import type { BlockFilters } from "../parsing/blockQuery";
-import { type ListEntry, type QueryContext, type TaskFilter, arrangeHierarchy, matchesTaskDate, quadrantOf } from "./queries";
+import { type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, inViewScope, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, isOpen, resolveListName } from "./tasks";
 import { hasTagOrChild, isUnderTag, normalizeTagKey } from "./tags";
@@ -103,6 +103,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	}
 
 	// -- compile the rest into plain lookups --
+	const listScope: ViewScope | null = listId === null ? null : { kind: "category", id: listId };
 	const priorities = filters.priorities === undefined ? null : new Set(filters.priorities);
 	const quadrants = filters.quadrants === undefined ? null : new Set(filters.quadrants);
 	const note = filters.linked === true ? normalizeNotePath(notePath) : null;
@@ -119,7 +120,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 
 	const matches = (task: Task): boolean => {
 		if (!isOpen(task)) return false;
-		if (listId !== null && task.categoryId !== listId) return false;
+		if (listScope !== null && !inViewScope(task, listScope, ctx)) return false;
 		if (sectionId !== null && task.sectionId !== sectionId) return false;
 		if (priorities !== null && !priorities.has(task.priority)) return false;
 		if (quadrants !== null && !quadrants.has(quadrantOf(task))) return false;

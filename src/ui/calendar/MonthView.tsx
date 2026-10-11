@@ -1,5 +1,6 @@
 import { useMemo } from "preact/hooks";
 import { type CalendarContext, layoutMonth } from "../../domain/calendar";
+import { plural } from "../../domain/text";
 import type { ID, LocalDate, Task } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
 import { useUniqueId } from "../hooks";
@@ -59,7 +60,7 @@ export function MonthView(props: {
 									<span class="cp-sr-only" id={labelId}>
 										{fmtDay(c.date)}
 										{today ? ", today" : ""}
-										{c.count > 0 ? `, ${c.count} ${c.count === 1 ? "entry" : "entries"}` : ""}
+										{c.count > 0 ? `, ${plural(c.count, "entry", "entries")}` : ""}
 									</span>
 									<div class="cp-cal-cell-head">
 										<button type="button" class="cp-cal-daynum" aria-label={`Open week, ${fmtDay(c.date)}`} onClick={() => props.onOpenWeek(c.date)}>

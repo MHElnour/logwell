@@ -1,4 +1,5 @@
 import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, repeatRuleProblem } from "../domain/recurrence";
+import { collapseWhitespace } from "../domain/text";
 import { pad2 } from "../domain/time";
 import type { MonthlyOn, RepeatRule, Weekday } from "../domain/types";
 
@@ -175,7 +176,7 @@ function parseClock(text: string): { time: string; ambiguous: boolean } | null {
  * year", "every other weekday", a time that is not one). `zone` is the parse zone: the zone of an `at` time.
  */
 export function parseRepeatText(text: string, zone: string): ParsedRepeat | null {
-	const lower = text.trim().toLowerCase().replace(/\s+/gu, " ");
+	const lower = collapseWhitespace(text.toLowerCase());
 	if (!lower.startsWith("every ")) return null;
 	let body = lower.slice("every ".length);
 	let time: string | null = null;

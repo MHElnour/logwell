@@ -1,6 +1,8 @@
 // Description-note naming rules. Pure: the Obsidian
 // adapter does the vault lookups.
 
+import { collapseWhitespace } from "./text";
+
 const FORBIDDEN_CHARS_RE = /[\\/:*?"<>|#^[\]]/g;
 const MAX_NAME_LENGTH = 100;
 const UNTITLED_NOTE_NAME = "Untitled task";
@@ -10,11 +12,7 @@ const UNTITLED_NOTE_NAME = "Untitled task";
  * characters and drops leading dots (they would hide the file). An empty result becomes "Untitled task".
  */
 export function sanitizeNoteName(title: string): string {
-	const cleaned = title
-		.normalize("NFC")
-		.replace(FORBIDDEN_CHARS_RE, "")
-		.replace(/\s+/g, " ")
-		.trim()
+	const cleaned = collapseWhitespace(title.normalize("NFC").replace(FORBIDDEN_CHARS_RE, ""))
 		.slice(0, MAX_NAME_LENGTH)
 		.trim()
 		// A leading dot would hide the file in Obsidian.

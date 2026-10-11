@@ -3,7 +3,9 @@ import {
 	addDays,
 	dateSpecDate,
 	dateSpecDisplayLocal,
+	fmtMin,
 	isValidDateSpec,
+	instantFromNow,
 	isValidLocalDate,
 	resolveWallTime,
 	todayIn,
@@ -25,6 +27,22 @@ describe("time (TIME-01..03)", () => {
 		expect(todayIn("UTC", clock)).toBe("2026-10-01");
 		expect(todayIn("Europe/Berlin", clock)).toBe("2026-10-02");
 		expect(todayIn("America/New_York", clock)).toBe("2026-10-01");
+	});
+
+	it("gives the instant some time from now, before or after", () => {
+		const clock = new FakeClock("2026-10-01T23:30:00.000Z");
+		expect(instantFromNow(clock, 10 * 60_000)).toBe("2026-10-01T23:40:00.000Z");
+		expect(instantFromNow(clock, -30 * 24 * 3600 * 1000)).toBe("2026-09-01T23:30:00.000Z");
+		expect(instantFromNow(clock, 0)).toBe("2026-10-01T23:30:00.000Z");
+	});
+
+	it("fmtMin writes minutes from midnight as HH:mm and wraps past a day", () => {
+		expect(fmtMin(0)).toBe("00:00");
+		expect(fmtMin(59)).toBe("00:59");
+		expect(fmtMin(600)).toBe("10:00");
+		expect(fmtMin(1439)).toBe("23:59");
+		expect(fmtMin(1440)).toBe("00:00");
+		expect(fmtMin(-1)).toBe("23:59");
 	});
 
 	it("B17: a spring-forward gap time moves to the first valid time with a warning", () => {

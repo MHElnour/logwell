@@ -1,3 +1,4 @@
+import { collapseWhitespace } from "../domain/text";
 import { PRIORITY_NAME, type Priority } from "../domain/types";
 import type { Quadrant } from "../domain/queries";
 
@@ -58,7 +59,7 @@ const own = (table: object, key: string): boolean => Object.prototype.hasOwnProp
 
 /** Lowercased with runs of whitespace collapsed to one space, for matching a keyword value. */
 function keyword(value: string): string {
-	return value.trim().toLowerCase().replace(/\s+/g, " ");
+	return collapseWhitespace(value.toLowerCase());
 }
 
 /** A comma list: items trimmed, lowercased and collapsed; an empty item is reported by the caller. */

@@ -1,4 +1,5 @@
 import { isDomainError } from "../domain/errors";
+import { plural } from "../domain/text";
 import type { ID, Section } from "../domain/types";
 import type { MenuSpec, UiHost } from "./host";
 
@@ -44,7 +45,7 @@ async function deleteSection(host: UiHost, section: Section): Promise<void> {
 		const mark = host.app.store.undoMark();
 		const moved = await host.app.sections.delete(section.id);
 		host.notifyUndo(
-			moved > 0 ? `Deleted section "${section.name}". ${moved} task${moved === 1 ? "" : "s"} moved to No section.` : `Deleted section "${section.name}".`,
+			moved > 0 ? `Deleted section "${section.name}". ${plural(moved, "task")} moved to No section.` : `Deleted section "${section.name}".`,
 			"Delete section",
 			mark,
 		);

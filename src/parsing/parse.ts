@@ -1,13 +1,14 @@
 import { DateTime } from "luxon";
 import type { RepeatRule } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
+import { collapseWhitespace } from "../domain/text";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey } from "../domain/tags";
 import { findDates, resolveDateSpec, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
 import { parseRepeatText } from "./recurrence";
-import { collapseWhitespace, MASK_CHAR } from "./text";
+import { MASK_CHAR } from "./text";
 import { findDurationTokens, findNoteTokens, findPriorityTokens, findRecurrence, findWordTokens } from "./tokens";
 import type {
 	Chip,

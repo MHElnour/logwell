@@ -1,4 +1,5 @@
 import { type HabitIndex, monthStats, streaks, total } from "../../domain/habits";
+import { plural } from "../../domain/text";
 import type { Habit, LocalDate } from "../../domain/types";
 import { IconButton } from "../common";
 import { useUniqueId } from "../hooks";
@@ -7,7 +8,8 @@ import { ICON } from "../icons";
 import { CheckinLog } from "./CheckinLog";
 import { HabitIcon } from "./HabitRow";
 import { MonthCalendar } from "./MonthCalendar";
-import { habitDialogOptions, runWrite } from "./actions";
+import { runWrite } from "../writeNotice";
+import { habitDialogOptions } from "./actions";
 import { currentVersion, detailLine, monthOf, shiftMonth, streakText, totalText } from "./format";
 
 // The right column of the Habits page: the selected habit's goal in words, four tiles, the
@@ -37,7 +39,7 @@ export function HabitDetail(props: {
 	const edit = () => void host.habitDialog(habitDialogOptions(host, { habit })).catch((err: unknown) => host.error(err));
 	const remove = async () => {
 		const n = host.app.habits.checkinCount(habit.id);
-		const checkins = `${n} check-in${n === 1 ? "" : "s"}`;
+		const checkins = plural(n, "check-in");
 		const answer = await host.choose("Delete habit?", `Delete "${habit.name}" and its ${checkins}? Archive keeps the history.`, [
 			{ label: "Delete habit", value: true, warning: true },
 		]);

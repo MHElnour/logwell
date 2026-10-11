@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "preact/hooks";
 import type { ViewGroup } from "../app/views";
 import type { ListEntry, QueryContext } from "../domain/queries";
+import { plural } from "../domain/text";
 import { type SubtaskCount, subtaskCountsFor } from "../domain/tasks";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -67,7 +68,7 @@ interface DashboardBlockProps {
 function countText(body: BlockBody): string {
 	if (body.kind !== "tasks") return "";
 	const n = body.entries.filter((e) => e.depth === 0).length;
-	return `${n} ${n === 1 ? "task" : "tasks"}`;
+	return plural(n, "task");
 }
 
 export function DashboardBlock(props: DashboardBlockProps) {

@@ -10,7 +10,7 @@ import {
 	slotRange,
 	slotSpec,
 } from "../../domain/calendar";
-import { daysBetween, pad2 } from "../../domain/time";
+import { daysBetween, fmtMin } from "../../domain/time";
 import type { DateSpec, ID, LocalDate, Task } from "../../domain/types";
 import { writeTask } from "../actions";
 import { type DragPoint, beginPointerDrag, createAutoScroller, hitTest, overElement } from "../drag";
@@ -246,7 +246,7 @@ function resolveDrop(
 			if (col === undefined) return NONE;
 			const rawEnd = ((p.y - col.getBoundingClientRect().top) / HOUR_PX) * 60;
 			const duration = resizedDuration(src.seg.startMin, rawEnd);
-			const local = `${src.seg.date}T${pad2(Math.floor(src.seg.startMin / 60))}:${pad2(src.seg.startMin % 60)}`;
+			const local = `${src.seg.date}T${fmtMin(src.seg.startMin)}`;
 			return {
 				ghost: {
 					kind: "slot",

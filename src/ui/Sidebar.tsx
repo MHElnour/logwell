@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
+import { plural } from "../domain/text";
 import { type TagNode, hasTagOrChild, isUnderTag, tagPath, tagTree } from "../domain/tags";
 import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -226,7 +227,7 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 	const n = host.app.categories.taskCount(category.id);
 	const ok = await host.choose(
 		"Delete list",
-		`Delete "${category.name}"? ${n} task${n === 1 ? "" : "s"} will move to Inbox.`,
+		`Delete "${category.name}"? ${plural(n, "task")} will move to Inbox.`,
 		[{ label: "Delete", value: true, warning: true }],
 	);
 	if (ok !== true) return;
@@ -242,7 +243,7 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 
 async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise<void> {
 	const n = host.app.tags.usage(tag.key);
-	const tasks = `${n} task${n === 1 ? "" : "s"}`;
+	const tasks = plural(n, "task");
 	// A parent tag with child tags: only this key goes, so the message says what stays.
 	const isParent = [...host.app.store.state.tags.keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
 	const ok = await host.choose(

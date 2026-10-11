@@ -12,7 +12,8 @@ import { accentClass } from "../ui/accent";
 import type CheckpointPlugin from "../main";
 import { LocalStorageActiveTimer } from "./activeTimer";
 import { AdapterGateway, LocalStorageState, VaultDbFile, VaultNotes } from "./gateways";
-import { actionNotice, showError, undoAction } from "./notices";
+import { actionNotice, showError } from "./notices";
+import { undoNotice } from "./undoNotice";
 import { LocalStorageReminderState } from "./reminderState";
 import { LocalStorageRenameQueue } from "./renameQueue";
 import { TICKTICK_TIMEOUT_MS, TickTickHttp } from "./tickTickHttp";
@@ -218,7 +219,7 @@ export class DbSession {
 			sync: this.sync,
 			ask: (pending, listName) => (this.closing ? Promise.resolve(null) : askMissing(this.plugin.app, { pending, listName }, accentClass(this.plugin.settings))),
 			undoMark: () => this.app.store.undoMark(),
-			notifyUndo: (message, label, mark) => void actionNotice(message, [undoAction(this.app.store.undoFor(mark, label))]),
+			notifyUndo: (message, label, mark) => void undoNotice(this.app.store, message, label, mark),
 			notify: (message) => void new Notice(message),
 			error: showError,
 		});

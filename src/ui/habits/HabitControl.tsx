@@ -5,7 +5,8 @@ import type { Habit, LocalDate } from "../../domain/types";
 import { Icon } from "../common";
 import type { UiHost } from "../host";
 import { ICON } from "../icons";
-import { checkedInText, runWrite } from "./actions";
+import { runWrite } from "../writeNotice";
+import { checkedInText } from "./actions";
 import { amountFieldLabel, amountPlaceholder, amountText, notScheduledText, parseAmount, plusLabel, quickAmount } from "./format";
 
 // The control of one habit on one day. One component for the page rows, the Today block

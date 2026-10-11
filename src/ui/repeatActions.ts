@@ -1,29 +1,16 @@
 import type { RecurrenceResult } from "../app/RecurrenceService";
-import type { WriteResult } from "../app/writes";
 import type { ID, LocalDate, Task } from "../domain/types";
+import { plural } from "../domain/text";
 import { formatDate } from "./format";
 import type { UiHost } from "./host";
 import { type RepeatChoice, ruleText } from "./repeat";
-import { notifyWrite } from "./writeNotice";
+import { runWrite } from "./writeNotice";
 
 // Writes of repeating tasks, from the row menus, the checkbox, the Completed history and the
 // details pane. Every write goes through app.recurrence; the Undo notice carries the label the service wrote
 // under and shows only when something was written, as the habit writes do.
 
 export const DEADLINE_CLEARED_TEXT = "The deadline was cleared: a repeating task has no deadline.";
-
-/** Runs a write; errors go to the host. Resolves whether it succeeded (a no-op write counts as success). */
-export async function runWrite(host: UiHost, write: () => Promise<WriteResult>, message: (result: WriteResult) => string): Promise<boolean> {
-	try {
-		const mark = host.app.store.undoMark();
-		const result = await write();
-		notifyWrite(host, result, message(result), mark);
-		return true;
-	} catch (err) {
-		host.error(err);
-		return false;
-	}
-}
 
 /** What a date change of a series reports (TaskResult.reanchored): its new current occurrence, and whether its end was dropped. */
 export interface Reanchored {
@@ -55,7 +42,7 @@ export function completeOccurrence(host: UiHost, task: Task): Promise<boolean> {
 		() => host.app.recurrence.complete(task.id),
 		(r) => {
 			const result = r as RecurrenceResult;
-			const skipped = result.autoSkipped > 0 ? `, ${result.autoSkipped} earlier ${result.autoSkipped === 1 ? "date" : "dates"} skipped` : "";
+			const skipped = result.autoSkipped > 0 ? `, ${plural(result.autoSkipped, "earlier date")} skipped` : "";
 			return `Completed "${task.title}"${dateText(host, result.date)}${skipped}.${result.seriesEnded ? ENDED_TEXT : ""}`;
 		},
 	);

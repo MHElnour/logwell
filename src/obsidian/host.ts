@@ -16,7 +16,8 @@ import { habitDialog } from "./habitDialog";
 import { showImportPreview } from "./ImportModal";
 import { type PromptField, choose, newListDialog, pick, pickFolder, pickJsonFile, pickListIcon, pickNote, prompt } from "./modals";
 import { accentClass } from "../ui/accent";
-import { actionNotice, showError, undoAction } from "./notices";
+import { showError } from "./notices";
+import { undoNotice } from "./undoNotice";
 import { resolveNoteLinks } from "./noteLinks";
 import { openQuickAdd } from "./QuickAddModal";
 import type { DbSession } from "./session";
@@ -86,7 +87,7 @@ export class ViewHost implements UiHost {
 	}
 
 	notifyUndo(message: string, label: string, mark: number): void {
-		actionNotice(message, [undoAction(this.app.store.undoFor(mark, label))]);
+		undoNotice(this.app.store, message, label, mark);
 	}
 
 	choose<T>(title: string, message: string, buttons: ButtonSpec<T>[]): Promise<T | null> {

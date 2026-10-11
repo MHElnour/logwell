@@ -1,4 +1,5 @@
 import type { Task } from "../domain/types";
+import { plural } from "../domain/text";
 import type { UiHost } from "./host";
 import { completeAsking } from "./actions";
 import { completeOccurrence } from "./repeatActions";
@@ -27,7 +28,7 @@ export async function completeBlockTask(host: UiHost, task: Task): Promise<void>
 		const { result, mark } = done;
 		if (result.kind !== "done" || result.completed === 0) return;
 		const subs = result.completed - 1;
-		host.notifyUndo(`Completed "${task.title}"${subs > 0 ? ` and ${subs} subtask${subs === 1 ? "" : "s"}` : ""}.`, result.label, mark);
+		host.notifyUndo(`Completed "${task.title}"${subs > 0 ? ` and ${plural(subs, "subtask")}` : ""}.`, result.label, mark);
 	} catch (err) {
 		host.error(err);
 	}

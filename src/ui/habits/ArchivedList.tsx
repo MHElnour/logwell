@@ -1,6 +1,6 @@
 import type { Habit, LocalDate } from "../../domain/types";
 import type { UiHost } from "../host";
-import { runWrite } from "./actions";
+import { runWrite } from "../writeNotice";
 import { HabitIcon } from "./HabitRow";
 import { detailLine } from "./format";
 
