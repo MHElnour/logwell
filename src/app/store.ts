@@ -58,6 +58,9 @@ export const RELOAD_LABEL = "Reload";
 export const REPLACE_ALL_LABEL = "Replace all";
 
 const UNDO_LIMIT = 50;
+/** How many change events `changesSince` reaches back over. */
+export const FEED_LIMIT = 64;
+const NO_CHANGES: readonly Change[] = [];
 const READ_ONLY_MESSAGE = "The database is read-only until the problem shown in the banner is resolved.";
 
 export interface RunOptions {
@@ -80,6 +83,9 @@ export class AppStore {
 	 * under a label since a mark, including ones already undone.
 	 */
 	private readonly pushed: { id: number; label: string }[] = [];
+	/** The changes of the newest change events, oldest first; `changes` undefined for a reload or a replacement. */
+	private readonly feed: (readonly Change[] | undefined)[] = [];
+	private feedVersion = 0;
 
 	constructor(
 		readonly host: StateHost,
@@ -96,6 +102,39 @@ export class AppStore {
 
 	now(): string {
 		return nowInstant(this.clock);
+	}
+
+	/** Counts the `changed` events: one more for each, a command, an undo, a reload or a replacement of all records. */
+	get version(): number {
+		return this.feedVersion;
+	}
+
+	/**
+	 * The changes written since `version`, oldest first: the `changes` of every `changed` event after it, the records
+	 * themselves, not copies. Undefined, never a partial list, when one of those events had no `changes` (a reload, a
+	 * replacement of all records, a restore) or when `version` is older than the last 64 events: the caller then reads
+	 * the whole state. Empty when nothing changed since.
+	 */
+	changesSince(version: number): readonly Change[] | undefined {
+		if (version === this.feedVersion) return NO_CHANGES;
+		const first = this.feed.length - (this.feedVersion - version);
+		if (version > this.feedVersion || first < 0) return undefined;
+		if (first === this.feed.length - 1) return this.feed[first];
+		const out: Change[] = [];
+		for (let i = first; i < this.feed.length; i++) {
+			const changes = this.feed[i];
+			if (changes === undefined) return undefined;
+			for (const ch of changes) out.push(ch);
+		}
+		return out;
+	}
+
+	/** Records the event in the feed, then tells the listeners, so a listener's `changesSince` already sees it. */
+	private emitChanged(event: AppEvents["changed"]): void {
+		this.feedVersion++;
+		this.feed.push(event.changes);
+		if (this.feed.length > FEED_LIMIT) this.feed.shift();
+		this.bus.emit("changed", event);
 	}
 
 	/** Runs a command against a transaction and commits it as one write. */
@@ -116,7 +155,7 @@ export class AppStore {
 					this.pushed.push({ id, label });
 					if (this.pushed.length > UNDO_LIMIT) this.pushed.shift();
 				}
-				this.bus.emit("changed", { label, changes, base: tx.base });
+				this.emitChanged({ label, changes, base: tx.base });
 			}
 			return result;
 		});
@@ -192,7 +231,7 @@ export class AppStore {
 		}
 		const { data, ops, changes } = tx.finish();
 		this.host.commit(data, ops);
-		this.bus.emit("changed", { label: `Undo ${entry.label}`, changes, base: tx.base });
+		this.emitChanged({ label: `Undo ${entry.label}`, changes, base: tx.base });
 		return entry.label;
 	}
 
@@ -206,7 +245,7 @@ export class AppStore {
 		return this.queue.run(async () => {
 			await this.host.replaceAll(collections, backupKind, check);
 			this.undoStack = [];
-			this.bus.emit("changed", { label: REPLACE_ALL_LABEL });
+			this.emitChanged({ label: REPLACE_ALL_LABEL });
 		});
 	}
 
@@ -259,7 +298,7 @@ export class AppStore {
 	/** Called when persistence reloaded the state from outside. */
 	notifyReloaded(): void {
 		this.undoStack = [];
-		this.bus.emit("changed", { label: RELOAD_LABEL });
+		this.emitChanged({ label: RELOAD_LABEL });
 	}
 
 	notifyStatus(): void {

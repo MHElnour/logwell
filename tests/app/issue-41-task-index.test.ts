@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FEED_LIMIT } from "../../src/app/store";
 import type { TaskIndex } from "../../src/app/taskIndex";
 import type { Change } from "../../src/app/tx";
 import { type SidebarCounts, type TaskView, buildBoard, buildList, sidebarCounts } from "../../src/app/views";
@@ -6,6 +7,7 @@ import { DomainError } from "../../src/domain/errors";
 import { groupByOptions } from "../../src/domain/groupBy";
 import { type TaskFilter, type TaskSort, emptyFilter } from "../../src/domain/queries";
 import { tagPrefixes } from "../../src/domain/tags";
+import { type SubtaskCount, subtaskCounts } from "../../src/domain/tasks";
 import { addDays } from "../../src/domain/time";
 import { type DateSpec, type ID, INBOX_ID, type Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
@@ -17,8 +19,10 @@ import { seededRandom, seededState } from "./issue-41-seed";
 // store's change events. A seeded run of service commands (every kind of task edit, completion, repeating
 // completion, delete, restore, Undo, list, section and tag deletion, a reload, a replacement of all records, the
 // next day, a save, a write that skips the store followed by a command) checks after every step that the index equals one built from the state, and that every view, grouping,
-// sort and held set, the boards and the sidebar counts come out the same with the index as without it (the full
-// scan). A run with one index update left out shows the check catches it.
+// sort and held set, the boards, the sidebar counts and the subtask counts come out the same with the index as
+// without it (the full scan). It also checks that a parent whose subtask counts did not move keeps its count object
+// (rows compare them), and that the store's `changesSince` lists exactly the changes its events carried, or nothing
+// across a reload or a replacement. A run with one index update left out shows the check catches it.
 
 const SORTS: TaskSort[] = ["manual", "date", "priority"];
 const FILTERS: { filter: TaskFilter; text: string }[] = [
@@ -59,6 +63,7 @@ function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): st
 	const ctx = h.app.queryContext();
 	const out = index.verify(state).map((d) => `index: ${d}`);
 	if (counted(sidebarCounts(state, ctx, index)) !== counted(sidebarCounts(state, ctx))) out.push("sidebar counts");
+	if (serialize(index.subtaskCounts()) !== serialize(subtaskCounts(state.tasks.values()))) out.push("subtask counts");
 	for (const view of viewsOf(state)) {
 		const name = serialize(view);
 		for (const sort of SORTS) {
@@ -234,6 +239,9 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 	};
 
 	tamper?.(index);
+	// Every change event, in order: what `changesSince` must list.
+	const events: (readonly Change[] | undefined)[] = [];
+	app.store.bus.on("changed", (e) => events.push(e.changes));
 	const run: Run = { steps: 0, ran: new Map(), failure: null };
 	const check = (step: number, command: string): boolean => {
 		const held = new Set<ID>([...seededHeld].filter((id) => app.store.state.tasks.has(id)));
@@ -248,6 +256,9 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		const state = app.store.state;
 		const today = app.queryContext().today;
 		const { drops, rebuilds } = index;
+		const version = app.store.version;
+		const seen = events.length;
+		const counts = index.subtaskCounts();
 		try {
 			await command();
 		} catch (err) {
@@ -257,6 +268,12 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		if (app.store.state !== state || app.queryContext().today !== today) run.ran.set(name, (run.ran.get(name) ?? 0) + 1);
 		run.steps = step;
 		if (!check(step, name)) return run;
+		const feed = feedProblem(app.store.changesSince(version), events.slice(seen), app.store.version - version);
+		const kept = index.rebuilds === rebuilds ? keptProblem(counts, index.subtaskCounts()) : null;
+		if (feed !== null || kept !== null) {
+			run.failure = { step, command: name, diffs: [feed ?? kept ?? ""] };
+			return run;
+		}
 		// Only a write that skipped the store puts the index out of step, and a save never rebuilds it.
 		const unexpected =
 			name === "skip the store"
@@ -274,6 +291,33 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 		}
 	}
 	return run;
+}
+
+/** What is wrong with `changesSince` after `events`, which raised the version by `raised` (null when nothing). */
+function feedProblem(since: readonly Change[] | undefined, events: readonly (readonly Change[] | undefined)[], raised: number): string | null {
+	if (raised !== events.length) return `version raised by ${raised} for ${events.length} events`;
+	if (events.some((e) => e === undefined)) return since === undefined ? null : "changesSince listed changes across a reload";
+	const all = events.flatMap((e) => e ?? []);
+	if (since === undefined) return "changesSince gave nothing for changes it holds";
+	if (since.length !== all.length || since.some((ch, i) => ch !== all[i])) return "changesSince differs from the events";
+	return null;
+}
+
+/** A parent whose counts did not move must keep its object, and the map its identity when none moved (null when so). */
+function keptProblem(prev: ReadonlyMap<ID, SubtaskCount>, next: ReadonlyMap<ID, SubtaskCount>): string | null {
+	let moved = prev.size !== next.size;
+	for (const [id, c] of next) {
+		const old = prev.get(id);
+		if (old === undefined) moved = true;
+		else if (old.total === c.total && old.done === c.done) {
+			if (old !== c) return `subtask counts of ${id} did not move but are a new object`;
+		} else {
+			if (old === c) return `subtask counts of ${id} moved in place`;
+			moved = true;
+		}
+	}
+	if (!moved && prev !== next) return "no subtask count moved but the map is new";
+	return null;
 }
 
 describe("the task index (issue 41)", () => {
@@ -315,6 +359,26 @@ describe("the task index (issue 41)", () => {
 		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 same, views only: caught at step ${unchecked.failure?.step} (${unchecked.failure?.command}): ${unchecked.failure?.diffs.join("; ")}\n`);
 		expect(unchecked.failure).not.toBeNull();
 		expect(unchecked.failure!.diffs.some((d) => !d.startsWith("index:"))).toBe(true);
+	}, 300_000);
+
+	it("catches subtask counts that miss a change of parent", async () => {
+		// Parent changes never reach the counts (the index sees the old parent).
+		const skipParents = (index: TaskIndex) => {
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
+			const original = target.onChanged.bind(index);
+			const stale = (ch: Change): Change => {
+				const before = ch.before as Task | undefined;
+				const after = ch.after as Task | undefined;
+				if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
+				return { ...ch, after: { ...after, parentId: before.parentId } };
+			};
+			target.onChanged = (changes, base) => original(changes?.map(stale), base);
+		};
+		const run = await fuzz(41, 300, skipParents);
+		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with parent changes skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
+		expect(run.failure).not.toBeNull();
+		expect(run.failure!.diffs.some((d) => d.startsWith("index: subtasks"))).toBe(true);
+		expect(run.failure!.diffs).toContain("subtask counts");
 	}, 300_000);
 
 	it("reads every task again after a write that bypassed the store, and only for the store's current state", async () => {
@@ -371,5 +435,39 @@ describe("the task index (issue 41)", () => {
 		await h.app.tasks.create({ title: "Buy milk" });
 		expect(titles()).toContain("Water the plants today");
 		expect(index.verify(h.app.store.state)).toEqual([]);
+	});
+});
+
+describe("the store's change feed (issue 41)", () => {
+	it(`lists the changes of the last ${FEED_LIMIT} events, and nothing past them or across a reload`, async () => {
+		const { h } = await seededState(7, 40);
+		const store = h.app.store;
+		const t = (await h.app.tasks.create({ title: "Call the bank" })).task;
+		const start = store.version;
+		expect(store.changesSince(start)).toEqual([]);
+		const seen: Change[] = [];
+		store.bus.on("changed", (e) => seen.push(...(e.changes ?? [])));
+		for (let i = 0; i < FEED_LIMIT + 6; i++) await h.app.tasks.update(t.id, { title: `Call the bank ${i}` });
+		expect(store.version).toBe(start + FEED_LIMIT + 6);
+		// The last 64 events, oldest first, the records themselves.
+		const last = store.changesSince(store.version - FEED_LIMIT)!;
+		expect(last).toHaveLength(seen.slice(-FEED_LIMIT).length);
+		last.forEach((ch, i) => expect(ch).toBe(seen.slice(-FEED_LIMIT)[i]));
+		expect(store.changesSince(store.version - FEED_LIMIT - 1)).toBeUndefined();
+		expect(store.changesSince(start)).toBeUndefined();
+		expect(store.changesSince(store.version + 1)).toBeUndefined();
+		// A reload in between: nothing, never a partial list; after it, the changes again.
+		const before = store.version;
+		await h.app.tasks.update(t.id, { title: "Pay rent" });
+		store.notifyReloaded();
+		await h.app.tasks.update(t.id, { title: "Buy milk" });
+		expect(store.changesSince(before)).toBeUndefined();
+		expect(store.changesSince(before + 1)).toBeUndefined();
+		expect(store.changesSince(before + 2)?.map((ch) => (ch.after as Task).title)).toEqual(["Buy milk"]);
+		// A replacement of all records likewise.
+		const v = store.version;
+		await store.replaceAll(collectionsOf(store.state), null);
+		expect(store.changesSince(v)).toBeUndefined();
+		expect(store.changesSince(store.version)).toEqual([]);
 	});
 });
