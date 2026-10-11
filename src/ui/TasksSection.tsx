@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { isListSynced } from "../app/syncMarks";
-import { type SidebarCounts, type TaskView, type ViewGroup, buildBoard, buildCompleted, buildView, completedScope, sidebarCounts, viewPreset, viewTitle } from "../app/views";
+import { type SidebarCounts, type TaskView, type ViewList, buildBoard, buildList, completedScope, sidebarCounts, viewPreset, viewTitle } from "../app/views";
 import type { BoardColumn } from "../domain/board";
 import { type GroupBy, effectiveGroupBy, groupByOptions } from "../domain/groupBy";
-import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter } from "../domain/queries";
+import { type QueryContext, type TaskFilter, emptyFilter } from "../domain/queries";
 import { type ID, INBOX_ID, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { BoardView } from "./board/BoardView";
@@ -66,9 +66,8 @@ export function revealInTasks(ui: TasksSectionState, view: TaskView, selectedId:
 const BOARD_VIEWS: ReadonlySet<TaskView["kind"]> = new Set(["today", "upcoming", "inbox", "category"]);
 /** The views whose list rows drag (the manual order and, with a grouping, between groups): the board views and a tag. */
 const DRAG_VIEWS: ReadonlySet<TaskView["kind"]> = new Set(["today", "upcoming", "inbox", "category", "tag"]);
-const NO_GROUPS: ViewGroup[] = [];
+const NO_LIST: ViewList = { groups: [], completed: [] };
 const NO_COLUMNS: BoardColumn[] = [];
-const NO_ENTRIES: ListEntry[] = [];
 const NO_COUNTS: SidebarCounts = { today: 0, upcoming: 0, categories: new Map(), tags: new Map(), completed: 0, trash: 0 };
 
 /** Matches the 800 px container query in styles.css under which the sidebar is hidden. */
@@ -126,27 +125,22 @@ export function TasksSection(props: {
 	const boardOn = BOARD_VIEWS.has(view.kind) && ui.boardMode[viewKey] === true;
 	// The grouping of the list; the board has fixed columns, so it ignores this.
 	const groupBy = effectiveGroupBy(view.kind, ui.groupBy[viewKey]);
-	// Rebuilt only when an input changes, not on every render (selecting a row, typing in a bar).
-	const groups = useActiveMemo(
+	const hasGroup = completedScope(view) !== null;
+	const showGroup = hasGroup && ui.showCompleted && !boardOn;
+	// The open rows and the Completed group, from one filtering of the tasks. Rebuilt only when an input changes, not on
+	// every render (selecting a row, typing in a bar).
+	const { groups, completed: completedEntries } = useActiveMemo(
 		props.visible,
-		() => (boardOn ? NO_GROUPS : buildView(state, view, ctx, ui.filter, ui.text, held, groupBy)),
+		() => (boardOn ? NO_LIST : buildList(state, view, ctx, ui.filter, ui.text, held, { groupBy, completed: showGroup })),
 		// `state` only supplies `tasks`, `occurrenceRecords` (the current occurrence of a series moves without its task changing), `sections`, `categories` and `tags` here; `ctx` only its day, zone, week start and upcoming range.
-		[boardOn, state.tasks, state.occurrenceRecords, state.sections, state.categories, state.tags, view, ui.filter, ui.text, held, groupBy, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
-		NO_GROUPS,
+		[boardOn, showGroup, state.tasks, state.occurrenceRecords, state.sections, state.categories, state.tags, view, ui.filter, ui.text, held, groupBy, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
+		NO_LIST,
 	);
 	const columns = useActiveMemo(
 		props.visible,
 		() => (boardOn ? buildBoard(state, view, ctx, ui.filter, ui.text, held) : NO_COLUMNS),
 		[boardOn, state.tasks, state.occurrenceRecords, state.sections, view, ui.filter, ui.text, held, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
 		NO_COLUMNS,
-	);
-	const hasGroup = completedScope(view) !== null;
-	const showGroup = hasGroup && ui.showCompleted && !boardOn;
-	const completedEntries = useActiveMemo(
-		props.visible,
-		() => (showGroup ? buildCompleted(state, view, ctx, ui.filter, ui.text, held) : []),
-		[showGroup, state.tasks, state.occurrenceRecords, state.sections, view, ui.filter, ui.text, held, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
-		NO_ENTRIES,
 	);
 	const shownCount = useMemo(
 		() =>

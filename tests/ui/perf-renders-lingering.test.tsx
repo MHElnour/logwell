@@ -10,7 +10,7 @@ import { type CalMount, mountCal, settle } from "./m3-helpers";
 
 vi.mock("../../src/app/views", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/app/views")>();
-	return { ...actual, buildView: vi.fn(actual.buildView) };
+	return { ...actual, buildList: vi.fn(actual.buildList) };
 });
 
 const mounted: CalMount[] = [];
@@ -19,7 +19,7 @@ afterEach(() => {
 	for (const m of mounted.splice(0)) m.unmount();
 });
 
-const builds = () => vi.mocked(views.buildView).mock.calls.length;
+const builds = () => vi.mocked(views.buildList).mock.calls.length;
 const rows = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
 
 describe("render passes with the hold on a completed row", () => {

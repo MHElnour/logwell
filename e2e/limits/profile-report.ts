@@ -392,7 +392,7 @@ function activity(st: Stats, resolve: (cf: CallFrame) => Resolved): void {
 	const watch: { label: string; test: (r: Resolved, cf: CallFrame) => boolean }[] = [
 		{ label: "Preact render queue (process)", test: (r) => r.where.endsWith("preact/src/component.js:222") },
 		{ label: "Preact render() of a root", test: (r) => r.where.endsWith("preact/src/render.js:14") },
-		{ label: "buildView", test: (r) => r.name === "buildView" },
+		{ label: "buildList", test: (r) => r.name === "buildList" },
 		{ label: "sidebarCounts", test: (r) => r.name === "sidebarCounts" },
 		{ label: "todayEntries", test: (r) => r.name === "todayEntries" },
 		{ label: "TaskRow (row render)", test: (r) => r.name === "TaskRow" },

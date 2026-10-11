@@ -54,7 +54,7 @@ flowchart TD
   F --> H[undo stack entry]
   F --> I[bus changed with changes]
   I --> J[hooks.ts useAppState]
-  J --> K[TasksSection.tsx calls views.ts buildView]
+  J --> K[TasksSection.tsx calls views.ts buildList]
   K --> L[TaskList.tsx, VirtualRows.tsx]
   L --> M[rowMemo.ts skips unchanged rows]
 ```
@@ -140,7 +140,7 @@ Description notes run next (`src/app/syncNotes.ts`), then the push sends what di
 - Shell: `src/ui/AppRoot.tsx` draws the rail and one panel per section (Tasks, Calendar, Focus, Habits, Matrix, Search, Data). `SectionId` is in `src/ui/host.ts`.
 - Hidden sections: every section stays mounted and hidden when inactive, so it keeps its state. Heavy work waits until it is visible (`useActiveMemo` in `src/ui/hooks.ts`). `SectionRelay` (`src/ui/sectionRelay.ts`) delivers "show this section" from commands.
 - Sections: one `<Name>Section.tsx` each, such as `src/ui/TasksSection.tsx`, with parts in folders (`src/ui/board/`, `calendar/`, `focus/`, `habits/`, `matrix/`, `quickadd/`). The Tasks section adds `Sidebar.tsx`, `TaskDetails.tsx` and `CompletedGroup.tsx`.
-- Views: pure selectors build what a section shows: `buildView`, `buildBoard`, `buildCompleted` and `globalSearch` in `src/app/views.ts`, over the rules in `src/domain/queries.ts`, which holds the shared date rules (`scheduleOf`, `matchesTaskDate`, `isOverdue`).
+- Views: pure selectors build what a section shows: `buildList` (a view's open rows and its Completed group from one filtering of the tasks; `buildView` and `buildCompleted` give one of the two), `buildBoard` and `globalSearch` in `src/app/views.ts`, over the rules in `src/domain/queries.ts`, which holds the shared date rules (`scheduleOf`, `matchesTaskDate`, `isOverdue`).
 - Rows: `src/ui/TaskList.tsx` and `src/ui/TaskRow.tsx` are the one row component, used by the Tasks, Calendar, Matrix and Search sections and by the task block (`src/ui/DashboardBlock.tsx`). `TaskRow` and `board/BoardCard.tsx` are wrapped in `memoComponent` (`src/ui/rowMemo.ts`); a row that reads something extra must add it to its comparator.
 - Windowing: `src/ui/VirtualRows.tsx` draws a list or board column in full up to `VIRTUAL_THRESHOLD` rows (`src/ui/virtual.ts`). Above it, only rows near the viewport are drawn, plus the focused or dragged row. Code that needs an undrawn row goes through `virtualHandle(box)`.
 - Writes: shared helpers call the services and show the notice: `src/ui/actions.ts`, `repeatActions.ts`, `sectionActions.ts`, `habits/actions.ts`. Errors go to `host.error(err)`.

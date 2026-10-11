@@ -2,28 +2,22 @@ import {
 	type DoneOccurrence,
 	type ListEntry,
 	type QueryContext,
+	type ViewScope,
 	completedRows,
 	hasPastDate,
-	inUpcoming,
 	inUpcomingRange,
-	isDueByToday,
+	inViewScope,
 	occurrenceDay,
 	scheduleOf,
 } from "./queries";
-import { isUnderTag } from "./tags";
 import { compareTasksBySortKey, isOpen } from "./tasks";
 import { dateSpecDate, instantDay } from "./time";
 import type { ID, LocalDate, OccurrenceRecord, Task } from "./types";
-import { INBOX_ID } from "./types";
 
 // Which completed tasks a view's Completed group holds. Pure.
 
-export type CompletedScope =
-	| { kind: "today" }
-	| { kind: "upcoming" }
-	| { kind: "inbox" }
-	| { kind: "category"; id: ID }
-	| { kind: "tag"; key: string };
+/** The views with a Completed group: the scope of the group is the view's own (`inViewScope`). */
+export type CompletedScope = ViewScope;
 
 /** The day a task was completed, in the display zone; null when it was never completed. */
 function completedDate(task: Task, zone: string): LocalDate | null {
@@ -39,32 +33,11 @@ function completedDate(task: Task, zone: string): LocalDate | null {
  */
 export function inCompletedScope(task: Task, scope: CompletedScope, ctx: QueryContext): boolean {
 	if (isOpen(task)) return false;
-	switch (scope.kind) {
-		case "today": {
-			if (!isDueByToday(task, ctx)) return false;
-			if (!hasPastDate(task, ctx)) return true;
-			// A past date may still sit beside a date of today (a deadline today, a schedule earlier).
-			return datesInclude(task, ctx.today, ctx) || completedDate(task, ctx.zone) === ctx.today;
-		}
-		case "upcoming":
-			return inUpcoming(task, ctx);
-		default:
-			return inListScope(task, scope);
-	}
-}
-
-/** Inbox, a list or a tag: the task belongs there. False for the date scopes. */
-function inListScope(task: Task, scope: CompletedScope): boolean {
-	switch (scope.kind) {
-		case "inbox":
-			return task.categoryId === INBOX_ID;
-		case "category":
-			return task.categoryId === scope.id;
-		case "tag":
-			return task.tagKeys.some((k) => isUnderTag(k, scope.key));
-		default:
-			return false;
-	}
+	if (!inViewScope(task, scope, ctx)) return false;
+	// Today's group is narrower than its rows: a task that was overdue counts only if it was completed today.
+	if (scope.kind !== "today" || !hasPastDate(task, ctx)) return true;
+	// A past date may still sit beside a date of today (a deadline today, a schedule earlier).
+	return datesInclude(task, ctx.today, ctx) || completedDate(task, ctx.zone) === ctx.today;
 }
 
 function datesInclude(task: Task, date: LocalDate, ctx: QueryContext): boolean {
@@ -92,25 +65,28 @@ function occurrenceInScope(task: Task, record: OccurrenceRecord, scope: Complete
 		case "upcoming":
 			return inUpcomingRange(day, ctx);
 		default:
-			return inListScope(task, scope);
+			return inViewScope(task, scope, ctx);
 	}
 }
 
+/** The open rows a view shows: their IDs, or a test of an open task. */
+export type ShownRows = ReadonlySet<ID> | ((task: Task) => boolean);
+
 /**
  * A completed subtask of an open parent stays under its parent instead of moving to the group, but
- * only when the parent's row is shown in the view (`shown`, the IDs of the view's open rows).
- * Without `shown`, any open parent counts.
+ * only when the parent's row is shown in the view (`shown`). Without `shown`, any open parent counts.
  */
-export function isKeptUnderParent(task: Task, byId: ReadonlyMap<ID, Task>, shown?: ReadonlySet<ID>): boolean {
+export function isKeptUnderParent(task: Task, byId: ReadonlyMap<ID, Task>, shown?: ShownRows): boolean {
 	if (isOpen(task) || task.parentId === null) return false;
 	const parent = byId.get(task.parentId);
-	return parent !== undefined && isOpen(parent) && (shown === undefined || shown.has(parent.id));
+	if (parent === undefined || !isOpen(parent)) return false;
+	return shown === undefined || (typeof shown === "function" ? shown(parent) : shown.has(parent.id));
 }
 
 /**
  * The Completed group of a view: newest `completedAt` first (done occurrences of repeating tasks by `resolvedAt`). `held` are tasks completed a moment ago
- * that still show among the open rows until their check animation ends. `shown` are the IDs of the
- * view's open rows: a completed subtask leaves for the group unless its parent is one of them.
+ * that still show among the open rows until their check animation ends. `shown` are the view's open
+ * rows: a completed subtask leaves for the group unless its parent is one of them.
  */
 export function completedGroup(
 	tasks: Iterable<Task>,
@@ -118,7 +94,7 @@ export function completedGroup(
 	scope: CompletedScope,
 	ctx: QueryContext,
 	held: ReadonlySet<ID> = new Set(),
-	shown?: ReadonlySet<ID>,
+	shown?: ShownRows,
 	occurrences: readonly DoneOccurrence[] = [],
 ): ListEntry[] {
 	const done: Task[] = [];

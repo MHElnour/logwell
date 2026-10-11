@@ -5,11 +5,13 @@ import {
 	type ListEntry,
 	type QueryContext,
 	type TaskFilter,
+	type ViewScope,
 	arrangeHierarchy,
 	categoryEntries,
 	completedEntries,
 	entryOf,
 	filterTasks,
+	inViewScope,
 	inUpcoming,
 	isDueByToday,
 	isOverdue,
@@ -17,6 +19,7 @@ import {
 	matchesOccurrence,
 	matchesText,
 	occurrenceDay,
+	passesFilter,
 	priorityRank,
 	sortEntriesByDate,
 	sortEntriesByPriority,
@@ -29,7 +32,7 @@ import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
 import { compareSortKeys } from "../domain/sortKey";
-import { isUnderTag, tagDisplayPath, tagPrefixes } from "../domain/tags";
+import { tagDisplayPath, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
 import { compareTasksBySortKey, isOpen } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
@@ -38,14 +41,8 @@ import type { NotePort } from "./ports";
 
 // View selectors. Pure reads over the store state.
 
-export type TaskView =
-	| { kind: "today" }
-	| { kind: "upcoming" }
-	| { kind: "inbox" }
-	| { kind: "category"; id: ID }
-	| { kind: "tag"; key: string }
-	| { kind: "completed" }
-	| { kind: "trash" };
+/** A Tasks view: one that lists open tasks (`ViewScope`), Completed or Trash. */
+export type TaskView = ViewScope | { kind: "completed" } | { kind: "trash" };
 
 export type { GroupTone };
 
@@ -168,19 +165,65 @@ export function buildView(
 	held: ReadonlySet<ID> = NO_IDS,
 	groupBy?: GroupBy,
 ): ViewGroup[] {
-	return openGroups(state, view, ctx, filter, text, held, groupBy, prepare(state, view, ctx, filter, text, held));
+	return openGroups(state, view, ctx, filter, text, groupBy, prepare(state, view, ctx, filter, text, held));
 }
 
-/** What a view's open rows and Completed group both start from: the filtered tasks and the open rows shown. */
+/** A view's open rows and its Completed group. */
+export interface ViewList {
+	groups: ViewGroup[];
+	/** Newest first; empty where the view has no Completed group or it was not asked for. */
+	completed: ListEntry[];
+}
+
+/**
+ * A view's open rows (as `buildView`) and its Completed group (as `buildCompleted`), from one filtering of the
+ * tasks. `completed: false` leaves the group out (it is not shown).
+ */
+export function buildList(
+	state: DbData,
+	view: TaskView,
+	ctx: QueryContext,
+	filter: TaskFilter,
+	text: string,
+	held: ReadonlySet<ID> = NO_IDS,
+	options: { groupBy?: GroupBy; completed?: boolean } = {},
+): ViewList {
+	const p = prepare(state, view, ctx, filter, text, held);
+	return {
+		groups: openGroups(state, view, ctx, filter, text, options.groupBy, p),
+		completed: options.completed === false ? [] : completedOf(state, view, ctx, filter, text, held, p),
+	};
+}
+
+/** What a view's open rows and Completed group both start from. */
 interface Prepared {
+	/** The tasks that pass the filter and the search text. */
 	tasks: Task[];
-	/** The IDs of the open rows shown (held tasks included), or null where the view has no Completed group. */
-	rows: Set<ID> | null;
+	/** Whether the view shows an open task's row; null where the view has no Completed group. */
+	shown: ((task: Task) => boolean) | null;
+	/**
+	 * The completed tasks shown among the open rows: held ones, and subtasks whose open parent's row is shown
+	 * (App shell and views rule 21). The rows themselves still apply the view's Completed scope to them.
+	 */
+	keep: (task: Task) => boolean;
 }
 
 function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskFilter, text: string, held: ReadonlySet<ID>): Prepared {
 	const tasks = filterTasks(state.tasks.values(), filter, text, ctx);
-	return { tasks, rows: shownRowIds(state, view, ctx, filter, tasks, held) };
+	const scope = completedScope(view);
+	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id) };
+	// An open parent's row is shown when the view lists it and it passes the filter and text. Asked only for
+	// the parents of completed subtasks, once per parent.
+	const known = new Map<ID, boolean>();
+	const shown = (parent: Task): boolean => {
+		let s = known.get(parent.id);
+		if (s === undefined) {
+			s = inViewScope(parent, scope, ctx) && passesFilter(parent, filter, text, ctx);
+			known.set(parent.id, s);
+		}
+		return s;
+	};
+	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown) };
 }
 
 function openGroups(
@@ -189,12 +232,10 @@ function openGroups(
 	ctx: QueryContext,
 	filter: TaskFilter,
 	text: string,
-	held: ReadonlySet<ID>,
 	groupBy: GroupBy | undefined,
-	{ tasks, rows }: Prepared,
+	{ tasks, keep }: Prepared,
 ): ViewGroup[] {
-	const shown = rows === null ? null : shownParents(state, tasks, rows);
-	return viewGroups(state, view, ctx, filter, tasks, (t) => held.has(t.id) || (shown?.has(t.id) ?? false), groupBy, text);
+	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text);
 }
 
 /**
@@ -294,7 +335,7 @@ function viewGroups(
 			case "category":
 				return categoryEntries(tasks, byId, ctx, view.id, keep);
 			case "tag":
-				return arrangeHierarchy(tasks.filter((t) => (isOpen(t) || keep(t)) && t.tagKeys.some((k) => isUnderTag(k, view.key))), byId, ctx);
+				return arrangeHierarchy(tasks.filter((t) => (isOpen(t) || keep(t)) && inViewScope(t, view, ctx)), byId, ctx);
 			case "completed":
 				return completedEntries(tasks, byId, ctx, doneOccurrences(state, ctx, filter, text));
 			case "trash":
@@ -375,32 +416,6 @@ function viewGroups(
 	}
 }
 
-/**
- * The IDs of the open rows of the view (held tasks included), or null where the view has no group.
- * A completed subtask is only kept under a parent that is one of them.
- */
-function shownRowIds(
-	state: DbData,
-	view: TaskView,
-	ctx: QueryContext,
-	filter: TaskFilter,
-	tasks: Task[],
-	held: ReadonlySet<ID>,
-): Set<ID> | null {
-	if (completedScope(view) === null) return null;
-	const ids = new Set<ID>();
-	// The rows are the same whatever the grouping, so the plain one will do.
-	for (const g of viewGroups(state, view, ctx, filter, tasks, (t) => held.has(t.id), "none")) for (const e of g.entries) ids.add(e.task.id);
-	return ids;
-}
-
-/** IDs of the completed subtasks the view keeps among its open rows: their open parent's row is shown. */
-function shownParents(state: DbData, tasks: Task[], rows: ReadonlySet<ID>): Set<ID> {
-	const kept = new Set<ID>();
-	for (const t of tasks) if (isKeptUnderParent(t, state.tasks, rows)) kept.add(t.id);
-	return kept;
-}
-
 /** The view's Completed group, newest first. Empty where the view has none. */
 export function buildCompleted(
 	state: DbData,
@@ -421,11 +436,11 @@ function completedOf(
 	filter: TaskFilter,
 	text: string,
 	held: ReadonlySet<ID>,
-	{ tasks, rows }: Prepared,
+	{ tasks, shown }: Prepared,
 ): ListEntry[] {
 	const scope = completedScope(view);
-	if (scope === null) return [];
-	return completedGroup(tasks, state.tasks, scope, ctx, held, rows ?? undefined, doneOccurrences(state, ctx, filter, text));
+	if (scope === null || shown === null) return [];
+	return completedGroup(tasks, state.tasks, scope, ctx, held, shown, doneOccurrences(state, ctx, filter, text));
 }
 
 /**
@@ -444,7 +459,7 @@ export function buildBoard(
 	held: ReadonlySet<ID> = NO_IDS,
 ): BoardColumn[] {
 	// A column's open rows and Completed group start from the same filtered tasks and shown rows: made once.
-	const openOf = (p: Prepared, groupBy?: GroupBy): ViewGroup[] => openGroups(state, view, ctx, filter, text, held, groupBy, p);
+	const openOf = (p: Prepared, groupBy?: GroupBy): ViewGroup[] => openGroups(state, view, ctx, filter, text, groupBy, p);
 	const doneOf = (p: Prepared): ListEntry[] => completedOf(state, view, ctx, filter, text, held, p);
 	switch (view.kind) {
 		case "today": {
