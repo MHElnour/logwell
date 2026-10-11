@@ -412,7 +412,9 @@ export function Sidebar(props: {
 	const followMovedTags = (moves: readonly TagMove[]) => {
 		const current = viewRef.current;
 		if (current.kind !== "tag") return;
-		const move = moves.find((m) => isUnderTag(current.key, m.from));
+		// The view's own tag, else its closest moved ancestor: a delete moves each child to the top on its own.
+		let move: TagMove | undefined;
+		for (const m of moves) if (isUnderTag(current.key, m.from) && (move === undefined || m.from.length > move.from.length)) move = m;
 		if (move !== undefined) onView({ kind: "tag", key: move.to + current.key.slice(move.from.length) });
 		else if (!host.app.store.state.tags.has(current.key)) toInbox();
 	};

@@ -35,6 +35,28 @@ describe("Quick Add unique tag names", () => {
 		expect(parseQuickAdd("x @home/calls y @home/calls", { ...ctx, tags: [] }).fields.newTags).toEqual(["home/calls"]);
 	});
 
+	it("a new child's parent name is taken in the same input: another tag of that name stays in the title (#9)", () => {
+		const ctx = makeCtx();
+		const r = parseQuickAdd("Ring mum @home/calls @work/home", { ...ctx, tags: [] });
+		expect(r.fields.newTags).toEqual(["home/calls"]);
+		expect(r.title).toBe("Ring mum @work/home");
+		// The parent itself is no clash: it is the same tag.
+		expect(parseQuickAdd("Ring mum @home/calls @home", { ...ctx, tags: [] }).fields.newTags).toEqual(["home/calls", "home"]);
+	});
+
+	it("a digits-only name is a tag once a tag of that name exists, like a parent made with its child (#9)", () => {
+		const ctx = makeCtx();
+		const tags = [
+			{ key: "2024", displayName: "2024" },
+			{ key: "2024/taxes", displayName: "2024/Taxes" },
+		];
+		const r = parseQuickAdd("File the forms @2024", { ...ctx, tags });
+		expect(r.chips[0]).toMatchObject({ kind: "tag", tagKey: "2024" });
+		expect(r.title).toBe("File the forms");
+		// With no such tag, it stays in the title.
+		expect(parseQuickAdd("File the forms @2024", { ...ctx, tags: [] }).title).toBe("File the forms @2024");
+	});
+
 	it("a tag named like its parent makes no chip", () => {
 		expect(parse("x @Garden/garden").chips).toEqual([]);
 	});

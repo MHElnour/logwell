@@ -66,7 +66,7 @@ export function tagPath(key: string): string[] {
 	return parts.some((p) => p === "") ? [key] : parts;
 }
 
-/** The node keys on the way to `key`, itself last: `a/b/c` gives `a`, `a/b`, `a/b/c`. */
+/** The path prefixes of `key`, itself last: `a/b/c` gives `a`, `a/b`, `a/b/c`. */
 export function tagPrefixes(key: string): string[] {
 	const path = tagPath(key);
 	return path.map((_, i) => path.slice(0, i + 1).join("/"));
@@ -157,8 +157,8 @@ export function tagLeaf(key: string): string {
 /** The tag names in use: each tag record by its name. */
 export class TagNames {
 	/** Tag key -> its record's `createdAt`: what the tag owns its name by. */
-	private readonly nodes = new Map<string, string>();
-	/** Name -> the node keys that use it (more than one only for duplicates already in a file). */
+	private readonly since = new Map<string, string>();
+	/** Name -> the tag keys that use it (more than one only for duplicates already in a file). */
 	private readonly byName = new Map<string, Set<string>>();
 
 	static of(tags: Iterable<{ key: string; createdAt?: string }>): TagNames {
@@ -170,7 +170,7 @@ export class TagNames {
 	/** Adds a tag key under its name. */
 	add(key: string, createdAt = ""): void {
 		const name = tagLeaf(key);
-		this.nodes.set(key, createdAt);
+		this.since.set(key, createdAt);
 		let set = this.byName.get(name);
 		if (set === undefined) this.byName.set(name, (set = new Set()));
 		set.add(key);
@@ -178,17 +178,17 @@ export class TagNames {
 
 	clone(): TagNames {
 		const copy = new TagNames();
-		for (const [k, v] of this.nodes) copy.nodes.set(k, v);
+		for (const [k, v] of this.since) copy.since.set(k, v);
 		for (const [k, v] of this.byName) copy.byName.set(k, new Set(v));
 		return copy;
 	}
 
 	/** Whether the key is a tag. */
 	has(key: string): boolean {
-		return this.nodes.has(key);
+		return this.since.has(key);
 	}
 
-	/** How many nodes use a name (more than one only for duplicates already in a file). */
+	/** How many tags use a name (more than one only for duplicates already in a file). */
 	count(name: string): number {
 		return this.byName.get(name)?.size ?? 0;
 	}
@@ -197,33 +197,39 @@ export class TagNames {
 	owner(name: string): string | undefined {
 		const set = this.byName.get(name);
 		if (set === undefined) return undefined;
-		const since = (key: string): string => this.nodes.get(key)!;
+		const age = (key: string): string => this.since.get(key)!;
 		let best: string | undefined;
 		for (const key of set) {
 			if (best === undefined) best = key;
 			else {
-				const a = since(key);
-				const b = since(best);
+				const a = age(key);
+				const b = age(best);
 				if (a < b || (a === b && key < best)) best = key;
 			}
 		}
 		return best;
 	}
 
-	/** Whether a new key adds a node whose name is longer than `TAG_NAME_MAX`. Existing nodes keep any length. */
+	/**
+	 * Whether a new key, or the missing parent created with it, has a name longer than `TAG_NAME_MAX`. Existing tags
+	 * keep any length.
+	 */
 	tooLong(key: string): boolean {
 		const path = tagPath(key);
-		return tagPrefixes(key).some((node, i) => !this.nodes.has(node) && path[i]!.length > TAG_NAME_MAX);
+		return tagPrefixes(key).some((prefix, i) => !this.since.has(prefix) && path[i]!.length > TAG_NAME_MAX);
 	}
 
-	/** The existing node whose name a new key would use again (checked for the key's new nodes only), or null. */
+	/**
+	 * The existing tag whose name a new key would use again, or null. A missing parent is created with the key, so its
+	 * name is checked too; an existing parent is not.
+	 */
 	clash(key: string): string | null {
 		const path = tagPath(key);
 		const prefixes = tagPrefixes(key);
 		for (let i = 0; i < prefixes.length; i++) {
-			const node = prefixes[i]!;
-			if (this.nodes.has(node)) continue;
-			for (const other of this.byName.get(path[i]!) ?? []) if (other !== node) return other;
+			const prefix = prefixes[i]!;
+			if (this.since.has(prefix)) continue;
+			for (const other of this.byName.get(path[i]!) ?? []) if (other !== prefix) return other;
 		}
 		return null;
 	}
@@ -254,7 +260,7 @@ export function resolveTagName(names: TagNames, typed: string): string | null {
 
 /**
  * How a tag is shown: its own name (`Calls` for `home/calls`), in the casing it was created with. A name that more than
- * one node uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
+ * one tag uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
  * Not for exports, which keep the full path.
  */
 export function tagLabel(tags: ReadonlyMap<string, Tag>, key: string): string {
@@ -270,12 +276,6 @@ export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: 
 	return [...tags.values()].map((tag) => ({ tag, label: tagLabel(tags, tag.key) })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** The existing tag node whose name a new key would repeat, or null. */
-export function tagNameClash(keys: Iterable<string>, key: string): string | null {
-	const names = new TagNames();
-	for (const k of keys) names.add(k);
-	return names.clash(key);
-}
 
 /**
  * `The name "Calls" is already used by another tag.`: the name only, in the existing tag's casing. It reads no memoized
@@ -324,7 +324,7 @@ export function tagNameTextProblem(typed: string, allowPath = false): string | n
 }
 
 /**
- * Why `name` under `parent` (a top-level node key, or null) cannot be saved, or null: the one check of the New tag and
+ * Why `name` under `parent` (a top-level tag key, or null) cannot be saved, or null: the one check of the New tag and
  * Edit tag dialogs and of `TagService.add` and `edit`. `except` is the key of the tag being edited: it and its children
  * leave the names in use, so its own name is allowed, and each child keeps its name under the new one. An unchanged
  * stored name skips the text and length rules, so a name from an older file is never refused.

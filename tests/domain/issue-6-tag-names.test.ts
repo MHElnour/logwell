@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DomainError } from "../../src/domain/errors";
-import { TAG_REPEAT_MESSAGE, TagNames, requireUniqueTagName, tagLabel, tagLeaf, tagNameClash, tagNameClashMessage } from "../../src/domain/tags";
+import { TAG_REPEAT_MESSAGE, TagNames, requireUniqueTagName, tagLabel, tagLeaf, tagNameClashMessage } from "../../src/domain/tags";
 import { fieldHashes } from "../../src/domain/ticktick/mapping";
 import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName, unsyncedTagKeys } from "../../src/domain/ticktick/tags";
 import type { Tag } from "../../src/domain/types";
@@ -10,6 +10,8 @@ import type { Tag } from "../../src/domain/types";
 
 const tag = (key: string, displayName: string, createdAt = "2026-10-01T10:00:00Z"): Tag => ({ key, displayName, color: null, createdAt, modifiedAt: createdAt });
 const map = (...tags: Tag[]) => new Map(tags.map((t) => [t.key, t]));
+/** The existing tag whose name a new key would repeat, among tags with these keys. */
+const clash = (keys: string[], key: string) => TagNames.of(keys.map((k) => ({ key: k }))).clash(key);
 
 describe("tag names (D29)", () => {
 	it("the leaf is the last path segment", () => {
@@ -19,25 +21,25 @@ describe("tag names (D29)", () => {
 	});
 
 	it("a new key clashes with a tag of the same name under another parent, or at the root", () => {
-		expect(tagNameClash(["home/calls"], "calls")).toBe("home/calls");
-		expect(tagNameClash(["home/calls"], "work/calls")).toBe("home/calls");
-		expect(tagNameClash(["calls"], "work/calls")).toBe("calls");
+		expect(clash(["home/calls"], "calls")).toBe("home/calls");
+		expect(clash(["home/calls"], "work/calls")).toBe("home/calls");
+		expect(clash(["calls"], "work/calls")).toBe("calls");
 	});
 
 	it("a parent tag is a name too", () => {
-		expect(tagNameClash(["home", "home/calls"], "work/home")).toBe("home");
+		expect(clash(["home", "home/calls"], "work/home")).toBe("home");
 		// The parent itself is no clash, and may get more children.
-		expect(tagNameClash(["home", "home/calls"], "home")).toBeNull();
-		expect(tagNameClash(["home", "home/calls"], "home/garden")).toBeNull();
+		expect(clash(["home", "home/calls"], "home")).toBeNull();
+		expect(clash(["home", "home/calls"], "home/garden")).toBeNull();
 	});
 
 	it("a new parent segment that repeats a name clashes", () => {
-		expect(tagNameClash(["work/home"], "home/calls")).toBe("work/home");
+		expect(clash(["work/home"], "home/calls")).toBe("work/home");
 	});
 
 	it("the same key, and unrelated names, do not clash", () => {
-		expect(tagNameClash(["home/calls"], "home/calls")).toBeNull();
-		expect(tagNameClash(["home/calls"], "callsx")).toBeNull();
+		expect(clash(["home/calls"], "home/calls")).toBeNull();
+		expect(clash(["home/calls"], "callsx")).toBeNull();
 	});
 
 	it("names compare case-insensitively (keys are lowercase)", () => {

@@ -1,4 +1,5 @@
 import type { Category, Checkin, FocusSession, Habit, Instant, OccurrenceRecord, OpaqueRecord, Section, SyncLink, Tag, Task, TrashEntry } from "../domain/types";
+import { tagPrefixes } from "../domain/tags";
 import { INBOX_ID, INBOX_NAME, isRecord, syncLinkId } from "../domain/types";
 
 // The `.cpbase` data model. One JSON document with a header
@@ -227,7 +228,8 @@ export function recordId(collection: CollectionName, record: unknown): string {
 
 /**
  * Why removing these records of `c` would leave a reference to them behind in `data`, or null. A tag key is held by
- * live tasks and by the tasks of trash entries. Undo checks it on the state after a revert, before committing.
+ * live tasks, by the tasks of trash entries, and as the parent of the tag records under it. Undo checks it on the
+ * state after a revert, before committing.
  */
 export function referenceProblem(data: DbCollections, c: CollectionName, removed: ReadonlySet<string>): string | null {
 	switch (c) {
@@ -235,6 +237,8 @@ export function referenceProblem(data: DbCollections, c: CollectionName, removed
 			const holds = (task: Task) => task.tagKeys.some((k) => removed.has(k));
 			for (const t of data.tasks.values()) if (holds(t)) return "a task now uses this tag.";
 			for (const e of data.trash.values()) if (e.tasks.some(holds)) return "a task now uses this tag.";
+			// Every displayed tag is a record, its parent too (Lists, sections and tags rule 25).
+			for (const key of data.tags.keys()) if (tagPrefixes(key).some((p) => p !== key && removed.has(p))) return "a tag now sits under this tag.";
 			return null;
 		}
 		default:

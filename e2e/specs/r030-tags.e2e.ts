@@ -120,21 +120,41 @@ describe("Parent tags (P6)", function () {
 		}
 	});
 
+	it("the fold arrow hides and shows the children", async function () {
+		const section = await visibleTasksSection();
+		const fold = section.$('.cp-tag-fold[data-tag-label="Programming"]');
+		await fold.waitForExist({ timeout: 5000 });
+		expect(await fold.getAttribute("aria-expanded")).toBe("true");
+		await domClick(fold);
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 1, { timeout: 5000, timeoutMsg: "the tree did not fold" });
+		expect(await section.$('.cp-tag-fold[data-tag-label="Programming"]').getAttribute("aria-expanded")).toBe("false");
+	});
+});
+
+describe("Parent tags are tags (#9)", function () {
+	beforeEach(async function () {
+		await freshDatabase();
+		await detachAppLeaves();
+		await createTask("Ring mum", { newTags: ["Home/Calls"] });
+		await createTask("Weed the beds", { newTags: ["Home/Garden"] });
+		await flush();
+	});
+
 	it("a parent is a tag: its row has the menu and takes a color (#9)", async function () {
 		const section = await visibleTasksSection();
 		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
 		const wasNative = await useDomMenus();
 		try {
-			const programming = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
-			await programming.click({ button: "right" });
+			const home = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await home.click({ button: "right" });
 			await pickMenuItem("Color: purple");
-			await browser.waitUntil(async () => ((await programming.$(".cp-tag-dot").getAttribute("class")) ?? "").includes("cp-tag-purple"), {
+			await browser.waitUntil(async () => ((await home.$(".cp-tag-dot").getAttribute("class")) ?? "").includes("cp-tag-purple"), {
 				timeout: 5000,
 				timeoutMsg: "the parent did not take the color",
 			});
 			const color = await browser.executeObsidian(({ plugins }) => {
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				return ((plugins as any).logwell.session.app.store.state.tags.get("programming")?.color ?? null) as string | null;
+				return ((plugins as any).logwell.session.app.store.state.tags.get("home")?.color ?? null) as string | null;
 			});
 			expect(color).toBe("purple");
 		} finally {
@@ -148,28 +168,18 @@ describe("Parent tags (P6)", function () {
 		const wasNative = await useDomMenus();
 		try {
 			await closeNotices();
-			const programming = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
-			await programming.click({ button: "right" });
+			const home = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await home.click({ button: "right" });
 			await pickMenuItem("Delete");
 			await clickModalButton("Delete");
-			await browser.waitUntil(async () => !(await treeLabels(section)).includes("Programming"), { timeout: 5000, timeoutMsg: "the parent was not deleted" });
-			expect(await treeLabels(section)).toEqual(["Go", "Python"]);
-			await waitForNotice("Deleted tag @Programming.");
+			await browser.waitUntil(async () => !(await treeLabels(section)).includes("Home"), { timeout: 5000, timeoutMsg: "the parent was not deleted" });
+			expect(await treeLabels(section)).toEqual(["Calls", "Garden"]);
+			await waitForNotice("Deleted tag @Home.");
 			await clickUndoNotice();
-			await browser.waitUntil(async () => (await treeLabels(section)).includes("Programming"), { timeout: 5000, timeoutMsg: "Undo did not restore the parent" });
-			expect(await treeLabels(section)).toEqual(["Programming", "Go", "Python"]);
+			await browser.waitUntil(async () => (await treeLabels(section)).includes("Home"), { timeout: 5000, timeoutMsg: "Undo did not restore the parent" });
+			expect(await treeLabels(section)).toEqual(["Home", "Calls", "Garden"]);
 		} finally {
 			await restoreMenus(wasNative);
 		}
-	});
-
-	it("the fold arrow hides and shows the children", async function () {
-		const section = await visibleTasksSection();
-		const fold = section.$('.cp-tag-fold[data-tag-label="Programming"]');
-		await fold.waitForExist({ timeout: 5000 });
-		expect(await fold.getAttribute("aria-expanded")).toBe("true");
-		await domClick(fold);
-		await browser.waitUntil(async () => (await treeLabels(section)).length === 1, { timeout: 5000, timeoutMsg: "the tree did not fold" });
-		expect(await section.$('.cp-tag-fold[data-tag-label="Programming"]').getAttribute("aria-expanded")).toBe("false");
 	});
 });
