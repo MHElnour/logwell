@@ -53,10 +53,13 @@ flowchart TD
   F --> G[CpbaseStore.commit]
   F --> H[undo stack entry]
   F --> I[bus changed with changes]
+  F --> O[store.ts change feed, changesSince]
   I --> N[taskIndex.ts TaskIndex updates the changed tasks]
   I --> J[hooks.ts useAppState]
   J --> K[TasksSection.tsx calls views.ts buildList]
   N --> K
+  O --> P[useLingering.ts holds just-completed rows]
+  P --> K
   K --> L[TaskList.tsx, VirtualRows.tsx]
   L --> M[rowMemo.ts skips unchanged rows]
 ```
@@ -69,7 +72,9 @@ The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, s
 
 Listeners use the list to narrow their work: the task index (`src/app/taskIndex.ts`), the task block (`src/obsidian/dashboardBlock.ts`) and the TickTick scheduler.
 
-The task index (`TaskIndex`, built in `TaskService` and reached as `app.tasks.lists`) holds which tasks can be in each Tasks view: the tasks of each list, the dated tasks (a schedule, a deadline or a repeat rule) for Today and Upcoming, the tasks of each tag, the completed tasks, and the open counts of lists and tags. For each task in the change list it takes the record out as it was and puts it in as it is. A `changed` without a list drops it, and the next read builds it again in one pass. It is current while the store's task map is the one it describes, so a save (a new state with the same task map) keeps it. A `changed` whose command started from another task map (its `base`), or replaced a record other than the one the index holds, drops it too (a write that skipped the store); so does a read that finds another task map. `buildList` and `buildBoard` filter only the view's candidates from it, and `sidebarCounts` reads its counts and counts Today and Upcoming over the dated tasks. Without an index both read every task: that path is the reference the index is tested against (`tests/app/issue-41-task-index.test.ts`). The candidates may hold extra tasks, never fewer: each view still applies its full test. The TickTick sync reads a linked list's tasks and the 999 open-task cap from the same index.
+The store also keeps the change lists of the last 64 `changed` events and counts the events (`AppStore.version`). `changesSince(version)` returns every change written since that count, oldest first, the records themselves; it returns nothing (`undefined`), never part of the list, when a reload or a replacement came in between or the count is older than the last 64 events. A view that renders after several changes reads them from there: `useLingering` (`src/ui/useLingering.ts`) holds a task for its check animation when a change since its last render took it from open to completed, and releases one reopened, without a pass over every task. When the store cannot list the changes it holds nothing new (a task completed by a reload does not animate) and only releases held tasks that are open again. A hidden section looks at nothing; when shown again it starts from the current count.
+
+The task index (`TaskIndex`, built in `TaskService` and reached as `app.tasks.lists`) holds which tasks can be in each Tasks view: the tasks of each list, the dated tasks (a schedule, a deadline or a repeat rule) for Today and Upcoming, the tasks of each tag, the completed tasks, the open counts of lists and tags, and the subtask counts of every parent. For each task in the change list it takes the record out as it was and puts it in as it is. A `changed` without a list drops it, and the next read builds it again in one pass. It is current while the store's task map is the one it describes, so a save (a new state with the same task map) keeps it. A `changed` whose command started from another task map (its `base`), or replaced a record other than the one the index holds, drops it too (a write that skipped the store); so does a read that finds another task map. `buildList` and `buildBoard` filter only the view's candidates from it, and `sidebarCounts` reads its counts and counts Today and Upcoming over the dated tasks. The subtask counts (`subtaskCounts()`, read by `useSubtaskCounts` in `src/ui/hooks.ts`) never change once handed out: a change that moves a parent's count gives a new map in which only that parent has a new count object, so rows, which compare counts by value, and memos keyed on the map redraw only for that parent. Without an index both read every task: that path is the reference the index is tested against (`tests/app/issue-41-task-index.test.ts`). The candidates may hold extra tasks, never fewer: each view still applies its full test. The TickTick sync reads a linked list's tasks and the 999 open-task cap from the same index.
 
 `useAppState` (`src/ui/hooks.ts`) ignores the list and re-renders the app on every `changed` and `status` event. `TasksSection.tsx` calls the selectors in `src/app/views.ts` only when the collections they read changed, and `rowMemo.ts` skips every row whose inputs are the same.
 
