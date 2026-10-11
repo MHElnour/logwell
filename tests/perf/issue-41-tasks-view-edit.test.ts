@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createElement, render } from "preact";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { type TaskView, buildView, sidebarCounts } from "../../src/app/views";
+import { type TaskView, buildList, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import type { ID } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
@@ -12,16 +12,19 @@ import { U1Host } from "../ui/u1-helpers";
 import { type FakeLayout, fakeLayout } from "../ui/virtual-layout";
 
 // One task edit with the Tasks view open at 50,000 tasks (issue 41). The view rebuilds its list whenever the
-// task map changes, and `buildView` filters every task. This test measures the work one edit causes:
-//   - the time of `buildView` for Inbox, Today and a list on the state after an edit, and of `sidebarCounts`;
+// task map changes, and `buildList` filters every task. This test measures the work one edit causes:
+//   - the time of `buildList` (the open rows and the Completed group) for Inbox, Today and a list on the state
+//     after an edit, and of `sidebarCounts`;
 //   - the number of full passes over the task map during the edit command and during the section's redraw,
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
-//     with the source line that started each pass.
-// The assertions are loose bounds that pass today and on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1).
+//     with the source line that started each pass;
+//   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): once per build.
+// The time bounds are loose and pass on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and
+// sort counts are exact.
 //
 // The whole app is not mounted: happy-dom mounting AppRoot with 50,000 tasks did not finish in minutes, so the
 // redraw is measured on `TasksSection` alone (what the app re-renders per change for the visible view), with
-// the real `buildView`, row memo and windowing. Redraw times in happy-dom are several times slower than in
+// the real `buildList`, row memo and windowing. Redraw times in happy-dom are several times slower than in
 // Chromium; the pass counts are exact.
 
 const TASKS = 50_000;
@@ -71,6 +74,25 @@ async function countBigPasses<T>(fn: () => Promise<T> | T): Promise<{ result: T;
 	}
 }
 
+/**
+ * Counts the sorts `arrangeHierarchy` makes of its top-level rows (arrays of 1,000+ tasks; its subtask
+ * lists are short) while `fn` runs.
+ */
+async function countHierarchySorts<T>(fn: () => Promise<T> | T): Promise<{ result: T; sorts: number }> {
+	const proto = Array.prototype as unknown as { sort: (...a: unknown[]) => unknown };
+	const original = proto.sort;
+	let sorts = 0;
+	proto.sort = function (this: unknown[], ...args: unknown[]) {
+		if (this.length >= 1_000 && (new Error().stack ?? "").includes("at arrangeHierarchy ")) sorts++;
+		return original.apply(this, args);
+	};
+	try {
+		return { result: await fn(), sorts };
+	} finally {
+		proto.sort = original;
+	}
+}
+
 const tally = (passes: string[]) => {
 	const counts = new Map<string, number>();
 	for (const p of passes) counts.set(p, (counts.get(p) ?? 0) + 1);
@@ -116,7 +138,7 @@ afterEach(() => {
 });
 
 describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
-	it("times buildView for Inbox, Today and a list on the state after an edit", async () => {
+	it("times buildList for Inbox, Today and a list on the state after an edit, each ordering its rows once", async () => {
 		const { h, lists } = await bigHarness();
 		const views: { name: string; view: TaskView }[] = [
 			{ name: "Inbox", view: { kind: "inbox" } },
@@ -125,7 +147,8 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		];
 		const ctx = h.app.queryContext();
 		const times = new Map<string, number[]>();
-		const rows = new Map<string, number>();
+		const rows = new Map<string, string>();
+		const sorts = new Map<string, number>();
 		let counts: number[] = [];
 		for (let run = 0; run < RUNS + 1; run++) {
 			// The edit command, then the view work its change triggers.
@@ -133,19 +156,26 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 			const state = h.app.store.state;
 			for (const { name, view } of views) {
 				const start = performance.now();
-				const groups = buildView(state, view, ctx, emptyFilter(), "");
+				const list = buildList(state, view, ctx, emptyFilter(), "");
 				const ms = performance.now() - start;
-				rows.set(name, groups.reduce((n, g) => n + g.entries.length, 0));
+				rows.set(name, `${list.groups.reduce((n, g) => n + g.entries.length, 0)} rows, ${list.completed.length} completed`);
 				if (run > 0) times.set(name, [...(times.get(name) ?? []), ms]);
 			}
 			const start = performance.now();
 			sidebarCounts(state, ctx);
 			if (run > 0) counts = [...counts, performance.now() - start];
 		}
-		const report = [...views.map(({ name }) => `${name} ${median(times.get(name) ?? []).toFixed(1)} ms (${rows.get(name)} rows)`), `sidebar counts ${median(counts).toFixed(1)} ms`].join("; ");
-		if (LOG) process.stderr.write(`issue-41: buildView after one edit at ${TASKS} tasks: ${report}\n`);
+		// Outside the timed runs: the sort counter's stack reads would cost more than the sorts.
+		for (const { name, view } of views) sorts.set(name, (await countHierarchySorts(() => buildList(h.app.store.state, view, ctx, emptyFilter(), ""))).sorts);
+		const report = [
+			...views.map(({ name }) => `${name} ${median(times.get(name) ?? []).toFixed(1)} ms (${rows.get(name)}; rows ordered ${sorts.get(name)}x)`),
+			`sidebar counts ${median(counts).toFixed(1)} ms`,
+		].join("; ");
+		if (LOG) process.stderr.write(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}\n`);
 		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
 		expect(median(counts), report).toBeLessThan(VIEW_BUDGET_MS);
+		// A list orders its rows once for the open rows and the Completed group together; Today has no hierarchy.
+		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, Today: 0, "a list": 1 });
 	}, 120_000);
 
 	for (const open of [
@@ -200,19 +230,28 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 					redrawMs.push(performance.now() - start);
 				}
 			}
+			// One more edit and redraw, untimed, to count how often the rows are ordered.
+			await h.app.tasks.update(taskId(1), { title: `Edited ${RUNS + 1}` });
+			const { sorts } = await countHierarchySorts(async () => {
+				draw();
+				await new Promise((r) => setTimeout(r, 0));
+			});
 			const commandPasses = median(command.map((p) => p.length));
 			const redrawPasses = median(redraw.map((p) => p.length));
 			if (LOG) {
 				process.stderr.write(
 					`issue-41: one edit at ${TASKS} tasks (${open.name} open): ${commandPasses} full passes in the edit command (${tally(command[0] ?? [])}); ` +
-						`${redrawPasses} in the section redraw (${tally(redraw[0] ?? [])}); redraw ${median(redrawMs).toFixed(0)} ms in happy-dom\n`,
+						`${redrawPasses} in the section redraw (${tally(redraw[0] ?? [])}); rows ordered ${sorts}x; redraw ${median(redrawMs).toFixed(0)} ms in happy-dom\n`,
 				);
 			}
-			expect(container.textContent).toContain(`Edited ${RUNS}`);
-			// The redraw rebuilds the view from the changed task map: at least one pass. The upper bound only catches a runaway.
+			expect(container.textContent).toContain(`Edited ${RUNS + 1}`);
+			// The redraw rebuilds the view from the changed task map: one pass for the rows and the Completed group
+			// together, then the sidebar counts, the lingering rows and the subtask counts.
 			expect(redrawPasses).toBeGreaterThanOrEqual(1);
-			expect(redrawPasses).toBeLessThanOrEqual(20);
+			expect(redrawPasses).toBeLessThanOrEqual(4);
 			expect(commandPasses).toBeLessThanOrEqual(20);
+			// Inbox orders its rows once per redraw; Today has no hierarchy.
+			expect(sorts).toBe(open.view.kind === "inbox" ? 1 : 0);
 		}, 120_000);
 	}
 });
