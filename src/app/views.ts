@@ -5,6 +5,7 @@ import {
 	type ListEntry,
 	type QueryContext,
 	type TaskFilter,
+	type ViewScope,
 	arrangeHierarchy,
 	categoryEntries,
 	completedEntries,
@@ -40,14 +41,8 @@ import type { NotePort } from "./ports";
 
 // View selectors. Pure reads over the store state.
 
-export type TaskView =
-	| { kind: "today" }
-	| { kind: "upcoming" }
-	| { kind: "inbox" }
-	| { kind: "category"; id: ID }
-	| { kind: "tag"; key: string }
-	| { kind: "completed" }
-	| { kind: "trash" };
+/** A Tasks view: one that lists open tasks (`ViewScope`), Completed or Trash. */
+export type TaskView = ViewScope | { kind: "completed" } | { kind: "trash" };
 
 export type { GroupTone };
 

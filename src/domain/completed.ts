@@ -7,7 +7,6 @@ import {
 	hasPastDate,
 	inUpcomingRange,
 	inViewScope,
-	isDueByToday,
 	occurrenceDay,
 	scheduleOf,
 } from "./queries";
@@ -34,9 +33,9 @@ function completedDate(task: Task, zone: string): LocalDate | null {
  */
 export function inCompletedScope(task: Task, scope: CompletedScope, ctx: QueryContext): boolean {
 	if (isOpen(task)) return false;
-	if (scope.kind !== "today") return inViewScope(task, scope, ctx);
-	if (!isDueByToday(task, ctx)) return false;
-	if (!hasPastDate(task, ctx)) return true;
+	if (!inViewScope(task, scope, ctx)) return false;
+	// Today's group is narrower than its rows: a task that was overdue counts only if it was completed today.
+	if (scope.kind !== "today" || !hasPastDate(task, ctx)) return true;
 	// A past date may still sit beside a date of today (a deadline today, a schedule earlier).
 	return datesInclude(task, ctx.today, ctx) || completedDate(task, ctx.zone) === ctx.today;
 }
