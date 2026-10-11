@@ -1,6 +1,6 @@
 import type { BlockFilters } from "../parsing/blockQuery";
 import { resolveListName } from "../domain/tasks";
-import { isUnderTag, resolveTagName, tagNamesOf } from "../domain/tags";
+import { isUnderTag, resolveTagNames, tagNamesOf } from "../domain/tags";
 import { INBOX_ID, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { TaskView } from "./views";
@@ -9,8 +9,8 @@ import type { TaskView } from "./views";
 
 /**
  * The view that comes closest to what `filters` show: the list when there is one, else the tag (when the tags
- * come down to one), else Today (`due` or `scheduled` today or overdue) or Upcoming (a range ahead). Filters no view shows (priority, quadrant, linked) or
- * names that do not exist give null: the caller then just opens the app.
+ * come down to one), else Today (`due` or `scheduled` today or overdue) or Upcoming (a range ahead). Filters no
+ * view shows (priority, quadrant, linked) or names that do not exist give null: the caller then just opens the app.
  */
 export function blockOpenView(filters: BlockFilters, state: Pick<DbData, "categories" | "tags">): TaskView | null {
 	if (filters.list !== undefined) {
@@ -21,13 +21,9 @@ export function blockOpenView(filters: BlockFilters, state: Pick<DbData, "catego
 	}
 	if (filters.tags !== undefined) {
 		// The same rule as the block's own check: a full key, a name alone, or the parent of tags. A name that is no tag opens nothing.
-		const names = tagNamesOf(state.tags);
-		const keys: string[] = [];
-		for (const typed of filters.tags) {
-			const key = resolveTagName(names, typed);
-			if (key === null) return null;
-			if (!keys.includes(key)) keys.push(key);
-		}
+		const r = resolveTagNames(tagNamesOf(state.tags), filters.tags);
+		if ("unknown" in r) return null;
+		const keys = r.keys;
 		// A tag under another selected tag adds nothing: the parent's view already holds it.
 		const top = keys.filter((key) => !keys.some((other) => other !== key && isUnderTag(key, other)));
 		// One tag has a view; several unrelated tags have none, so the dates decide.

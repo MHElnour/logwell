@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type BlockQueryState, compileBlockQuery } from "../../src/domain/blockQuery";
-import { type QueryContext, type TaskFilter, emptyFilter, filterTasks, isDeadlineMissed, matchesTaskDate } from "../../src/domain/queries";
+import { type QueryContext, type TaskFilter, emptyFilter, filterTasks, isDeadlineMissed, isScheduleMissed, matchesTaskDate } from "../../src/domain/queries";
 import type { Category, DateSpec, Task } from "../../src/domain/types";
 import { parseBlockQuery } from "../../src/parsing/blockQuery";
 
@@ -113,6 +113,25 @@ describe("matchesTaskDate: the field parameter", () => {
 				const either = matchesTaskDate(t, f, CTX);
 				expect(either, `${t.id} ${f.date}`).toBe(matchesTaskDate(t, f, CTX, "schedule") || matchesTaskDate(t, f, CTX, "deadline"));
 			}
+	});
+});
+
+describe("isScheduleMissed", () => {
+	it("an open task scheduled before today, in the display zone", () => {
+		expect(isScheduleMissed(task("a", { scheduled: day("2026-10-13") }), CTX)).toBe(true);
+		expect(isScheduleMissed(task("b", { scheduled: day(TODAY) }), CTX)).toBe(false);
+		expect(isScheduleMissed(task("c", { scheduled: timed("2026-10-14T00:05") }), CTX)).toBe(false);
+		expect(isScheduleMissed(task("d", { scheduled: timed("2026-10-13T23:30", "America/Los_Angeles") }), CTX)).toBe(false);
+	});
+
+	it("a completed task, a task with no schedule and a missed deadline alone are not missed", () => {
+		expect(isScheduleMissed(task("a", { scheduled: day("2026-10-01"), status: "completed", completedAt: TS }), CTX)).toBe(false);
+		expect(isScheduleMissed(task("b"), CTX)).toBe(false);
+		expect(isScheduleMissed(task("c", { deadline: day("2026-10-01") }), CTX)).toBe(false);
+	});
+
+	it("the schedule field of overdue is isScheduleMissed over the grid", () => {
+		for (const t of GRID) expect(matchesTaskDate(t, filter("overdue"), CTX, "schedule"), t.id).toBe(isScheduleMissed(t, CTX));
 	});
 });
 

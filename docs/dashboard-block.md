@@ -17,7 +17,7 @@ Type a code block with the language `logwell`, and write one filter per line:
 ```logwell
 list: Work
 section: Planning
-due: this week
+scheduled: this week
 ```
 ````
 

@@ -2,7 +2,7 @@ import type { BlockFilters } from "../parsing/blockQuery";
 import { type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, inViewScope, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, isOpen, resolveListName } from "./tasks";
-import { isUnderTag, resolveTagName, tagNamesOf } from "./tags";
+import { isUnderTag, resolveTagNames, tagNamesOf } from "./tags";
 import { dateOf, dayNum, weekStartOfDay } from "./time";
 import type { Category, ID, Section, Tag, Task } from "./types";
 
@@ -96,16 +96,14 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 			sectionId = found.id;
 		}
 	}
-	const tagKeys: string[] | null = filters.tags === undefined ? null : [];
-	if (filters.tags !== undefined && tagKeys !== null) {
+	let tagKeys: string[] | null = null;
+	if (filters.tags !== undefined) {
 		// Each tag by its full key, its own name, or as the parent of tags (the filter then includes the children).
-		const names = tagNamesOf(state.tags);
-		for (const typed of filters.tags) {
-			const key = resolveTagName(names, typed);
-			if (key === null) return { kind: "error", message: `No tag named \u201c${typed}\u201d.` };
-			if (!tagKeys.includes(key)) tagKeys.push(key);
-		}
+		const r = resolveTagNames(tagNamesOf(state.tags), filters.tags);
+		if ("unknown" in r) return { kind: "error", message: `No tag named \u201c${r.unknown}\u201d.` };
+		tagKeys = r.keys;
 	}
+	const selectedTags = tagKeys;
 
 	// -- compile the rest into plain lookups --
 	const listScope: ViewScope | null = listId === null ? null : { kind: "category", id: listId };
@@ -132,7 +130,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 		if (priorities !== null && !priorities.has(task.priority)) return false;
 		if (quadrants !== null && !quadrants.has(quadrantOf(task))) return false;
 		if (note !== null && (task.descriptionNote === null || normalizeNotePath(task.descriptionNote.path) !== note)) return false;
-		if (tagKeys !== null && !task.tagKeys.some((k) => inTag(k, tagKeys))) return false;
+		if (selectedTags !== null && !task.tagKeys.some((k) => inTag(k, selectedTags))) return false;
 		// The app's own date rule on one date: the deadline for `due`, the effective schedule (a repeating task's current occurrence) for `scheduled`.
 		if (due !== null && !matchesTaskDate(task, due, ctx, "deadline")) return false;
 		if (scheduled !== null && !matchesTaskDate(task, scheduled, ctx, "schedule")) return false;

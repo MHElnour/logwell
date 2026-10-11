@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { type BlockQueryState, compileBlockQuery, runBlockQuery } from "../../src/domain/blockQuery";
 import type { QueryContext } from "../../src/domain/queries";
 import type { Category, Tag, Task } from "../../src/domain/types";
+import { TagNames, resolveTagNames } from "../../src/domain/tags";
 import { parseBlockQuery } from "../../src/parsing/blockQuery";
 
 // `tag:` takes a comma list; a task with any of the tags shows (#52).
@@ -122,5 +123,22 @@ describe("block matcher: tag list", () => {
 		const s: BlockQueryState = { ...state, tasks: dated };
 		const r = runBlockQuery(parseBlockQuery("tag: work, errands\nscheduled: today").filters, s, CTX, "Note.md");
 		expect(r.kind === "ok" && r.entries.map((e) => e.task.id)).toEqual(["work"]);
+	});
+});
+
+describe("resolveTagNames", () => {
+	const names = TagNames.of(tags);
+
+	it("resolves each typed name and drops a repeated key, keeping the typed order", () => {
+		expect(resolveTagNames(names, ["Work", "calls", "home/calls", "@work"])).toEqual({ keys: ["work", "home/calls"] });
+	});
+
+	it("an empty list has no keys", () => {
+		expect(resolveTagNames(names, [])).toEqual({ keys: [] });
+	});
+
+	it("reports the first name that is no tag, as typed", () => {
+		expect(resolveTagNames(names, ["work", "Nope2", "nope1"])).toEqual({ unknown: "Nope2" });
+		expect(resolveTagNames(names, ["work/calls", "nope"])).toEqual({ unknown: "work/calls" });
 	});
 });
