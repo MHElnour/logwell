@@ -76,8 +76,8 @@ export function TaskList(props: {
 	 */
 	sections?: { categoryId: ID; hasAny: boolean; collapsed: (key: string) => boolean; onToggle: (key: string) => void; addRequest: number };
 	/**
-	 * The Tasks section's list (its scroller is `.cp-main`). With more than VIRTUAL_THRESHOLD
-	 * rows it draws only the rows near the viewport. Search and the Calendar leave it off.
+	 * With more than VIRTUAL_THRESHOLD rows, draw only the rows near the viewport of `scroller`: the Tasks section, the
+	 * task block and the calendar's Unscheduled drawer turn it on. Search leaves it off.
 	 */
 	virtualize?: boolean;
 	/** The scrolling ancestor the windowed rows follow (`closest()` selector). Default: the Tasks section's `.cp-main`. */

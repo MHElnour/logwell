@@ -90,6 +90,22 @@ export function isOpen(task: Task): boolean {
 	return task.status === "open";
 }
 
+/**
+ * Has a date a view can place: a schedule, a deadline, or a repeat rule (its occurrences). Only these tasks can be in
+ * Today, Upcoming or on the calendar.
+ */
+export function isDated(task: Task): boolean {
+	return task.scheduled !== null || task.deadline !== null || task.recurrence !== null;
+}
+
+/**
+ * An open task the calendar's Unscheduled drawer lists: no schedule and no repeat rule; a deadline is allowed (Calendar
+ * rule 14). A repeating task has no schedule of its own (its dates are the series), so it is never unscheduled.
+ */
+export function isUnscheduled(task: Task): boolean {
+	return isOpen(task) && task.scheduled === null && task.recurrence === null;
+}
+
 export function subtasksOf(tasks: Iterable<Task>, parentId: ID): Task[] {
 	const result: Task[] = [];
 	for (const t of tasks) if (t.parentId === parentId) result.push(t);

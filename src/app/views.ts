@@ -14,6 +14,7 @@ import {
 	inViewScope,
 	inUpcoming,
 	isDueByToday,
+	isFilterActive,
 	isOverdue,
 	keyDate,
 	matchesOccurrence,
@@ -34,7 +35,7 @@ import { sectionsOfList } from "../domain/sections";
 import { compareSortKeys } from "../domain/sortKey";
 import { tagDisplayPath, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
-import { compareTasksBySortKey, isOpen } from "../domain/tasks";
+import { compareTasksBySortKey, isDated, isOpen, isUnscheduled } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
@@ -569,6 +570,49 @@ export function sidebarCounts(state: DbData, ctx: QueryContext, index?: TaskInde
 		for (const k of keys) counts.tags.set(k, (counts.tags.get(k) ?? 0) + 1);
 	}
 	return counts;
+}
+
+/** A part of the tasks a view reads: the dated ones (`isDated`) or the open ones. */
+export type TaskSubset = "dated" | "open";
+
+/**
+ * The tasks that pass a view menu's filter (`passesFilter`, no search text), and with `within` are also dated or open:
+ * what the calendar and the matrix show. With `index`, only the index's candidates for the filter are read; without
+ * it every task is (the reference the index is tested against). Both give the same tasks, in no set order: callers
+ * sort them.
+ */
+export function menuTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, options: { within?: TaskSubset; index?: TaskIndex } = {}): Task[] {
+	const { within, index } = options;
+	const tasks = filterTasks(index?.filterCandidates(state, filter, within) ?? state.tasks.values(), filter, "", ctx);
+	if (within === undefined) return tasks;
+	return tasks.filter(within === "dated" ? isDated : isOpen);
+}
+
+export interface CalendarTasks {
+	/** The tasks the week and month place: dated ones through the view menu. */
+	dated: Task[];
+	/** How many tasks the Unscheduled drawer lists (`unscheduledTasks`); undefined when not asked for. */
+	unscheduledCount: number | undefined;
+}
+
+/**
+ * What the calendar shows on every change: the tasks it places and the Unscheduled count. With `index`, the dated
+ * tasks are the index's; a view menu that asks for nothing but a status other than "completed" lets every open task
+ * through, so the count is then the index's open tasks less the open ones with a schedule or a repeat rule (all of
+ * them dated) and no task is read for it. Otherwise the count reads the drawer's tasks. `count: false` leaves the
+ * count out (an open drawer counts its rows).
+ */
+export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex, options: { count?: boolean } = {}): CalendarTasks {
+	const dated = menuTasks(state, ctx, filter, { within: "dated", index });
+	if (options.count === false) return { dated, unscheduledCount: undefined };
+	const open = filter.status !== "completed" && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
+	const unscheduledCount = open === undefined ? unscheduledTasks(state, ctx, filter, index).length : open - dated.filter((t) => isOpen(t) && !isUnscheduled(t)).length;
+	return { dated, unscheduledCount };
+}
+
+/** The calendar's Unscheduled drawer: the open tasks through the view menu with no schedule and no repeat rule (`isUnscheduled`), unsorted. */
+export function unscheduledTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex): Task[] {
+	return menuTasks(state, ctx, filter, { within: "open", index }).filter(isUnscheduled);
 }
 
 export interface SearchResults {

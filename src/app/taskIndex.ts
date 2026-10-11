@@ -1,11 +1,12 @@
 import { DomainError } from "../domain/errors";
 import { isUnderTag, tagPrefixes } from "../domain/tags";
-import { type SubtaskCount, compareTasksBySortKey, isOpen, subtaskCounts } from "../domain/tasks";
+import { type SubtaskCount, compareTasksBySortKey, isDated, isOpen, subtaskCounts } from "../domain/tasks";
 import { type ID, INBOX_ID, type Task, syncLinkId } from "../domain/types";
+import type { TaskFilter } from "../domain/queries";
 import type { DbData } from "../persistence/schema";
 import type { AppStore } from "./store";
 import type { Change, Tx } from "./tx";
-import type { TaskView } from "./views";
+import type { TaskSubset, TaskView } from "./views";
 
 type Tasks = DbData["tasks"];
 
@@ -31,6 +32,8 @@ interface Parts {
 	byTag: Map<string, Set<ID>>;
 	/** Tasks that are not open. */
 	completed: Set<ID>;
+	/** Open tasks. */
+	openTasks: Set<ID>;
 	/** Open tasks per tag key and every path prefix above it, a task once per key (the sidebar's tag counts). */
 	tagOpen: Map<string, number>;
 	/** How many tasks the parts hold. */
@@ -51,8 +54,17 @@ interface Parts {
 	order: Map<ID, Task[]>;
 }
 
+const NO_IDS: ReadonlySet<ID> = new Set();
+
+/**
+ * The largest share of all tasks a view menu's candidates may hold (`filterCandidates`). Reading ids from a set and
+ * each task by id costs more per task than reading the task map: at 50,000 tasks, 45,000 open tasks read through the
+ * set took 2.4 ms and all tasks from the map 1.8 ms.
+ */
+const CANDIDATES_MAX_SHARE = 0.5;
+
 function emptyParts(): Parts {
-	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), completed: new Set(), tagOpen: new Map(), size: 0, subtasks: new Map(), subtasksShared: false, order: new Map() };
+	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), completed: new Set(), openTasks: new Set(), tagOpen: new Map(), size: 0, subtasks: new Map(), subtasksShared: false, order: new Map() };
 }
 
 function addId<K>(map: Map<K, Set<ID>>, key: K, id: ID): void {
@@ -83,17 +95,13 @@ function tagCountKeys(task: Task): Set<string> {
 	return keys;
 }
 
-/** Has a date a view can read: a schedule, a deadline, or a repeat rule (its current occurrence). */
-function isDated(t: Task): boolean {
-	return t.scheduled !== null || t.deadline !== null || t.recurrence !== null;
-}
-
 /** Puts one task in every part. */
 function add(p: Parts, t: Task): void {
 	addId(p.byList, t.categoryId, t.id);
 	for (const k of t.tagKeys) addId(p.byTag, k, t.id);
 	if (isDated(t)) p.dated.add(t.id);
 	if (isOpen(t)) {
+		p.openTasks.add(t.id);
 		bump(p.open, t.categoryId, 1);
 		for (const k of tagCountKeys(t)) bump(p.tagOpen, k, 1);
 	} else {
@@ -111,6 +119,7 @@ function remove(p: Parts, t: Task, next: Task | undefined): void {
 	for (const k of t.tagKeys) if (next?.tagKeys.includes(k) !== true) deleteId(p.byTag, k, t.id);
 	if (isDated(t) && (next === undefined || !isDated(next))) p.dated.delete(t.id);
 	if (isOpen(t)) {
+		if (next === undefined || !isOpen(next)) p.openTasks.delete(t.id);
 		bump(p.open, t.categoryId, -1);
 		for (const k of tagCountKeys(t)) bump(p.tagOpen, k, -1);
 	} else if (next === undefined || isOpen(next)) {
@@ -221,8 +230,8 @@ export interface IndexCounts {
 /**
  * Which tasks can be in each Tasks view, the open-task counts of lists and tags, and the subtask counts of every
  * parent, kept up to date from the store's change events. A Tasks view reads only its candidates and its rows' subtask
- * counts, the sidebar counts without a pass over all tasks,
- * the sync reads the tasks of the linked lists, and the synced-list cap is checked. Each task change takes the
+ * counts, the calendar and the matrix the candidates of their view menu, the sidebar counts without a pass over all
+ * tasks, the sync reads the tasks of the linked lists, and the synced-list cap is checked. Each task change takes the
  * record out as it was before and puts it in as it is after. A change event without `changes` (a reload, a
  * replacement of all records) drops the index; the next read builds it again in one pass. Every part is a function of
  * the task records alone, so the index is current while the store's task map is the one it describes, whatever else
@@ -240,6 +249,8 @@ export class TaskIndex {
 	rebuilds = 0;
 	/** Tests only: how often a change event found the index out of step with the tasks and dropped it. */
 	drops = 0;
+	/** The largest share of all tasks `filterCandidates` reads through a set. Tests set 1 to read the sets whatever their size. */
+	candidatesMaxShare = CANDIDATES_MAX_SHARE;
 
 	constructor(private readonly store: AppStore) {
 		store.bus.on("changed", (e) => this.onChanged(e.changes, e.base));
@@ -323,6 +334,11 @@ export class TaskIndex {
 		return this.index().open.get(listId) ?? 0;
 	}
 
+	/** How many open tasks `state` holds; undefined when it does not hold the store's current tasks. */
+	openTotal(state: DbData): number | undefined {
+		return state.tasks === this.store.state.tasks ? this.index().openTasks.size : undefined;
+	}
+
 	/** The tasks of one list in sort order; the ids are read at once, not kept. */
 	private sortedTasksOf(get: (id: ID) => Task | undefined, listId: ID): Task[] {
 		const out: Task[] = [];
@@ -372,6 +388,39 @@ export class TaskIndex {
 		}
 	}
 
+	/**
+	 * The tasks that can pass a view menu's lists, tags and status (`filter`), and with `within` also be dated
+	 * (`isDated`) or open: the smallest of the index's sets that those criteria allow (the tasks of the chosen lists;
+	 * those with one of the chosen tags, or with each of them; open; completed; dated). Any order. The caller still
+	 * applies the whole filter and `within` to each one. Undefined when no such set holds at most half of the tasks
+	 * (reading a set costs more per task than reading the task map), or when `state` does not hold the store's current
+	 * tasks: the caller then reads every task.
+	 */
+	filterCandidates(state: DbData, filter: Pick<TaskFilter, "categoryIds" | "tagKeys" | "tagMode" | "status">, within?: TaskSubset): Task[] | undefined {
+		if (state.tasks !== this.store.state.tasks) return undefined;
+		const p = this.index();
+		// Each choice: how many ids it reads, and the ids.
+		const choices: { size: number; ids: () => Iterable<ID> }[] = [];
+		const one = (ids: ReadonlySet<ID>) => choices.push({ size: ids.size, ids: () => ids });
+		if (within === "dated") one(p.dated);
+		if (within === "open" || filter.status === "open") one(p.openTasks);
+		if (filter.status === "completed") one(p.completed);
+		if (filter.categoryIds.length > 0) {
+			// A task is in one list: the lists' sets do not overlap.
+			const lists = [...new Set(filter.categoryIds)].map((id) => p.byList.get(id) ?? NO_IDS);
+			choices.push({ size: lists.reduce((n, ids) => n + ids.size, 0), ids: () => lists.flatMap((ids) => [...ids]) });
+		}
+		if (filter.tagKeys.length > 0) {
+			// The filter matches tag keys exactly (`passesFilter`), not the tags under them.
+			const tags = [...new Set(filter.tagKeys)].map((key) => p.byTag.get(key) ?? NO_IDS);
+			if (filter.tagMode === "all") for (const ids of tags) one(ids);
+			else choices.push({ size: tags.reduce((n, ids) => n + ids.size, 0), ids: () => new Set(tags.flatMap((ids) => [...ids])) });
+		}
+		let best = choices[0];
+		for (const c of choices) if (c.size < (best?.size ?? Infinity)) best = c;
+		return best === undefined || best.size > p.size * this.candidatesMaxShare ? undefined : tasksIn(state, best.ids());
+	}
+
 	/** The sidebar's list, tag and completed counts and its dated tasks; undefined when `state` does not hold the store's current tasks. */
 	counts(state: DbData): IndexCounts | undefined {
 		if (state.tasks !== this.store.state.tasks) return undefined;
@@ -417,6 +466,7 @@ export class TaskIndex {
 		sets("dated", p.dated, fresh.dated);
 		setMaps("byTag", p.byTag, fresh.byTag);
 		sets("completed", p.completed, fresh.completed);
+		sets("openTasks", p.openTasks, fresh.openTasks);
 		counts("tagOpen", p.tagOpen, fresh.tagOpen);
 		for (const id of new Set([...p.subtasks.keys(), ...fresh.subtasks.keys()])) {
 			const a = p.subtasks.get(id);

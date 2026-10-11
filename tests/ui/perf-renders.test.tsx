@@ -8,8 +8,8 @@ import { type CalMount, click, mountCal, settle } from "./m3-helpers";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not
 // change is not re-rendered. The counters wrap the pure functions the renders call: buildList (once per
-// Tasks section render that rebuilds its rows), globalSearch (once per Search section render) and the
-// format helper TaskRow calls on every render of a dated row.
+// Tasks section render that rebuilds its rows), globalSearch (once per change of what Search reads, only while
+// Search is shown) and the format helper TaskRow calls on every render of a dated row.
 
 vi.mock("../../src/app/views", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/app/views")>();
@@ -57,8 +57,38 @@ describe("render passes", () => {
 		expect(rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim())).toContain("B edited");
 		expect(builds() - b0).toBe(1);
 		expect(rowRenders() - r0).toBe(1);
-		// The Search section is mounted but hidden: it renders once for the change, not a second time from an effect.
+		// The Search section is mounted but hidden: it searches nothing for the change (issue 41).
+		expect(searches() - s0).toBe(0);
+	});
+
+	it("Search reads the titles once per change while shown, and not again on a render without a change (issue 41)", async () => {
+		const { m, ids } = await mountWithTasks(["Call the bank", "Buy milk", "Call mom"]);
+		await click(m.root.querySelector('.cp-rail [aria-label="Search"]'));
+		const box = m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;
+		box.value = "call";
+		box.dispatchEvent(new Event("input", { bubbles: true }));
+		await flush();
+		const results = () => [...m.root.querySelectorAll<HTMLElement>(".cp-search .cp-task-row")];
+		expect(results()).toHaveLength(2);
+		const s0 = searches();
+		await m.h.app.tasks.update(ids[1]!, { title: "Call the plumber" });
+		await flush();
+		expect(results()).toHaveLength(3);
 		expect(searches() - s0).toBe(1);
+		// Selecting a result renders the section again; the tasks, query and filter are the same, so no search runs.
+		const s1 = searches();
+		await click(results()[0]);
+		expect(m.root.querySelector(".cp-details-pane")).not.toBeNull();
+		expect(searches() - s1).toBe(0);
+		// A list renamed to match: Search reads the list names again.
+		const s2 = searches();
+		const list = await m.h.app.categories.create("Errands");
+		await flush();
+		expect(m.root.querySelector(".cp-search")?.textContent).not.toContain("Call list");
+		await m.h.app.categories.update(list.id, { name: "Call list" });
+		await flush();
+		expect(searches() - s2).toBe(2);
+		expect(m.root.querySelector(".cp-search")?.textContent).toContain("Call list");
 	});
 
 	it("selecting a row re-renders only the row that was selected", async () => {
