@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EDIT_TAG_LABEL } from "../../src/app/CategoryService";
-import { TAG_REPEAT_MESSAGE } from "../../src/domain/tags";
+import { TAG_FLAT_PARENT_MESSAGE, TAG_REPEAT_MESSAGE } from "../../src/domain/tags";
 import type { Tag, Task } from "../../src/domain/types";
 import { type AppHarness, appHarness } from "./harness";
 
@@ -119,7 +119,32 @@ describe("TagService.edit: rename", () => {
 		await h.app.tags.edit("errands", { name: "Chores", parentKey: null, color: null });
 		const undo = h.app.store.undoFor(mark, EDIT_TAG_LABEL);
 		await h.app.tasks.update(h.ids["Shop"]!, { title: "Shop for food" });
+		const before = snapshot(h);
+		const state = h.app.store.state;
 		await expect(undo()).rejects.toMatchObject({ code: "UndoConflict" });
+		// Nothing changed, and the entry is still there: once the later edit is undone, the notice's Undo works.
+		expect(h.app.store.state).toBe(state);
+		expect(snapshot(h)).toEqual(before);
+		await h.app.store.undo();
+		expect(h.app.store.undoLabel).toBe(EDIT_TAG_LABEL);
+		expect(await undo()).toBe(true);
+		expect(h.app.store.state.tags.has("errands")).toBe(true);
+		expect(task(h, h.ids["Shop"]!).tagKeys).toEqual(["errands"]);
+	});
+});
+
+describe("TagService.edit: a flat key from an older file", () => {
+	it("a key with an empty segment takes no parent, but can be recolored and renamed", async () => {
+		const h = await seeded();
+		await h.app.store.run("Seed", (tx) => tx.put("tags", { key: "a//b", displayName: "A//B", color: null, createdAt: JAN, modifiedAt: JAN }));
+		const state = h.app.store.state;
+		await expect(h.app.tags.edit("a//b", { name: "A//B", parentKey: "home", color: null })).rejects.toMatchObject({
+			code: "InvalidTag",
+			message: TAG_FLAT_PARENT_MESSAGE,
+		});
+		expect(h.app.store.state).toBe(state);
+		expect((await h.app.tags.edit("a//b", { name: "A//B", parentKey: null, color: "green" })).key).toBe("a//b");
+		expect((await h.app.tags.edit("a//b", { name: "Ab", parentKey: null, color: "green" })).key).toBe("ab");
 	});
 });
 

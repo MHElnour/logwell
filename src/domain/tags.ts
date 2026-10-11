@@ -32,6 +32,8 @@ export const TAG_NAME_MAX = 64;
 export const TAG_LENGTH_MESSAGE = `Use at most ${TAG_NAME_MAX} characters.`;
 /** Tags nest one level deep, so a tag with children stays at the top (the Edit tag dialog's locked Parent). */
 export const TAG_WITH_CHILDREN_MESSAGE = "A tag with child tags has no parent.";
+/** A key with an empty segment (`a//b`, older files only) is one flat tag: under a parent it would not be a path. */
+export const TAG_FLAT_PARENT_MESSAGE = 'A tag with "/" in its name has no parent.';
 
 /**
  * A NEW key has at most one "/" (counted as characters, so "a//b" is refused). Keys already

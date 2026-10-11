@@ -110,7 +110,7 @@ Right-click a tag in the sidebar, or focus it and press the context-menu key or 
 - Change the **Color**.
 - Choose **Save**. Everything changes in one step, and the notice, such as "Renamed tag @Calls to @Phone.", offers **Undo**.
 
-A name that another tag already uses is refused: two tags are never merged. If the tag's view is open, it stays open under the new name.
+A name that another tag already uses is refused: two tags are never merged. If the tag's view is open, it stays open under the new name. A tag filter in the calendar, the matrix or Search, and a tag picked in an open add bar, let go of the old name; pick the tag again under its new name.
 
 Renaming a tag does not change `tag:` lines in your notes; edit them yourself. See [Task block](dashboard-block.md). With [TickTick sync](ticktick-sync.md), the tasks go up with the new name, and nothing is renamed in TickTick.
 

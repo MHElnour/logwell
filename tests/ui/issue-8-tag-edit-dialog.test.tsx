@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EDIT_TAG_LABEL } from "../../src/app/CategoryService";
 import type { TagDialogOptions, TagDialogValues } from "../../src/ui/host";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
+import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { appHarness } from "../app/harness";
 import { type CalMount, click, mountCal, settle } from "./m3-helpers";
 import { menuItem } from "./u1-helpers";
@@ -66,7 +67,7 @@ describe("tag menu Edit", () => {
 		expect(o.submit).toBe("Save");
 		const calls = m.h.app.store.state.tags.get("home/calls")!;
 		expect(o.initial).toEqual({ name: "Calls", parent: "home", color: calls.color });
-		expect(o.parentLocked).toBe(false);
+		expect(o.parentLock).toBeNull();
 		expect(o.parents.map((p) => p.key)).toEqual(["errands", "home"]);
 		// Its own name is allowed; another tag's is not.
 		expect(o.check("calls", "home")).toBeNull();
@@ -76,8 +77,18 @@ describe("tag menu Edit", () => {
 	it("a tag with children has its parent locked and is not its own parent choice", async () => {
 		const { m, opened } = await mount(null);
 		await edit(m, "Home");
-		expect(opened[0]!.parentLocked).toBe(true);
+		expect(opened[0]!.parentLock).toBe("A tag with child tags has no parent.");
 		expect(opened[0]!.parents.map((p) => p.key)).toEqual(["errands"]);
+	});
+
+	it("a flat tag from an older file (an empty segment, as a//b) has its parent locked", async () => {
+		const { m, opened } = await mount(null);
+		await m.h.app.store.run("Seed", (tx) => tx.put("tags", { key: "a//b", displayName: "A//B", color: null, createdAt: tx.now, modifiedAt: tx.now }));
+		await settle();
+		// The tree names a flat key by its key.
+		await edit(m, "a//b");
+		expect(opened[0]!.parentLock).toBe('A tag with "/" in its name has no parent.');
+		expect(opened[0]!.initial).toMatchObject({ name: "A//B", parent: null });
 	});
 
 	it("a rename is one write with the notice 'Renamed tag @Calls to @Phone.'; Undo restores it", async () => {
@@ -141,7 +152,41 @@ describe("tag menu Edit", () => {
 });
 
 describe("Quick Add after a rename", () => {
-	it("a manual tag pill whose tag was renamed is dropped, so saving still works", async () => {
+	it("a picked tag that is renamed or deleted leaves the pills with a message; the save writes no old key", async () => {
+		const h = await appHarness();
+		await h.app.tags.create("Calls");
+		await h.app.tags.create("Home");
+		const m = new QuickAddModel(
+			{
+				app: h.app,
+				preset: {},
+				locale: () => "en",
+				resolveNote: () => [],
+				onSaved: () => undefined,
+				onError: (e) => {
+					throw e;
+				},
+				keepOpen: () => true,
+				onClose: () => undefined,
+			},
+			() => undefined,
+		);
+		m.setTags(["calls", "home"]);
+		await h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
+		m.refresh();
+		expect(m.tagKeys).toEqual(["home"]);
+		expect(manualPills(m).filter((p) => p.kind === "tag").map((p) => p.label)).toEqual(["@Home"]);
+		expect(m.message).toBe('The tag "calls" was renamed or deleted. Pick it again.');
+		// Another change with nothing gone leaves the message alone.
+		m.refresh();
+		expect(m.message).toBe('The tag "calls" was renamed or deleted. Pick it again.');
+		m.setInput("Ring mum");
+		expect(await m.submit()).toBe("saved");
+		const task = [...h.app.store.state.tasks.values()].find((t) => t.title === "Ring mum")!;
+		expect(task.tagKeys).toEqual(["home"]);
+	});
+
+	it("a manual tag whose tag was renamed is never saved, even before a refresh", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Calls");
 		const m = new QuickAddModel(

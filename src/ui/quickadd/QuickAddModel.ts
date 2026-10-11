@@ -1,5 +1,6 @@
 import type { CheckpointApp } from "../../app/App";
 import { DST_WARNING_TEXT } from "../../app/TaskService";
+import { tagLeaf } from "../../domain/tags";
 import { DURATION_RANGE_MESSAGE, isDurationMinutes } from "../../domain/tasks";
 import { type DateSpec, type ID, INBOX_ID, type LocalDate, type Priority, type RepeatRule, type Task, isPriority } from "../../domain/types";
 import {
@@ -156,6 +157,16 @@ export class QuickAddModel {
 
 	/** Re-reads categories, tags and notes (they changed elsewhere). */
 	refresh(): void {
+		// A picked tag renamed or deleted elsewhere leaves the pills, and the message says to pick it again.
+		if (this.tagKeys !== null) {
+			const tags = this.env.app.store.state.tags;
+			const gone = this.tagKeys.filter((k) => !tags.has(k));
+			if (gone.length > 0) {
+				this.tagKeys = this.tagKeys.filter((k) => tags.has(k));
+				const names = gone.map((k) => `"${tagLeaf(k)}"`).join(", ");
+				this.message = gone.length === 1 ? `The tag ${names} was renamed or deleted. Pick it again.` : `The tags ${names} were renamed or deleted. Pick them again.`;
+			}
+		}
 		this.update();
 	}
 

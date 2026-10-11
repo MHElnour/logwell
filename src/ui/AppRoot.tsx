@@ -1,5 +1,6 @@
 import { Fragment } from "preact";
 import type { TaskView } from "../app/views";
+import { type TaskFilter, existingTagFilter } from "../domain/queries";
 import type { ID } from "../domain/types";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { isDomainError } from "../domain/errors";
@@ -67,6 +68,18 @@ export function AppRoot(props: { host: UiHost; initialSection: SectionId | "toda
 
 	// A pending "Move to section…" menu must not outlive the view.
 	useEffect(() => cancelMoveToSection, []);
+
+	// A renamed or deleted tag leaves every section's filter, so no view filters by a tag its menu cannot list.
+	useEffect(() => {
+		const prune = <S extends { filter: TaskFilter }>(s: S): S => {
+			const filter = existingTagFilter(s.filter, state.tags);
+			return filter === s.filter ? s : { ...s, filter };
+		};
+		setTasksUi(prune);
+		setCalendarUi(prune);
+		setMatrixUi(prune);
+		setSearchUi(prune);
+	}, [state.tags]);
 
 	useEffect(() => {
 		props.handle({

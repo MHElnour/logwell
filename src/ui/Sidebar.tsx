@@ -5,7 +5,18 @@ import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
 import { plural } from "../domain/text";
-import { type TagNode, hasTagOrChild, isUnderTag, newTagProblem, tagDisplayLeaf, tagLabel, tagPath, tagTree } from "../domain/tags";
+import {
+	TAG_FLAT_PARENT_MESSAGE,
+	TAG_WITH_CHILDREN_MESSAGE,
+	type TagNode,
+	hasTagOrChild,
+	isUnderTag,
+	newTagProblem,
+	tagDisplayLeaf,
+	tagLabel,
+	tagPath,
+	tagTree,
+} from "../domain/tags";
 import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, IconButton, SrOnly, hueClass } from "./common";
@@ -263,7 +274,7 @@ async function newTag(host: UiHost, parents: { key: string; label: string }[]): 
 		// The swatch that starts selected is the palette color the tag would get; "Default" means none.
 		initial: { name: "", parent: null, color: paletteColor(tags().size) },
 		parents,
-		parentLocked: false,
+		parentLock: null,
 		check: (name, parent) => newTagProblem(tags(), name, parent),
 		save: async (values) => {
 			try {
@@ -285,12 +296,14 @@ async function editTag(host: UiHost, tag: Tag, parents: { key: string; label: st
 	const path = tagPath(tag.key);
 	const name = tagDisplayLeaf(tag);
 	const hasChildren = [...tags().keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
+	// The same reasons, in the same order, as TagService.edit refuses a new parent.
+	const flat = path.length === 1 && tag.key.includes("/");
 	await host.tagDialog({
 		title: "Edit tag",
 		submit: "Save",
 		initial: { name, parent: path.length > 1 ? path.slice(0, -1).join("/") : null, color: tag.color },
 		parents,
-		parentLocked: hasChildren,
+		parentLock: flat ? TAG_FLAT_PARENT_MESSAGE : hasChildren ? TAG_WITH_CHILDREN_MESSAGE : null,
 		check: (typed, parent) => newTagProblem(tags(), typed, parent, tag.key),
 		save: async (values) => {
 			try {

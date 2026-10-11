@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import { TAG_NAME_MAX, TAG_WITH_CHILDREN_MESSAGE } from "../domain/tags";
+import { TAG_NAME_MAX } from "../domain/tags";
 import type { TagDialogOptions, TagDialogValues } from "../ui/host";
 import { el } from "./dom";
 import { openFormModal } from "./formModal";
@@ -18,7 +18,8 @@ export interface TagFormDeps {
 	submitLabel: "Create" | "Save";
 	initial: TagDialogValues;
 	parents: { key: string; label: string }[];
-	parentLocked: boolean;
+	/** Why the parent is off (shown as its hint), or null. */
+	parentLock: string | null;
 	check: (name: string, parent: string | null) => string | null;
 	/** Resolves a message to show inline (the form stays as it is), or null when it saved. */
 	onSubmit: (values: TagDialogValues) => Promise<string | null>;
@@ -59,11 +60,11 @@ export function buildTagForm(container: HTMLElement, deps: TagFormDeps): { focus
 	const current = deps.initial.parent;
 	if (current !== null && !deps.parents.some((p) => p.key === current)) el(parent, "option", "", { value: current }, current);
 	parent.value = current ?? "";
-	if (deps.parentLocked) {
+	if (deps.parentLock !== null) {
 		const lockId = `cp-tag-parent-hint-${seq}`;
 		parent.disabled = true;
 		parent.setAttribute("aria-describedby", lockId);
-		el(form, "p", "cp-tag-form-hint", { id: lockId }, TAG_WITH_CHILDREN_MESSAGE);
+		el(form, "p", "cp-tag-form-hint", { id: lockId }, deps.parentLock);
 	}
 
 	// Color
@@ -134,7 +135,7 @@ export async function tagDialog(app: App, options: TagDialogOptions, accentClass
 			submitLabel: options.submit,
 			initial: options.initial,
 			parents: options.parents,
-			parentLocked: options.parentLocked,
+			parentLock: options.parentLock,
 			check: (name, parent) => options.check(name, parent),
 			onSubmit: async (values) => {
 				const message = await options.save(values);

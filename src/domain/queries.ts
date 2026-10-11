@@ -88,6 +88,15 @@ export function emptyFilter(status: StatusFilter = "all"): TaskFilter {
 	};
 }
 
+/**
+ * The filter without the tags that no longer exist (renamed or deleted), so a view never filters by a tag it cannot
+ * list. The same object when every tag exists, so views memoized on the filter do not recompute.
+ */
+export function existingTagFilter(f: TaskFilter, tags: ReadonlyMap<string, unknown>): TaskFilter {
+	if (f.tagKeys.every((k) => tags.has(k))) return f;
+	return { ...f, tagKeys: f.tagKeys.filter((k) => tags.has(k)) };
+}
+
 export function isFilterActive(f: TaskFilter, defaultStatus: StatusFilter): boolean {
 	return (
 		f.categoryIds.length > 0 ||

@@ -2,6 +2,7 @@ import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
 import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
 import {
+	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
 	hasTagOrChild,
 	isUnderTag,
@@ -241,6 +242,7 @@ export class TagService {
 			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
 			// Keeping the current parent is always allowed, so a deeper tag from an older file can still be renamed.
 			if (parentKey !== currentParent && parentKey !== null) {
+				if (path.length === 1 && key.includes("/")) throw new DomainError("InvalidTag", TAG_FLAT_PARENT_MESSAGE);
 				if (children.length > 0) throw new DomainError("InvalidTag", TAG_WITH_CHILDREN_MESSAGE);
 				requireTagParent(tags, parentKey, key);
 			}

@@ -66,7 +66,7 @@ describe("sidebar New tag", () => {
 		expect(o.title).toBe("New tag");
 		expect(o.submit).toBe("Create");
 		expect(o.initial).toEqual({ name: "", parent: null, color: paletteColor(3) });
-		expect(o.parentLocked).toBe(false);
+		expect(o.parentLock).toBeNull();
 		// A key with an empty segment is one flat tag and cannot be a parent.
 		expect(o.parents).toEqual([
 			{ key: "errands", label: "Errands" },

@@ -19,7 +19,7 @@ const tags = new Map<string, Tag>(
 );
 
 function form(
-	options: { initial?: TagDialogValues; submitLabel?: "Create" | "Save"; parentLocked?: boolean; except?: string | null; result?: string | null } = {},
+	options: { initial?: TagDialogValues; submitLabel?: "Create" | "Save"; parentLock?: string | null; except?: string | null; result?: string | null } = {},
 ) {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
@@ -32,7 +32,7 @@ function form(
 			{ key: "calls", label: "Calls" },
 			{ key: "home", label: "Home" },
 		],
-		parentLocked: options.parentLocked ?? false,
+		parentLock: options.parentLock ?? null,
 		check: (name, parent) => newTagProblem(tags, name, parent, options.except ?? null),
 		onSubmit,
 		onCancel,
@@ -95,7 +95,7 @@ describe("tag form: fields", () => {
 	});
 
 	it("a locked parent is disabled with its hint", () => {
-		const t = form({ submitLabel: "Save", initial: { name: "Home", parent: null, color: null }, parentLocked: true, except: "home" });
+		const t = form({ submitLabel: "Save", initial: { name: "Home", parent: null, color: null }, parentLock: "A tag with child tags has no parent.", except: "home" });
 		expect(t.select().disabled).toBe(true);
 		const hintId = t.select().getAttribute("aria-describedby")!;
 		expect(t.container.querySelector(`#${hintId}`)!.textContent).toBe("A tag with child tags has no parent.");

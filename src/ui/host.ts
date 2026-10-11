@@ -89,8 +89,8 @@ export interface TagDialogOptions {
 	initial: TagDialogValues;
 	/** The Parent choices after None, by key and shown name. */
 	parents: { key: string; label: string }[];
-	/** A tag with child tags takes no parent: the select is off, with a hint. */
-	parentLocked: boolean;
+	/** Why the tag takes no parent (it has child tags, or a "/" in its name): the select is off with this hint; null when free. */
+	parentLock: string | null;
 	/** The first problem of a name under a parent, or null (`newTagProblem`); runs on every keystroke. */
 	check(name: string, parent: string | null): string | null;
 	/** Resolves a message to show inline (the dialog stays open, values kept), or null once saved (it closes), as NewListOptions.create. */
