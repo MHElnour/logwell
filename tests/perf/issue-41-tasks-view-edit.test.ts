@@ -19,7 +19,7 @@ import { type FakeLayout, fakeLayout } from "../ui/virtual-layout";
 //   - the number of full passes over the task map during the edit command and during the section's redraw,
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
 //     with the source line that started each pass: the command copies the map once, the redraw reads none;
-//   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): once per build.
+//   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): never with the index, which keeps each list's ids in sort order; once per build without it.
 // The time bounds are loose and pass on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and
 // sort counts are exact.
 //
@@ -37,6 +37,9 @@ const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild 
 // With the index, Today and a list read only their candidates: about 1 ms is the target, bounded loosely here.
 const CANDIDATES_BUDGET_MS = 5 * CI_SLACK;
 const COUNTS_BUDGET_MS = 2 * CI_SLACK; // the target is 0.5 ms
+// Inbox builds 22,500 rows (the target was 3 ms). With each list's order kept in the index no rows are sorted, and the
+// time left is making the rows; it was about 11 ms before the order was kept. The sort count below is the exact check.
+const INBOX_BUDGET_MS = 9 * CI_SLACK;
 const LOG = Boolean(process.env.CHECKPOINT_PERF_LOG);
 
 beforeAll(() => {
@@ -128,7 +131,7 @@ async function bigHarness() {
 		const t = makeTask(taskId(i + 1), {
 			// The search "step" matches the subtasks and every fourth task, never a subtask's parent.
 			title: kind === "subtask" || i % 4 === 0 ? `Task ${i} step` : `Task ${i}`,
-			sortKey: `V${i.toString(36).padStart(4, "0")}`,
+			sortKey: `V${((i * 7919) % TASKS).toString(36).padStart(4, "0")}`,
 			categoryId: i % 2 === 0 ? "inbox" : lists[i % LISTS],
 			parentId: kind === "subtask" ? taskId(i + 1 - (i % 2 === 0 ? 2 : 10)) : null,
 			scheduled: i % 20 === 0 ? { kind: "date", date: today } : null,
@@ -157,7 +160,7 @@ afterEach(() => {
 });
 
 describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
-	it("times buildList for Inbox, Today and a list on the state after an edit, each ordering its rows once", async () => {
+	it("times buildList for Inbox, Today and a list on the state after an edit, ordering no rows", async () => {
 		const { h, lists } = await bigHarness();
 		const views: { name: string; view: TaskView; text: string }[] = [
 			{ name: "Inbox", view: { kind: "inbox" }, text: "" },
@@ -217,8 +220,9 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		expect(median(times.get("Today") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
 		expect(median(times.get("a list") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
 		expect(median(counts), report).toBeLessThan(COUNTS_BUDGET_MS);
-		// A list orders its rows once for the open rows and the Completed group together; Today has no hierarchy.
-		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, "Inbox searching": 1, Today: 0, "a list": 1 });
+		expect(median(times.get("Inbox") ?? []), report).toBeLessThan(INBOX_BUDGET_MS);
+		// With the index no list sorts its rows (it walks the index's order); Today has no hierarchy.
+		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 0, "Inbox searching": 0, Today: 0, "a list": 0 });
 		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
 		expect(completed.get("Inbox"), report).toBe(2_500);
 		expect(completed.get("Inbox searching"), report).toBe(2_500);
@@ -329,8 +333,8 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 			// lingering rows the store's changes since the last redraw: no pass over every task.
 			expect(redrawPasses, tally(redraw[0] ?? [])).toBe(0);
 			expect(commandPasses).toBeLessThanOrEqual(20);
-			// Inbox orders its rows once per redraw; Today has no hierarchy.
-			expect(sorts).toBe(open.view.kind === "inbox" ? 1 : 0);
+			// Inbox and Today sort no rows: the index keeps the order.
+			expect(sorts).toBe(0);
 		}, 120_000);
 	}
 });

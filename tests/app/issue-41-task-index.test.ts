@@ -7,7 +7,7 @@ import { DomainError } from "../../src/domain/errors";
 import { groupByOptions } from "../../src/domain/groupBy";
 import { type TaskFilter, type TaskSort, emptyFilter } from "../../src/domain/queries";
 import { tagPrefixes } from "../../src/domain/tags";
-import { type SubtaskCount, subtaskCounts } from "../../src/domain/tasks";
+import { type SubtaskCount, compareTasksBySortKey, subtaskCounts } from "../../src/domain/tasks";
 import { addDays } from "../../src/domain/time";
 import { type DateSpec, type ID, INBOX_ID, type Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
@@ -62,6 +62,11 @@ function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): st
 	const state = h.app.store.state;
 	const ctx = h.app.queryContext();
 	const out = index.verify(state).map((d) => `index: ${d}`);
+	// Each list's ids in sort order equal a fresh sort of its tasks (Inbox, every list, and an id that is no list).
+	for (const listId of new Set<ID>([INBOX_ID, ...state.categories.keys()])) {
+		const fresh = [...state.tasks.values()].filter((t) => t.categoryId === listId).sort(compareTasksBySortKey).map((t) => t.id);
+		if (index.orderedOf(listId).join() !== fresh.join()) out.push(`order of ${listId}`);
+	}
 	if (counted(sidebarCounts(state, ctx, index)) !== counted(sidebarCounts(state, ctx))) out.push("sidebar counts");
 	if (serialize(index.subtaskCounts()) !== serialize(subtaskCounts(state.tasks.values()))) out.push("subtask counts");
 	for (const view of viewsOf(state)) {
@@ -152,7 +157,20 @@ async function fuzz(seed: number, steps: number, tamper?: (index: TaskIndex) => 
 				return app.tasks.update(t.id, { sectionId: pick([...sectionsOf(t.categoryId), null]) ?? null });
 			},
 		],
-		["parent", async () => app.tasks.setParent(need(task()).id, rnd() < 0.3 ? null : need(pick(tasks().filter((t) => t.parentId === null))).id)],
+		[
+			"move",
+			async () => {
+				// A drop among the siblings of a list (a new sort key inside the same list, sometimes new keys for all of them).
+				const t = need(task());
+				const siblings = tasks()
+					.filter((s) => s.categoryId === t.categoryId && s.parentId === t.parentId && s.id !== t.id)
+					.sort(compareTasksBySortKey)
+					.map((s) => s.id);
+				siblings.splice(Math.floor(rnd() * (siblings.length + 1)), 0, t.id);
+				return app.tasks.place(t.id, siblings);
+			},
+		],
+		["parent", async () =>app.tasks.setParent(need(task()).id, rnd() < 0.3 ? null : need(pick(tasks().filter((t) => t.parentId === null))).id)],
 		["tags", async () => app.tasks.update(need(task()).id, { tagKeys: rnd() < 0.3 ? [] : [...new Set([need(pick(tagKeys())), need(pick(tagKeys()))])] })],
 		["complete", async () => app.tasks.complete(need(pick(tasks().filter((t) => t.status === "open"))).id, { includeSubtasks: rnd() < 0.5 })],
 		["reopen", async () => app.tasks.reopen(need(pick(tasks().filter((t) => t.status === "completed"))).id)],
@@ -340,7 +358,7 @@ describe("the task index (issue 41)", () => {
 		expect(run.failure, JSON.stringify(ran)).toBeNull();
 		expect(run.steps).toBe(300);
 		// Every kind of command wrote at least once.
-		for (const name of ["create", "title", "schedule", "deadline", "list", "section", "parent", "tags", "complete", "reopen", "repeat complete", "repeat set", "delete", "restore", "undo", "section delete", "list delete", "tag delete", "reload", "replace all", "next day", "save", "skip the store"]) {
+		for (const name of ["create", "title", "schedule", "deadline", "list", "section", "move", "parent", "tags", "complete", "reopen", "repeat complete", "repeat set", "delete", "restore", "undo", "section delete", "list delete", "tag delete", "reload", "replace all", "next day", "save", "skip the store"]) {
 			expect(run.ran.get(name) ?? 0, `${name} in ${JSON.stringify(ran)}`).toBeGreaterThan(0);
 		}
 	}, 300_000);
@@ -372,6 +390,64 @@ describe("the task index (issue 41)", () => {
 		expect(unchecked.failure).not.toBeNull();
 		expect(unchecked.failure!.diffs.some((d) => !d.startsWith("index:"))).toBe(true);
 	}, 300_000);
+
+	it("catches an index that does not put a task in its new place when its sort key changes", async () => {
+		// The index sees every task with its old sort key: a moved task stays where it was in its list's order.
+		const keepSortKeys = (index: TaskIndex) => {
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
+			const original = target.onChanged.bind(index);
+			const stale = (ch: Change): Change => {
+				const before = ch.before as Task | undefined;
+				const after = ch.after as Task | undefined;
+				if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
+				return { ...ch, after: { ...after, sortKey: before.sortKey } };
+			};
+			target.onChanged = (changes, base) => original(changes?.map(stale), base);
+		};
+		const run = await fuzz(41, 300, keepSortKeys);
+		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with sort key changes skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.slice(0, 4).join("; ")}\n`);
+		expect(run.failure).not.toBeNull();
+		expect(run.failure!.diffs.some((d) => d.startsWith("order of"))).toBe(true);
+		// The rows built from the stale order differ from the full scan's too, not only the order itself: the Inbox
+		// with its first top-level task dropped last.
+		const { h } = await seededState(41, 40);
+		const index = h.app.tasks.lists;
+		keepSortKeys(index);
+		const inbox: TaskView = { kind: "inbox" };
+		const build = (withIndex: boolean) => buildList(h.app.store.state, inbox, h.app.queryContext(), emptyFilter(), "", undefined, withIndex ? { index } : {});
+		expect(serialize(build(true))).toBe(serialize(build(false)));
+		const tops = index.orderedOf(INBOX_ID).filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
+		await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
+		expect(serialize(build(true))).not.toBe(serialize(build(false)));
+	}, 300_000);
+
+	it("never changes an order it handed out, and keeps handing out the same one while no task moves in the list", async () => {
+		const { h } = await seededState(41, 40);
+		const index = h.app.tasks.lists;
+		const first = index.orderedOf(INBOX_ID);
+		const copy = [...first];
+		expect(copy.length).toBeGreaterThan(2);
+		// An edit that leaves the sort fields alone keeps the same array.
+		await h.app.tasks.update(copy[0] as ID, { title: "Renamed" });
+		expect(index.orderedOf(INBOX_ID)).toBe(first);
+		// A task added to the list, and one dropped to another place in it, give new arrays; the ones handed out stay.
+		await h.app.tasks.create({ title: "A new task" });
+		const added = index.orderedOf(INBOX_ID);
+		expect(added).not.toBe(first);
+		expect(added.length).toBe(copy.length + 1);
+		const addedCopy = [...added];
+		const tops = added.filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
+		expect(tops.length).toBeGreaterThan(2);
+		await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
+		const moved = index.orderedOf(INBOX_ID);
+		expect(moved).not.toBe(added);
+		expect(moved.indexOf(tops[0] as ID)).toBeGreaterThan(moved.indexOf(tops[tops.length - 1] as ID));
+		expect([...first]).toEqual(copy);
+		expect([...added]).toEqual(addedCopy);
+		// A list nobody put a task in has an empty order.
+		expect(index.orderedOf("no-such-list")).toEqual([]);
+		expect(index.verify(h.app.store.state)).toEqual([]);
+	});
 
 	it("catches subtask counts that miss a change of parent", async () => {
 		// Parent changes never reach the counts (the index sees the old parent).

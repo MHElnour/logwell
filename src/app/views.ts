@@ -193,6 +193,8 @@ interface Prepared {
 	 * (App shell and views rule 21). The rows themselves still apply the view's Completed scope to them.
 	 */
 	keep: (task: Task) => boolean;
+	/** `tasks` are in sort order (the index's candidates of Inbox and a list), so the rows need not sort them. */
+	sorted: boolean;
 }
 
 /**
@@ -201,9 +203,11 @@ interface Prepared {
  * it need not be a candidate.
  */
 function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskFilter, text: string, held: ReadonlySet<ID>, index?: TaskIndex): Prepared {
-	const tasks = filterTasks(index?.candidates(state, view) ?? state.tasks.values(), filter, text, ctx);
+	const candidates = index?.candidates(state, view);
+	const sorted = candidates !== undefined && index?.candidatesInOrder(view) === true;
+	const tasks = filterTasks(candidates ?? state.tasks.values(), filter, text, ctx);
 	const scope = completedScope(view);
-	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id) };
+	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id), sorted };
 	// An open parent's row is shown when the view lists it and it passes the filter and text. Asked only for
 	// the parents of completed subtasks, once per parent.
 	const known = new Map<ID, boolean>();
@@ -215,7 +219,7 @@ function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskF
 		}
 		return s;
 	};
-	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown) };
+	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown), sorted };
 }
 
 function openGroups(
@@ -225,9 +229,9 @@ function openGroups(
 	filter: TaskFilter,
 	text: string,
 	groupBy: GroupBy | undefined,
-	{ tasks, keep }: Prepared,
+	{ tasks, keep, sorted }: Prepared,
 ): ViewGroup[] {
-	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text);
+	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text, sorted);
 }
 
 /**
@@ -289,6 +293,8 @@ function viewGroups(
 	groupBy?: GroupBy,
 	/** The view's search text; only the Completed view needs it (done occurrences). */
 	text = "",
+	/** `tasks` are in sort order: Inbox and list rows then skip their sort (`arrangeHierarchy` `presorted`). */
+	sorted = false,
 ): ViewGroup[] {
 	const byId = state.tasks;
 	const scope = completedScope(view);
@@ -323,9 +329,9 @@ function viewGroups(
 					.flatMap((g) => g.entries)
 					.sort((a, b) => compareTasksBySortKey(a.task, b.task));
 			case "inbox":
-				return categoryEntries(tasks, byId, ctx, INBOX_ID, keep);
+				return categoryEntries(tasks, byId, ctx, INBOX_ID, keep, sorted);
 			case "category":
-				return categoryEntries(tasks, byId, ctx, view.id, keep);
+				return categoryEntries(tasks, byId, ctx, view.id, keep, sorted);
 			case "tag":
 				return arrangeHierarchy(tasks.filter((t) => (isOpen(t) || keep(t)) && inViewScope(t, view, ctx)), byId, ctx);
 			case "completed":
