@@ -1,6 +1,5 @@
 import { addDays, utcDay } from "../../domain/time";
 import { type LocalDate, MONTH_LONG } from "../../domain/types";
-import { pad2 } from "../format";
 
 // Calendar titles, navigation and the text of day and time labels.
 // Dates are plain YYYY-MM-DD values, so everything here runs in UTC and never shifts a day.
@@ -47,8 +46,4 @@ export function fmtDom(date: LocalDate): string {
 	return String(d(date).day);
 }
 
-/** Minutes from midnight as HH:mm; 24:00 and beyond wrap to the next day's clock. */
-export function fmtMin(min: number): string {
-	const m = ((min % 1440) + 1440) % 1440;
-	return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
-}
+export { fmtMin } from "../../domain/time";

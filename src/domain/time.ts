@@ -76,6 +76,12 @@ export function pad2(n: number): string {
 	return String(n).padStart(2, "0");
 }
 
+/** Minutes from midnight as HH:mm; 24:00 and beyond wrap to the next day's clock. */
+export function fmtMin(min: number): string {
+	const m = ((min % 1440) + 1440) % 1440;
+	return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+}
+
 /** The language of month and weekday names: English everywhere, whatever the device is set to. */
 export const NAME_LOCALE = "en";
 
