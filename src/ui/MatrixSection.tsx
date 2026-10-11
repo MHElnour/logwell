@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { menuTasks } from "../app/views";
 import { type MatrixGroup, QUADRANT_ORDER, matrixQuadrants, quadrantFlags } from "../domain/matrix";
-import { type ListEntry, type Quadrant, type QueryContext, type TaskFilter, emptyFilter, filterTasks, quadrantOf } from "../domain/queries";
+import { type ListEntry, type Quadrant, type QueryContext, type TaskFilter, emptyFilter, quadrantOf } from "../domain/queries";
 import type { SubtaskCount } from "../domain/tasks";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -67,10 +68,14 @@ export function MatrixSection(props: {
 
 	// A task completed a moment ago stays in its date group until its check animation ends.
 	const held = useLingering(host.app.store, state.tasks, props.visible);
+	// The view menu's tasks from the task index: with a list or tag chosen only theirs are read, with "Show completed"
+	// off only the open ones (when they are at most half of all tasks). Every task is shown by default, so then every
+	// task is read.
+	const index = host.app.tasks.lists;
 	const quadrants = useActiveMemo(
 		props.visible,
-		() => matrixQuadrants(filterTasks(state.tasks.values(), ui.filter, "", ctx), state.tasks, ctx, held),
-		[state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart, held],
+		() => matrixQuadrants(menuTasks(state, ctx, ui.filter, { index }), state.tasks, ctx, held),
+		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart, held],
 		NO_GROUPS,
 	);
 	const counts = useSubtaskCounts(host, state.tasks, props.visible);

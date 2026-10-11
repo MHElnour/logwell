@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { ViewGroup } from "../app/views";
+import { type CalendarTasks, type ViewGroup, calendarTasks, unscheduledTasks } from "../app/views";
 import { type CalendarContext, monthGrid, weekDays } from "../domain/calendar";
-import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter, entryOf, filterTasks } from "../domain/queries";
+import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter, entryOf } from "../domain/queries";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { compareTasksBySortKey } from "../domain/tasks";
 import type { ID, LocalDate, Task } from "../domain/types";
@@ -68,7 +68,8 @@ function useNowIso(host: UiHost, visible: boolean): string {
 	return last.current;
 }
 
-const NO_TASKS: readonly Task[] = [];
+const NO_TASKS: CalendarTasks = { dated: [], unscheduledCount: 0 };
+const NO_ENTRIES: ListEntry[] = [];
 
 export function CalendarSection(props: {
 	host: UiHost;
@@ -115,28 +116,28 @@ export function CalendarSection(props: {
 		return () => observer.disconnect();
 	}, []);
 
-	// The store holds live tasks only (the trash is separate); the view menu narrows them.
+	// The store holds live tasks only (the trash is separate); the view menu narrows them. The grid places the task
+	// index's dated tasks, and the Unscheduled count comes from the index too (`calendarTasks`), not from every task.
 	// Only while shown: a hidden calendar must not filter thousands of tasks on every store change.
-	const tasks = useActiveMemo<readonly Task[]>(
+	const index = host.app.tasks.lists;
+	const cal = useActiveMemo<CalendarTasks>(
 		props.visible,
-		() => filterTasks(state.tasks.values(), ui.filter, "", ctx),
-		// `filterTasks` reads the effective schedule: completing or skipping an occurrence changes no task, only its records.
-		[state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart],
+		() => calendarTasks(state, ctx, ui.filter, index),
+		// The filter reads the effective schedule: completing or skipping an occurrence changes no task, only its records.
+		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart],
 		NO_TASKS,
 	);
+	const tasks: readonly Task[] = cal.dated;
 	const days = useMemo(() => (ui.mode === "week" ? weekDays(ui.anchor, weekStart) : []), [ui.mode, ui.anchor, weekStart]);
 	const grid = useMemo(() => (ui.mode === "month" ? monthGrid(ui.anchor, weekStart) : []), [ui.mode, ui.anchor, weekStart]);
 
-	// Open tasks without a schedule, narrowed by the same menu.
+	// Open tasks without a schedule, narrowed by the same menu. The header shows how many; the rows are read, sorted and
+	// made only while the drawer is open.
 	const unscheduled = useActiveMemo<ListEntry[]>(
-		props.visible,
-		() => {
-			// A repeating task has no schedule of its own (its dates are the series), so it is never "unscheduled".
-			const list = tasks.filter((t) => t.scheduled === null && t.recurrence === null && t.status === "open").sort(compareTasksBySortKey);
-			return list.map<ListEntry>((t) => entryOf(t, state.tasks, ctx));
-		},
-		[tasks, state.tasks, state.occurrenceRecords],
-		[],
+		props.visible && ui.unscheduledOpen,
+		() => unscheduledTasks(state, ctx, ui.filter, index).sort(compareTasksBySortKey).map<ListEntry>((t) => entryOf(t, state.tasks, ctx)),
+		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart],
+		NO_ENTRIES,
 	);
 
 	// A fixed identity, so the drawer's memoized rows are not rendered again by every render of the section.
@@ -164,7 +165,7 @@ export function CalendarSection(props: {
 					onStep={(step) => setUi((s) => ({ ...s, anchor: shiftAnchor(s.anchor, s.mode, step, ctx.today) }))}
 					onToday={() => setUi((s) => ({ ...s, anchor: ctx.today }))}
 					unscheduledOpen={ui.unscheduledOpen}
-					unscheduledCount={unscheduled.length}
+					unscheduledCount={cal.unscheduledCount}
 					onToggleUnscheduled={() => setUi((s) => ({ ...s, unscheduledOpen: !s.unscheduledOpen }))}
 					toggleRef={toggleRef}
 					viewMenu={<ScopeMenuButton host={host} visible={props.visible} filter={ui.filter} onChange={(update) => setUi((s) => ({ ...s, filter: update(s.filter) }))} />}
