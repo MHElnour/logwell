@@ -1,6 +1,7 @@
 import { useRef } from "preact/hooks";
 import { NOT_SYNCED_TITLE, notSyncedReason } from "../app/syncMarks";
 import type { ListEntry, QueryContext } from "../domain/queries";
+import { tagLabel } from "../domain/tags";
 import type { SubtaskCount } from "../domain/tasks";
 import type { ID, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -155,9 +156,9 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 			</div>
 			<div class="cp-task-meta">
 				{tags.length > 0 && (
-					<span class="cp-meta-tags" title={tags.map((k) => `@${state.tags.get(k)?.displayName ?? k}`).join(" ")}>
+					<span class="cp-meta-tags" title={tags.map((k) => `@${tagLabel(state.tags, k)}`).join(" ")}>
 						{/* First tag, then a count, so a pill is never cut off mid-word in a tight row. */}
-						<span class={`cp-tag-pill ${hueClass(firstTag?.color)}`}>@{firstTag?.displayName ?? tags[0]}</span>
+						<span class={`cp-tag-pill ${hueClass(firstTag?.color)}`}>@{tagLabel(state.tags, tags[0]!)}</span>
 						{tags.length > 1 && <span class="cp-tag-more">+{tags.length - 1}</span>}
 					</span>
 				)}

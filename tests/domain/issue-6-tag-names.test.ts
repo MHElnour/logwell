@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DomainError } from "../../src/domain/errors";
-import { TAG_REPEAT_MESSAGE, TagNames, requireUniqueTagName, tagLeaf, tagNameClash, tagNameClashMessage } from "../../src/domain/tags";
+import { TAG_REPEAT_MESSAGE, TagNames, requireUniqueTagName, tagLabel, tagLeaf, tagNameClash, tagNameClashMessage } from "../../src/domain/tags";
 import { fieldHashes } from "../../src/domain/ticktick/mapping";
 import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName, unsyncedTagKeys } from "../../src/domain/ticktick/tags";
 import type { Tag } from "../../src/domain/types";
@@ -45,12 +45,25 @@ describe("tag names (D29)", () => {
 		expect(() => requireUniqueTagName(tags, "calls")).toThrow(DomainError);
 	});
 
-	it("the message names the existing tag and its parent, in its own casing", () => {
+	it("the message names the existing tag by its own name, in its own casing", () => {
 		const tags = map(tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
-		expect(tagNameClashMessage(tags, "home/calls")).toBe("A tag named Calls already exists under Home.");
-		expect(tagNameClashMessage(tags, "errands")).toBe("A tag named Errands already exists.");
-		expect(tagNameClashMessage(tags, "home")).toBe("A tag named Home already exists.");
-		expect(() => requireUniqueTagName(tags, "work/errands")).toThrow("A tag named Errands already exists.");
+		expect(tagNameClashMessage(tags, "home/calls")).toBe('The name "Calls" is already used by another tag.');
+		expect(tagNameClashMessage(tags, "errands")).toBe('The name "Errands" is already used by another tag.');
+		expect(tagNameClashMessage(tags, "home")).toBe('The name "Home" is already used by another tag.');
+		expect(() => requireUniqueTagName(tags, "work/errands")).toThrow('The name "Errands" is already used by another tag.');
+	});
+
+	it("a name two older tags share is quoted as the name, not as a path", () => {
+		const tags = map(tag("home/calls", "Home/Calls"), tag("work/calls", "Work/Calls"));
+		expect(tagNameClashMessage(tags, "home/calls")).toBe('The name "Calls" is already used by another tag.');
+	});
+
+	it("building the message leaves no stale names for a map that is changed afterwards (a write in progress)", () => {
+		const working = map(tag("home/calls", "Home/Calls"));
+		tagNameClashMessage(working, "home/calls");
+		// The working map of a write gets more tags after a refused create; a label read from it afterwards must see them.
+		working.set("work/calls", tag("work/calls", "Work/Calls"));
+		expect(tagLabel(working, "home/calls")).toBe("Home/Calls");
 	});
 
 	it("a tag owns by the older of its own date and its oldest child's, so a parent that gets a record keeps its name", () => {

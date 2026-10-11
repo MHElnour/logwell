@@ -86,9 +86,10 @@ A slash makes a path: `@home/garden` sits under home. Tags nest one level deep. 
 - Click a tag to see its tasks. A parent's view and its count of open tasks include its children, and each task counts once.
 - A parent you never created as a tag shows while a child exists. It has no color and no menu.
 - `@home/garden` does not also tag a task `@home`.
+- Outside the sidebar tree a tag shows just its own name: `@garden`, not `@home/garden`. Type it the same way in Quick Add, the tag field and a task block. Two tags that already share a name (older databases only) show their full paths, so each stays distinct.
 - Adding a task from a tag's view gives it that tag, unless the tag is a parent you never created.
 
-A tag name is used once, whatever its parent. If `home/calls` exists, you cannot create `work/calls`: Logwell says "A tag named calls already exists under home." A tag cannot repeat its parent's name either, as in `home/home`. In Quick Add, such an `@name` stays in the title as text. Tags that already share a name keep working.
+A tag name is used once, whatever its parent. If `home/calls` exists, you cannot create `work/calls`: Logwell says "The name "calls" is already used by another tag." A tag cannot repeat its parent's name either, as in `home/home`. In Quick Add, such an `@name` stays in the title as text. Tags that already share a name keep working.
 
 ## Color or delete a tag
 

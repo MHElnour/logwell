@@ -33,7 +33,7 @@ import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
 import { compareSortKeys } from "../domain/sortKey";
-import { tagDisplayPath, tagPrefixes } from "../domain/tags";
+import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
 import { compareTasksBySortKey, isDated, isOpen, isUnscheduled } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
@@ -97,7 +97,7 @@ export function viewTitle(view: TaskView, state: DbData): string {
 		case "category":
 			return state.categories.get(view.id)?.name ?? INBOX_NAME;
 		case "tag":
-			return `@${tagDisplayPath(state.tags, view.key)}`;
+			return `@${tagLabel(state.tags, view.key)}`;
 		case "completed":
 			return "Completed";
 		case "trash":
@@ -386,7 +386,7 @@ function viewGroups(
 		case "tag": {
 			// A task is listed once, under the first tag of its own tag order; no drop between tag groups.
 			const buckets = bucketize(rows(), (t) => t.tagKeys[0] ?? null);
-			const name = (key: string) => state.tags.get(key)?.displayName ?? key;
+			const name = (key: string) => tagLabel(state.tags, key);
 			const keys = [...buckets.keys()].filter((k): k is string => k !== null).sort((a, b) => name(a).localeCompare(name(b)));
 			const groups: ViewGroup[] = keys.map((k) => ({ key: `tag:${k}`, date: null, label: `@${name(k)}`, entries: ordered(buckets.get(k)!) }));
 			const none = buckets.get(null);

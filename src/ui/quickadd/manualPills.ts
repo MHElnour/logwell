@@ -1,3 +1,4 @@
+import { tagLabel } from "../../domain/tags";
 import { INBOX_NAME, type Priority } from "../../domain/types";
 import { formatDateSpec, formatDuration, specFromInputs } from "../format";
 import { ICON } from "../icons";
@@ -83,13 +84,12 @@ export function manualPills(model: QuickAddModel): ManualPill[] {
 		out.push({ key: "note", kind: "note", label: `Note: ${vals.notePath}`, icon: ICON.note, remove: () => model.setNote(null) });
 	}
 	if (model.tagKeys !== null) {
-		const tags = app.tags.list();
+		const tags = app.store.state.tags;
 		for (const key of model.tagKeys) {
-			const name = tags.find((t) => t.key === key)?.displayName ?? key;
 			out.push({
 				key: `tag:${key}`,
 				kind: "tag",
-				label: `@${name}`,
+				label: `@${tagLabel(tags, key)}`,
 				icon: "tag",
 				remove: () => model.setTags((model.tagKeys ?? []).filter((k) => k !== key)),
 			});

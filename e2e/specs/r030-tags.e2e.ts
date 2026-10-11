@@ -50,7 +50,7 @@ describe("Parent tags (P6)", function () {
 
 		const go = await section.$$(".cp-tag-tree .cp-sidebar-item");
 		await domClick(go[1]!);
-		await browser.waitUntil(async () => (await section.$(".cp-main-title").getText()) === "@Programming/Go", {
+		await browser.waitUntil(async () => (await section.$(".cp-main-title").getText()) === "@Go", {
 			timeout: 5000,
 			timeoutMsg: "the child view did not open",
 		});

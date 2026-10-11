@@ -324,7 +324,7 @@ describe("a typed timed repeat shows its time", () => {
 			span: { start: 0, end: 19 },
 			rule: { freq: "weekly", interval: 1, weekdays: ["MO"], monthly: null, afterCompletion: false, time: "17:00", tz: "Europe/Berlin" },
 		} as unknown as Chip;
-		expect(chipLabel(chip, { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: [] })).toBe("Repeat: every Mon at 17:00");
+		expect(chipLabel(chip, { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: new Map() })).toBe("Repeat: every Mon at 17:00");
 	});
 });
 

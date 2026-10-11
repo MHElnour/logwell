@@ -2,6 +2,7 @@ import { categoryText } from "./icons";
 import type { TargetedEvent } from "preact";
 import { useState } from "preact/hooks";
 import { type DateFilter, type StatusFilter, type TaskFilter, type TaskSort, emptyFilter, isFilterActive } from "../domain/queries";
+import { tagsByLabel } from "../domain/tags";
 import type { Priority } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { QUADRANT_LIST } from "./matrix/quadrants";
@@ -96,7 +97,7 @@ export function FilterBar(props: {
 									<option value="all">All</option>
 								</select>
 							</legend>
-							{[...state.tags.values()].map((t) => (
+							{tagsByLabel(state.tags).map(({ tag: t, label }) => (
 								<button
 									key={t.key}
 									type="button"
@@ -104,7 +105,7 @@ export function FilterBar(props: {
 									aria-pressed={f.tagKeys.includes(t.key)}
 									onClick={() => set({ tagKeys: toggle(f.tagKeys, t.key) })}
 								>
-									@{t.displayName}
+									@{label}
 								</button>
 							))}
 						</fieldset>

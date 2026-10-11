@@ -3,7 +3,7 @@ import { parseQuickAdd } from "../../src/parsing";
 import { makeCtx } from "./helpers";
 
 // Quick Add makes no new-tag chip for a name that another tag already uses under another parent.
-// Resolution is unchanged (no leaf matching): like a key that is too deep, the token stays in the title.
+// A name alone finds the existing tag (#11); a path under another parent, like a key that is too deep, stays in the title.
 
 const TAGS = [{ key: "home/calls", displayName: "Home/Calls" }];
 const parse = (input: string) => {
@@ -12,11 +12,12 @@ const parse = (input: string) => {
 };
 
 describe("Quick Add unique tag names", () => {
-	it("@calls under another parent makes no chip and stays in the title", () => {
+	it("@calls finds the tag under another parent and makes no new tag", () => {
 		const r = parse("Ring mum @Calls");
-		expect(r.chips).toEqual([]);
+		expect(r.chips).toHaveLength(1);
+		expect(r.chips[0]).toMatchObject({ kind: "tag", tagKey: "home/calls" });
 		expect(r.fields.newTags).toEqual([]);
-		expect(r.title).toBe("Ring mum @Calls");
+		expect(r.title).toBe("Ring mum");
 	});
 
 	it("@work/calls makes no chip either", () => {

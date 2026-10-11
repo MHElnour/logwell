@@ -93,7 +93,8 @@ export interface ParseContext {
 	/** "tonight" is today at this "HH:mm" local time; default "20:00". */
 	eveningTime?: string;
 	categories: readonly { id: string; name: string }[];
-	tags: readonly { key: string; displayName: string }[];
+	/** `createdAt` decides who owns a name that two tags use: the oldest. */
+	tags: readonly { key: string; displayName: string; createdAt?: string }[];
 	resolveNote: (linktext: string) => string[];
 	decisions: readonly SpanDecision[];
 	manual: ReadonlySet<ParsedField>;

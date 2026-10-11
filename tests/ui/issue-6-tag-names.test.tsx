@@ -44,7 +44,7 @@ describe("TagInput unique tag names", () => {
 		const m = await mount();
 		const input = await typeInto(m.root, "Work/Calls");
 		expect(buttons(m.root)).toEqual([]);
-		expect(m.root.querySelector(".cp-hint")?.textContent).toBe("A tag named Calls already exists under Home.");
+		expect(m.root.querySelector(".cp-hint")?.textContent).toBe('The name "Calls" is already used by another tag.');
 		input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 		await settleUi();
 		expect(m.h.app.tags.list()).toHaveLength(1);

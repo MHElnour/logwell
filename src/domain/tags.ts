@@ -196,6 +196,11 @@ export class TagNames {
 		return this.nodes.has(key);
 	}
 
+	/** How many nodes use a name (more than one only for duplicates already in a file). */
+	count(name: string): number {
+		return this.byName.get(name)?.size ?? 0;
+	}
+
 	/**
 	 * The node that owns a name: the oldest of those that use it (then the smaller key); undefined when unused. A node
 	 * is as old as the older of its record and its oldest child, so giving an implicit parent a record never moves its
@@ -230,6 +235,48 @@ export class TagNames {
 	}
 }
 
+/** The tag names of a tags map, memoized per map (a committed state's maps never change). */
+const namesMemo = new WeakMap<ReadonlyMap<string, Tag>, TagNames>();
+export function tagNamesOf(tags: ReadonlyMap<string, Tag>): TagNames {
+	let names = namesMemo.get(tags);
+	if (names === undefined) {
+		names = TagNames.of(tags.values());
+		namesMemo.set(tags, names);
+	}
+	return names;
+}
+
+/**
+ * What a typed tag name stands for (Quick Add `@tag`, the tag field, the `tag:` filter of a task block): the node key,
+ * or null. An exact node wins (a tag, or the parent of one); else a name alone (`calls`) finds the node that owns it,
+ * the oldest when older files use it twice. A path that is no node (`work/calls`) finds nothing.
+ */
+export function resolveTagName(names: TagNames, typed: string): string | null {
+	const key = normalizeTagKey(typed);
+	if (key === "") return null;
+	if (names.has(key)) return key;
+	return tagPath(key).length === 1 ? (names.owner(key) ?? null) : null;
+}
+
+/**
+ * How a tag is shown: its own name (`Calls` for `home/calls`), in the casing it was created with. A name that more than
+ * one node uses (older files only) shows the full path, so each label still finds its own tag (`resolveTagName`).
+ * Not for exports, which keep the full path.
+ */
+export function tagLabel(tags: ReadonlyMap<string, Tag>, key: string): string {
+	const path = tagPath(key);
+	const names = tagNamesOf(tags);
+	if (path.length === 1 || names.count(path[path.length - 1]!) > 1 || !names.has(key)) return tags.get(key)?.displayName ?? tagDisplayPath(tags, key);
+	const record = tags.get(key);
+	const shown = record !== undefined ? displaySegments(record, path) : tagDisplayPath(tags, key).split("/");
+	return shown[shown.length - 1]!;
+}
+
+/** Every tag with its label, sorted by label: the order of a tag menu or list, which shows labels. */
+export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: string }[] {
+	return [...tags.values()].map((tag) => ({ tag, label: tagLabel(tags, tag.key) })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** The existing tag node whose name a new key would repeat, or null. */
 export function tagNameClash(keys: Iterable<string>, key: string): string | null {
 	const names = new TagNames();
@@ -237,11 +284,13 @@ export function tagNameClash(keys: Iterable<string>, key: string): string | null
 	return names.clash(key);
 }
 
-/** "A tag named Calls already exists under Home.", in the existing tag's casing. */
+/**
+ * `The name "Calls" is already used by another tag.`: the name only, in the existing tag's casing. It reads no memoized
+ * names, because `tags` may be the working map of a write that is still changing.
+ */
 export function tagNameClashMessage(tags: ReadonlyMap<string, Tag>, existingKey: string): string {
-	const parts = tagDisplayPath(tags, existingKey).split("/");
-	const name = parts.pop() ?? existingKey;
-	return parts.length === 0 ? `A tag named ${name} already exists.` : `A tag named ${name} already exists under ${parts.join("/")}.`;
+	const name = tagDisplayPath(tags, existingKey).split("/").pop() ?? existingKey;
+	return `The name "${name}" is already used by another tag.`;
 }
 
 /** Why a new key cannot be created (its name is taken, or it repeats its parent's), or null. */

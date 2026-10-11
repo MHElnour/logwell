@@ -57,12 +57,12 @@ describe("tag views with descendants", () => {
 		expect(counts.get("programmingx")).toBe(1);
 	});
 
-	it("an implicit parent's title is its display segment, and Quick Add from it presets no tag", async () => {
+	it("a tag view is titled by the tag's own name, and Quick Add from it presets no tag", async () => {
 		const h = await appHarness();
 		await h.app.tasks.create({ title: "Go task", newTags: ["Programming/Go"] });
 		const state = h.app.store.state;
 		expect(viewTitle({ kind: "tag", key: "programming" }, state)).toBe("@Programming");
-		expect(viewTitle({ kind: "tag", key: "programming/go" }, state)).toBe("@Programming/Go");
+		expect(viewTitle({ kind: "tag", key: "programming/go" }, state)).toBe("@Go");
 		const ctx = h.app.queryContext();
 		expect(viewPreset({ kind: "tag", key: "programming" }, ctx, state).addTagKeys).toEqual([]);
 		expect(viewPreset({ kind: "tag", key: "programming/go" }, ctx, state).addTagKeys).toEqual(["programming/go"]);

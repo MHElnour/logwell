@@ -4,7 +4,7 @@ import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
 import { plural } from "../domain/text";
-import { type TagNode, hasTagOrChild, isUnderTag, tagPath, tagTree } from "../domain/tags";
+import { type TagNode, hasTagOrChild, isUnderTag, tagLabel, tagPath, tagTree } from "../domain/tags";
 import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, IconButton, SrOnly, hueClass } from "./common";
@@ -244,11 +244,12 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise<void> {
 	const n = host.app.tags.usage(tag.key);
 	const tasks = plural(n, "task");
+	const label = tagLabel(host.app.store.state.tags, tag.key);
 	// A parent tag with child tags: only this key goes, so the message says what stays.
 	const isParent = [...host.app.store.state.tags.keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
 	const ok = await host.choose(
 		"Delete tag",
-		isParent ? `Remove the tag "${tag.displayName}" from ${tasks}? Its child tags are kept.` : `Delete @${tag.displayName}? It is removed from ${tasks}.`,
+		isParent ? `Remove the tag "${label}" from ${tasks}? Its child tags are kept.` : `Delete @${label}? It is removed from ${tasks}.`,
 		[{ label: "Delete", value: true, warning: true }],
 	);
 	if (ok !== true) return;
@@ -257,7 +258,7 @@ async function deleteTag(host: UiHost, tag: Tag, onDeleted: () => void): Promise
 		const result = await host.app.tags.delete(tag.key);
 		onDeleted();
 		// A tag already gone and unused: nothing was written, so no notice and no Undo.
-		notifyWrite(host, result, `Deleted tag @${tag.displayName}.`, mark);
+		notifyWrite(host, result, `Deleted tag @${label}.`, mark);
 	} catch (err) {
 		host.error(err);
 	}
