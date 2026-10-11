@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, buildCompleted, buildView, globalSearch, sidebarCounts } from "../../src/app/views";
+import { buildBoard, buildList, globalSearch, sidebarCounts } from "../../src/app/views";
 import { matrixQuadrants } from "../../src/domain/matrix";
 import { type TaskFilter, emptyFilter } from "../../src/domain/queries";
 import type { RepeatRule, Task } from "../../src/domain/types";
@@ -24,7 +24,7 @@ async function series(h: AppHarness, title: string, r: RepeatRule, anchor: strin
 
 const titles = (groups: { entries: { task: Task }[] }[]): string[] => groups.flatMap((g) => g.entries.map((e) => e.task.title));
 const view = (h: AppHarness, kind: "today" | "upcoming" | "inbox" | "completed", filter: TaskFilter = emptyFilter(), text = "") =>
-	buildView(h.app.store.state, { kind }, h.app.queryContext(), filter, text);
+	buildList(h.app.store.state, { kind }, h.app.queryContext(), filter, text).groups;
 
 describe("D5: one reader of when a task is due", () => {
 	it("Today shows the current occurrence, overdue included; completing catches up (B20)", async () => {
@@ -80,13 +80,13 @@ describe("D5: one reader of when a task is due", () => {
 		await h.app.tasks.create({ title: "Plain", scheduled: { kind: "date", date: "2026-10-07" } });
 		await h.app.tasks.create({ title: "Later", scheduled: { kind: "date", date: "2026-10-30" } });
 		const ctx = h.app.queryContext();
-		const byDate = buildView(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, "date");
+		const byDate = buildList(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, { groupBy: "date" }).groups;
 		expect(byDate.map((g) => [g.key, titles([g])])).toEqual([
 			["2026-10-07", ["Plain"]],
 			["2026-10-08", ["Monthly rent"]],
 			["2026-10-30", ["Later"]],
 		]);
-		const sorted = buildView(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "date" }, "");
+		const sorted = buildList(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "date" }, "").groups;
 		expect(titles(sorted)).toEqual(["Plain", "Monthly rent", "Later"]);
 	});
 
@@ -196,7 +196,7 @@ describe("D7: done occurrences in the Completed history", () => {
 		await h.app.tasks.complete(a.id);
 		await h.app.tasks.complete(b.id); // Oct 9 done ahead of time
 		const ctx = h.app.queryContext();
-		const group = (kind: "today" | "upcoming" | "inbox") => buildCompleted(h.app.store.state, { kind }, ctx, emptyFilter(), "").map((e) => [e.task.title, e.occurrence?.date ?? null]);
+		const group = (kind: "today" | "upcoming" | "inbox") => buildList(h.app.store.state, { kind }, ctx, emptyFilter(), "").completed.map((e) => [e.task.title, e.occurrence?.date ?? null]);
 		expect(group("today")).toEqual([["Overdue one", "2026-10-03"]]);
 		expect(group("upcoming")).toEqual([["Early", "2026-10-09"]]);
 		expect(group("inbox")).toHaveLength(2);

@@ -38,6 +38,7 @@ import { compareTasksBySortKey, isOpen } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
+import type { TaskIndex } from "./taskIndex";
 
 // View selectors. Pure reads over the store state.
 
@@ -151,23 +152,6 @@ export function completedScope(view: TaskView): CompletedScope | null {
 	}
 }
 
-/**
- * The open rows of a view. A completed task stays among them when it is in `held` (completed a moment
- * ago, waiting for its check animation to end) or is a subtask whose open parent's row is shown too;
- * any other completed subtask is in the Completed group.
- */
-export function buildView(
-	state: DbData,
-	view: TaskView,
-	ctx: QueryContext,
-	filter: TaskFilter,
-	text: string,
-	held: ReadonlySet<ID> = NO_IDS,
-	groupBy?: GroupBy,
-): ViewGroup[] {
-	return openGroups(state, view, ctx, filter, text, groupBy, prepare(state, view, ctx, filter, text, held));
-}
-
 /** A view's open rows and its Completed group. */
 export interface ViewList {
 	groups: ViewGroup[];
@@ -176,8 +160,11 @@ export interface ViewList {
 }
 
 /**
- * A view's open rows (as `buildView`) and its Completed group (as `buildCompleted`), from one filtering of the
- * tasks. `completed: false` leaves the group out (it is not shown).
+ * A view's open rows and its Completed group, from one filtering of the tasks. A completed task stays among the open
+ * rows when it is in `held` (completed a moment ago, waiting for its check animation to end) or is a subtask whose
+ * open parent's row is shown too; any other completed task the view would have listed is in the Completed group.
+ * `completed: false` leaves the group out (it is not shown). With `index`, only the view's candidate tasks are read;
+ * without it every task is (the reference the index is tested against). Both give the same result.
  */
 export function buildList(
 	state: DbData,
@@ -186,9 +173,9 @@ export function buildList(
 	filter: TaskFilter,
 	text: string,
 	held: ReadonlySet<ID> = NO_IDS,
-	options: { groupBy?: GroupBy; completed?: boolean } = {},
+	options: { groupBy?: GroupBy; completed?: boolean; index?: TaskIndex } = {},
 ): ViewList {
-	const p = prepare(state, view, ctx, filter, text, held);
+	const p = prepare(state, view, ctx, filter, text, held, options.index);
 	return {
 		groups: openGroups(state, view, ctx, filter, text, options.groupBy, p),
 		completed: options.completed === false ? [] : completedOf(state, view, ctx, filter, text, held, p),
@@ -208,8 +195,13 @@ interface Prepared {
 	keep: (task: Task) => boolean;
 }
 
-function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskFilter, text: string, held: ReadonlySet<ID>): Prepared {
-	const tasks = filterTasks(state.tasks.values(), filter, text, ctx);
+/**
+ * Filters the view's candidates (from `index`), or every task without one. A candidate outside the view is harmless:
+ * the rows and the Completed group test each task's own scope. A kept subtask's parent is read from the state, so
+ * it need not be a candidate.
+ */
+function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskFilter, text: string, held: ReadonlySet<ID>, index?: TaskIndex): Prepared {
+	const tasks = filterTasks(index?.candidates(state, view) ?? state.tasks.values(), filter, text, ctx);
 	const scope = completedScope(view);
 	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id) };
 	// An open parent's row is shown when the view lists it and it passes the filter and text. Asked only for
@@ -416,19 +408,6 @@ function viewGroups(
 	}
 }
 
-/** The view's Completed group, newest first. Empty where the view has none. */
-export function buildCompleted(
-	state: DbData,
-	view: TaskView,
-	ctx: QueryContext,
-	filter: TaskFilter,
-	text: string,
-	held: ReadonlySet<ID> = NO_IDS,
-): ListEntry[] {
-	if (completedScope(view) === null) return [];
-	return completedOf(state, view, ctx, filter, text, held, prepare(state, view, ctx, filter, text, held));
-}
-
 function completedOf(
 	state: DbData,
 	view: TaskView,
@@ -457,13 +436,15 @@ export function buildBoard(
 	filter: TaskFilter,
 	text: string,
 	held: ReadonlySet<ID> = NO_IDS,
+	/** Reads only the view's candidate tasks, as `buildList` does. */
+	index?: TaskIndex,
 ): BoardColumn[] {
 	// A column's open rows and Completed group start from the same filtered tasks and shown rows: made once.
 	const openOf = (p: Prepared, groupBy?: GroupBy): ViewGroup[] => openGroups(state, view, ctx, filter, text, groupBy, p);
 	const doneOf = (p: Prepared): ListEntry[] => completedOf(state, view, ctx, filter, text, held, p);
 	switch (view.kind) {
 		case "today": {
-			const p = prepare(state, view, ctx, filter, text, held);
+			const p = prepare(state, view, ctx, filter, text, held, index);
 			const groups = openOf(p);
 			const overdue = groups.find((g) => g.key === "overdue")?.entries ?? [];
 			const today = groups.find((g) => g.key === "today")?.entries ?? [];
@@ -483,7 +464,7 @@ export function buildBoard(
 			return columns;
 		}
 		case "upcoming": {
-			const p = prepare(state, view, ctx, filter, text, held);
+			const p = prepare(state, view, ctx, filter, text, held, index);
 			const byDate = new Map<LocalDate, ListEntry[]>();
 			for (const g of openOf(p)) if (g.date !== null) byDate.set(g.date, g.entries);
 			const done = new Map<LocalDate, ListEntry[]>();
@@ -510,7 +491,7 @@ export function buildBoard(
 		case "inbox":
 		case "category": {
 			// "No section", then one column per section; each column has its own Completed group.
-			const p = prepare(state, view, ctx, filter, text, held);
+			const p = prepare(state, view, ctx, filter, text, held, index);
 			const completed = doneOf(p);
 			return openOf(p, "section").map((g) => {
 				const id = g.section?.id ?? null;
@@ -541,8 +522,24 @@ export interface SidebarCounts {
 	trash: number;
 }
 
-/** Open-task counts for the sidebar. */
-export function sidebarCounts(state: DbData, ctx: QueryContext): SidebarCounts {
+/**
+ * Open-task counts for the sidebar. With `index`, the list, tag and completed counts are the index's and Today and
+ * Upcoming are counted over the dated tasks only; without it every task is read (the reference the index is tested
+ * against). Both give the same counts.
+ */
+export function sidebarCounts(state: DbData, ctx: QueryContext, index?: TaskIndex): SidebarCounts {
+	const fromIndex = index?.counts(state);
+	if (fromIndex !== undefined) {
+		let today = 0;
+		let upcoming = 0;
+		for (const t of fromIndex.dated) {
+			if (!isOpen(t)) continue;
+			const due = isDueByToday(t, ctx);
+			if (due) today++;
+			if (inUpcoming(t, ctx, due)) upcoming++;
+		}
+		return { today, upcoming, categories: fromIndex.lists, tags: fromIndex.tags, completed: fromIndex.completed, trash: state.trash.size };
+	}
 	const counts: SidebarCounts = {
 		today: 0,
 		upcoming: 0,

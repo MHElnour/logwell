@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCompleted, buildView, sidebarCounts, viewPreset, viewTitle } from "../../src/app/views";
+import { buildList, sidebarCounts, viewPreset, viewTitle } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { appHarness } from "./harness";
 
@@ -18,7 +18,7 @@ async function seed() {
 }
 
 const titles = (h: Awaited<ReturnType<typeof seed>>, key: string) =>
-	buildView(h.app.store.state, { kind: "tag", key }, h.app.queryContext(), emptyFilter(), "").flatMap((g) => g.entries.map((e) => e.task.title)).sort();
+	buildList(h.app.store.state, { kind: "tag", key }, h.app.queryContext(), emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title)).sort();
 
 describe("tag views with descendants", () => {
 	it("a parent view lists its own and every descendant's tasks, not a lookalike", async () => {
@@ -43,9 +43,9 @@ describe("tag views with descendants", () => {
 		const h = await seed();
 		const done = (await h.app.tasks.create({ title: "Done go", newTags: ["Programming/Go"] })).task;
 		await h.app.tasks.complete(done.id);
-		const entries = buildCompleted(h.app.store.state, { kind: "tag", key: "programming" }, h.app.queryContext(), emptyFilter(), "");
+		const entries = buildList(h.app.store.state, { kind: "tag", key: "programming" }, h.app.queryContext(), emptyFilter(), "").completed;
 		expect(entries.map((e) => e.task.title)).toEqual(["Done go"]);
-		expect(buildCompleted(h.app.store.state, { kind: "tag", key: "programming/python" }, h.app.queryContext(), emptyFilter(), "")).toEqual([]);
+		expect(buildList(h.app.store.state, { kind: "tag", key: "programming/python" }, h.app.queryContext(), emptyFilter(), "").completed).toEqual([]);
 	});
 
 	it("counts include descendants, each task once, with implicit parents counted", async () => {

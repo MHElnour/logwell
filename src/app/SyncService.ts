@@ -36,7 +36,7 @@ import { type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorK
 import type { SectionService } from "./SectionService";
 import type { AppStore } from "./store";
 import type { TaskInput, TaskPatch, TaskService } from "./TaskService";
-import { type ListIndex, SYNCED_LIST_OPEN_MAX } from "./listIndex";
+import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "./taskIndex";
 import { INBOX_ALIAS, InboxAliasApi, canonicalProjectId } from "./tickTickInbox";
 import { type NotePush, SyncNotes, type SyncNotesDeps, TICKTICK_NOTE_WARNING, ownsNote } from "./syncNotes";
 import { type StoredNoteBase, docFromTickTick, isChecklist, sameDoc, storedBase, ttNoteWrite } from "../domain/ticktick/noteText";
@@ -352,7 +352,7 @@ class SortKeys {
 
 	constructor(
 		private readonly tx: Tx,
-		private readonly index: ListIndex,
+		private readonly index: TaskIndex,
 	) {}
 
 	next(categoryId: ID, parentId: ID | null): string {
@@ -406,7 +406,7 @@ export class SyncService {
 		this.pendingCreates.set(listId, pending);
 	}
 
-	private readonly index: ListIndex;
+	private readonly index: TaskIndex;
 	/** Description notes; null when the host gives no vault (the sync never touches a note). */
 	private readonly notes: SyncNotes | null;
 	/** Links being marked `pendingDelete` after a change removed their task (see `onChanged`); a sync waits for it. */

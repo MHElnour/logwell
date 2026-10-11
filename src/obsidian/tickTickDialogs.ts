@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import { SYNCED_LIST_OPEN_MAX } from "../app/listIndex";
+import { SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import type { LinkOption } from "../app/tickTickLink";
 import type { FirstSyncPlan, PendingTrash } from "../app/SyncService";
 import { openFormModal } from "./formModal";

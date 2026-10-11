@@ -36,7 +36,12 @@ export interface AppEvents {
 	 * The state changed (local command, undo, external reload). `changes` lists the records a command or an undo
 	 * wrote, before and after; a reload or a replacement of all records has none, which means "anything may differ".
 	 */
-	changed: { label: string; changes?: readonly Change[] };
+	changed: {
+		label: string;
+		changes?: readonly Change[];
+		/** The state the command or undo started from, with `changes`: the `before` of each change is its record. */
+		base?: DbData;
+	};
 	/** Read-only state or conflicts changed; views refresh their banners. */
 	status: undefined;
 }
@@ -111,7 +116,7 @@ export class AppStore {
 					this.pushed.push({ id, label });
 					if (this.pushed.length > UNDO_LIMIT) this.pushed.shift();
 				}
-				this.bus.emit("changed", { label, changes });
+				this.bus.emit("changed", { label, changes, base: tx.base });
 			}
 			return result;
 		});
@@ -187,7 +192,7 @@ export class AppStore {
 		}
 		const { data, ops, changes } = tx.finish();
 		this.host.commit(data, ops);
-		this.bus.emit("changed", { label: `Undo ${entry.label}`, changes });
+		this.bus.emit("changed", { label: `Undo ${entry.label}`, changes, base: tx.base });
 		return entry.label;
 	}
 

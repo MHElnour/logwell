@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { type TaskView, buildBoard, buildCompleted, buildView } from "../../src/app/views";
+import { type TaskView, buildBoard, buildList } from "../../src/app/views";
 import { groupByOptions } from "../../src/domain/groupBy";
 import { type TaskFilter, type TaskSort, emptyFilter } from "../../src/domain/queries";
 import type { ID } from "../../src/domain/types";
@@ -60,10 +60,10 @@ describe("Tasks views match the golden results (issue 41)", () => {
 					for (const [heldName, hs] of [["none", new Set<ID>()], ["held", held]] as const) {
 						const at = `${v}|${sort}|${f.name}|${heldName}`;
 						for (const groupBy of [undefined, ...groupByOptions(view.kind)]) {
-							const groups = buildView(state, view, ctx, filter, f.text, hs, groupBy);
+							const groups = buildList(state, view, ctx, filter, f.text, hs, { groupBy }).groups;
 							actual[`view|${at}|${groupBy ?? "default"}`] = digest(groups, groups.reduce((n, g) => n + g.entries.length, 0));
 						}
-						const completed = buildCompleted(state, view, ctx, filter, f.text, hs);
+						const completed = buildList(state, view, ctx, filter, f.text, hs).completed;
 						actual[`completed|${at}`] = digest(completed, completed.length);
 						const board = buildBoard(state, view, ctx, filter, f.text, hs);
 						actual[`board|${at}`] = digest(board, board.reduce((n, c) => n + c.cards.length + c.completed.length, 0));

@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { render } from "preact";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type ViewGroup, buildView } from "../../src/app/views";
+import { type ViewGroup, buildList } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import type { ID, Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
@@ -86,7 +86,7 @@ async function mount(count: number, opts: { virtualize?: boolean; groups?: (all:
 	const draw = async (groups?: ViewGroup[], extra: Partial<Parameters<typeof TaskList>[0]> = {}) => {
 		const state = h.app.store.state;
 		const ctx = h.app.queryContext();
-		const all = buildView(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "");
+		const all = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "").groups;
 		render(
 			<div class="cp-main">
 				<TaskList
@@ -150,7 +150,7 @@ function prioritise(m: Mount, half: number, first: 0 | 1 | 2 | 3, second: 0 | 1 
 	}
 	m.h.store.commit({ ...data, tasks }, ops);
 }
-const byPriority = (m: Mount) => buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, "priority");
+const byPriority = (m: Mount) => buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, { groupBy: "priority" }).groups;
 
 describe("at or below the threshold", () => {
 	it("renders exactly the markup it renders without windowing", async () => {
@@ -349,10 +349,10 @@ describe("keyboard", () => {
 	it("Tab out of a section's last row is left to the browser: the next section's heading buttons come first", async () => {
 		const m = await mount(400);
 		const s = await m.h.app.sections.create("inbox", "Later");
-		for (const e of buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "")[0]!.entries.slice(200)) {
+		for (const e of buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "").groups[0]!.entries.slice(200)) {
 			await m.h.app.tasks.update(e.task.id, { sectionId: s.id });
 		}
-		const groups = buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, "section");
+		const groups = buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 		await m.draw(groups, { sections: { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 } });
 		await layout!.scrollTo(m.main, 190 * ROW);
 		rowOf(m, 199)!.focus();
@@ -428,10 +428,10 @@ describe("keyboard", () => {
 	it("in a read-only database the section heading's disabled buttons do not stand in the way, its toggle still does", async () => {
 		const m = await mount(400);
 		const s = await m.h.app.sections.create("inbox", "Later");
-		for (const e of buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "")[0]!.entries.slice(200)) {
+		for (const e of buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "").groups[0]!.entries.slice(200)) {
 			await m.h.app.tasks.update(e.task.id, { sectionId: s.id });
 		}
-		const groups = buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, "section");
+		const groups = buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, { groupBy: "section" }).groups;
 		await m.draw(groups, { readOnly: true, sections: { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 } });
 		const heading = m.root.querySelectorAll<HTMLElement>(".cp-section-heading")[1]!;
 		expect(heading.querySelector<HTMLButtonElement>(".cp-section-add")!.disabled).toBe(true);
@@ -547,11 +547,11 @@ describe("drag and drop", () => {
 		const m = await mount(600, { layout: true });
 		const s = await m.h.app.sections.create("inbox", "Later");
 		const state = m.h.app.store.state;
-		const all = buildView(state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, "section");
+		const all = buildList(state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 		expect(all.map((g) => g.key)).toEqual(["section:none", `section:${s.id}`]);
 		// Half the rows go into "Later".
 		for (const e of all[0]!.entries.slice(300)) await m.h.app.tasks.update(e.task.id, { sectionId: s.id });
-		const groups = () => buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, "section");
+		const groups = () => buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 		const sections = { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 };
 		await m.draw(groups(), { sections });
 		const place = vi.spyOn(m.h.app.tasks, "place");
@@ -576,10 +576,10 @@ describe("drag and drop into another group", () => {
 	it("a section far down: the line sits at the row under the pointer, then the drop lands there", async () => {
 		const m = await mount(600);
 		const s = await m.h.app.sections.create("inbox", "Later");
-		for (const e of buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "")[0]!.entries.slice(300)) {
+		for (const e of buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "").groups[0]!.entries.slice(300)) {
 			await m.h.app.tasks.update(e.task.id, { sectionId: s.id });
 		}
-		const groups = buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, "section");
+		const groups = buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, { groupBy: "section" }).groups;
 		await m.draw(groups, { sections: { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 } });
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const zero = rowOf(m, 0)!;
@@ -673,7 +673,7 @@ describe("collapse", () => {
 		const s = await m.h.app.sections.create("inbox", "Later");
 		const ids = [...m.h.app.store.state.tasks.values()].filter((t) => t.title.startsWith("Task ")).map((t) => t.id);
 		for (const id of ids.slice(2000)) await m.h.app.tasks.update(id, { sectionId: s.id });
-		const groups = () => buildView(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, "section");
+		const groups = () => buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 		let collapsed = false;
 		const sections = () => ({ categoryId: "inbox", hasAny: true, collapsed: (k: string) => collapsed && k === "section:inbox:none", onToggle: () => undefined, addRequest: 0 });
 		await m.draw(groups(), { sections: sections() });

@@ -2,7 +2,7 @@ import type { TickTickApi } from "../app/ports";
 import type { FirstSyncPlan, PendingTrash, SyncResult, SyncService } from "../app/SyncService";
 import { TICKTICK_TRASH_LABEL } from "../app/SyncService";
 import { type LinkOption, type LinkTarget, countPushable, defaultOption, loadLinkOptions } from "../app/tickTickLink";
-import { type ListIndex, SYNCED_LIST_OPEN_MAX } from "../app/listIndex";
+import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import { isListSynced } from "../app/syncMarks";
 import { DomainError } from "../domain/errors";
 import type { ID } from "../domain/types";
@@ -21,7 +21,7 @@ export interface LinkFlowDeps {
 	ready: () => boolean;
 	api: Pick<TickTickApi, "listProjects" | "getProjectData" | "createProject">;
 	sync: Pick<SyncService, "planFirstSync" | "applyFirstSync" | "unlinkList">;
-	index: Pick<ListIndex, "tasksOf" | "openCount">;
+	index: Pick<TaskIndex, "tasksOf" | "openCount">;
 	/**
 	 * Projects this flow created in TickTick whose first sync did not link the list, per list. A retry reuses the
 	 * project instead of creating a second one. Held by the session; cleared once the list is linked.

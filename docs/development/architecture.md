@@ -53,8 +53,10 @@ flowchart TD
   F --> G[CpbaseStore.commit]
   F --> H[undo stack entry]
   F --> I[bus changed with changes]
+  I --> N[taskIndex.ts TaskIndex updates the changed tasks]
   I --> J[hooks.ts useAppState]
   J --> K[TasksSection.tsx calls views.ts buildList]
+  N --> K
   K --> L[TaskList.tsx, VirtualRows.tsx]
   L --> M[rowMemo.ts skips unchanged rows]
 ```
@@ -65,7 +67,9 @@ Records are immutable: a change is a fresh object, and only the collections a co
 
 The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, sent on the `EventBus` from `src/app/events.ts`). It carries the label and the change list: each record written, before and after. A reload or a full replace carries no list, which means anything may differ.
 
-Listeners use the list to narrow their work: the per-list index (`src/app/listIndex.ts`), the task block (`src/obsidian/dashboardBlock.ts`) and the TickTick scheduler.
+Listeners use the list to narrow their work: the task index (`src/app/taskIndex.ts`), the task block (`src/obsidian/dashboardBlock.ts`) and the TickTick scheduler.
+
+The task index (`TaskIndex`, built in `TaskService` and reached as `app.tasks.lists`) holds which tasks can be in each Tasks view: the tasks of each list, the dated tasks (a schedule, a deadline or a repeat rule) for Today and Upcoming, the tasks of each tag, the completed tasks, and the open counts of lists and tags. For each task in the change list it takes the record out as it was and puts it in as it is. A `changed` without a list drops it, and the next read builds it again in one pass. It is current while the store's task map is the one it describes, so a save (a new state with the same task map) keeps it. A `changed` whose command started from another task map (its `base`), or replaced a record other than the one the index holds, drops it too (a write that skipped the store); so does a read that finds another task map. `buildList` and `buildBoard` filter only the view's candidates from it, and `sidebarCounts` reads its counts and counts Today and Upcoming over the dated tasks. Without an index both read every task: that path is the reference the index is tested against (`tests/app/issue-41-task-index.test.ts`). The candidates may hold extra tasks, never fewer: each view still applies its full test. The TickTick sync reads a linked list's tasks and the 999 open-task cap from the same index.
 
 `useAppState` (`src/ui/hooks.ts`) ignores the list and re-renders the app on every `changed` and `status` event. `TasksSection.tsx` calls the selectors in `src/app/views.ts` only when the collections they read changed, and `rowMemo.ts` skips every row whose inputs are the same.
 
@@ -140,7 +144,7 @@ Description notes run next (`src/app/syncNotes.ts`), then the push sends what di
 - Shell: `src/ui/AppRoot.tsx` draws the rail and one panel per section (Tasks, Calendar, Focus, Habits, Matrix, Search, Data). `SectionId` is in `src/ui/host.ts`.
 - Hidden sections: every section stays mounted and hidden when inactive, so it keeps its state. Heavy work waits until it is visible (`useActiveMemo` in `src/ui/hooks.ts`). `SectionRelay` (`src/ui/sectionRelay.ts`) delivers "show this section" from commands.
 - Sections: one `<Name>Section.tsx` each, such as `src/ui/TasksSection.tsx`, with parts in folders (`src/ui/board/`, `calendar/`, `focus/`, `habits/`, `matrix/`, `quickadd/`). The Tasks section adds `Sidebar.tsx`, `TaskDetails.tsx` and `CompletedGroup.tsx`.
-- Views: pure selectors build what a section shows: `buildList` (a view's open rows and its Completed group from one filtering of the tasks; `buildView` and `buildCompleted` give one of the two), `buildBoard` and `globalSearch` in `src/app/views.ts`, over the rules in `src/domain/queries.ts`, which holds the shared date rules (`scheduleOf`, `matchesTaskDate`, `isOverdue`).
+- Views: pure selectors build what a section shows: `buildList` (a view's open rows and its Completed group from one filtering of the view's candidate tasks from the task index), `buildBoard` and `globalSearch` in `src/app/views.ts`, over the rules in `src/domain/queries.ts`, which holds the shared date rules (`scheduleOf`, `matchesTaskDate`, `isOverdue`).
 - Rows: `src/ui/TaskList.tsx` and `src/ui/TaskRow.tsx` are the one row component, used by the Tasks, Calendar, Matrix and Search sections and by the task block (`src/ui/DashboardBlock.tsx`). `TaskRow` and `board/BoardCard.tsx` are wrapped in `memoComponent` (`src/ui/rowMemo.ts`); a row that reads something extra must add it to its comparator.
 - Windowing: `src/ui/VirtualRows.tsx` draws a list or board column in full up to `VIRTUAL_THRESHOLD` rows (`src/ui/virtual.ts`). Above it, only rows near the viewport are drawn, plus the focused or dragged row. Code that needs an undrawn row goes through `virtualHandle(box)`.
 - Writes: shared helpers call the services and show the notice: `src/ui/actions.ts`, `repeatActions.ts`, `sectionActions.ts`, `habits/actions.ts`. Errors go to `host.error(err)`.

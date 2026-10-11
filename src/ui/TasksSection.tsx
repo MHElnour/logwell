@@ -110,12 +110,14 @@ export function TasksSection(props: {
 	setSidebarOpen: (open: boolean) => void;
 }) {
 	const { host, state, ctx, ui, setUi } = props;
-	// Counts every task: rebuilt only when what they read changes, not on every render (selecting a row, typing in a bar). The app mounts a hidden section too, which keeps its last value (`useActiveMemo`).
+	// Which tasks can be in each view, kept up to date by the store's changes: the views and counts read only those.
+	const index = host.app.tasks.lists;
+	// Rebuilt only when what they read changes, not on every render (selecting a row, typing in a bar). The app mounts a hidden section too, which keeps its last value (`useActiveMemo`).
 	const counts = useActiveMemo(
 		props.visible,
-		() => sidebarCounts(state, ctx),
+		() => sidebarCounts(state, ctx, index),
 		// `sidebarCounts` reads `tasks`, `trash` and, for a repeating task, `occurrenceRecords`; `ctx` only its day, zone and upcoming range (the week start moves a series' occurrence).
-		[state.tasks, state.occurrenceRecords, state.trash, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
+		[index, state.tasks, state.occurrenceRecords, state.trash, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
 		NO_COUNTS,
 	);
 	const { view } = ui;
@@ -131,15 +133,15 @@ export function TasksSection(props: {
 	// every render (selecting a row, typing in a bar).
 	const { groups, completed: completedEntries } = useActiveMemo(
 		props.visible,
-		() => (boardOn ? NO_LIST : buildList(state, view, ctx, ui.filter, ui.text, held, { groupBy, completed: showGroup })),
+		() => (boardOn ? NO_LIST : buildList(state, view, ctx, ui.filter, ui.text, held, { groupBy, completed: showGroup, index })),
 		// `state` only supplies `tasks`, `occurrenceRecords` (the current occurrence of a series moves without its task changing), `sections`, `categories` and `tags` here; `ctx` only its day, zone, week start and upcoming range.
-		[boardOn, showGroup, state.tasks, state.occurrenceRecords, state.sections, state.categories, state.tags, view, ui.filter, ui.text, held, groupBy, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
+		[boardOn, showGroup, index, state.tasks, state.occurrenceRecords, state.sections, state.categories, state.tags, view, ui.filter, ui.text, held, groupBy, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
 		NO_LIST,
 	);
 	const columns = useActiveMemo(
 		props.visible,
-		() => (boardOn ? buildBoard(state, view, ctx, ui.filter, ui.text, held) : NO_COLUMNS),
-		[boardOn, state.tasks, state.occurrenceRecords, state.sections, view, ui.filter, ui.text, held, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
+		() => (boardOn ? buildBoard(state, view, ctx, ui.filter, ui.text, held, index) : NO_COLUMNS),
+		[boardOn, index, state.tasks, state.occurrenceRecords, state.sections, view, ui.filter, ui.text, held, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
 		NO_COLUMNS,
 	);
 	const shownCount = useMemo(

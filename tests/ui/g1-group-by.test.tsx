@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type TaskView, buildView } from "../../src/app/views";
+import { type TaskView, buildList } from "../../src/app/views";
 import type { GroupBy } from "../../src/domain/groupBy";
 import { type TaskSort, emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID, type Task } from "../../src/domain/types";
@@ -230,7 +230,7 @@ describe("dragging a row to another group", () => {
 		const redraw = async () => {
 			const state = m.h.app.store.state;
 			const ctx = m.h.app.queryContext();
-			const groups = buildView(state, view, ctx, { ...emptyFilter("all"), sort }, "", undefined, by);
+			const groups = buildList(state, view, ctx, { ...emptyFilter("all"), sort }, "", undefined, { groupBy: by }).groups;
 			render(
 				<TaskList
 					host={host}
