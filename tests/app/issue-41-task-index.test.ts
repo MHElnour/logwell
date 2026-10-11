@@ -57,6 +57,17 @@ function viewsOf(state: DbData): TaskView[] {
 	];
 }
 
+/** A list's task ids as the index's candidates give them: its tasks in sort order. */
+function indexOrder(index: TaskIndex, state: DbData, listId: ID): ID[] {
+	const view: TaskView = listId === INBOX_ID ? { kind: "inbox" } : { kind: "category", id: listId };
+	return (index.candidates(state, view) ?? []).map((t) => t.id);
+}
+
+/** The index's built orders, by list (a test reaches into it; the index itself only exposes candidates). */
+function builtOrders(index: TaskIndex): Map<ID, Task[]> {
+	return (index as unknown as { parts: { order: Map<ID, Task[]> } }).parts.order;
+}
+
 /** Where the index and the full scan disagree for the store's current state (empty when they agree). */
 function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): string[] {
 	const state = h.app.store.state;
@@ -65,7 +76,7 @@ function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): st
 	// Each list's ids in sort order equal a fresh sort of its tasks (Inbox, every list, and an id that is no list).
 	for (const listId of new Set<ID>([INBOX_ID, ...state.categories.keys()])) {
 		const fresh = [...state.tasks.values()].filter((t) => t.categoryId === listId).sort(compareTasksBySortKey).map((t) => t.id);
-		if (index.orderedOf(listId).join() !== fresh.join()) out.push(`order of ${listId}`);
+		if (indexOrder(index, state, listId).join() !== fresh.join()) out.push(`order of ${listId}`);
 	}
 	if (counted(sidebarCounts(state, ctx, index)) !== counted(sidebarCounts(state, ctx))) out.push("sidebar counts");
 	if (serialize(index.subtaskCounts()) !== serialize(subtaskCounts(state.tasks.values()))) out.push("subtask counts");
@@ -416,36 +427,63 @@ describe("the task index (issue 41)", () => {
 		const inbox: TaskView = { kind: "inbox" };
 		const build = (withIndex: boolean) => buildList(h.app.store.state, inbox, h.app.queryContext(), emptyFilter(), "", undefined, withIndex ? { index } : {});
 		expect(serialize(build(true))).toBe(serialize(build(false)));
-		const tops = index.orderedOf(INBOX_ID).filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
+		const tops = indexOrder(index, h.app.store.state, INBOX_ID).filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
 		await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
 		expect(serialize(build(true))).not.toBe(serialize(build(false)));
 	}, 300_000);
 
-	it("never changes an order it handed out, and keeps handing out the same one while no task moves in the list", async () => {
+	it("moves a task in a built order for a small change, and sorts a list again after a bulk change", async () => {
 		const { h } = await seededState(41, 40);
 		const index = h.app.tasks.lists;
-		const first = index.orderedOf(INBOX_ID);
-		const copy = [...first];
-		expect(copy.length).toBeGreaterThan(2);
-		// An edit that leaves the sort fields alone keeps the same array.
-		await h.app.tasks.update(copy[0] as ID, { title: "Renamed" });
-		expect(index.orderedOf(INBOX_ID)).toBe(first);
-		// A task added to the list, and one dropped to another place in it, give new arrays; the ones handed out stay.
-		await h.app.tasks.create({ title: "A new task" });
-		const added = index.orderedOf(INBOX_ID);
-		expect(added).not.toBe(first);
-		expect(added.length).toBe(copy.length + 1);
-		const addedCopy = [...added];
-		const tops = added.filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
+		const state = () => h.app.store.state;
+		const big = (await h.app.categories.create("Big")).id;
+		for (let i = 0; i < 100; i++) await h.app.tasks.create({ title: `Bulk ${i}`, categoryId: big });
+		const sorted = (listId: ID) =>
+			[...state().tasks.values()]
+				.filter((t) => t.categoryId === listId)
+				.sort(compareTasksBySortKey)
+				.map((t) => t.id);
+		expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
+		expect(indexOrder(index, state(), big)).toEqual(sorted(big));
+		expect([...builtOrders(index).keys()].sort()).toEqual([big, INBOX_ID].sort());
+		// A small change moves the task and keeps the order.
+		await h.app.tasks.update(sorted(big)[0] as ID, { categoryId: INBOX_ID });
+		expect(builtOrders(index).has(big) && builtOrders(index).has(INBOX_ID)).toBe(true);
+		expect(index.verify(state())).toEqual([]);
+		expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
+		// Deleting the list moves its 99 tasks to the Inbox in one event: both orders are dropped and sorted again.
+		await h.app.categories.delete(big);
+		expect(builtOrders(index).has(INBOX_ID)).toBe(false);
+		expect(index.verify(state())).toEqual([]);
+		expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
+		// Undo puts them back in one event again.
+		await h.app.store.undo();
+		expect(index.verify(state())).toEqual([]);
+		expect(indexOrder(index, state(), big)).toEqual(sorted(big));
+		expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
+		expect(index.verify(state())).toEqual([]);
+	}, 60_000);
+
+	it("sorts a list again when its built order does not hold the task a change takes out", async () => {
+		const { h } = await seededState(41, 40);
+		const index = h.app.tasks.lists;
+		const inbox = () => indexOrder(index, h.app.store.state, INBOX_ID);
+		const tops = inbox().filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
 		expect(tops.length).toBeGreaterThan(2);
-		await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
-		const moved = index.orderedOf(INBOX_ID);
-		expect(moved).not.toBe(added);
-		expect(moved.indexOf(tops[0] as ID)).toBeGreaterThan(moved.indexOf(tops[tops.length - 1] as ID));
-		expect([...first]).toEqual(copy);
-		expect([...added]).toEqual(addedCopy);
-		// A list nobody put a task in has an empty order.
-		expect(index.orderedOf("no-such-list")).toEqual([]);
+		// Damage the order: the task about to be dropped at the end of the Inbox is missing from it.
+		const moved = tops[0] as ID;
+		const order = builtOrders(index).get(INBOX_ID)!;
+		order.splice(
+			order.findIndex((t) => t.id === moved),
+			1,
+		);
+		await h.app.tasks.place(moved, [...tops.slice(1), moved]);
+		const fresh = [...h.app.store.state.tasks.values()]
+			.filter((t) => t.categoryId === INBOX_ID)
+			.sort(compareTasksBySortKey)
+			.map((t) => t.id);
+		expect(builtOrders(index).has(INBOX_ID)).toBe(false);
+		expect(inbox()).toEqual(fresh);
 		expect(index.verify(h.app.store.state)).toEqual([]);
 	});
 

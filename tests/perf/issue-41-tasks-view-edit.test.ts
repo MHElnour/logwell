@@ -118,7 +118,7 @@ function completedKind(i: number): "task" | "subtask" | null {
 	return null;
 }
 
-async function bigHarness() {
+async function bigHarness(oneBigList = false) {
 	const h = await appHarness();
 	const lists: ID[] = [];
 	for (let i = 0; i < LISTS; i++) lists.push((await h.app.categories.create(`List ${i}`)).id);
@@ -132,7 +132,7 @@ async function bigHarness() {
 			// The search "step" matches the subtasks and every fourth task, never a subtask's parent.
 			title: kind === "subtask" || i % 4 === 0 ? `Task ${i} step` : `Task ${i}`,
 			sortKey: `V${((i * 7919) % TASKS).toString(36).padStart(4, "0")}`,
-			categoryId: i % 2 === 0 ? "inbox" : lists[i % LISTS],
+			categoryId: i % 2 === 0 ? "inbox" : lists[oneBigList ? 0 : i % LISTS],
 			parentId: kind === "subtask" ? taskId(i + 1 - (i % 2 === 0 ? 2 : 10)) : null,
 			scheduled: i % 20 === 0 ? { kind: "date", date: today } : null,
 			status: kind === null ? "open" : "completed",
@@ -228,6 +228,43 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		expect(completed.get("Inbox searching"), report).toBe(2_500);
 		expect(completed.get("a list"), report).toBe(1_250);
 	}, 120_000);
+
+	it("deletes a list of 25,000 tasks and restores it with the Inbox and the list viewed, at about the cost without kept orders", async () => {
+		// Deleting a list moves its tasks to the Inbox in one event, and Undo moves them back: the index must not move
+		// each task in the long orders of the Inbox and the list (that copies an array per task).
+		const run = async (viewed: boolean) => {
+			const { h, lists } = await bigHarness(true);
+			const big = lists[0] as ID;
+			const index = h.app.tasks.lists;
+			const ctx = h.app.queryContext();
+			const inbox: TaskView = { kind: "inbox" };
+			const list: TaskView = { kind: "category", id: big };
+			if (viewed) for (const view of [inbox, list]) buildList(h.app.store.state, view, ctx, emptyFilter(), "", undefined, { index });
+			const timed = async (fn: () => Promise<unknown>) => {
+				const start = performance.now();
+				await fn();
+				return performance.now() - start;
+			};
+			const deleteMs = await timed(() => h.app.categories.delete(big));
+			expect(index.verify(h.app.store.state)).toEqual([]);
+			const inboxMs = await timed(async () => buildList(h.app.store.state, inbox, ctx, emptyFilter(), "", undefined, { index }));
+			const undoMs = await timed(() => h.app.store.undo());
+			expect(index.verify(h.app.store.state)).toEqual([]);
+			const state = h.app.store.state;
+			expect(buildList(state, list, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(state, list, ctx, emptyFilter(), ""));
+			expect(buildList(state, inbox, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(state, inbox, ctx, emptyFilter(), ""));
+			return { deleteMs, undoMs, inboxMs };
+		};
+		// The faster of two runs without kept orders is the cost to compare with (one slow run is a pause, not the cost).
+		const [first, second] = [await run(false), await run(false)] as const;
+		const plain = { deleteMs: Math.min(first.deleteMs, second.deleteMs), undoMs: Math.min(first.undoMs, second.undoMs), inboxMs: Math.min(first.inboxMs, second.inboxMs) };
+		const kept = await run(true);
+		const report = `delete ${kept.deleteMs.toFixed(0)} ms and Undo ${kept.undoMs.toFixed(0)} ms with the orders built (${plain.deleteMs.toFixed(0)} and ${plain.undoMs.toFixed(0)} ms without), then the Inbox ${kept.inboxMs.toFixed(0)} ms (${plain.inboxMs.toFixed(0)} ms)`;
+		if (LOG) process.stderr.write(`issue-41: bulk list delete at ${TASKS} tasks: ${report}\n`);
+		// Moving 25,000 tasks one by one took about 800 ms each way.
+		expect(kept.deleteMs, report).toBeLessThan((plain.deleteMs * 2 + 100) * CI_SLACK);
+		expect(kept.undoMs, report).toBeLessThan((plain.undoMs * 2 + 100) * CI_SLACK);
+	}, 300_000);
 
 	it("reads Today from the index after a task is completed and saved, without building it again", async () => {
 		const { h } = await bigHarness();

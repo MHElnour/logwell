@@ -13,15 +13,11 @@ type Tasks = DbData["tasks"];
 export const SYNCED_LIST_OPEN_MAX = 999;
 
 /**
- * One list's tasks in sort order (`compareTasksBySortKey`). `tasks` are the records as indexed, kept only to compare
- * against (a change that leaves a task's sort fields alone leaves its record here); `ids` is what `orderedOf` hands out.
+ * The most places in one list's order a single change event moves before the order is dropped and sorted again on the
+ * next read: moving a task costs a copy of the array, so a bulk change (a list deleted, restored or re-keyed) is
+ * cheaper to sort once.
  */
-interface Ordered {
-	tasks: Task[];
-	ids: ID[];
-	/** `ids` was handed out by `orderedOf` and must not change any more. */
-	shared: boolean;
-}
+const ORDER_MOVES_MAX = 64;
 
 /** What the index holds. Every part is a function of the task records alone. */
 interface Parts {
@@ -48,10 +44,11 @@ interface Parts {
 	/** `subtasks` was handed out by `subtaskCounts()` and must not change any more. */
 	subtasksShared: boolean;
 	/**
-	 * The sort order of each list that was asked for it: built on the first ask, kept up to date after that, absent
-	 * while nobody reads it. Never holds an empty list.
+	 * The tasks of each list that was asked for it, in sort order (`compareTasksBySortKey`): built on the first ask,
+	 * moved by a change after that, absent while nobody reads it. Never an empty list. The records are the ones
+	 * indexed, only compared: a change that leaves a task's list and sort fields alone leaves its old record here.
 	 */
-	order: Map<ID, Ordered>;
+	order: Map<ID, Task[]>;
 }
 
 function emptyParts(): Parts {
@@ -156,46 +153,48 @@ function lowerBound(tasks: readonly Task[], t: Task): number {
 	return lo;
 }
 
-/** `o` is about to change: its ids are copied first when they were handed out. */
-function writable(o: Ordered): Ordered {
-	if (o.shared) {
-		o.ids = o.ids.slice();
-		o.shared = false;
+/** Whether a change leaves a task in the same place of the same list's order. */
+function keepsPlace(before: Task | undefined, after: Task | undefined): boolean {
+	return before !== undefined && after !== undefined && before.categoryId === after.categoryId && compareTasksBySortKey(before, after) === 0;
+}
+
+/**
+ * Drops the order of each list that one event moves more than `ORDER_MOVES_MAX` places of (a task leaving or entering
+ * counts one), so `reorder` never copies a long array once per task of a bulk change.
+ */
+function dropBulkOrders(p: Parts, changes: readonly Change[]): void {
+	const moves = new Map<ID, number>();
+	const count = (listId: ID) => moves.set(listId, (moves.get(listId) ?? 0) + 1);
+	for (const ch of changes) {
+		const before = ch.before as Task | undefined;
+		const after = ch.after as Task | undefined;
+		if (keepsPlace(before, after)) continue;
+		if (before !== undefined && p.order.has(before.categoryId)) count(before.categoryId);
+		if (after !== undefined && p.order.has(after.categoryId)) count(after.categoryId);
 	}
-	return o;
+	for (const [listId, n] of moves) if (n > ORDER_MOVES_MAX) p.order.delete(listId);
 }
 
 /**
  * Moves one task's change into the lists' orders: out of the order of its list as it was, into the order of its list
  * as it is. A change that keeps the list and the sort fields moves nothing. A list nobody asked the order of has none
- * to move. An order that does not hold the task where it should be is dropped (built again on the next ask).
+ * to move. An order that does not hold the task being taken out where it should be is dropped (sorted again on the
+ * next read).
  */
 function reorder(p: Parts, before: Task | undefined, after: Task | undefined): void {
-	if (before !== undefined && after !== undefined && before.categoryId === after.categoryId && compareTasksBySortKey(before, after) === 0) return;
+	if (keepsPlace(before, after)) return;
 	if (before !== undefined) {
 		const o = p.order.get(before.categoryId);
 		if (o !== undefined) {
-			const at = lowerBound(o.tasks, before);
-			if (o.tasks[at]?.id !== before.id || o.tasks.length === 1) {
-				p.order.delete(before.categoryId);
-			} else {
-				writable(o);
-				o.tasks.splice(at, 1);
-				o.ids.splice(at, 1);
-			}
+			const at = lowerBound(o, before);
+			if (o[at]?.id !== before.id || o.length === 1) p.order.delete(before.categoryId);
+			else o.splice(at, 1);
 		}
 	}
 	if (after !== undefined) {
 		const o = p.order.get(after.categoryId);
 		if (o !== undefined) {
-			const at = lowerBound(o.tasks, after);
-			if (o.tasks[at]?.id === after.id) {
-				p.order.delete(after.categoryId);
-			} else {
-				writable(o);
-				o.tasks.splice(at, 0, after);
-				o.ids.splice(at, 0, after.id);
-			}
+			o.splice(lowerBound(o, after), 0, after);
 		}
 	}
 }
@@ -264,6 +263,7 @@ export class TaskIndex {
 			return;
 		}
 		const p = this.parts;
+		if (p.order.size > 0) dropBulkOrders(p, tasks);
 		for (const ch of tasks) {
 			const before = ch.before as Task | undefined;
 			const after = ch.after as Task | undefined;
@@ -303,7 +303,7 @@ export class TaskIndex {
 	}
 
 	/** The sort order of one list, built on the first ask (the list's tasks in the store's state, any status). */
-	private orderOf(listId: ID): Ordered | undefined {
+	private orderOf(listId: ID): Task[] | undefined {
 		const p = this.index();
 		const have = p.order.get(listId);
 		if (have !== undefined) return have;
@@ -314,21 +314,8 @@ export class TaskIndex {
 		}
 		if (tasks.length === 0) return undefined;
 		tasks.sort(compareTasksBySortKey);
-		const o: Ordered = { tasks, ids: tasks.map((t) => t.id), shared: false };
-		p.order.set(listId, o);
-		return o;
-	}
-
-	/**
-	 * The ids of a list's tasks (any status) in the store's current tasks, in sort order (`compareTasksBySortKey`).
-	 * The array never changes once returned: a later change that moves a task in this list gives a new array, and a
-	 * change that moves none keeps the same one.
-	 */
-	orderedOf(listId: ID): readonly ID[] {
-		const o = this.orderOf(listId);
-		if (o === undefined) return [];
-		o.shared = true;
-		return o.ids;
+		p.order.set(listId, tasks);
+		return tasks;
 	}
 
 	/** The open tasks of a list in the store's state (completed ones do not count). */
@@ -339,8 +326,8 @@ export class TaskIndex {
 	/** The tasks of one list in sort order; the ids are read at once, not kept. */
 	private sortedTasksOf(get: (id: ID) => Task | undefined, listId: ID): Task[] {
 		const out: Task[] = [];
-		for (const id of this.orderOf(listId)?.ids ?? []) {
-			const t = get(id);
+		for (const indexed of this.orderOf(listId) ?? []) {
+			const t = get(indexed.id);
 			if (t !== undefined && t.categoryId === listId) out.push(t);
 		}
 		return out;
@@ -439,8 +426,7 @@ export class TaskIndex {
 		for (const [listId, o] of p.order) {
 			const want = [...state.tasks.values()].filter((t) => t.categoryId === listId).sort(compareTasksBySortKey);
 			if (want.length === 0) out.push(`order ${listId}: kept for an empty list`);
-			if (want.map((t) => t.id).join() !== o.ids.join()) out.push(`order ${listId}: ids differ from a fresh sort`);
-			if (o.tasks.length !== o.ids.length || o.tasks.some((t, i) => t.id !== o.ids[i])) out.push(`order ${listId}: records and ids differ`);
+			if (want.map((t) => t.id).join() !== o.map((t) => t.id).join()) out.push(`order ${listId}: ids differ from a fresh sort`);
 		}
 		if (p.size !== fresh.size) out.push(`size: ${p.size} ≠ ${fresh.size}`);
 		return out;
