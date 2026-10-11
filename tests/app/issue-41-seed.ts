@@ -119,6 +119,23 @@ export async function seededState(seed = 41, count = 240): Promise<SeededState> 
 		tasks.set(t.id, t);
 		ops.push({ c: "tasks", id: t.id, v: t });
 	}
+	// Completed subtasks dated in a date view whose open parent that view does not list (App shell and views
+	// rule 21): each goes to the view's Completed group, not under the parent.
+	let added = 0;
+	const add = (patch: Partial<Task>): Task => {
+		added++;
+		const t = makeTask(`00000000-0000-4000-9000-${added.toString(16).padStart(12, "0")}`, { sortKey: `W${added}`, ...patch });
+		tasks.set(t.id, t);
+		ops.push({ c: "tasks", id: t.id, v: t });
+		return t;
+	};
+	const doneToday = { status: "completed" as const, completedAt: `${today}T09:45:00.000Z` };
+	const undated = add({ title: "Plan the party" });
+	add({ title: "Book the hall", parentId: undated.id, scheduled: { kind: "date", date: today }, ...doneToday });
+	const later = add({ title: "Paint the fence", categoryId: lists[0]!, scheduled: { kind: "date", date: addDays(today, 3) } });
+	add({ title: "Buy paint", categoryId: lists[0]!, parentId: later.id, scheduled: { kind: "date", date: today }, ...doneToday });
+	const dueToday = add({ title: "Move the sofa", categoryId: lists[1]!, scheduled: { kind: "date", date: today } });
+	add({ title: "Measure the door", categoryId: lists[1]!, parentId: dueToday.id, scheduled: { kind: "date", date: addDays(today, 1) }, ...doneToday });
 	h.store.commit({ ...data, tasks }, ops);
 
 	const held = new Set<ID>();
