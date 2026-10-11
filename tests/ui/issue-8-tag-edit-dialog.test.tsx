@@ -176,10 +176,10 @@ describe("Quick Add after a rename", () => {
 		m.refresh();
 		expect(m.tagKeys).toEqual(["home"]);
 		expect(manualPills(m).filter((p) => p.kind === "tag").map((p) => p.label)).toEqual(["@Home"]);
-		expect(m.message).toBe('The tag "calls" was renamed or deleted. Pick it again.');
+		expect(m.message).toBe('The tag "Calls" was renamed or deleted. Pick it again.');
 		// Another change with nothing gone leaves the message alone.
 		m.refresh();
-		expect(m.message).toBe('The tag "calls" was renamed or deleted. Pick it again.');
+		expect(m.message).toBe('The tag "Calls" was renamed or deleted. Pick it again.');
 		m.setInput("Ring mum");
 		expect(await m.submit()).toBe("saved");
 		const task = [...h.app.store.state.tasks.values()].find((t) => t.title === "Ring mum")!;
@@ -209,5 +209,48 @@ describe("Quick Add after a rename", () => {
 		expect(m.tagKeysValue()).toEqual([]);
 		m.setInput("Ring mum");
 		expect(await m.submit()).toBe("saved");
+	});
+});
+
+describe("Quick Add after a delete, and picking again", () => {
+	const model = (h: Awaited<ReturnType<typeof appHarness>>) =>
+		new QuickAddModel(
+			{
+				app: h.app,
+				preset: {},
+				locale: () => "en",
+				resolveNote: () => [],
+				onSaved: () => undefined,
+				onError: (e) => {
+					throw e;
+				},
+				keepOpen: () => true,
+				onClose: () => undefined,
+			},
+			() => undefined,
+		);
+
+	it("a deleted tag leaves the pills, and the message names it as its pill did", async () => {
+		const h = await appHarness();
+		await h.app.tags.create("Home/Phone-Calls");
+		const m = model(h);
+		m.setTags(["home/phone-calls"]);
+		expect(manualPills(m).find((p) => p.kind === "tag")?.label).toBe("@Phone-Calls");
+		await h.app.tags.delete("home/phone-calls");
+		m.refresh();
+		expect(m.tagKeys).toEqual([]);
+		expect(m.message).toBe('The tag "Phone-Calls" was renamed or deleted. Pick it again.');
+	});
+
+	it("picking a tag again clears the message", async () => {
+		const h = await appHarness();
+		await h.app.tags.create("Calls");
+		const m = model(h);
+		m.setTags(["calls"]);
+		await h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
+		m.refresh();
+		expect(m.message).not.toBeNull();
+		m.setTags(["phone"]);
+		expect(m.message).toBeNull();
 	});
 });
