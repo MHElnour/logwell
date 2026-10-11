@@ -591,18 +591,20 @@ export function menuTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, 
 export interface CalendarTasks {
 	/** The tasks the week and month place: dated ones through the view menu. */
 	dated: Task[];
-	/** How many tasks the Unscheduled drawer lists (`unscheduledTasks`). */
-	unscheduledCount: number;
+	/** How many tasks the Unscheduled drawer lists (`unscheduledTasks`); undefined when not asked for. */
+	unscheduledCount: number | undefined;
 }
 
 /**
  * What the calendar shows on every change: the tasks it places and the Unscheduled count. With `index`, the dated
  * tasks are the index's; a view menu that asks for nothing but a status other than "completed" lets every open task
  * through, so the count is then the index's open tasks less the open ones with a schedule or a repeat rule (all of
- * them dated) and no task is read for it. Otherwise the count reads the drawer's tasks.
+ * them dated) and no task is read for it. Otherwise the count reads the drawer's tasks. `count: false` leaves the
+ * count out (an open drawer counts its rows).
  */
-export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex): CalendarTasks {
+export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex, options: { count?: boolean } = {}): CalendarTasks {
 	const dated = menuTasks(state, ctx, filter, { within: "dated", index });
+	if (options.count === false) return { dated, unscheduledCount: undefined };
 	const open = filter.status !== "completed" && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
 	const unscheduledCount = open === undefined ? unscheduledTasks(state, ctx, filter, index).length : open - dated.filter((t) => isOpen(t) && !isUnscheduled(t)).length;
 	return { dated, unscheduledCount };

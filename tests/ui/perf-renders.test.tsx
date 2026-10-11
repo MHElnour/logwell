@@ -8,8 +8,8 @@ import { type CalMount, click, mountCal, settle } from "./m3-helpers";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not
 // change is not re-rendered. The counters wrap the pure functions the renders call: buildList (once per
-// Tasks section render that rebuilds its rows), globalSearch (once per Search section render) and the
-// format helper TaskRow calls on every render of a dated row.
+// Tasks section render that rebuilds its rows), globalSearch (once per change of what Search reads, only while
+// Search is shown) and the format helper TaskRow calls on every render of a dated row.
 
 vi.mock("../../src/app/views", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/app/views")>();
@@ -80,6 +80,15 @@ describe("render passes", () => {
 		await click(results()[0]);
 		expect(m.root.querySelector(".cp-details-pane")).not.toBeNull();
 		expect(searches() - s1).toBe(0);
+		// A list renamed to match: Search reads the list names again.
+		const s2 = searches();
+		const list = await m.h.app.categories.create("Errands");
+		await flush();
+		expect(m.root.querySelector(".cp-search")?.textContent).not.toContain("Call list");
+		await m.h.app.categories.update(list.id, { name: "Call list" });
+		await flush();
+		expect(searches() - s2).toBe(2);
+		expect(m.root.querySelector(".cp-search")?.textContent).toContain("Call list");
 	});
 
 	it("selecting a row re-renders only the row that was selected", async () => {

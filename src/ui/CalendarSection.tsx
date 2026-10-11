@@ -3,7 +3,7 @@ import { type CalendarTasks, type ViewGroup, calendarTasks, unscheduledTasks } f
 import { type CalendarContext, monthGrid, weekDays } from "../domain/calendar";
 import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter, entryOf } from "../domain/queries";
 import { indexOccurrenceRecords } from "../domain/recurrence";
-import { compareTasksBySortKey } from "../domain/tasks";
+import { compareTasksBySortKey, isUnscheduled } from "../domain/tasks";
 import type { ID, LocalDate, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { CalendarHeader } from "./calendar/CalendarHeader";
@@ -68,7 +68,7 @@ function useNowIso(host: UiHost, visible: boolean): string {
 	return last.current;
 }
 
-const NO_TASKS: CalendarTasks = { dated: [], unscheduledCount: 0 };
+const NO_TASKS: CalendarTasks = { dated: [], unscheduledCount: undefined };
 const NO_ENTRIES: ListEntry[] = [];
 
 export function CalendarSection(props: {
@@ -122,9 +122,10 @@ export function CalendarSection(props: {
 	const index = host.app.tasks.lists;
 	const cal = useActiveMemo<CalendarTasks>(
 		props.visible,
-		() => calendarTasks(state, ctx, ui.filter, index),
+		// An open drawer counts its rows: the count is not read twice.
+		() => calendarTasks(state, ctx, ui.filter, index, { count: !ui.unscheduledOpen }),
 		// The filter reads the effective schedule: completing or skipping an occurrence changes no task, only its records.
-		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart],
+		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart, ui.unscheduledOpen],
 		NO_TASKS,
 	);
 	const tasks: readonly Task[] = cal.dated;
@@ -165,7 +166,7 @@ export function CalendarSection(props: {
 					onStep={(step) => setUi((s) => ({ ...s, anchor: shiftAnchor(s.anchor, s.mode, step, ctx.today) }))}
 					onToday={() => setUi((s) => ({ ...s, anchor: ctx.today }))}
 					unscheduledOpen={ui.unscheduledOpen}
-					unscheduledCount={cal.unscheduledCount}
+					unscheduledCount={cal.unscheduledCount ?? unscheduled.length}
 					onToggleUnscheduled={() => setUi((s) => ({ ...s, unscheduledOpen: !s.unscheduledOpen }))}
 					toggleRef={toggleRef}
 					viewMenu={<ScopeMenuButton host={host} visible={props.visible} filter={ui.filter} onChange={(update) => setUi((s) => ({ ...s, filter: update(s.filter) }))} />}
@@ -214,7 +215,7 @@ export function CalendarSection(props: {
 						const row = target.closest<HTMLElement>(".cp-task-row");
 						if (row === null || target.closest("button, input, a") !== null) return;
 						const task = state.tasks.get(row.getAttribute("data-task-id") ?? "");
-						if (task === undefined || task.scheduled !== null || task.recurrence !== null) return;
+						if (task === undefined || !isUnscheduled(task)) return;
 						dnd.start(e, row, { kind: "drawer", task });
 					}}
 					onKeyDown={(e) => {
