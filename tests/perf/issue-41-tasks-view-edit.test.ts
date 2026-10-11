@@ -28,8 +28,10 @@ import { CI_SLACK, LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHar
 
 const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild is far below it today
 // Measured alone: Inbox about 0.5 of the full read (22,500 rows to make either way; no sort with the index), Today 0.15
-// (2,500 dated tasks are its candidates), a list 0.3, the sidebar counts 0.12.
-const INBOX_RATIO = 0.8;
+// (2,500 dated tasks are its candidates), a list 0.3, the sidebar counts 0.12. The Inbox holds half the tasks, so its
+// only saving is the sort, which "rows ordered 0x" asserts exactly; on a slow CI runner its ratio has reached 1.09, so its
+// time bound only catches a real slowdown.
+const INBOX_RATIO = 1.5;
 const TODAY_RATIO = 0.5;
 const LIST_RATIO = 0.6;
 const COUNTS_RATIO = 0.5;
