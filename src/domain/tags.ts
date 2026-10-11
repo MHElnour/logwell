@@ -287,7 +287,7 @@ export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: 
  */
 export function tagNameClashMessage(tags: ReadonlyMap<string, Tag>, existingKey: string): string {
 	const record = tags.get(existingKey);
-	const name = record === undefined ? existingKey : tagDisplayLeaf(record);
+	const name = record === undefined ? tagLeaf(existingKey) : tagDisplayLeaf(record);
 	return `The name "${name}" is already used by another tag.`;
 }
 

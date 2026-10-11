@@ -52,6 +52,8 @@ describe("tag names (D29)", () => {
 		expect(tagNameClashMessage(tags, "home/calls")).toBe('The name "Calls" is already used by another tag.');
 		expect(tagNameClashMessage(tags, "errands")).toBe('The name "Errands" is already used by another tag.');
 		expect(tagNameClashMessage(tags, "home")).toBe('The name "Home" is already used by another tag.');
+		// No record: the key's last segment.
+		expect(tagNameClashMessage(tags, "gone/phone")).toBe('The name "phone" is already used by another tag.');
 		expect(() => requireUniqueTagName(tags, "work/errands")).toThrow('The name "Errands" is already used by another tag.');
 	});
 
