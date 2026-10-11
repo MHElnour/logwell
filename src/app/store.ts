@@ -3,7 +3,7 @@ import { type Clock, nowInstant } from "../domain/ports";
 import type { BackupInfo, SnapshotKind } from "../persistence/backups";
 import type { ReadOnlyState } from "../persistence/CpbaseStore";
 import type { JournalOp } from "../persistence/journal";
-import type { DbCollections, DbData } from "../persistence/schema";
+import { type CollectionName, type DbCollections, type DbData, referenceProblem } from "../persistence/schema";
 import { CommandQueue, EventBus } from "./events";
 import { type Change, Tx } from "./tx";
 
@@ -225,11 +225,24 @@ export class AppStore {
 				throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": the item changed since.`);
 			}
 		}
+		// The records this undo removes, by collection.
+		const removed = new Map<CollectionName, Set<string>>();
 		for (const ch of entry.changes) {
-			if (ch.before === undefined) tx.remove(ch.c, ch.id);
-			else tx.put(ch.c, ch.before as never);
+			if (ch.before === undefined) {
+				tx.remove(ch.c, ch.id);
+				let ids = removed.get(ch.c);
+				if (ids === undefined) removed.set(ch.c, (ids = new Set()));
+				ids.add(ch.id);
+			} else tx.put(ch.c, ch.before as never);
 		}
 		const { data, ops, changes } = tx.finish();
+		// A write that is not an undo step (a TickTick pull) may have started using a record this undo removes. Checked on
+		// the reverted state, so the entry's own records (removed with it, or restored) never count. Nothing is committed,
+		// and the entry stays dropped.
+		for (const [c, ids] of removed) {
+			const problem = referenceProblem(data, c, ids);
+			if (problem !== null) throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": ${problem}`);
+		}
 		this.host.commit(data, ops);
 		this.emitChanged({ label: `Undo ${entry.label}`, changes, base: tx.base });
 		return entry.label;

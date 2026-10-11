@@ -21,7 +21,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 - (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks.
 - (#7) Create a tag from the sidebar: the **New tag** button next to Tags opens a dialog with a name, an optional parent and a color. The name is checked as you type.
-- (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag.
+- (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag. Undo of a new or renamed tag is refused once a synced task uses it, so no task is left with a tag that no longer exists.
 
 ## Changed
 

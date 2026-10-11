@@ -24,6 +24,12 @@ describe("tag rename at 50,000 tasks", () => {
 				const tagKeys = i < 5_000 ? [i % 21 === 0 ? "home" : `home/child${i % 20}`, `tag${21 + (i % 100)}`] : [`tag${21 + (i % (TAGS - 21))}`];
 				tx.put("tasks", makeTask(`t${i}`, { tagKeys, sortKey: `V${i}` }));
 			}
+			// Trash entries, half of them holding a key the rename moves: the rename rewrites them, and the undo's
+			// reference check reads them all.
+			for (let i = 0; i < 100; i++) {
+				const tasks = [0, 1, 2].map((j) => makeTask(`d${i}-${j}`, { tagKeys: i % 2 === 0 ? [`home/child${(i + j) % 20}`] : [`tag${21 + i}`] }));
+				tx.put("trash", { batchId: `b${i}`, deletedAt: TS, tasks });
+			}
 		});
 		const before = h.app.store.state;
 
@@ -38,6 +44,7 @@ describe("tag rename at 50,000 tasks", () => {
 		await h.app.store.undo();
 		const undone = performance.now() - undoStart;
 		expect(h.app.store.state.tasks.get("t1")).toBe(before.tasks.get("t1"));
+		expect(h.app.store.state.trash.get("b0")).toBe(before.trash.get("b0"));
 		expect(h.app.store.state.tags.has("home/child19")).toBe(true);
 
 		expect(renamed + undone).toBeLessThan(BUDGET_MS);
