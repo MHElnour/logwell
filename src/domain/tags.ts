@@ -276,7 +276,6 @@ export function tagsByLabel(tags: ReadonlyMap<string, Tag>): { tag: Tag; label: 
 	return [...tags.values()].map((tag) => ({ tag, label: tagLabel(tags, tag.key) })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-
 /**
  * `The name "Calls" is already used by another tag.`: the name only, in the existing tag's casing. It reads no memoized
  * names, because `tags` may be the working map of a write that is still changing.
