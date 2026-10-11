@@ -1,4 +1,5 @@
 import type { Clock } from "../domain/ports";
+import { instantFromNow } from "../domain/time";
 import type { FileGateway } from "./gateway";
 import { type JournalEntry, journalLine, parseJournal } from "./journal";
 import { DB_EXTENSION, isSafeId } from "./schema";
@@ -277,7 +278,7 @@ export class BackupStore {
 			list.push({ path, stamp: parsed.stamp });
 			byKind.set(parsed.kind, list);
 		}
-		const cutoff = new Date(this.clock.now().getTime() - DAILY_KEEP_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10);
+		const cutoff = instantFromNow(this.clock, -DAILY_KEEP_DAYS * 24 * 3600 * 1000).slice(0, 10);
 		for (const [kind, list] of byKind) {
 			// Newest first, snapshots stamped in the future after the rest, so a
 			// future stamp evicts first and never keeps real snapshots out.

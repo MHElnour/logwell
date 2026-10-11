@@ -4,7 +4,7 @@ import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, rewriteNotePath, sanitizeNoteName } from "../domain/notes";
 import { assertCanBecomeSubtask, compareTasksBySortKey, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
 import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
-import { type WallTimeWarning, dateSpecDate, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
+import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
 import {
 	type DateSpec,
 	type ID,
@@ -735,7 +735,7 @@ export class TaskService {
 
 	/** Purges trash entries older than 30 days. */
 	purgeExpired(): Promise<number> {
-		const cutoff = new Date(this.store.clock.now().getTime() - TRASH_RETENTION_DAYS * 24 * 3600 * 1000).toISOString();
+		const cutoff = instantFromNow(this.store.clock, -TRASH_RETENTION_DAYS * 24 * 3600 * 1000);
 		const expired = [...this.store.state.trash.values()].filter((e) => e.deletedAt < cutoff);
 		if (expired.length === 0 || this.store.readOnlyState !== null) return Promise.resolve(0);
 		return this.store.run(

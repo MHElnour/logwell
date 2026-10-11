@@ -71,6 +71,11 @@ export function todayIn(zone: string, clock: Clock): LocalDate {
 	return DateTime.fromJSDate(clock.now(), { zone }).toISODate() ?? "";
 }
 
+/** The instant `ms` from now on the clock, as an ISO string; negative `ms` is in the past. */
+export function instantFromNow(clock: Clock, ms: number): Instant {
+	return new Date(clock.now().getTime() + ms).toISOString();
+}
+
 /** A number as two digits, "07". */
 export function pad2(n: number): string {
 	return String(n).padStart(2, "0");

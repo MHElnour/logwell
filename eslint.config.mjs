@@ -34,11 +34,8 @@ const LUXON_ALLOWED = [
 const NEW_DATE_ALLOWED = [
 	"src/domain/time.ts",
 	"src/app/SyncService.ts",
-	"src/app/TaskService.ts",
 	"src/domain/focus.ts",
 	"src/domain/ports.ts",
-	"src/obsidian/habitReminderHost.ts",
-	"src/persistence/backups.ts",
 ];
 const TIME_MESSAGE = "Date and time code goes through src/domain/time.ts.";
 const noLuxon = [
