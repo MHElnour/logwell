@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildView } from "../../src/app/views";
+import { buildList } from "../../src/app/views";
 import { emptyFilter, quadrantOf } from "../../src/domain/queries";
 import { type Priority, type TagColor } from "../../src/domain/types";
 import { CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
@@ -83,14 +83,14 @@ describe("PRI-05: sort and filter by priority", () => {
 		const med = await mk("med", 2);
 		return { h, none1, low, high, none2, med };
 	}
-	const titles = (g: ReturnType<typeof buildView>) => g.flatMap((x) => x.entries.map((e) => e.task.title));
+	const titles = (g: ReturnType<typeof buildList>["groups"]) => g.flatMap((x) => x.entries.map((e) => e.task.title));
 
 	it("sorts high, medium, low, none with ties in the existing order", async () => {
 		const { h } = await seed();
 		const ctx = h.app.queryContext();
-		const base = titles(buildView(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), ""));
+		const base = titles(buildList(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "").groups);
 		expect(base).toEqual(["none1", "low", "high", "none2", "med"]);
-		const sorted = titles(buildView(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "priority" }, ""));
+		const sorted = titles(buildList(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "priority" }, "").groups);
 		expect(sorted).toEqual(["high", "med", "low", "none1", "none2"]);
 	});
 
@@ -98,7 +98,7 @@ describe("PRI-05: sort and filter by priority", () => {
 		const { h, none1, high } = await seed();
 		await h.app.tasks.create({ title: "sub-of-none1", parentId: none1.id, priority: 1 });
 		const ctx = h.app.queryContext();
-		const rows = buildView(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "priority" }, "")[0]!.entries;
+		const rows = buildList(h.app.store.state, { kind: "inbox" }, ctx, { ...emptyFilter(), sort: "priority" }, "").groups[0]!.entries;
 		const i = rows.findIndex((e) => e.task.id === none1.id);
 		expect(rows[i + 1]?.task.title).toBe("sub-of-none1");
 		expect(rows[i + 1]?.depth).toBe(1);
@@ -109,7 +109,7 @@ describe("PRI-05: sort and filter by priority", () => {
 		const { h, high, none1, none2, med } = await seed();
 		const ctx = h.app.queryContext();
 		const ids = (f: ReturnType<typeof emptyFilter>) =>
-			new Set(buildView(h.app.store.state, { kind: "inbox" }, ctx, f, "")[0]!.entries.map((e) => e.task.id));
+			new Set(buildList(h.app.store.state, { kind: "inbox" }, ctx, f, "").groups[0]!.entries.map((e) => e.task.id));
 		expect(ids({ ...emptyFilter(), priorities: [1, 2] })).toEqual(new Set([high.id, med.id]));
 		expect(ids({ ...emptyFilter(), priorities: [0] })).toEqual(new Set([none1.id, none2.id]));
 		expect(ids({ ...emptyFilter(), priorities: [] }).size).toBe(5);

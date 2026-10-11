@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, buildCompleted, buildView, viewTitle } from "../../src/app/views";
+import { buildBoard, buildList, viewTitle } from "../../src/app/views";
 import type { TaskView, ViewGroup } from "../../src/app/views";
 import type { GroupBy } from "../../src/domain/groupBy";
 import { type TaskSort, emptyFilter } from "../../src/domain/queries";
@@ -12,7 +12,7 @@ import { type AppHarness, appHarness } from "./harness";
 const date = (d: string) => ({ kind: "date" as const, date: d });
 
 function group(h: AppHarness, view: TaskView, by: GroupBy | undefined, sort: TaskSort = "manual", held?: ReadonlySet<string>): ViewGroup[] {
-	return buildView(h.app.store.state, view, h.app.queryContext(), { ...emptyFilter(), sort }, "", held, by);
+	return buildList(h.app.store.state, view, h.app.queryContext(), { ...emptyFilter(), sort }, "", held, { groupBy: by }).groups;
 }
 const titles = (g: ViewGroup) => g.entries.map((e) => e.task.title);
 const shape = (gs: ViewGroup[]) => gs.map((g) => [g.key, g.label ?? g.date, g.tone, titles(g)]);
@@ -135,7 +135,7 @@ describe("group by date in a list", () => {
 		const gs = group(h, INBOX, "date");
 		expect(gs.flatMap(titles)).toEqual(["A", "A sub", "C", "E", "D"]);
 		expect(gs[0]!.entries[1]!.task.parentId).toBe(a.id);
-		expect(buildCompleted(h.app.store.state, INBOX, h.app.queryContext(), emptyFilter(), "").map((e) => e.task.title)).toEqual(["B"]);
+		expect(buildList(h.app.store.state, INBOX, h.app.queryContext(), emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["B"]);
 	});
 });
 

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { buildView } from "../../src/app/views";
+import { buildList } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID, type Task } from "../../src/domain/types";
 import { cancelMoveToSection, moveToSection, taskMenu } from "../../src/ui/actions";
@@ -439,7 +439,7 @@ describe("row drag between sections (D7)", () => {
 		const redraw = async () => {
 			const state = m.h.app.store.state;
 			const ctx = m.h.app.queryContext();
-			const groups = buildView(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "", undefined, "section");
+			const groups = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 			render(
 				<TaskList
 					host={host}

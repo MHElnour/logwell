@@ -33,7 +33,7 @@ import { COMPLETE_OCCURRENCE_LABEL, RecurrenceService, recordsOfTask, requireRep
 import { storableDbId } from "../persistence/schema";
 import { TRASH_RETENTION_DAYS } from "./settings";
 import { TagService } from "./CategoryService";
-import { ListIndex } from "./listIndex";
+import { TaskIndex } from "./taskIndex";
 import type { AppStore } from "./store";
 import type { Tx } from "./tx";
 
@@ -278,8 +278,8 @@ export class TaskService {
 	/** Bumped when the timer is cancelled, so a callback that already fired for it does nothing. */
 	private saveTimerGen = 0;
 	private saveWanted = false;
-	/** The tasks and open-task counts per list (the TickTick sync reads it, and the synced-list cap checks it). */
-	readonly lists: ListIndex;
+	/** Which tasks can be in each Tasks view and the open-task counts (the views, the sidebar and the TickTick sync read it; the synced-list cap checks it). */
+	readonly lists: TaskIndex;
 
 	constructor(
 		private readonly store: AppStore,
@@ -291,7 +291,7 @@ export class TaskService {
 		/** Completing a repeating task completes its occurrence. */
 		readonly recurrence: RecurrenceService = new RecurrenceService(store, settings),
 	) {
-		this.lists = new ListIndex(store);
+		this.lists = new TaskIndex(store);
 		// "status" fires when the store becomes writable again; "changed" covers reloads.
 		const replay = () => void this.drainRenames();
 		store.bus.on("status", replay);

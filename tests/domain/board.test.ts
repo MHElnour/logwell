@@ -3,7 +3,7 @@ import { dayTitle } from "../../src/domain/board";
 import { type QueryContext, emptyFilter, upcomingGroups, todayEntries, flatEntries } from "../../src/domain/queries";
 import type { DateSpec, Task } from "../../src/domain/types";
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
-import { buildBoard, buildView } from "../../src/app/views";
+import { buildBoard, buildList } from "../../src/app/views";
 import { makeTask } from "../persistence/fixtures";
 
 // Board columns. 2026-10-01 is a Thursday; the zone is Europe/Berlin.
@@ -42,7 +42,7 @@ describe("D1: Upcoming starts tomorrow", () => {
 		]);
 	});
 	it("the view shows the same", () => {
-		const groups = buildView(db(tasks), { kind: "upcoming" }, ctx, emptyFilter(), "");
+		const groups = buildList(db(tasks), { kind: "upcoming" }, ctx, emptyFilter(), "").groups;
 		expect(groups.map((g) => [g.date, g.tone])).toEqual([
 			["2026-10-02", "tomorrow"],
 			["2026-10-03", undefined],
@@ -65,7 +65,7 @@ describe("D5: default order is the sort key", () => {
 	it("the date sort still orders by time", () => {
 		const a = t("late", { sortKey: "A", scheduled: { kind: "datetime", local: "2026-10-01T20:00", tz: "Europe/Berlin" } });
 		const b = t("early", { sortKey: "B", scheduled: { kind: "datetime", local: "2026-10-01T08:00", tz: "Europe/Berlin" } });
-		const groups = buildView(db([a, b]), { kind: "today" }, ctx, { ...emptyFilter(), sort: "date" }, "");
+		const groups = buildList(db([a, b]), { kind: "today" }, ctx, { ...emptyFilter(), sort: "date" }, "").groups;
 		expect(groups[0]!.entries.map((e) => e.task.id)).toEqual(["early", "late"]);
 	});
 });

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
 import { beforeAll, describe, expect, it } from "vitest";
-import { buildView, sidebarCounts } from "../../src/app/views";
+import { buildList, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { addDays } from "../../src/domain/time";
 import type { Checkin, Habit, ID, Task } from "../../src/domain/types";
@@ -120,7 +120,7 @@ describe(`performance at ${TOTAL} tasks`, () => {
 		const container = document.createElement("div");
 		try {
 			tasks.scans = 0;
-			const groups = buildView(state, { kind: "inbox" }, ctx, emptyFilter(), "");
+			const groups = buildList(state, { kind: "inbox" }, ctx, emptyFilter(), "").groups;
 			render(
 				<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" onSelect={() => undefined} />,
 				container,
@@ -139,7 +139,7 @@ describe(`performance at ${TOTAL} tasks`, () => {
 		document.body.appendChild(container);
 		const query = (s: DbData) => {
 			sidebarCounts(s, ctx);
-			return buildView(s, { kind: "inbox" }, ctx, emptyFilter(), "");
+			return buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "").groups;
 		};
 		const renderInbox = () =>
 			render(

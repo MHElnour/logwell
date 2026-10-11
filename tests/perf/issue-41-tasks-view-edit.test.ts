@@ -12,9 +12,10 @@ import { U1Host } from "../ui/u1-helpers";
 import { type FakeLayout, fakeLayout } from "../ui/virtual-layout";
 
 // One task edit with the Tasks view open at 50,000 tasks (issue 41). The view rebuilds its list whenever the
-// task map changes, and `buildList` filters every task. This test measures the work one edit causes:
+// task map changes; with the task index, `buildList` filters only the view's candidates. This test measures the work
+// one edit causes:
 //   - the time of `buildList` (the open rows and the Completed group) for Inbox, Today and a list on the state
-//     after an edit, and of `sidebarCounts`;
+//     after an edit, and of `sidebarCounts`, with the index and without it (every task read);
 //   - the number of full passes over the task map during the edit command and during the section's redraw,
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
 //     with the source line that started each pass;
@@ -33,6 +34,9 @@ const RUNS = 5;
 const BIG = 40_000;
 const CI_SLACK = process.env.CI ? 4 : 1;
 const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild is far below it today
+// With the index, Today and a list read only their candidates: about 1 ms is the target, bounded loosely here.
+const CANDIDATES_BUDGET_MS = 5 * CI_SLACK;
+const COUNTS_BUDGET_MS = 2 * CI_SLACK; // the target is 0.5 ms
 const LOG = Boolean(process.env.CHECKPOINT_PERF_LOG);
 
 beforeAll(() => {
@@ -163,37 +167,56 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 			{ name: "a list", view: { kind: "category", id: lists[1] as ID }, text: "" },
 		];
 		const ctx = h.app.queryContext();
+		const index = h.app.tasks.lists;
 		const times = new Map<string, number[]>();
+		const scanTimes = new Map<string, number[]>();
 		const rows = new Map<string, string>();
 		const completed = new Map<string, number>();
 		const sorts = new Map<string, number>();
 		let counts: number[] = [];
+		let scanCounts: number[] = [];
 		for (let run = 0; run < RUNS + 1; run++) {
 			// The edit command, then the view work its change triggers.
 			await h.app.tasks.update(taskId(run * 1000 + 1), { title: `Edited ${run}` });
 			const state = h.app.store.state;
 			for (const { name, view, text } of views) {
+				const scanStart = performance.now();
+				const reference = buildList(state, view, ctx, emptyFilter(), text);
+				const scanMs = performance.now() - scanStart;
 				const start = performance.now();
-				const list = buildList(state, view, ctx, emptyFilter(), text);
+				const list = buildList(state, view, ctx, emptyFilter(), text, undefined, { index });
 				const ms = performance.now() - start;
+				expect(list).toEqual(reference);
 				const shown = list.groups.flatMap((g) => g.entries);
 				rows.set(name, `${shown.length} rows (${shown.filter((e) => e.task.status === "completed").length} completed under a parent), ${list.completed.length} in the Completed group`);
 				completed.set(name, list.completed.length);
 				if (run > 0) times.set(name, [...(times.get(name) ?? []), ms]);
+				if (run > 0) scanTimes.set(name, [...(scanTimes.get(name) ?? []), scanMs]);
 			}
+			const scanStart = performance.now();
+			const reference = sidebarCounts(state, ctx);
+			const scanMs = performance.now() - scanStart;
 			const start = performance.now();
-			sidebarCounts(state, ctx);
-			if (run > 0) counts = [...counts, performance.now() - start];
+			const fromIndex = sidebarCounts(state, ctx, index);
+			const ms = performance.now() - start;
+			expect(fromIndex).toEqual(reference);
+			if (run > 0) counts = [...counts, ms];
+			if (run > 0) scanCounts = [...scanCounts, scanMs];
 		}
 		// Outside the timed runs: the sort counter's stack reads would cost more than the sorts.
-		for (const { name, view, text } of views) sorts.set(name, (await countHierarchySorts(() => buildList(h.app.store.state, view, ctx, emptyFilter(), text))).sorts);
+		for (const { name, view, text } of views) sorts.set(name, (await countHierarchySorts(() => buildList(h.app.store.state, view, ctx, emptyFilter(), text, undefined, { index }))).sorts);
 		const report = [
-			...views.map(({ name }) => `${name} ${median(times.get(name) ?? []).toFixed(1)} ms (${rows.get(name)}; rows ordered ${sorts.get(name)}x)`),
-			`sidebar counts ${median(counts).toFixed(1)} ms`,
+			...views.map(
+				({ name }) =>
+					`${name} ${median(times.get(name) ?? []).toFixed(2)} ms with the index, ${median(scanTimes.get(name) ?? []).toFixed(2)} ms without (${rows.get(name)}; rows ordered ${sorts.get(name)}x)`,
+			),
+			`sidebar counts ${median(counts).toFixed(2)} ms with the index, ${median(scanCounts).toFixed(2)} ms without`,
 		].join("; ");
 		if (LOG) process.stderr.write(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}\n`);
 		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
-		expect(median(counts), report).toBeLessThan(VIEW_BUDGET_MS);
+		expect(median(times.get("Today") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
+		expect(median(times.get("a list") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
+		expect(median(counts), report).toBeLessThan(COUNTS_BUDGET_MS);
 		// A list orders its rows once for the open rows and the Completed group together; Today has no hierarchy.
 		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 1, "Inbox searching": 1, Today: 0, "a list": 1 });
 		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
@@ -269,10 +292,10 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 				);
 			}
 			expect(container.textContent).toContain(`Edited ${RUNS + 1}`);
-			// The redraw rebuilds the view from the changed task map: one pass for the rows and the Completed group
-			// together, then the sidebar counts, the lingering rows and the subtask counts.
-			expect(redrawPasses).toBeGreaterThanOrEqual(1);
-			expect(redrawPasses).toBeLessThanOrEqual(4);
+			// The rows, the Completed group and the sidebar counts read the task index; the lingering rows and the
+			// subtask counts (`useSubtaskCounts` in hooks.ts) still read every task.
+			expect(redrawPasses, tally(redraw[0] ?? [])).toBe(2);
+			expect(redraw[0]?.every((p) => p.includes("src/ui/useLingering.ts") || p.includes("src/ui/hooks.ts")), tally(redraw[0] ?? [])).toBe(true);
 			expect(commandPasses).toBeLessThanOrEqual(20);
 			// Inbox orders its rows once per redraw; Today has no hierarchy.
 			expect(sorts).toBe(open.view.kind === "inbox" ? 1 : 0);

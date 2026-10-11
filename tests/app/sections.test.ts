@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mergeCollections } from "../../src/app/DataService";
-import { buildBoard, buildView } from "../../src/app/views";
+import { buildBoard, buildList } from "../../src/app/views";
 import { isDomainError } from "../../src/domain/errors";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
@@ -250,16 +250,16 @@ describe("D7 grouping and D6 board", () => {
 		await h.app.tasks.create({ title: "Its sub", parentId: a.id });
 		await h.app.tasks.create({ title: "Inbox task" });
 		const ctx = h.app.queryContext();
-		const groups = buildView(h.app.store.state, { kind: "category", id: list.id }, ctx, emptyFilter(), "", undefined, "section");
+		const groups = buildList(h.app.store.state, { kind: "category", id: list.id }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
 		expect(groups.map((g) => [g.section, g.entries.map((e) => e.task.title)])).toEqual([
 			[{ id: null, name: "No section" }, ["Loose"]],
 			[{ id: s1.id, name: "Todo" }, []],
 			[{ id: s2.id, name: "Doing" }, ["In doing", "Its sub"]],
 		]);
-		const inbox = buildView(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, "section");
+		const inbox = buildList(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
 		expect(inbox.map((g) => [g.section, g.entries.length])).toEqual([[{ id: null, name: "No section" }, 1]]);
 		// Other views are untouched.
-		expect(buildView(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").every((g) => g.section === undefined)).toBe(true);
+		expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups.every((g) => g.section === undefined)).toBe(true);
 	});
 
 	it("the board has a No section column, then a column per section, each with its own completed group", async () => {

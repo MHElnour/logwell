@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportFileName, mergeCollections } from "../../src/app/DataService";
-import { buildCompleted, buildView, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
+import { buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { serializeDb } from "../../src/persistence/serializer";
@@ -24,12 +24,12 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await t.create({ title: "Undated" });
 		const ctx = h.app.queryContext();
 		expect(ctx.today).toBe(TODAY);
-		const today = buildView(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "");
+		const today = buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups;
 		expect(today.map((g) => [g.label, g.tone, g.entries.map((e) => e.task.title)])).toEqual([
 			["Overdue", "overdue", ["Overdue"]],
 			["Today", "today", ["Due today", "Tonight"]],
 		]);
-		const upcoming = buildView(h.app.store.state, { kind: "upcoming" }, ctx, emptyFilter(), "");
+		const upcoming = buildList(h.app.store.state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups;
 		// No today, no overdue.
 		expect(upcoming.map((g) => g.date)).toEqual(["2026-10-02"]);
 		expect(upcoming.map((g) => g.tone)).toEqual(["tomorrow"]);
@@ -46,23 +46,23 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await t.complete(done.id);
 		const state = h.app.store.state;
 		const ctx = h.app.queryContext();
-		const titles = (v: "today" | "upcoming") => buildView(state, { kind: v }, ctx, emptyFilter(), "").flatMap((g) => g.entries.map((e) => e.task.title));
+		const titles = (v: "today" | "upcoming") => buildList(state, { kind: v }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
 		expect(titles("upcoming")).toEqual(["Deadline later"]);
 		expect(titles("today").sort()).toEqual(["Deadline past", "Deadline today"]);
 		expect(sidebarCounts(state, ctx)).toMatchObject({ today: 2, upcoming: 1 });
-		expect(buildCompleted(state, { kind: "upcoming" }, ctx, emptyFilter(), "")).toEqual([]);
-		expect(buildCompleted(state, { kind: "today" }, ctx, emptyFilter(), "").map((e) => e.task.title)).toEqual(["Done"]);
+		expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed).toEqual([]);
+		expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Done"]);
 	});
 
 	it("SUB-07: a scheduled subtask shows on its own date with the parent's title", async () => {
 		const h = await appHarness();
 		const parent = (await h.app.tasks.create({ title: "Trip" })).task;
 		await h.app.tasks.create({ title: "Book hotel", parentId: parent.id, scheduled: { kind: "date", date: TODAY } });
-		const today = buildView(h.app.store.state, { kind: "today" }, h.app.queryContext(), emptyFilter(), "");
+		const today = buildList(h.app.store.state, { kind: "today" }, h.app.queryContext(), emptyFilter(), "").groups;
 		expect(today).toHaveLength(1);
 		expect(today[0]).toMatchObject({ label: "Today", tone: "today" });
 		expect(today[0]!.entries).toMatchObject([{ task: { title: "Book hotel" }, parentTitle: "Trip" }]);
-		const inbox = buildView(h.app.store.state, { kind: "inbox" }, h.app.queryContext(), emptyFilter(), "");
+		const inbox = buildList(h.app.store.state, { kind: "inbox" }, h.app.queryContext(), emptyFilter(), "").groups;
 		expect(inbox[0]!.entries.map((e) => [e.task.title, e.depth])).toEqual([
 			["Trip", 0],
 			["Book hotel", 1],
@@ -80,9 +80,9 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await T.complete(b.id);
 		const ctx = h.app.queryContext();
 		const state = h.app.store.state;
-		const open = buildView(state, { kind: "today" }, ctx, emptyFilter(), "").flatMap((g) => g.entries.map((e) => e.task.title));
+		const open = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
 		expect(open).toEqual(["Shown parent", "Sub A"]);
-		expect(buildCompleted(state, { kind: "today" }, ctx, emptyFilter(), "").map((e) => e.task.title)).toEqual(["Sub B"]);
+		expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
 	});
 
 	it("#98: Upcoming does the same", async () => {
@@ -96,9 +96,9 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await T.complete(b.id);
 		const ctx = h.app.queryContext();
 		const state = h.app.store.state;
-		const open = buildView(state, { kind: "upcoming" }, ctx, emptyFilter(), "").flatMap((g) => g.entries.map((e) => e.task.title));
+		const open = buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
 		expect(open).toEqual(["Shown parent", "Sub A"]);
-		expect(buildCompleted(state, { kind: "upcoming" }, ctx, emptyFilter(), "").map((e) => e.task.title)).toEqual(["Sub B"]);
+		expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
 	});
 
 	it("Completed is newest first; completing removes the task from Today (AS-10, list part)", async () => {
@@ -109,12 +109,12 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		h.clock.advance(1000);
 		await h.app.tasks.complete(b.id);
 		const ctx = h.app.queryContext();
-		expect(buildView(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "")).toEqual([]);
-		const done = buildView(h.app.store.state, { kind: "completed" }, ctx, emptyFilter(), "");
+		expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
+		const done = buildList(h.app.store.state, { kind: "completed" }, ctx, emptyFilter(), "").groups;
 		expect(done[0]!.entries.map((e) => e.task.title)).toEqual(["B", "A"]);
 	});
 
-	it("buildCompleted: Today holds a task completed today even when it was overdue, not one completed yesterday (spec §7)", async () => {
+	it("the Completed group: Today holds a task completed today even when it was overdue, not one completed yesterday (spec §7)", async () => {
 		const h = await appHarness();
 		const T = h.app.tasks;
 		const old = (await T.create({ title: "Old", scheduled: { kind: "date", date: "2026-09-20" } })).task;
@@ -124,14 +124,14 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await T.complete(fresh.id);
 		const ctx = { ...h.app.queryContext(), today: "2026-10-02" };
 		const s = h.app.store.state;
-		expect(buildCompleted(s, { kind: "today" }, ctx, emptyFilter(), "").map((e) => e.task.title)).toEqual(["Fresh"]);
+		expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Fresh"]);
 		// Open rows never include them, and the views without a group have none.
-		expect(buildView(s, { kind: "today" }, ctx, emptyFilter(), "")).toEqual([]);
-		expect(buildCompleted(s, { kind: "completed" }, ctx, emptyFilter(), "")).toEqual([]);
-		expect(buildCompleted(s, { kind: "trash" }, ctx, emptyFilter(), "")).toEqual([]);
+		expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
+		expect(buildList(s, { kind: "completed" }, ctx, emptyFilter(), "").completed).toEqual([]);
+		expect(buildList(s, { kind: "trash" }, ctx, emptyFilter(), "").completed).toEqual([]);
 	});
 
-	it("buildView keeps a completed subtask under its open parent and a held task in place", async () => {
+	it("buildList keeps a completed subtask under its open parent and a held task in place", async () => {
 		const h = await appHarness();
 		const T = h.app.tasks;
 		const parent = (await T.create({ title: "Trip" })).task;
@@ -142,11 +142,11 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		const ctx = h.app.queryContext();
 		const s = h.app.store.state;
 		const titles = (held?: Set<string>) =>
-			buildView(s, { kind: "inbox" }, ctx, emptyFilter(), "", held)[0]!.entries.map((e) => `${e.task.title}${e.depth === 1 ? " (sub)" : ""}`);
+			buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "", held).groups[0]!.entries.map((e) => `${e.task.title}${e.depth === 1 ? " (sub)" : ""}`);
 		expect(titles()).toEqual(["Trip", "Book (sub)"]);
 		expect(titles(new Set([solo.id]))).toEqual(["Trip", "Book (sub)", "Solo"]);
-		expect(buildCompleted(s, { kind: "inbox" }, ctx, emptyFilter(), "").map((e) => e.task.title)).toEqual(["Solo"]);
-		expect(buildCompleted(s, { kind: "inbox" }, ctx, emptyFilter(), "", new Set([solo.id]))).toEqual([]);
+		expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Solo"]);
+		expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "", new Set([solo.id])).completed).toEqual([]);
 	});
 
 	it("sort by date orders by key date, undated last, subtasks with their parent", async () => {
@@ -156,7 +156,7 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		await T.create({ title: "Late", scheduled: { kind: "date", date: "2026-10-09" } });
 		const soon = (await T.create({ title: "Soon", deadline: { kind: "date", date: "2026-10-02" } })).task;
 		await T.create({ title: "Soon child", parentId: soon.id });
-		const rows = buildView(h.app.store.state, { kind: "inbox" }, h.app.queryContext(), { ...emptyFilter(), sort: "date" }, "")[0]!.entries;
+		const rows = buildList(h.app.store.state, { kind: "inbox" }, h.app.queryContext(), { ...emptyFilter(), sort: "date" }, "").groups[0]!.entries;
 		expect(rows.map((e) => e.task.title)).toEqual(["Soon", "Soon child", "Late", "None"]);
 	});
 
@@ -180,7 +180,7 @@ describe("views (VIEW-01..03, SUB-07)", () => {
 		expect(titles({ ...emptyFilter(), quadrants: ["urgent"] }, "read")).toEqual(["read news"]);
 		expect(titles({ ...emptyFilter(), date: "none" }, "read")).toHaveLength(2);
 		expect(globalSearch(s, "stud", ctx, emptyFilter()).categories.map((c) => c.name)).toEqual(["Study"]);
-		const inView = buildView(s, { kind: "category", id: study.id }, ctx, emptyFilter(), "python");
+		const inView = buildList(s, { kind: "category", id: study.id }, ctx, emptyFilter(), "python").groups;
 		expect(inView[0]!.entries).toHaveLength(1);
 	});
 

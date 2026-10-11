@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { buildView } from "../../src/app/views";
+import { buildList } from "../../src/app/views";
 import { type TaskSort, emptyFilter } from "../../src/domain/queries";
 import type { Task } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
@@ -55,7 +55,7 @@ async function mount(sort: TaskSort | undefined = "manual"): Promise<Mount> {
 		const state = h.app.store.state;
 		const ctx = h.app.queryContext();
 		const filter = { ...emptyFilter("all"), sort: s ?? "manual" };
-		const groups = buildView(state, { kind: "inbox" }, ctx, filter, "");
+		const groups = buildList(state, { kind: "inbox" }, ctx, filter, "").groups;
 		render(
 			<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort={s} onSelect={() => undefined} />,
 			root,
@@ -211,7 +211,7 @@ describe("list row reorder (D5)", () => {
 		const onSelect = vi.fn();
 		const state = m.h.app.store.state;
 		const ctx = m.h.app.queryContext();
-		const groups = buildView(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "");
+		const groups = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "").groups;
 		render(
 			<TaskList host={m.host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort="manual" onSelect={onSelect} />,
 			m.root,
@@ -237,7 +237,7 @@ describe("list row reorder (D5)", () => {
 		await seedFlat(m);
 		const state = m.h.app.store.state;
 		const ctx = m.h.app.queryContext();
-		const groups = buildView(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "");
+		const groups = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "").groups;
 		render(
 			<TaskList host={m.host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort="manual" readOnly onSelect={() => undefined} />,
 			m.root,

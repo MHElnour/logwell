@@ -1,6 +1,6 @@
 import { type App, SecretComponent, type Setting, type SettingDefinitionItem, type SettingGroupItem } from "obsidian";
 import { type CheckpointSettings, DEFAULT_SETTINGS, TICKTICK_PULL_RANGE } from "../app/settings";
-import { SYNCED_LIST_OPEN_MAX } from "../app/listIndex";
+import { SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import type { SyncService } from "../app/SyncService";
 import type { TickTickDevicePort, TickTickSecretPort } from "../app/ports";
 import type { DbData } from "../persistence/schema";

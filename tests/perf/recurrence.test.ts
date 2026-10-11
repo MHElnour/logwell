@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildView, sidebarCounts } from "../../src/app/views";
+import { buildList, sidebarCounts } from "../../src/app/views";
 import { type CalendarContext, layoutMonth, monthGrid } from "../../src/domain/calendar";
 import { type QueryContext, emptyFilter } from "../../src/domain/queries";
 import { indexOccurrenceRecords, scheduleResolver } from "../../src/domain/recurrence";
@@ -146,7 +146,7 @@ describe("target-scale views with 500 repeating tasks (D12)", () => {
 
 	it(`Today builds under ${BUDGET_MS} ms and the repeating tasks are in it`, () => {
 		const ms = timed(full, (state, ctx) => {
-			const groups = buildView(state, { kind: "today" }, ctx, emptyFilter(), "");
+			const groups = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups;
 			expect(groups.flatMap((g) => g.entries).some((e) => e.task.recurrence !== null)).toBe(true);
 		});
 		log("today", ms);
@@ -155,7 +155,7 @@ describe("target-scale views with 500 repeating tasks (D12)", () => {
 
 	it(`Upcoming builds under ${BUDGET_MS} ms and lists a series once`, () => {
 		const ms = timed(full, (state, ctx) => {
-			const groups = buildView(state, { kind: "upcoming" }, ctx, emptyFilter(), "");
+			const groups = buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups;
 			const ids = groups.flatMap((g) => g.entries.map((e) => e.task.id));
 			expect(new Set(ids).size).toBe(ids.length);
 		});
@@ -190,8 +190,8 @@ describe("target-scale views with 500 repeating tasks (D12)", () => {
 	it("grows linearly with the number of tasks: four times the tasks take well under ten times as long", () => {
 		const work = (state: DbData, ctx: QueryContext): void => {
 			sidebarCounts(state, ctx);
-			buildView(state, { kind: "today" }, ctx, emptyFilter(), "");
-			buildView(state, { kind: "upcoming" }, ctx, emptyFilter(), "");
+			buildList(state, { kind: "today" }, ctx, emptyFilter(), "");
+			buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "");
 		};
 		const small = timed(quarter, work);
 		const large = timed(full, work);

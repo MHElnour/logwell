@@ -2,7 +2,7 @@ import { isInboxProjectId } from "../domain/ticktick/inbox";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { TickTickApi } from "./ports";
-import type { ListIndex } from "./listIndex";
+import type { TaskIndex } from "./taskIndex";
 import { INBOX_ALIAS, canonicalProjectId } from "./tickTickInbox";
 
 // What the "Sync with TickTick" link dialog offers for one list. Pure over the TickTick
@@ -66,7 +66,7 @@ export function defaultOption(options: readonly LinkOption[], listName: string):
 }
 
 /** The open tasks of the list that a first sync sends (repeating tasks do not sync). */
-export function countPushable(state: DbData, index: Pick<ListIndex, "tasksOf">, listId: ID): number {
+export function countPushable(state: DbData, index: Pick<TaskIndex, "tasksOf">, listId: ID): number {
 	let n = 0;
 	for (const t of index.tasksOf((id) => state.tasks.get(id), listId)) if (t.status === "open" && t.recurrence === null) n++;
 	return n;
