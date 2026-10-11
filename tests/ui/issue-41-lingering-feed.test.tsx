@@ -24,6 +24,11 @@ function Probe(props: { active: boolean }) {
 	held = useLingering(h.app.store, tasks, props.active);
 	return null;
 }
+/** The probe with the task map given, as a section passes the map of the state it renders. */
+function MapProbe(props: { tasks: ReadonlyMap<ID, Task> }) {
+	held = useLingering(h.app.store, props.tasks, true);
+	return null;
+}
 const draw = async (active = true) => {
 	render(<Probe active={active} />, host);
 	await vi.advanceTimersByTimeAsync(0);
@@ -164,6 +169,38 @@ describe("the hold on a just-completed row reads the store's changes (issue 41)"
 		await h.app.tasks.reopen(a);
 		for (let i = 0; i < FEED_LIMIT; i++) await h.app.tasks.update(b, { title: `Buy milk ${i}` });
 		expect(h.app.store.changesSince(h.app.store.version - FEED_LIMIT - 1)).toBeUndefined();
+		await draw();
+		expect(held.size).toBe(0);
+	});
+
+	it("a render of an older task map than the store's looks at nothing; the render of the current one holds the task", async () => {
+		const older = h.app.store.state.tasks;
+		render(<MapProbe tasks={older} />, host);
+		await vi.advanceTimersByTimeAsync(0);
+		await h.app.tasks.complete(a);
+		// The section re-renders alone (a hold ending) before the app passes it the new state.
+		render(<MapProbe tasks={older} />, host);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(held.size).toBe(0);
+		render(<MapProbe tasks={h.app.store.state.tasks} />, host);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(held).toEqual(new Set([a]));
+	});
+
+	it("tasks written without a change event hold nothing new, and a held task they reopened is released", async () => {
+		await draw();
+		await h.app.tasks.complete(b);
+		await draw();
+		expect(held).toEqual(new Set([b]));
+		// Straight to persistence, no change event: `a` completed and `b` reopened.
+		const data = h.store.data;
+		const done: Task = { ...data.tasks.get(a)!, status: "completed", completedAt: "2026-10-01T09:00:00.000Z" };
+		const reopened: Task = { ...data.tasks.get(b)!, status: "open", completedAt: null };
+		const ops: JournalOp[] = [
+			{ c: "tasks", id: a, v: done },
+			{ c: "tasks", id: b, v: reopened },
+		];
+		h.store.commit({ ...data, tasks: new Map(data.tasks).set(a, done).set(b, reopened) }, ops);
 		await draw();
 		expect(held.size).toBe(0);
 	});

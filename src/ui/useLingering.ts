@@ -59,6 +59,11 @@ export type ChangeFeed = Pick<AppStore, "state" | "version" | "changesSince">;
  * last look and is completed now. A change the store cannot list (a reload, a replacement of all records,
  * more changes than its feed keeps) holds nothing; it only releases held tasks that are open again. The
  * held set is a ref that keeps its identity until it changes; only the timer that ends a hold asks for a render.
+ *
+ * `tasks` must be the task map of the state the caller renders, which is the store's (`store.state.tasks`) or an
+ * older one of the store's: a render of an older map (this section re-rendered alone before the app caught up) looks
+ * at nothing, so the held set always matches the rows drawn; the render of the current map reads the changes. A map
+ * that is never the store's holds nothing.
  */
 export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, active: boolean, ms = LINGER_MS): ReadonlySet<ID> {
 	const { held, timers, release, hold } = useHolds(window, ms);
