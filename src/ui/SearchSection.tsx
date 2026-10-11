@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { type LinkedNotes, globalSearch, linkedNotes, searchNoteContent } from "../app/views";
+import { type LinkedNotes, type SearchResults, globalSearch, linkedNotes, searchNoteContent } from "../app/views";
 import { type QueryContext, type TaskFilter, emptyFilter } from "../domain/queries";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -26,6 +26,7 @@ export function initialSearchState(): SearchSectionState {
 const NOTE_SCAN_DELAY_MS = 300;
 const NO_IDS: ReadonlySet<ID> = new Set();
 const NO_LINKS: LinkedNotes = new Map();
+const NO_RESULTS: SearchResults = { tasks: [], categories: [], habits: [] };
 /** The task IDs whose linked note matched, with the query they were found for; no note text. */
 const NO_FOUND: { query: string; ids: ReadonlySet<ID> } = { query: "", ids: NO_IDS };
 
@@ -125,7 +126,15 @@ export function SearchSection(props: {
 	// Matches belong to the query they were found for and to the toggle.
 	const noteMatches = ui.includeNotes && found.query === query ? found.ids : NO_IDS;
 
-	const results = globalSearch(state, ui.query, ctx, ui.filter, noteMatches);
+	// Each title is checked once per change of the tasks, the query, the filter or the note matches, and only while
+	// shown: not on every render (a selection, a hidden section's redraw after each store change).
+	const results = useActiveMemo(
+		props.visible,
+		() => globalSearch(state, ui.query, ctx, ui.filter, noteMatches),
+		// The filter reads the effective schedule: completing or skipping an occurrence changes no task, only its records.
+		[state.tasks, state.occurrenceRecords, state.categories, state.habits, ui.query, ui.filter, noteMatches, ctx.today, ctx.zone, ctx.upcomingDays, ctx.weekStart],
+		NO_RESULTS,
+	);
 	const searching = ui.query.trim() !== "";
 	// Counted only while the results are shown: the list below would otherwise scan every task on each store change of a hidden section.
 	const subtaskCounts = useSubtaskCounts(host, state.tasks, props.visible && searching);

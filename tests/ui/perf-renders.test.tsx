@@ -57,8 +57,29 @@ describe("render passes", () => {
 		expect(rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim())).toContain("B edited");
 		expect(builds() - b0).toBe(1);
 		expect(rowRenders() - r0).toBe(1);
-		// The Search section is mounted but hidden: it renders once for the change, not a second time from an effect.
+		// The Search section is mounted but hidden: it searches nothing for the change (issue 41).
+		expect(searches() - s0).toBe(0);
+	});
+
+	it("Search reads the titles once per change while shown, and not again on a render without a change (issue 41)", async () => {
+		const { m, ids } = await mountWithTasks(["Call the bank", "Buy milk", "Call mom"]);
+		await click(m.root.querySelector('.cp-rail [aria-label="Search"]'));
+		const box = m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;
+		box.value = "call";
+		box.dispatchEvent(new Event("input", { bubbles: true }));
+		await flush();
+		const results = () => [...m.root.querySelectorAll<HTMLElement>(".cp-search .cp-task-row")];
+		expect(results()).toHaveLength(2);
+		const s0 = searches();
+		await m.h.app.tasks.update(ids[1]!, { title: "Call the plumber" });
+		await flush();
+		expect(results()).toHaveLength(3);
 		expect(searches() - s0).toBe(1);
+		// Selecting a result renders the section again; the tasks, query and filter are the same, so no search runs.
+		const s1 = searches();
+		await click(results()[0]);
+		expect(m.root.querySelector(".cp-details-pane")).not.toBeNull();
+		expect(searches() - s1).toBe(0);
 	});
 
 	it("selecting a row re-renders only the row that was selected", async () => {
