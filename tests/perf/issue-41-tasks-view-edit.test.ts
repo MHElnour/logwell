@@ -34,12 +34,17 @@ const RUNS = 5;
 const BIG = 40_000;
 const CI_SLACK = process.env.CI ? 4 : 1;
 const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild is far below it today
-// With the index, Today and a list read only their candidates: about 1 ms is the target, bounded loosely here.
-const CANDIDATES_BUDGET_MS = 5 * CI_SLACK;
-const COUNTS_BUDGET_MS = 2 * CI_SLACK; // the target is 0.5 ms
-// Inbox builds 22,500 rows (the target was 3 ms). With each list's order kept in the index no rows are sorted, and the
-// time left is making the rows; it was about 11 ms before the order was kept. The sort count below is the exact check.
-const INBOX_BUDGET_MS = 9 * CI_SLACK;
+// Times depend on how busy the machine is, so a view with the index is compared with the same view read through every
+// task, measured in the same run (the fastest of several interleaved runs of each, so load hits both alike). The exact
+// checks are the candidate counts and the sort counts; the absolute bound is only a safety net.
+const SAFETY_NET_MS = 50 * CI_SLACK;
+// Measured alone: Inbox about 0.5 of the full read (22,500 rows to make either way; no sort with the index), Today 0.15
+// (2,500 dated tasks are its candidates), a list 0.3, the sidebar counts 0.12.
+const INBOX_RATIO = 0.8;
+const TODAY_RATIO = 0.5;
+const LIST_RATIO = 0.6;
+const COUNTS_RATIO = 0.5;
+const fastest = (xs: number[]) => Math.min(...xs);
 const LOG = Boolean(process.env.CHECKPOINT_PERF_LOG);
 
 beforeAll(() => {
@@ -217,10 +222,20 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		].join("; ");
 		if (LOG) process.stderr.write(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}\n`);
 		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
-		expect(median(times.get("Today") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
-		expect(median(times.get("a list") ?? []), report).toBeLessThan(CANDIDATES_BUDGET_MS);
-		expect(median(counts), report).toBeLessThan(COUNTS_BUDGET_MS);
-		expect(median(times.get("Inbox") ?? []), report).toBeLessThan(INBOX_BUDGET_MS);
+		// The index reads only the view's candidates: the Inbox half the tasks, Today the dated tasks, a list its own.
+		const state = h.app.store.state;
+		expect(index.candidates(state, { kind: "inbox" })?.length, report).toBe(TASKS / 2);
+		expect(index.candidates(state, { kind: "today" })?.length, report).toBe(TASKS / 20);
+		expect(index.candidates(state, { kind: "category", id: lists[1] as ID })?.length, report).toBe(TASKS / LISTS);
+		const ratio = (name: string) => fastest(times.get(name) ?? []) / fastest(scanTimes.get(name) ?? []);
+		const ratios = `Inbox ${ratio("Inbox").toFixed(2)}, Today ${ratio("Today").toFixed(2)}, a list ${ratio("a list").toFixed(2)}, sidebar counts ${(fastest(counts) / fastest(scanCounts)).toFixed(2)} of the full read`;
+		if (LOG) process.stderr.write(`issue-41: fastest with the index over fastest without: ${ratios}\n`);
+		expect(ratio("Inbox"), `${ratios}; ${report}`).toBeLessThan(INBOX_RATIO);
+		expect(ratio("Today"), `${ratios}; ${report}`).toBeLessThan(TODAY_RATIO);
+		expect(ratio("a list"), `${ratios}; ${report}`).toBeLessThan(LIST_RATIO);
+		expect(fastest(counts) / fastest(scanCounts), `${ratios}; ${report}`).toBeLessThan(COUNTS_RATIO);
+		for (const name of ["Inbox", "Today", "a list"]) expect(fastest(times.get(name) ?? []), report).toBeLessThan(SAFETY_NET_MS);
+		expect(fastest(counts), report).toBeLessThan(SAFETY_NET_MS);
 		// With the index no list sorts its rows (it walks the index's order); Today has no hierarchy.
 		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 0, "Inbox searching": 0, Today: 0, "a list": 0 });
 		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
@@ -296,7 +311,8 @@ describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
 		const report = `Today after complete and save: ${median(times).toFixed(2)} ms with the index, ${median(scans).toFixed(2)} ms without; index rebuilds ${index.rebuilds - rebuilds}`;
 		if (LOG) process.stderr.write(`issue-41: ${report}\n`);
 		expect(index.rebuilds - rebuilds, report).toBe(0);
-		expect(median(times), report).toBeLessThan(CANDIDATES_BUDGET_MS);
+		expect(fastest(times) / fastest(scans), report).toBeLessThan(TODAY_RATIO);
+		expect(fastest(times), report).toBeLessThan(SAFETY_NET_MS);
 	}, 120_000);
 
 	for (const open of [
