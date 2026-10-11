@@ -74,7 +74,7 @@ describe("sidebar: a parent tag is a tag", () => {
 describe("sidebar: deleting a parent tag", () => {
 	it("the confirmation says the child tags move to the top level; a leaf keeps the plain text", async () => {
 		const m = await mount();
-		await m.h.app.tasks.create({ title: "Tidy up", tagKeys: ["home"] });
+		const tidy = await m.h.app.tasks.create({ title: "Tidy up", tagKeys: ["home"] });
 		await settle();
 		const messages: string[] = [];
 		m.host.choose = (async (_t: string, message: string) => {
@@ -86,6 +86,13 @@ describe("sidebar: deleting a parent tag", () => {
 		menuItem(await menuOf(m, "Errands"), "Delete").run();
 		await settle();
 		expect(messages).toEqual(["Delete @Home? It is removed from 1 task, and its child tags move to the top level.", "Delete @Errands? It is removed from 1 task."]);
+		// A tag no task holds itself: no "removed from 0 tasks".
+		await m.h.app.tasks.update(tidy.task.id, { tagKeys: [] });
+		await settle();
+		messages.length = 0;
+		menuItem(await menuOf(m, "Home"), "Delete").run();
+		await settle();
+		expect(messages).toEqual(["Delete @Home? Its child tags move to the top level."]);
 		// Nothing was confirmed, so nothing changed.
 		expect(labels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
 	});

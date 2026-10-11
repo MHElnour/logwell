@@ -329,7 +329,10 @@ async function deleteTag(host: UiHost, tag: Tag, onDeleted: (moves: readonly Tag
 	const isParent = [...host.app.store.state.tags.keys()].some((k) => k !== tag.key && isUnderTag(k, tag.key));
 	const ok = await host.choose(
 		"Delete tag",
-		`Delete @${label}? It is removed from ${tasks}${isParent ? ", and its child tags move to the top level" : ""}.`,
+		// No "removed from 0 tasks" when no task holds the tag itself.
+		n === 0
+			? `Delete @${label}?${isParent ? " Its child tags move to the top level." : ""}`
+			: `Delete @${label}? It is removed from ${tasks}${isParent ? ", and its child tags move to the top level" : ""}.`,
 		[{ label: "Delete", value: true, warning: true }],
 	);
 	if (ok !== true) return;
