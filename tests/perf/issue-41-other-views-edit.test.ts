@@ -23,7 +23,6 @@ import { LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, coun
 // title (a text search has no candidates), once per change and only while shown.
 const CALENDAR_RATIO = 0.6;
 const CALENDAR_BEFORE_RATIO = 0.5;
-const MATRIX_LIST_RATIO = 0.75;
 
 const dom = domCleanup();
 
@@ -104,7 +103,8 @@ describe(`one edit with the calendar, the matrix or Search at ${TASKS} tasks (is
 		expect(ratio("calendar week"), report).toBeLessThan(CALENDAR_RATIO);
 		expect(ratio("calendar month"), report).toBeLessThan(CALENDAR_RATIO);
 		expect(ratio("calendar week, before"), report).toBeLessThan(CALENDAR_BEFORE_RATIO);
-		expect(ratio("matrix a list"), report).toBeLessThan(MATRIX_LIST_RATIO);
+		// No speed ratio for the matrix: the index saves only a few ms for one list, too little to measure on shared CI
+		// (#78). It is held by the equal result, the zero passes above, and the safety net below.
 		for (const { name } of cases) expect(fastest(times.get(name) ?? []), report).toBeLessThan(SAFETY_NET_MS);
 	}, 120_000);
 
