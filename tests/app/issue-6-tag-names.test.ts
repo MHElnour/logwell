@@ -13,7 +13,7 @@ describe("TagService.create", () => {
 		await h.app.tags.create("Home/Calls");
 		await expect(h.app.tags.create("Work/CALLS")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Calls" is already used by another tag.' });
 		await expect(h.app.tags.create("calls")).rejects.toMatchObject({ code: "InvalidTag" });
-		expect(h.app.tags.list().map((t) => t.key)).toEqual(["home/calls"]);
+		expect(h.app.tags.list().map((t) => t.key)).toEqual(["home", "home/calls"]);
 	});
 
 	it("a refused create leaves the labels and name lookups of the committed tags unchanged", async () => {
@@ -39,11 +39,12 @@ describe("TagService.create", () => {
 		expect(h.app.tags.list()).toHaveLength(0);
 	});
 
-	it("still returns an existing key, and lets the implicit parent become a tag", async () => {
+	it("still returns an existing key, the parent made with a child too", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Home/Calls");
+		const home = h.app.store.state.tags.get("home");
 		expect((await h.app.tags.create("HOME/calls")).key).toBe("home/calls");
-		expect((await h.app.tags.create("Home")).key).toBe("home");
+		expect(await h.app.tags.create("Home")).toBe(home);
 		expect((await h.app.tags.create("home/garden")).key).toBe("home/garden");
 	});
 });
@@ -54,7 +55,7 @@ describe("TaskService.create with newTags", () => {
 		await h.app.tags.create("home/calls");
 		await expect(h.app.tasks.create({ title: "x", newTags: ["work/calls"] })).rejects.toMatchObject({ code: "InvalidTag" });
 		expect(h.app.store.state.tasks.size).toBe(0);
-		expect(h.app.tags.list()).toHaveLength(1);
+		expect(h.app.tags.list()).toHaveLength(2);
 	});
 
 	it("refuses two new tags of one name in one task", async () => {

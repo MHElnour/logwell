@@ -73,7 +73,9 @@ describe("sync after a tag rename", () => {
 		const s = await syncHarness();
 		const { listId } = await linkedList(s);
 		await s.h.app.store.run("Seed", (tx) => {
+			tx.put("tags", { key: "home", displayName: "Home", color: null, createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" });
 			tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" });
+			tx.put("tags", { key: "work", displayName: "Work", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
 			tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
 		});
 		await s.h.app.tasks.create({ title: "Ring mum", categoryId: listId, tagKeys: ["home/calls"] });

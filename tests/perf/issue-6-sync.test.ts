@@ -37,7 +37,7 @@ function linkedDb(total: number, tt: FakeTickTick, tagged = false, notes = 0): s
 	const tagKeys = tagged ? ["home/calls", "errands"] : [];
 	const tags = new Map<string, Tag>();
 	if (tagged) {
-		for (const [key, displayName] of [["home/calls", "Home/Calls"], ["errands", "Errands"]] as const) {
+		for (const [key, displayName] of [["home", "Home"], ["home/calls", "Home/Calls"], ["errands", "Errands"]] as const) {
 			tags.set(key, { key, displayName, color: null, createdAt: NOW, modifiedAt: NOW });
 		}
 		tt.addTag("home", "Home");

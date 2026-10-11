@@ -94,10 +94,10 @@ A slash makes a path: `@home/garden` sits under home. Tags nest one level deep. 
 
 - The sidebar shows your tags as a tree under the Tags heading. The chevron beside a parent folds its children.
 - Click a tag to see its tasks. A parent's view and its count of open tasks include its children, and each task counts once.
-- A parent you never created as a tag shows while a child exists. It has no color and no menu.
+- Every tag in the tree is a tag of its own, with a color and the same menu. Creating `@home/garden` creates `home` too when it does not exist yet, in the same step.
 - `@home/garden` does not also tag a task `@home`.
 - Outside the sidebar tree a tag shows just its own name: `@garden`, not `@home/garden`. Type it the same way in Quick Add, the tag field and a task block. Two tags that already share a name (older databases only) show their full paths, so each stays distinct.
-- Adding a task from a tag's view gives it that tag, unless the tag is a parent you never created.
+- Adding a task from a tag's view gives it that tag, a parent's too.
 
 A tag name is used once, whatever its parent. If `home/calls` exists, you cannot create `work/calls`: Logwell says "The name "calls" is already used by another tag." A tag cannot repeat its parent's name either, as in `home/home`. In Quick Add, such an `@name` stays in the title as text. Tags that already share a name keep working.
 
@@ -118,6 +118,6 @@ Renaming a tag does not change `tag:` lines in your notes; edit them yourself. S
 
 Right-click a tag in the sidebar, or focus it and press the context-menu key or Shift+F10. Choose **No color** or a color, such as **Color: green**, or **Delete**.
 
-Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent keeps its children.
+Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent moves its child tags to the top level: `@home/garden` becomes `@garden` on every task, in the same step. If a child's view is open, it stays open under the child's new place.
 
 To show only tasks with chosen tags in Search, the calendar or the matrix, see [Views](views.md).

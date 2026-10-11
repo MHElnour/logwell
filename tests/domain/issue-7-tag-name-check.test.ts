@@ -55,8 +55,8 @@ describe("tagNameTextProblem", () => {
 describe("TagNames.tooLong and tagNameRefusal", () => {
 	const long = "x".repeat(65);
 
-	it("a new segment over 64 characters is too long; an existing node keeps any length", () => {
-		const names = TagNames.of([{ key: `${long}/calls` }]);
+	it("a new segment over 64 characters is too long; an existing tag keeps any length", () => {
+		const names = TagNames.of([{ key: long }, { key: `${long}/calls` }]);
 		expect(names.tooLong(long)).toBe(false);
 		expect(names.tooLong(`${long}/home`)).toBe(false);
 		expect(names.tooLong(`home/${long}`)).toBe(true);
@@ -74,7 +74,7 @@ describe("TagNames.tooLong and tagNameRefusal", () => {
 });
 
 describe("newTagProblem: New tag", () => {
-	const tags = map(tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
+	const tags = map(tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
 
 	it("text problems come first", () => {
 		expect(newTagProblem(tags, "", null)).toBe("Enter a name.");
@@ -82,7 +82,7 @@ describe("newTagProblem: New tag", () => {
 		expect(newTagProblem(tags, "a/b", null)).toBe(SLASH);
 	});
 
-	it("an existing record or implicit parent at the key is a name in use", () => {
+	it("an existing tag at the key is a name in use", () => {
 		expect(newTagProblem(tags, "errands", null)).toBe('The name "Errands" is already used by another tag.');
 		expect(newTagProblem(tags, "ERRANDS", null)).toBe('The name "Errands" is already used by another tag.');
 		expect(newTagProblem(tags, "home", null)).toBe('The name "Home" is already used by another tag.');
@@ -95,7 +95,7 @@ describe("newTagProblem: New tag", () => {
 		expect(newTagProblem(tags, "home", "home")).toBe(TAG_REPEAT_MESSAGE);
 	});
 
-	it("a free name is fine at the top or under a record or implicit parent", () => {
+	it("a free name is fine at the top or under a top-level tag", () => {
 		expect(newTagProblem(tags, "Garden", null)).toBeNull();
 		expect(newTagProblem(tags, "Garden", "home")).toBeNull();
 		expect(newTagProblem(tags, "Shop", "errands")).toBeNull();
@@ -103,7 +103,14 @@ describe("newTagProblem: New tag", () => {
 });
 
 describe("newTagProblem: Edit tag (the tag and its children are left out)", () => {
-	const tags = map(tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden"), tag("errands", "Errands"), tag("work/desk", "Work/Desk"));
+	const tags = map(
+		tag("home", "Home"),
+		tag("home/calls", "Home/Calls"),
+		tag("home/garden", "Home/Garden"),
+		tag("errands", "Errands"),
+		tag("work", "Work"),
+		tag("work/desk", "Work/Desk"),
+	);
 
 	it("the tag's own name is allowed, in any casing", () => {
 		expect(newTagProblem(tags, "home", null, "home")).toBeNull();
@@ -117,7 +124,7 @@ describe("newTagProblem: Edit tag (the tag and its children are left out)", () =
 		expect(newTagProblem(tags, "Calls", "work", "home/calls")).toBeNull();
 	});
 
-	it("another tag's name, an implicit parent's name, or a child's name is refused", () => {
+	it("another tag's name, a parent's name, or a child's name is refused", () => {
 		expect(newTagProblem(tags, "Errands", null, "home")).toBe('The name "Errands" is already used by another tag.');
 		expect(newTagProblem(tags, "work", null, "errands")).toBe('The name "Work" is already used by another tag.');
 		expect(newTagProblem(tags, "desk", null, "errands")).toBe('The name "Desk" is already used by another tag.');

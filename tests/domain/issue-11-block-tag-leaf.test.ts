@@ -34,7 +34,7 @@ const task = (id: string, tagKeys: string[]): Task => ({
 	modifiedAt: TS,
 });
 
-const tags = [tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden")];
+const tags = [tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden")];
 const tasks = [task("call", ["home/calls"]), task("garden", ["home/garden"]), task("none", [])];
 const state: BlockQueryState = {
 	tasks: new Map(tasks.map((t) => [t.id, t])),

@@ -24,11 +24,11 @@ describe("tag names (D29)", () => {
 		expect(tagNameClash(["calls"], "work/calls")).toBe("calls");
 	});
 
-	it("an implicit parent is a name too", () => {
-		expect(tagNameClash(["home/calls"], "work/home")).toBe("home");
-		// The parent itself may become a tag, and may get more children.
-		expect(tagNameClash(["home/calls"], "home")).toBeNull();
-		expect(tagNameClash(["home/calls"], "home/garden")).toBeNull();
+	it("a parent tag is a name too", () => {
+		expect(tagNameClash(["home", "home/calls"], "work/home")).toBe("home");
+		// The parent itself is no clash, and may get more children.
+		expect(tagNameClash(["home", "home/calls"], "home")).toBeNull();
+		expect(tagNameClash(["home", "home/calls"], "home/garden")).toBeNull();
 	});
 
 	it("a new parent segment that repeats a name clashes", () => {
@@ -46,7 +46,7 @@ describe("tag names (D29)", () => {
 	});
 
 	it("the message names the existing tag by its own name, in its own casing", () => {
-		const tags = map(tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
+		const tags = map(tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("errands", "Errands"));
 		expect(tagNameClashMessage(tags, "home/calls")).toBe('The name "Calls" is already used by another tag.');
 		expect(tagNameClashMessage(tags, "errands")).toBe('The name "Errands" is already used by another tag.');
 		expect(tagNameClashMessage(tags, "home")).toBe('The name "Home" is already used by another tag.');
@@ -66,15 +66,15 @@ describe("tag names (D29)", () => {
 		expect(tagLabel(working, "home/calls")).toBe("Home/Calls");
 	});
 
-	it("a tag owns by the older of its own date and its oldest child's, so a parent that gets a record keeps its name", () => {
+	it("a tag owns its name by its own record's date, not its children's", () => {
 		const homeCalls = tag("home/calls", "Home/Calls", "2026-01-01T00:00:00Z");
 		const workHome = tag("work/home", "Work/Home", "2026-02-01T00:00:00Z");
-		// An implicit parent takes its oldest child's date.
-		expect(TagNames.of([homeCalls, workHome]).owner("home")).toBe("home");
-		// Its record, made later, does not move the name.
+		// A parent with no record is no name.
+		expect(TagNames.of([homeCalls, workHome]).owner("home")).toBe("work/home");
+		// A parent record made later than a duplicate does not own the name, so its children do not sync.
 		const home = tag("home", "Home", "2026-03-01T00:00:00Z");
-		expect(TagNames.of([homeCalls, workHome, home]).owner("home")).toBe("home");
-		expect(isSyncedTag(TagNames.of([homeCalls, workHome, home]), "home/calls")).toBe(true);
+		expect(TagNames.of([homeCalls, workHome, home]).owner("home")).toBe("work/home");
+		expect(isSyncedTag(TagNames.of([homeCalls, workHome, home]), "home/calls")).toBe(false);
 		// Ties go to the smaller key.
 		const a = tag("a/x", "A/X", "2026-01-01T00:00:00Z");
 		const b = tag("b/x", "B/X", "2026-01-01T00:00:00Z");
@@ -89,7 +89,7 @@ describe("tag names (D29)", () => {
 	it("the owner of a duplicated name is the oldest tag", () => {
 		const names = TagNames.of([tag("work/calls", "Work/Calls", "2026-10-02T00:00:00Z"), tag("home/calls", "Home/Calls", "2026-10-01T00:00:00Z")]);
 		expect(names.owner("calls")).toBe("home/calls");
-		expect(names.owner("home")).toBe("home");
+		expect(names.owner("home")).toBeUndefined();
 		expect(names.owner("nope")).toBeUndefined();
 	});
 });
@@ -104,6 +104,9 @@ describe("tags and TickTick", () => {
 
 	it("a later duplicate, a deep key and a child of a duplicated parent are not synced", () => {
 		const names = TagNames.of([
+			tag("home", "Home", "2026-10-01T00:00:00Z"),
+			tag("work", "Work", "2026-10-01T00:00:00Z"),
+			tag("x", "X", "2026-10-01T00:00:00Z"),
 			tag("home/calls", "Home/Calls", "2026-10-01T00:00:00Z"),
 			tag("work/calls", "Work/Calls", "2026-10-02T00:00:00Z"),
 			tag("a/b/c", "A/B/C"),
@@ -120,7 +123,7 @@ describe("tags and TickTick", () => {
 	});
 
 	it("a pulled name is pullable when it is new or its owner syncs", () => {
-		const names = TagNames.of([tag("a/b/c", "A/B/C"), tag("home/calls", "Home/Calls")]);
+		const names = TagNames.of([tag("a", "A"), tag("a/b", "A/B"), tag("a/b/c", "A/B/C"), tag("home", "Home"), tag("home/calls", "Home/Calls")]);
 		expect(pullableTagName(names, "Calls")).toBe("calls");
 		expect(pullableTagName(names, "garden")).toBe("garden");
 		// Owned by a tag that cannot sync (too deep): left in TickTick, never pulled.

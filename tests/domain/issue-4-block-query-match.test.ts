@@ -184,9 +184,10 @@ describe("block matcher: tag", () => {
 		expect(sorted(ids("tag: programming/go", { tasks }))).toEqual(["go", "multi", "tools"]);
 	});
 
-	it("an implicit parent (a path prefix that is not a tag) resolves", () => {
-		const f = { tasks: [task("a", { tagKeys: ["a/b"] })], tags: [tag("a/b")] };
-		expect(ids("tag: a", f)).toEqual(["a"]);
+	it("a parent resolves by its tag; a path prefix with no tag is an unknown tag", () => {
+		const tasks = [task("a", { tagKeys: ["a/b"] })];
+		expect(ids("tag: a", { tasks, tags: [tag("a"), tag("a/b")] })).toEqual(["a"]);
+		expect(run("tag: a", { tasks, tags: [tag("a/b")] })).toEqual({ kind: "error", message: "No tag named “a”." });
 	});
 
 	it("an unknown tag is an error naming it", () => {

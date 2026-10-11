@@ -405,8 +405,9 @@ describe("Tags (TAG-02, B16)", () => {
 		await press(titleInput(m.root), "Enter");
 		expect(tasks(m)[0]!.tagKeys).toEqual(["newtag", "other/sub"]);
 		const tags = m.h.app.tags.list();
-		expect(tags.map((t) => t.displayName).sort()).toEqual(["NewTag", "Other/Sub"]);
-		expect(tags.map((t) => t.key).sort()).toEqual(["newtag", "other/sub"]);
+		// The new child's parent is made with it.
+		expect(tags.map((t) => t.displayName).sort()).toEqual(["NewTag", "Other", "Other/Sub"]);
+		expect(tags.map((t) => t.key).sort()).toEqual(["newtag", "other", "other/sub"]);
 	});
 
 	it("TAG-03: '@NewTag @newtag' creates one tag", async () => {

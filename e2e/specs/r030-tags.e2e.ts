@@ -2,6 +2,7 @@
 // services; every DOM read is scoped to the visible Tasks section (background tabs keep hidden copies).
 import { browser, expect } from "@wdio/globals";
 import {
+	clickModalButton,
 	clickUndoNotice,
 	closeNotices,
 	createTask,
@@ -113,6 +114,49 @@ describe("Parent tags (P6)", function () {
 			expect(await treeLabels(section)).toEqual(["Programming", "Golang", "Python"]);
 			await clickUndoNotice();
 			await browser.waitUntil(async () => (await treeLabels(section)).includes("Go"), { timeout: 5000, timeoutMsg: "Undo did not restore the name" });
+			expect(await treeLabels(section)).toEqual(["Programming", "Go", "Python"]);
+		} finally {
+			await restoreMenus(wasNative);
+		}
+	});
+
+	it("a parent is a tag: its row has the menu and takes a color (#9)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		const wasNative = await useDomMenus();
+		try {
+			const programming = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await programming.click({ button: "right" });
+			await pickMenuItem("Color: purple");
+			await browser.waitUntil(async () => ((await programming.$(".cp-tag-dot").getAttribute("class")) ?? "").includes("cp-tag-purple"), {
+				timeout: 5000,
+				timeoutMsg: "the parent did not take the color",
+			});
+			const color = await browser.executeObsidian(({ plugins }) => {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				return ((plugins as any).logwell.session.app.store.state.tags.get("programming")?.color ?? null) as string | null;
+			});
+			expect(color).toBe("purple");
+		} finally {
+			await restoreMenus(wasNative);
+		}
+	});
+
+	it("deleting a parent moves its child tags to the top level in one write; Undo brings it back (#9)", async function () {
+		const section = await visibleTasksSection();
+		await browser.waitUntil(async () => (await treeLabels(section)).length === 3, { timeout: 5000, timeoutMsg: "the tag tree did not appear" });
+		const wasNative = await useDomMenus();
+		try {
+			await closeNotices();
+			const programming = (await section.$$(".cp-tag-tree .cp-sidebar-item"))[0]!;
+			await programming.click({ button: "right" });
+			await pickMenuItem("Delete");
+			await clickModalButton("Delete");
+			await browser.waitUntil(async () => !(await treeLabels(section)).includes("Programming"), { timeout: 5000, timeoutMsg: "the parent was not deleted" });
+			expect(await treeLabels(section)).toEqual(["Go", "Python"]);
+			await waitForNotice("Deleted tag @Programming.");
+			await clickUndoNotice();
+			await browser.waitUntil(async () => (await treeLabels(section)).includes("Programming"), { timeout: 5000, timeoutMsg: "Undo did not restore the parent" });
 			expect(await treeLabels(section)).toEqual(["Programming", "Go", "Python"]);
 		} finally {
 			await restoreMenus(wasNative);
