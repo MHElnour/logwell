@@ -206,6 +206,7 @@ export function TaskDetails(props: {
 						weekStart={host.settings().weekStart}
 						setIcon={(el, icon) => host.setIcon(el, icon)}
 						explicitPresets
+						seriesAnchor={rec?.anchor}
 						openRequest={repeatRequest}
 						onChange={(choice) => {
 							// The picker hands back what it was given when nothing changed: that is no edit (no version, no notice).

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { repeatRuleProblem } from "../../src/domain/recurrence";
 import type { RepeatRule } from "../../src/domain/types";
 import { RepeatCustom, RepeatPresets } from "../../src/ui/RepeatPicker";
-import { type RepeatChoice, afterCompletionHint, draftOf, presetChoice, presetHint, presetOf, repeatLine } from "../../src/ui/repeat";
+import { type RepeatChoice, afterCompletionHint, draftOf, presetChoice, presetHint, presetOf, repeatLine, ruleText } from "../../src/ui/repeat";
 
 // The Yearly preset and the "years" unit of the repeat picker (#12, Repeating tasks rule 20).
 // Friday 2026-10-09 is the picked date.
@@ -78,6 +78,16 @@ describe("the Yearly preset (#12)", () => {
 		expect(presetChoice("yearly", null, "2026-10-09")!.rule).toEqual(rule());
 		expect(presetOf({ rule: rule({ interval: 2 }), end: never }, ANCHOR)).toBe("custom");
 		expect(presetOf({ rule: rule({ afterCompletion: true }), end: never }, ANCHOR)).toBe("custom");
+	});
+
+	it("names the series' first date for yearly only, when one is given", () => {
+		expect(presetHint("yearly", ANCHOR, "2026-01-15")).toBe("on Jan 15");
+		expect(presetHint("monthly", ANCHOR, "2026-01-15")).toBe("on the 9th");
+		expect(presetHint("weekly", ANCHOR, "2026-01-15")).toBe("on Friday");
+		expect(repeatLine({ rule: rule(), end: never }, ANCHOR, TODAY, false, "2026-01-15")).toBe("yearly on Jan 15");
+		expect(repeatLine({ rule: rule({ freq: "monthly" }), end: never }, ANCHOR, TODAY, false, "2026-01-15")).toBe("monthly on the 9th");
+		expect(ruleText({ rule: rule({ interval: 2 }), end: never }, ANCHOR, "2028-02-29")).toBe("every 2 years on Feb 29");
+		expect(ruleText({ rule: rule({ freq: "weekly" }), end: never }, ANCHOR, "2026-01-15")).toBe("every Fri");
 	});
 
 	it("words the Repeat line, and the summary notes the Feb 28 fallback of Feb 29", () => {

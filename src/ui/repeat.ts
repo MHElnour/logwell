@@ -46,19 +46,29 @@ export function withTime(text: string, rule: Pick<RepeatRule, "time">): string {
 	return rule.time === null ? text : `${text} at ${rule.time}`;
 }
 
-/** "every Fri", "every Mon at 17:00": the short rule text of chips and notices. */
-export function ruleText(choice: RepeatChoice, anchor: LocalDate): string {
-	return withTime(describeRule(recurrenceOf(choice, anchor)), choice.rule);
+/**
+ * The date a rule's text names. A yearly rule on an existing series follows the series' first date (`seriesAnchor`): a
+ * rule change keeps the anchor, so "yearly on Jan 15" is what the engine schedules, whatever date is on screen. Every
+ * other rule, and a new series, names `anchor`.
+ */
+function textAnchor(rule: Pick<RepeatRule, "freq">, anchor: LocalDate, seriesAnchor: LocalDate | undefined): LocalDate {
+	return rule.freq === "yearly" && seriesAnchor !== undefined ? seriesAnchor : anchor;
+}
+
+/** "every Fri", "every Mon at 17:00": the short rule text of chips and notices. `seriesAnchor`: see textAnchor. */
+export function ruleText(choice: RepeatChoice, anchor: LocalDate, seriesAnchor?: LocalDate): string {
+	return withTime(describeRule(recurrenceOf(choice, textAnchor(choice.rule, anchor, seriesAnchor))), choice.rule);
 }
 
 const LONG_DAY_BY_SHORT: Readonly<Record<string, string>> = Object.fromEntries(WEEKDAYS.map((d) => [WEEKDAY_ABBR[d], WEEKDAY_LONG[d]]));
 
 /**
  * The Repeat line of the picker and the field's value: "every Fri · ends after 10 times", or "Never". `long`
- * spells the weekdays out ("every Friday"), as the custom editor's summary does.
+ * spells the weekdays out ("every Friday"), as the custom editor's summary does. `seriesAnchor`: see textAnchor.
  */
-export function repeatLine(choice: RepeatChoice | null, anchor: LocalDate, today: LocalDate, long = false): string {
+export function repeatLine(choice: RepeatChoice | null, given: LocalDate, today: LocalDate, long = false, seriesAnchor?: LocalDate): string {
 	if (choice === null) return "Never";
+	const anchor = textAnchor(choice.rule, given, seriesAnchor);
 	const rec = recurrenceOf(choice, anchor);
 	const end = describeEnd(rec, today);
 	let text = describeRule(rec);
@@ -100,12 +110,12 @@ export function presetOf(choice: RepeatChoice | null, anchor: LocalDate): Preset
 	return m.kind === "day" && m.day === Number(anchor.slice(8, 10)) ? "monthly" : "custom";
 }
 
-/** The small text of a preset: "Mon–Fri", "on Friday", "on the 9th", "on Oct 9". */
-export function presetHint(id: PresetId, anchor: LocalDate): string | null {
+/** The small text of a preset: "Mon–Fri", "on Friday", "on the 9th", "on Oct 9". `seriesAnchor`: see textAnchor. */
+export function presetHint(id: PresetId, anchor: LocalDate, seriesAnchor?: LocalDate): string | null {
 	if (id === "weekday") return "Mon–Fri";
 	if (id === "weekly") return `on ${WEEKDAY_LONG[weekdayOf(anchor)]}`;
 	if (id === "monthly") return `on the ${ordinal(Number(anchor.slice(8, 10)))}`;
-	if (id === "yearly") return `on ${monthDayText(anchor)}`;
+	if (id === "yearly") return `on ${monthDayText(textAnchor({ freq: "yearly" }, anchor, seriesAnchor))}`;
 	return null;
 }
 

@@ -42,6 +42,11 @@ interface PickerEnv {
 	setIcon?: SetIcon;
 	/** The Weekly and Monthly presets name the anchor's weekday and day in the rule (the details pane). */
 	explicitPresets?: boolean;
+	/**
+	 * The first date of the series being edited (the details pane), whose month and day a yearly rule keeps: a yearly
+	 * hint, summary and line name it instead of `anchor`. Absent for a task that does not repeat yet.
+	 */
+	seriesAnchor?: LocalDate;
 }
 
 // -- Presets ----------------------------------------------------------------------------
@@ -59,6 +64,8 @@ export function RepeatPresets(props: {
 	onCustom: () => void;
 	/** Weekly and Monthly store the weekday and day of this date instead of "the anchor's". */
 	explicitFor?: LocalDate;
+	/** The series' first date, which the Yearly hint names (see PickerEnv). */
+	seriesAnchor?: LocalDate;
 	/** Focus an option when the list appears: the selected one (true) or a given preset (coming back from Custom…). */
 	autoFocus?: boolean | PresetId;
 }) {
@@ -95,7 +102,7 @@ export function RepeatPresets(props: {
 		<div ref={listRef} class="cp-repeat-opts" role="listbox" aria-labelledby={props.labelledBy} onKeyDown={onKeyDown}>
 			{PRESET_IDS.map((id) => {
 				const on = id === current;
-				const hint = presetHint(id, anchor);
+				const hint = presetHint(id, anchor, props.seriesAnchor);
 				return (
 					<button
 						key={id}
@@ -140,7 +147,7 @@ export function RepeatCustom(props: PickerEnv & { value: RepeatChoice | null; on
 
 	const problem = draftProblem(draft, anchor);
 	const block = afterCompletionBlock(draft);
-	const summary = problem ?? capitalize(repeatLine(choiceOfDraft(draft), anchor, today, true));
+	const summary = problem ?? capitalize(repeatLine(choiceOfDraft(draft), anchor, today, true, props.seriesAnchor));
 
 	const toggleDay = (d: Weekday) => set({ days: draft.days.includes(d) ? draft.days.filter((x) => x !== d) : [...draft.days, d] });
 
@@ -382,9 +389,9 @@ export function RepeatPicker(props: PickerEnv & { value: RepeatChoice | null; on
 						<span class="cp-repeat-line-k" id={lineId}>
 							Repeat
 						</span>
-						<span class="cp-repeat-line-v">{repeatLine(props.value, props.anchor, props.today)}</span>
+						<span class="cp-repeat-line-v">{repeatLine(props.value, props.anchor, props.today, false, props.seriesAnchor)}</span>
 					</div>
-					<RepeatPresets value={props.value} anchor={props.anchor} labelledBy={lineId} autoFocus={cameBack ? "custom" : true} explicitFor={props.explicitPresets === true ? props.anchor : undefined} onPick={props.onDone} onCustom={() => setFace("custom")} />
+					<RepeatPresets value={props.value} anchor={props.anchor} labelledBy={lineId} autoFocus={cameBack ? "custom" : true} explicitFor={props.explicitPresets === true ? props.anchor : undefined} seriesAnchor={props.seriesAnchor} onPick={props.onDone} onCustom={() => setFace("custom")} />
 				</div>
 			) : (
 				<RepeatCustom {...props} onBack={back} onDone={props.onDone} />
@@ -448,7 +455,7 @@ export function RepeatField(props: PickerEnv & {
 				onClick={() => setOpen(!open)}
 			>
 				{props.setIcon !== undefined && <QaIcon setIcon={props.setIcon} name="repeat" cls="cp-repeat-button-icon" />}
-				<span class="cp-repeat-button-text">{repeatLine(props.value, props.anchor, props.today)}</span>
+				<span class="cp-repeat-button-text">{repeatLine(props.value, props.anchor, props.today, false, props.seriesAnchor)}</span>
 			</button>
 			{open && (
 				<RepeatPicker

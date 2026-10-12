@@ -82,7 +82,8 @@ export async function stopRepeating(host: UiHost, task: Task): Promise<boolean> 
 /**
  * The details pane's picker: sets the repeat (null = Never) from today, with the end the picker returned.
  * `anchor` is the date the picker named its hints from (the series' first date), so the notice words the rule as
- * the task will have it ("every Fri", not the weekday of today).
+ * the task will have it ("every Fri", not the weekday of today). A yearly rule on a task that already repeats is
+ * named from the series' own first date, which the edit keeps ("yearly on Jan 15").
  */
 export function setRepeat(host: UiHost, task: Task, choice: RepeatChoice | null, anchor: LocalDate): Promise<boolean> {
 	return runWrite(
@@ -92,7 +93,7 @@ export function setRepeat(host: UiHost, task: Task, choice: RepeatChoice | null,
 			const base =
 				choice === null
 					? `"${task.title}" no longer repeats.`
-					: `"${task.title}" repeats ${ruleText(choice, anchor)}.`;
+					: `"${task.title}" repeats ${ruleText(choice, anchor, task.recurrence?.anchor)}.`;
 			return (r as RecurrenceResult).deadlineCleared ? `${base} ${DEADLINE_CLEARED_TEXT}` : base;
 		},
 	);
