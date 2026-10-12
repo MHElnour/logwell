@@ -253,16 +253,37 @@ function expectFullyShown(g: PopGeometry | null, minItems: number): void {
 	expect(g!.modalScrolls).toBe(false);
 }
 
+/** The Obsidian window's outer size through Electron (the driver has no window/rect command here). */
+async function windowSize(): Promise<{ width: number; height: number }> {
+	return browser.execute(() => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const [width, height] = (window as any).require("@electron/remote").getCurrentWindow().getSize() as [number, number];
+		return { width, height };
+	});
+}
+
+async function resizeWindow(width: number, height: number): Promise<void> {
+	await browser.execute(
+		(w, h) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(window as any).require("@electron/remote").getCurrentWindow().setSize(w, h);
+		},
+		width,
+		height,
+	);
+	await browser.pause(300);
+}
+
 describe("Popovers are never cut off (#85)", function () {
 	let size: { width: number; height: number } | null = null;
 
 	before(async function () {
-		size = await browser.getWindowSize();
-		await browser.setWindowSize(1400, 900);
+		size = await windowSize();
+		await resizeWindow(1400, 900);
 	});
 
 	after(async function () {
-		if (size !== null) await browser.setWindowSize(size.width, size.height);
+		if (size !== null) await resizeWindow(size.width, size.height);
 	});
 
 	beforeEach(async function () {
@@ -270,7 +291,7 @@ describe("Popovers are never cut off (#85)", function () {
 	});
 
 	afterEach(async function () {
-		await browser.setWindowSize(1400, 900);
+		await resizeWindow(1400, 900);
 		await closeQuickAdd();
 	});
 
@@ -298,7 +319,7 @@ describe("Popovers are never cut off (#85)", function () {
 	});
 
 	it("the Quick Add modal at a 600 px tall window: the date popover's OK is reachable", async function () {
-		await browser.setWindowSize(1400, 600);
+		await resizeWindow(1400, 600);
 		const modal = await openQuickAdd();
 		await dateTool(modal).click();
 		await modal.$(".cp-date-pop").waitForDisplayed({ timeout: 3000 });
@@ -306,7 +327,7 @@ describe("Popovers are never cut off (#85)", function () {
 	});
 
 	it("the inline add bar in a short view: the date popover shows in full and the list does not grow", async function () {
-		await browser.setWindowSize(1400, 600);
+		await resizeWindow(1400, 600);
 		const section = await openInboxBar();
 		const scrollBefore = await browser.execute(() => {
 			const main = Array.from(document.querySelectorAll<HTMLElement>(".cp-main")).find((m) => m.offsetParent !== null);
