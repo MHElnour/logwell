@@ -149,6 +149,48 @@ describe("Quick Add repeat end (#12)", () => {
 		}
 	});
 
+	it("a typed end before the first date of a repeat picked by hand is refused and blocks saving", async () => {
+		const { h, m } = await model();
+		m.setRepeat({ rule: { ...weekly, weekdays: ["FR"] }, end: { kind: "never" } });
+		m.setInput("Gym until Oct 8");
+		expect(m.result.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "invalid", notice: "The repeat ends before its first date." });
+		expect(await m.submit()).toBe("invalid");
+		expect(h.app.store.state.tasks.size).toBe(0);
+		m.setInput("Gym until Oct 9");
+		expect(await m.submit()).toBe("saved");
+		expect([...h.app.store.state.tasks.values()][0]!.recurrence?.end).toEqual({ kind: "date", date: "2026-10-09" });
+	});
+
+	it("a date picked by hand after choosing a typed date's hour wins: the chip is offered again and its text stays", async () => {
+		const { h, m } = await model();
+		m.setInput("Call tomorrow at 5");
+		const chip = m.result.chips.find((c) => c.kind === "scheduled")!;
+		m.setChipDate(chip, chip.alternatives![1]!.value!);
+		expect(m.result.chips.find((c) => c.kind === "scheduled")?.status).toBe("applied");
+		m.setDate("2026-10-20");
+		expect(m.result.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "choice", notice: "Replace date?" });
+		expect(m.result.title).toBe("Call tomorrow at 5");
+		expect(await m.submit()).toBe("saved");
+		// The popover showed the chosen 17:00 when the date was picked, so the hand pick keeps that time.
+		expect([...h.app.store.state.tasks.values()][0]).toMatchObject({ title: "Call tomorrow at 5", scheduled: { kind: "datetime", local: "2026-10-20T17:00" } });
+	});
+
+	it("a repeat picked by hand after choosing a typed repeat's hour wins: the chip is offered again and its text stays", async () => {
+		const { h, m } = await model();
+		m.setInput("Gym every monday at 7");
+		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
+		m.setChipRule(chip, chip.alternatives![0]!.rule!);
+		expect(m.result.chips.find((c) => c.kind === "recurrence")?.status).toBe("applied");
+		m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "never" } });
+		expect(m.result.chips.find((c) => c.kind === "recurrence")).toMatchObject({ status: "choice", notice: "Replace repeat?" });
+		expect(m.result.title).toBe("Gym every monday at 7");
+		expect(m.repeatValue()?.rule.freq).toBe("daily");
+		expect(await m.submit()).toBe("saved");
+		const task = [...h.app.store.state.tasks.values()][0]!;
+		expect(task.title).toBe("Gym every monday at 7");
+		expect(task.recurrence?.versions[0]?.rule).toMatchObject({ freq: "daily", time: null });
+	});
+
 	it("Clear in the date popover keeps the end as text too", async () => {
 		const { m } = await model();
 		m.setInput("Pills every day until Dec 1");

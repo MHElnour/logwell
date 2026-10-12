@@ -39,11 +39,11 @@ End the repeat in the same line:
 
 | You type | It ends |
 | --- | --- |
-| `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included |
+| `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included. With a start: `every day starting Oct 12 until Dec 1` |
 | `for 5 times`, `5 times` | After 5 times |
 | `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the task's first date: the date you type, pick or the view gives, else today. Only after the repeat: `Plan meals for 7 days every sunday` keeps "for 7 days" in the title |
 
-An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text); when the picked repeat already has an end, the typed one is offered as a replacement.
+An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. Without a repeat, `Trip Oct 12 until Oct 20` is a date and a deadline. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement.
 
 A repeat Quick Add cannot make yet, such as `every 3 hours` or `every 2nd and 4th tuesday`, stays in the title marked "Recurrence not supported yet", and is never read as a date. Counting from completion is set in the picker.
 

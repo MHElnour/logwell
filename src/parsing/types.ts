@@ -112,4 +112,6 @@ export interface ParseContext {
 	weekStart?: WeekStart;
 	/** The repeat picked by hand has an end of its own: a typed end replaces it only when accepted. */
 	pickedEnd?: boolean;
+	/** The rule of the repeat picked by hand: a typed end with no typed repeat is checked against it. */
+	pickedRule?: RepeatRule;
 }

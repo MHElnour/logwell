@@ -150,6 +150,8 @@ export class QuickAddModel {
 			weekStart: app.queryContext().weekStart,
 			// A typed end over a repeat picked by hand that has its own end is a "Replace repeat end?" suggestion.
 			pickedEnd: this.manual.has("recurrence") && this.vals.repeat !== null && this.vals.repeat.end.kind !== "never",
+			// A typed end of a repeat picked by hand is checked against that repeat.
+			...(this.manual.has("recurrence") && this.vals.repeat !== null ? { pickedRule: this.vals.repeat.rule } : {}),
 		});
 	}
 
@@ -213,13 +215,14 @@ export class QuickAddModel {
 
 	/**
 	 * A value picked by hand for `field`. The hand pick wins again over the typed chips of that field: an earlier "use
-	 * it" (accept) of one of them is forgotten, so the chip is a "Replace …?" suggestion again (a repeat end belongs to
-	 * the repeat).
+	 * it" (accept) of one of them, or a reading chosen or edited on it (a date, a repeat's hour), is forgotten, so the chip
+	 * is a "Replace …?" offer again and its text stays in the title (a repeat end belongs to the repeat).
 	 */
 	private pickManual(field: ManualFieldName): void {
 		this.manual.add(field);
 		const spans = this.result.chips.filter((c) => (c.kind === "repeatEnd" ? "recurrence" : c.kind) === field).map((c) => c.span);
-		this.decisions = this.decisions.filter((d) => d.kind !== "accept" || !spans.some((s) => s.start === d.span.start && s.end === d.span.end));
+		const chosen = (d: SpanDecision): boolean => d.kind === "accept" || d.kind === "date" || d.kind === "rule";
+		this.decisions = this.decisions.filter((d) => !chosen(d) || !spans.some((s) => s.start === d.span.start && s.end === d.span.end));
 	}
 
 	private clearManual(field: ManualFieldName): void {

@@ -21,10 +21,41 @@ const sched = (r: ParseResult): string | undefined => {
 };
 
 describe("the date reader instances", () => {
-	it("are clones with one more refiner, the shared chrono instances untouched", () => {
-		expect(DATE_READERS.en.refiners.length).toBe(chrono.en.casual.refiners.length + 1);
-		expect(DATE_READERS["en-GB"].refiners.length).toBe(chrono.en.GB.refiners.length + 1);
-		expect(DATE_READERS.en).not.toBe(chrono.en.casual);
+	it("are clones with the rollover first and again right before the filter of impossible dates; the shared chrono instances untouched", () => {
+		for (const [reader, base] of [
+			[DATE_READERS.en, chrono.en.casual],
+			[DATE_READERS["en-GB"], chrono.en.GB],
+		] as const) {
+			expect(reader).not.toBe(base);
+			expect(reader.refiners.length).toBe(base.refiners.length + 2);
+			const added = reader.refiners.filter((r) => !base.refiners.includes(r));
+			// The rollover twice, and the range merge without `until`/`till` in place of chrono's.
+			expect(new Set(added).size).toBe(2);
+			const rollover = reader.refiners[0]!;
+			const names = reader.refiners.map((r) => (r === rollover ? "rollover" : r.constructor.name));
+			const filter = names.indexOf("UnlikelyFormatFilter");
+			expect(names[filter - 1]).toBe("rollover");
+			expect(names.indexOf("ForwardDateRefiner")).toBeLessThan(filter - 1);
+			expect(base.refiners.includes(rollover)).toBe(false);
+		}
+	});
+});
+
+// Clocks from Mar 1 to Dec 31 of a leap year: the year chrono assumes (2028) has Feb 29 but it is past, so chrono's
+// forward step moves it to 2029, which has none. The rollover after that step takes the next Feb 29 (2032).
+describe.each(ZONES)("Feb 29 said after Feb 29 of a leap year in %s", (zone) => {
+	it.each(["2028-03-01", "2028-05-01", "2028-08-15", "2028-09-01"])("on %s it is 2032-02-29, never dropped", (today) => {
+		const cases: [string, DateLocale, string][] = [
+			["Pay Feb 29", "en", "Pay"],
+			["Pay 02/29", "en", "Pay"],
+			["Pay 29/02", "en-GB", "Pay"],
+			["Birthday every year on Feb 29", "en", "Birthday"],
+		];
+		for (const [input, locale, title] of cases) {
+			const r = parseQuickAdd(input, makeCtx({ zone, now: at(zone, `${today}T10:00`), locale }));
+			expect(r.title, `${today} ${input}`).toBe(title);
+			expect(sched(r), `${today} ${input}`).toBe("2032-02-29");
+		}
 	});
 });
 

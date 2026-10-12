@@ -327,7 +327,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const chips = kept.map((d) => d.chip);
 	requireStartDate(chips, startsOnDate, readDates, input);
-	bindEnds(chips, periods, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO" });
+	bindEnds(chips, periods, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
 	return finish(input, chips);
 }
 
@@ -400,10 +400,15 @@ function pickedEndDraft(input: string, c: DateCandidate, ctx: ParseContext): Dra
 /**
  * Binds the end chips to the repeat once the start is known (the applied typed date, else `start`: a date picked by
  * hand, a preset or today): `for N <periods>` becomes the day before N periods from the start; an end that leaves the
- * series no date is invalid (repeatEndProblem, the services' check); an end waits while its repeat's time is a
- * choice; the end of a repeat Quick Add cannot build is not supported either.
+ * series no date is invalid (repeatEndProblem, the services' check), against the typed repeat, else the one picked by
+ * hand; an end waits while its repeat's time is a choice; the end of a repeat Quick Add cannot build is not supported
+ * either.
  */
-function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>, env: { zone: string; start: LocalDate; weekStart: WeekStart }): void {
+function bindEnds(
+	chips: Chip[],
+	periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>,
+	env: { zone: string; start: LocalDate; weekStart: WeekStart; pickedRule?: RepeatRule },
+): void {
 	if (!chips.some((c) => c.kind === "repeatEnd")) return;
 	const repeats = chips.filter((c) => c.kind === "recurrence");
 	const rule = repeats.find((c) => c.status === "applied")?.rule;
@@ -411,8 +416,8 @@ function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq:
 	const unsupported = repeats.length > 0 && repeats.every((c) => c.status === "unsupported");
 	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
 	const anchor = date === undefined ? env.start : dateSpecDate(date, env.zone);
-	// A repeat picked by hand is not known here: only its anchor is checked, and the service checks the rest.
-	const series = singleVersionRecurrence(anchor, rule ?? FROM_ANCHOR);
+	// Without a known rule (none typed, none picked), only the anchor is checked, and the service checks the rest.
+	const series = singleVersionRecurrence(anchor, rule ?? env.pickedRule ?? FROM_ANCHOR);
 	for (const c of chips) {
 		if (c.kind !== "repeatEnd") continue;
 		const p = periods.get(c.id);

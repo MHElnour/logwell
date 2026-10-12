@@ -85,7 +85,9 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 /**
  * A month and day with no year that does not exist in the year chrono assumes (Feb 29 in 2027) moves to the first
  * later year where it exists, from today on (at most 8 years: the next Feb 29). chrono would drop it as an
- * impossible date. Today comes from chrono's own zone-adjusted reference.
+ * impossible date. It runs first, and again right before chrono's filter of impossible dates: chrono's forward step
+ * moves a past Feb 29 of a leap year (said from March on) into the next year, which has none. Today comes from
+ * chrono's own zone-adjusted reference.
  */
 const rollover: chrono.Refiner = {
 	refine(context, results) {
@@ -108,9 +110,27 @@ const rollover: chrono.Refiner = {
 	},
 };
 
-/** chrono's casual English and en-GB readers, with the year rollover first. Clones: chrono's shared instances stay as they are. */
+/** chrono's date range merge: the merge whose words between include `until` (class names do not survive minifying). */
+interface RangeMerge extends chrono.Refiner {
+	patternBetween(): RegExp;
+}
+const isRangeMerge = (r: chrono.Refiner): r is RangeMerge =>
+	typeof (r as Partial<RangeMerge>).patternBetween === "function" && (r as RangeMerge).patternBetween().test(" until ");
+// The words a date range keeps: `until` and `till` lead a repeat end or a deadline of their own (LEADS).
+const RANGE_BETWEEN_RE = /^\s*(?:to|-|–|through)\s*$/iu;
+
+/**
+ * chrono's casual English and en-GB readers: the year rollover first and again right before the filter of impossible
+ * dates (the one refiner with a `strictMode` field), and a date range that never joins over `until` or `till`, so
+ * `Oct 12 until Dec 1` is a start and an end. Clones: chrono's shared instances stay as they are.
+ */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
+	reader.refiners = reader.refiners.map((r) =>
+		isRangeMerge(r) ? Object.assign(Object.create(r) as RangeMerge, { patternBetween: () => RANGE_BETWEEN_RE }) : r,
+	);
+	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
+	if (filter !== -1) reader.refiners.splice(filter, 0, rollover);
 	reader.refiners.unshift(rollover);
 	return reader;
 }
