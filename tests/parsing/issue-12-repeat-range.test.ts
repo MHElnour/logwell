@@ -289,37 +289,37 @@ describe("parse time of ranges under a repeat", () => {
 	});
 });
 
-// A month and day without a year that the assumed year lacks (Feb 29) keeps the year it was read as before repeat
-// ranges: inputs without a repeat never change. Tuesday 2028-02-29 21:00 in Tokyo, where today's Feb 29 is past for
-// chrono's forward step on any host clock. [input, locale, the scheduled value]
+// A month and day without a year, said on that very day: today (#88), whatever the hour. Tuesday 2028-02-29 21:00 in
+// Tokyo, late enough that chrono's own forward step would have moved it to the next leap day on any host clock.
+// [input, locale, the scheduled value]
 const LEAP_DAYS: ReadonlyArray<readonly [string, DateLocale, string | undefined]> = [
-	["Feb 29 party", "en", "2032-02-29"],
-	["Feb 29 9am party", "en", "2032-02-29T09:00"],
-	["29 Feb party", "en", "2032-02-29"],
-	["02/29 party", "en", "2032-02-29"],
-	["29/02 party", "en", "2032-02-29"],
-	["the 29th of February party", "en", "2032-02-29"],
-	["29 Feb party", "en-GB", "2032-02-29"],
-	["02/29 party", "en-GB", "2032-02-29"],
-	["29/02 party", "en-GB", "2032-02-29"],
-	["the 29th of February party", "en-GB", "2032-02-29"],
+	["Feb 29 party", "en", "2028-02-29"],
+	["Feb 29 9am party", "en", "2028-02-29T09:00"],
+	["29 Feb party", "en", "2028-02-29"],
+	["02/29 party", "en", "2028-02-29"],
+	["29/02 party", "en", "2028-02-29"],
+	["the 29th of February party", "en", "2028-02-29"],
+	["29 Feb party", "en-GB", "2028-02-29"],
+	["02/29 party", "en-GB", "2028-02-29"],
+	["29/02 party", "en-GB", "2028-02-29"],
+	["the 29th of February party", "en-GB", "2028-02-29"],
 ];
 
-// Known defects (#88, #69), not the intended reading: in en-GB, a month name before a leap day reads no date or the
-// day after it. Pinned at what the parser gives today, without a repeat, so a change shows up here; a fix of those
-// issues updates these rows to the next Feb 29 (2032-02-29), as the en rows read. [input, the scheduled value]
+// Known defects (#69), not the intended reading: in en-GB, a month name before a leap day reads no date or the day
+// after it. Pinned at what the parser gives today, without a repeat, so a change shows up here; a fix of #69 updates
+// these rows to that day (2028-02-29), as the en rows read. [input, the scheduled value]
 const LEAP_DAY_DEFECTS: ReadonlyArray<readonly [string, string | undefined]> = [
 	["Feb 29 party", undefined],
 	["Feb 29 9am party", "2028-03-01T09:00"],
 ];
 
 describe("a leap day without a year or a repeat", () => {
-	it.each(LEAP_DAYS)("%s (%s) keeps its year", (input, locale, expected) => {
+	it.each(LEAP_DAYS)("%s (%s) is that day", (input, locale, expected) => {
 		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale }));
 		expect(day(r)).toBe(expected);
 	});
 
-	it.each(LEAP_DAY_DEFECTS)("known defect (#88, #69): %s (en-GB) reads as before, not the next Feb 29", (input, current) => {
+	it.each(LEAP_DAY_DEFECTS)("known defect (#69): %s (en-GB) reads as before, not that day", (input, current) => {
 		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale: "en-GB" }));
 		expect(day(r)).toBe(current);
 	});

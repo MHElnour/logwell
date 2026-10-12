@@ -5,8 +5,8 @@ import { parseQuickAdd } from "../../src/parsing";
 import type { DateLocale, ParsedField, ParseResult, SpanDecision } from "../../src/parsing/types";
 import { BERLIN, NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
 
-// Repeating tasks rule 19 (#12): Feb 29 is read by the one date reader. A month and day with no year that does not
-// exist in the year the reader assumes (Feb 29 in 2027) rolls over to the next year where it exists, from today on.
+// Repeating tasks rule 19 (#12): Feb 29 is read by the one date reader. A month and day with no year is the first such
+// date on or after today (#88), so a Feb 29 that the current year lacks is the next leap day.
 // Wednesday 2026-10-07 10:00 in each zone.
 
 const ZONES = [NY, BERLIN, TOKYO] as const;
@@ -21,28 +21,28 @@ const sched = (r: ParseResult): string | undefined => {
 };
 
 describe("the date reader instances", () => {
-	it("are clones with the rollover first and again right before the filter of impossible dates; the shared chrono instances untouched", () => {
+	it("are clones with the implied-year refiner after chrono's forward step and right before the filter of impossible dates; the shared chrono instances untouched", () => {
 		for (const [reader, base] of [
 			[DATE_READERS.en, chrono.en.casual],
 			[DATE_READERS["en-GB"], chrono.en.GB],
 		] as const) {
 			expect(reader).not.toBe(base);
-			expect(reader.refiners.length).toBe(base.refiners.length + 2);
+			expect(reader.refiners.length).toBe(base.refiners.length + 1);
 			const added = reader.refiners.filter((r) => !base.refiners.includes(r));
-			// Only the rollover is added (twice, one object); chrono's own refiners, the range merge included, are kept.
-			expect(new Set(added).size).toBe(1);
-			const rollover = reader.refiners[0]!;
-			const names = reader.refiners.map((r) => (r === rollover ? "rollover" : r.constructor.name));
+			// Only the one refiner is added; chrono's own refiners, the range merge included, are kept.
+			expect(added.length).toBe(1);
+			const impliedYear = added[0]!;
+			const names = reader.refiners.map((r) => (r === impliedYear ? "impliedYear" : r.constructor.name));
 			const filter = names.indexOf("UnlikelyFormatFilter");
-			expect(names[filter - 1]).toBe("rollover");
+			expect(names[filter - 1]).toBe("impliedYear");
 			expect(names.indexOf("ForwardDateRefiner")).toBeLessThan(filter - 1);
-			expect(base.refiners.includes(rollover)).toBe(false);
+			expect(base.refiners.includes(impliedYear)).toBe(false);
 		}
 	});
 });
 
-// Clocks from Mar 1 to Dec 31 of a leap year: the year chrono assumes (2028) has Feb 29 but it is past, so chrono's
-// forward step moves it to 2029, which has none. The rollover after that step takes the next Feb 29 (2032).
+// Clocks from Mar 1 to Dec 31 of a leap year: this year's Feb 29 is past and next year has none, so it is the next
+// leap day (2032).
 describe.each(ZONES)("Feb 29 said after Feb 29 of a leap year in %s", (zone) => {
 	it.each(["2028-03-01", "2028-05-01", "2028-08-15", "2028-09-01"])("on %s it is 2032-02-29, never dropped", (today) => {
 		const cases: [string, DateLocale, string][] = [

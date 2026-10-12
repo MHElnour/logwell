@@ -96,11 +96,9 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 	return best;
 }
 
-/**
- * The first real date with this month and day ("MM-DD") on or after `from`, in `firstYear` or the 8 years after it
- * (the next Feb 29). `firstYear` is `from`'s year unless given.
- */
-function monthDayOnOrAfter(monthDay: string, from: LocalDate, firstYear = Number(from.slice(0, 4))): LocalDate | null {
+/** The first real date with this month and day ("MM-DD") on or after `from`, in its year or the 8 years after it (the next Feb 29). */
+function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
+	const firstYear = Number(from.slice(0, 4));
 	for (let year = firstYear; year <= firstYear + 8; year++) {
 		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
 		if (isValidLocalDate(date) && date >= from) return date;
@@ -108,41 +106,45 @@ function monthDayOnOrAfter(monthDay: string, from: LocalDate, firstYear = Number
 	return null;
 }
 
-/** The tag `rollover` puts on a date whose year it chose. */
-const ROLLED_YEAR = "logwell/rolledYear";
+/** The options the date readers get: chrono's, plus today's date on the parse clock, for `impliedYear`. */
+interface ReaderOption extends chrono.ParsingOption {
+	today: LocalDate;
+}
 
 /**
- * A month and day with no year that does not exist in the year chrono assumes (Feb 29 in 2027) moves to the first
- * later year where it exists, from the year chrono assumes and from today on (at most 8 years: the next Feb 29).
- * chrono would drop it as an impossible date. It runs first, and again right before chrono's filter of impossible
- * dates: chrono's forward step moves a past Feb 29 of a leap year (said from March on) into the next year, which has
- * none. Today comes from chrono's own zone-adjusted reference. The year it sets is certain to chrono and tagged
- * ROLLED_YEAR: it was not typed.
+ * The year of a month and day typed without one (#88, #12): the first year, from today's on, in which that date exists
+ * and is on or after today on the parse clock. So today's month and day is today at any hour of the day, yesterday's
+ * is next year's, and Feb 29 is the next leap day (at most 8 years on). chrono's own forward step compares instants, an
+ * implied noon that has passed against a reference the host zone shifts, and would move today's date to next year or
+ * drop a leap day as impossible. Runs after that step, right before chrono's filter of impossible dates; the year stays
+ * implied, so a typed year is still the one certain year, and chrono's range merge after the filter still moves an end
+ * before its start a year on, as it always did.
  */
-const rollover: chrono.Refiner = {
+const impliedYear: chrono.Refiner = {
 	refine(context, results) {
+		// Called with chrono's plain options (tests), today is chrono's own reference day.
 		const ref = context.createParsingComponents();
-		const today = `${String(ref.get("year") ?? 0).padStart(4, "0")}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
+		const today = (context.option as Partial<ReaderOption>).today ?? `${String(ref.get("year") ?? 0).padStart(4, "0")}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
 		for (const r of results) {
-			const s = r.start;
-			if (!s.isCertain("month") || !s.isCertain("day") || s.isCertain("year") || s.isValidDate()) continue;
-			const date = monthDayOnOrAfter(`${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`, today, s.get("year") ?? 0);
-			if (date !== null) s.assign("year", Number(date.slice(0, 4))).addTag(ROLLED_YEAR);
+			for (const c of r.end == null ? [r.start] : [r.start, r.end]) {
+				if (!c.isCertain("month") || !c.isCertain("day") || c.isCertain("year")) continue;
+				const date = monthDayOnOrAfter(`${pad2(c.get("month") ?? 0)}-${pad2(c.get("day") ?? 0)}`, today);
+				if (date !== null) c.imply("year", Number(date.slice(0, 4)));
+			}
 		}
 		return results;
 	},
 };
 
 /**
- * chrono's casual English and en-GB readers: the year rollover first and again right before the filter of impossible
- * dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared
- * instances stay as they are.
+ * chrono's casual English and en-GB readers with `impliedYear` right before the filter of impossible dates (the one
+ * refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared instances stay
+ * as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
-	if (filter !== -1) reader.refiners.splice(filter, 0, rollover);
-	reader.refiners.unshift(rollover);
+	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, impliedYear);
 	return reader;
 }
 
@@ -212,6 +214,9 @@ interface Clock {
 	/** 0 = Sunday, chrono's numbering. */
 	todayWeekday: number;
 }
+
+/** What every parse call hands the reader: a forward reading, and today for `impliedYear`. */
+const optionOf = (clock: Clock): ReaderOption => ({ forwardDate: true, today: clock.today });
 
 /**
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
@@ -301,8 +306,8 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 	return { date, hourCertain, outcome };
 }
 
-/** A year that was typed, not assumed by chrono or chosen by `rollover`. */
-const hasTypedYear = (c: chrono.ParsedComponents): boolean => c.isCertain("year") && !c.tags().has(ROLLED_YEAR);
+/** A year that was typed, not assumed by chrono or chosen by `impliedYear`. */
+const hasTypedYear = (c: chrono.ParsedComponents): boolean => c.isCertain("year");
 const dayCertainOf = (c: chrono.ParsedComponents): boolean => c.isCertain("day") || c.isCertain("weekday");
 /** A weekday with no day of the month (`Friday`, `next friday`). */
 const weekdayOnly = (c: chrono.ParsedComponents): boolean => c.isCertain("weekday") && !c.isCertain("day");
@@ -329,7 +334,7 @@ interface RangeSplit {
 function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.ParsingReference, clock: Clock, startWord: boolean): RangeSplit | null {
 	if (r.end == null || !dayCertainOf(r.start) || !dayCertainOf(r.end)) return null;
 	const whole = (text: string): chrono.ParsedResult | null => {
-		const found = parser.parse(text, ref, { forwardDate: true });
+		const found = parser.parse(text, ref, optionOf(clock));
 		const one = found.length === 1 ? found[0] : undefined;
 		return one !== undefined && one.index === 0 && one.text.trimEnd() === text && one.end == null && dayCertainOf(one.start) ? one : null;
 	};
@@ -388,8 +393,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
 	const parser = DATE_READERS[env.locale];
 	const ref = { instant: env.now, timezone: zoneNow.offset };
-	const results = parser.parse(masked, ref, { forwardDate: true });
 	const clock: Clock = { env, today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
+	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
 	for (const r of results) {
