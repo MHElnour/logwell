@@ -39,7 +39,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#88) Typing today's date in Quick Add, such as `Pay Oct 7` on Oct 7, now means today at any time of day, not the same day next year.
+- (#88) Typing today's date in Quick Add, such as `Pay Oct 7` on Oct 7, now means today at any time of day, not the same day next year, and weekdays, relative words and dates no longer depend on the computer's time zone.
 - (#85) Quick Add's date and ⋯ popovers are no longer cut off by the Quick Add window or a short view, and the All fields form lines up: consistent spacing and field styles, and Time says it needs a date.
 
 ## Security

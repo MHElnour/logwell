@@ -9,7 +9,8 @@ import { BERLIN, NY, TOKYO, at, makeCtx } from "./helpers";
 // year. A month and day with no year is the first such date on or after today, by day; yesterday's is next year's.
 // Wednesday 2026-10-07 and Tuesday 2028-02-29 in each zone, with the computer's zone (`process.env.TZ`) set to another.
 
-const HOSTS = ["Pacific/Auckland", "America/Los_Angeles", "UTC"] as const;
+// Hosts from UTC+14 to UTC-11, so the host's date is a day ahead of or behind the task's zone.
+const HOSTS = ["Pacific/Kiritimati", "Pacific/Auckland", "UTC", "America/Los_Angeles", "Pacific/Pago_Pago"] as const;
 const ZONES = [NY, BERLIN, TOKYO] as const;
 const TIMES = ["00:30", "09:00", "13:30", "16:00", "23:30"] as const;
 const LOCALES: DateLocale[] = ["en", "en-GB"];
@@ -54,6 +55,22 @@ describe.each(HOSTS)("with the computer in %s", (host) => {
 				expect(sched(parse(`Party ${written(locale, "Feb", 28)}`)), time).toBe("2029-02-28");
 			});
 		}
+
+		it("weekdays and relative words count from today in the task's zone, never the computer's", () => {
+			// Wednesday 2026-10-07 10:00 and 23:30 in the zone.
+			for (const time of ["10:00", "23:30"] as const) {
+				const parse = (input: string): ParseResult => parseQuickAdd(input, makeCtx({ zone, now: at(zone, `2026-10-07T${time}`) }));
+				expect(sched(parse("Meet wed")), time).toBeUndefined(); // said on a Wednesday: a choice, never last week
+				expect(parse("Meet wed").chips[0]?.alternatives?.map((a) => (a.value?.kind === "date" ? a.value.date : "")), time).toEqual(["2026-10-07", "2026-10-14"]);
+				expect(sched(parse("Meet thu")), time).toBe("2026-10-08");
+				expect(sched(parse("Meet next friday")), time).toBe("2026-10-16");
+				expect(sched(parse("Dinner tomorrow")), time).toBe("2026-10-08");
+				expect(sched(parse("Dinner the day after tomorrow")), time).toBe("2026-10-09");
+				expect(sched(parse("Call in 3 days")), time).toBe("2026-10-10");
+				expect(sched(parse("Call today")), time).toBe("2026-10-07");
+				expect(sched(parse("Pay Oct 7"))?.slice(0, 10), time).toBe("2026-10-07");
+			}
+		});
 
 		it("a repeat's typed start on today's date is today, and its end counts from it", () => {
 			const r = parseQuickAdd("Pills every day starting Oct 7 for 2 weeks", makeCtx({ zone, now: at(zone, "2026-10-07T16:00") }));

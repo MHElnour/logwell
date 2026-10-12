@@ -357,7 +357,7 @@ interface RangeSplit {
  * of its alternatives. Null unless both sides name a day and the text splits at a join word into two whole dates; two
  * bare weekdays (`Mon-Fri`: days of the week) only with a start word (`startWord`: `starting`, `beginning`).
  */
-function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.ParsingReference, clock: Clock, startWord: boolean): RangeSplit | null {
+function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: Date, clock: Clock, startWord: boolean): RangeSplit | null {
 	if (r.end == null || !dayCertainOf(r.start) || !dayCertainOf(r.end)) return null;
 	const whole = (text: string): chrono.ParsedResult | null => {
 		const found = parser.parse(text, ref, optionOf(clock));
@@ -421,7 +421,9 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const zoneNow = DateTime.fromJSDate(env.now, { zone: env.zone });
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
 	const parser = DATE_READERS[env.locale];
-	const ref = { instant: env.now, timezone: zoneNow.offset };
+	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
+	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).
+	const ref = zoneNow.setZone("system", { keepLocalTime: true }).toJSDate();
 	const clock: Clock = { env, today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
 	const results = parser.parse(masked, ref, optionOf(clock));
 
