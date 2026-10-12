@@ -133,26 +133,6 @@ export function subtaskCounts(tasks: Iterable<Task>): Map<ID, SubtaskCount> {
 	return counts;
 }
 
-/**
- * `subtaskCounts` for the given parents only: one pass that reads each task's parent and nothing else, and allocates
- * only for a parent in `parents`. A dashboard block shows a few parents out of tens of thousands of tasks.
- */
-export function subtaskCountsFor(parents: ReadonlySet<ID>, tasks: Iterable<Task>): Map<ID, SubtaskCount> {
-	const counts = new Map<ID, SubtaskCount>();
-	if (parents.size === 0) return counts;
-	for (const t of tasks) {
-		if (t.parentId === null || !parents.has(t.parentId)) continue;
-		let c = counts.get(t.parentId);
-		if (c === undefined) {
-			c = { total: 0, done: 0 };
-			counts.set(t.parentId, c);
-		}
-		c.total++;
-		if (t.status === "completed") c.done++;
-	}
-	return counts;
-}
-
 export function compareTasksBySortKey(a: Task, b: Task): number {
 	if (a.sortKey !== b.sortKey) return a.sortKey < b.sortKey ? -1 : 1;
 	if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
