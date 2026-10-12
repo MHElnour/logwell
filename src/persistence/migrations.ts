@@ -69,6 +69,14 @@ export const MIGRATIONS: readonly Migration[] = [
 		describe: "add TickTick sync links",
 		migrate: (raw) => ("syncLinks" in raw ? { ...raw } : { ...raw, syncLinks: [] }),
 	},
+	{
+		// v5 to v6 changes no record: a v5 file has no yearly repeat. The step exists for the header
+		// alone, so a schema 5 device opens a database that can hold yearly repeats read-only instead of
+		// rewriting it with those tasks no longer repeating.
+		from: 5,
+		describe: "yearly repeat (header only)",
+		migrate: (raw) => ({ ...raw }),
+	},
 ];
 
 export type MigrationPlan =

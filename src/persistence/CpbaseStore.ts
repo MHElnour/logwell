@@ -699,7 +699,8 @@ export class CpbaseStore {
 		let conflictPath: string | null = null;
 		if (!fastForward) conflictPath = await this.writeConflictCopy();
 		// An older file cannot hold sections (before v3), repeating
-		// tasks (before v4) or TickTick links (before v5), so replacing newer memory with it would silently drop them.
+		// tasks (before v4), TickTick links (before v5) or yearly repeats (before v6), so replacing newer memory
+		// with it would silently drop them.
 		// Keep them as a conflict copy first.
 		else if (result.migratedFrom !== null && result.migratedFrom < ours.schemaVersion && this.holdsDataNewerThan(result.migratedFrom)) {
 			conflictPath = await this.writeConflictCopy();
@@ -731,7 +732,7 @@ export class CpbaseStore {
 	/**
 	 * True when memory holds data a file of schema `version` cannot have kept: a section or a task (live
 	 * or trashed) in a section before v3; a repeating task or an occurrence record before v4; a TickTick
-	 * link before v5.
+	 * link before v5; a yearly repeat before v6.
 	 */
 	private holdsDataNewerThan(version: number): boolean {
 		const data = this.data;
@@ -743,6 +744,7 @@ export class CpbaseStore {
 		if (version < 3 && (data.sections.size > 0 || all((t) => t.sectionId !== null))) return true;
 		if (version < 4 && (data.occurrenceRecords.size > 0 || all((t) => t.recurrence !== null))) return true;
 		if (version < 5 && data.syncLinks.size > 0) return true;
+		if (version < 6 && all((t) => t.recurrence !== null && t.recurrence.versions.some((v) => v.rule.freq === "yearly"))) return true;
 		return false;
 	}
 

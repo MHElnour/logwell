@@ -44,6 +44,7 @@ const RULES: RepeatRule[] = [
 	rule({ freq: "monthly", monthly: { kind: "day", day: 31 } }),
 	rule({ freq: "monthly", monthly: { kind: "nth", n: -1, weekday: "FR" } }),
 	rule({ freq: "monthly", interval: 2, monthly: { kind: "lastDay" } }),
+	rule({ freq: "yearly" }),
 	rule({ interval: 3, afterCompletion: true }),
 	rule({ time: "09:00", tz: ZONE }),
 ];

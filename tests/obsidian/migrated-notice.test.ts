@@ -32,7 +32,7 @@ describe("migration notice", () => {
 		fake.files.set(PATH, V1);
 		await loadPlugin(fake, PATH);
 		expect(upgrades()).toHaveLength(1);
-		expect(upgrades()[0]).toContain("from schema 1 to 5");
+		expect(upgrades()[0]).toContain("from schema 1 to 6");
 	});
 
 	it("the modify event for the migration's own save does not announce it again", async () => {
@@ -73,13 +73,13 @@ describe("migration notice", () => {
 		const r = loadText(readFileSync(path, "utf8"), "2026-10-01T10:00:00.000Z");
 		expect(r.kind).toBe("ok");
 		if (r.kind === "ok") expect(r.migratedFrom).toBeNull();
-		// Both seeds carry the current schema (5), so the e2e vault never migrates.
-		if (r.kind === "ok") expect(r.data.meta.schemaVersion).toBe(5);
+		// Both seeds carry the current schema (6), so the e2e vault never migrates.
+		if (r.kind === "ok") expect(r.data.meta.schemaVersion).toBe(6);
 	});
 
 	it("opening a current-schema database shows no upgrade notice", async () => {
 		const fake = fakeApp();
-		fake.files.set(PATH, readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v5.cpbase"), "utf8"));
+		fake.files.set(PATH, readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v6.cpbase"), "utf8"));
 		await loadPlugin(fake, PATH);
 		expect(upgrades()).toHaveLength(0);
 	});
@@ -93,7 +93,7 @@ describe("migration notice", () => {
 		await plugin.ready();
 		await plugin.setActiveDatabase(PATH);
 		expect(upgrades()).toHaveLength(1);
-		expect(upgrades()[0]).toContain("from schema 3 to 5");
+		expect(upgrades()[0]).toContain("from schema 3 to 6");
 	});
 
 	it("opening a v2 database (K1b) shows the upgrade notice once", async () => {
@@ -102,6 +102,6 @@ describe("migration notice", () => {
 		const plugin = await loadPlugin(fake, PATH);
 		await plugin.setActiveDatabase(PATH);
 		expect(upgrades()).toHaveLength(1);
-		expect(upgrades()[0]).toContain("from schema 2 to 5");
+		expect(upgrades()[0]).toContain("from schema 2 to 6");
 	});
 });

@@ -23,6 +23,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#7) Create a tag from the sidebar: the **New tag** button next to Tags opens a dialog with a name, an optional parent and a color. The name is checked as you type.
 - (#52) `tag:` in a task block takes several tags separated by commas; a task with any of them shows.
 - (#52) A task block has a new `scheduled:` filter for a task's planned date (a repeating task's current one), with the values `today`, `overdue`, `this week` and `next 7 days`.
+- (#12) Added a yearly repeat: pick **Yearly** in the repeat picker. Once this version opens a database, older Logwell versions open it read-only, so update every device.
 - (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag. Undo of a new or renamed tag is refused once a synced task uses it, so no task is left with a tag that no longer exists.
 
 ## Changed

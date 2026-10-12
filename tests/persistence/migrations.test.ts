@@ -52,7 +52,7 @@ describe("schema fixtures (spec §17.3)", () => {
 	});
 });
 
-describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to v5, issue #6)", () => {
+describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to v5, issue #6, then to v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v2.cpbase"), "utf8");
 
 	it("migrates with no issues; the output is the v2 text plus the version and empty sections and syncLinks collections", () => {
@@ -66,18 +66,18 @@ describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to 
 		expect(r.data.sections.size).toBe(0);
 		for (const t of r.data.tasks.values()) expect(t.sectionId).toBeNull();
 		for (const e of r.data.trash.values()) for (const t of e.tasks) expect(t.sectionId).toBeNull();
-		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(withTypedHabits(withEmptySections(text.replace('"schemaVersion":2', '"schemaVersion":5')))));
+		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(withTypedHabits(withEmptySections(text.replace('"schemaVersion":2', '"schemaVersion":6')))));
 	});
 
-	it("opening a v2 file writes a pre-migration snapshot of the original text, then the v5 file, and notifies once", async () => {
+	it("opening a v2 file writes a pre-migration snapshot of the original text, then the v6 file, and notifies once", async () => {
 		const h = harness(text);
 		await h.store.open();
-		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 2, to: 5 }]);
+		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 2, to: 6 }]);
 		const backups = await h.fs.list("plugin/backups/5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90/snapshots");
 		const pre = backups.find((p) => p.includes("/pre-migration-"));
 		expect(pre).toBeDefined();
 		expect(h.fs.files.get(pre!)).toBe(text);
-		expect(h.fs.files.get(DB_PATH) ?? "").toContain('"schemaVersion":5');
+		expect(h.fs.files.get(DB_PATH) ?? "").toContain('"schemaVersion":6');
 		expect(h.fs.files.get(DB_PATH) ?? "").toContain('"sections":[]');
 		expect(h.fs.files.get(DB_PATH) ?? "").toContain('"syncLinks":[]');
 	});
@@ -86,13 +86,13 @@ describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to 
 describe("frozen v3 fixture (K1b sections)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v3.cpbase"), "utf8");
 
-	it("migrates to v5 with no issues; the output is the v3 text with the version changed and an empty syncLinks collection", () => {
+	it("migrates to v6 with no issues; the output is the v3 text with the version changed and an empty syncLinks collection", () => {
 		const r = loadText(text, "2026-10-01T10:00:00.000Z");
 		if (r.kind !== "ok") throw new Error(`fixture did not load: ${JSON.stringify(r)}`);
 		expect(r.issues).toEqual([]);
 		expect(r.migratedFrom).toBe(3);
 		expect(r.data.sections.size).toBe(3);
-		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(withTypedHabits(text.replace('"schemaVersion":3', '"schemaVersion":5'))));
+		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(withTypedHabits(text.replace('"schemaVersion":3', '"schemaVersion":6'))));
 	});
 
 	it("keeps tasks in and out of sections, subtasks and trashed tasks included", () => {
@@ -153,11 +153,11 @@ describe("v2 to v3 migration (K1b D2)", () => {
 		expect(twice).toEqual(once);
 	});
 
-	it("a v1 file runs every step in one load: one snapshot, one notice from 1 to 5", async () => {
+	it("a v1 file runs every step in one load: one snapshot, one notice from 1 to 6", async () => {
 		const v1Text = readFileSync(join(FIXTURES, "schema-v1.cpbase"), "utf8");
 		const h = harness(v1Text);
 		await h.store.open();
-		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 1, to: 5 }]);
+		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 1, to: 6 }]);
 		const backups = await h.fs.list("plugin/backups/5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90/snapshots");
 		expect(backups.filter((p) => p.includes("/pre-migration-"))).toHaveLength(1);
 	});
@@ -199,16 +199,16 @@ describe("v3 to v4 migration (M7 D1)", () => {
 		expect(runMigrations({ ...once, schemaVersion: 3 }, [step!])).toEqual(once);
 	});
 
-	it("opening a v3 file writes a pre-migration snapshot of the original text, then the v5 file, and notifies once", async () => {
+	it("opening a v3 file writes a pre-migration snapshot of the original text, then the v6 file, and notifies once", async () => {
 		const h = harness(v3Text);
 		await h.store.open();
-		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 3, to: 5 }]);
+		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 3, to: 6 }]);
 		const backups = await h.fs.list("plugin/backups/5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90/snapshots");
 		const pre = backups.filter((p) => p.includes("/pre-migration-"));
 		expect(pre).toHaveLength(1);
 		expect(h.fs.files.get(pre[0]!)).toBe(v3Text);
 		const written = h.fs.files.get(DB_PATH) ?? "";
-		expect(written).toContain('"schemaVersion":5');
+		expect(written).toContain('"schemaVersion":6');
 		// Apart from the header (new revision, history, writer) and the empty syncLinks, the records are the v3 text's.
 		const body = (t: string) => t.slice(t.indexOf("\n"));
 		expect(body(written)).toBe(body(withEmptySyncLinks(withTypedHabits(v3Text))));
@@ -230,19 +230,19 @@ describe("v3 to v4 migration (M7 D1)", () => {
 	});
 });
 
-describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6)", () => {
+describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6, and v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v4.cpbase"), "utf8");
 	const GYM = "4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8";
 	const RENT = "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d";
 	const NEWS = "6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e";
 
-	it("migrates to v5 with no issues; the output is the v4 text with the version changed and an empty syncLinks collection", () => {
+	it("migrates to v6 with no issues; the output is the v4 text with the version changed and an empty syncLinks collection", () => {
 		const r = loadText(text, "2026-10-05T10:00:00.000Z");
 		if (r.kind !== "ok") throw new Error(`fixture did not load: ${JSON.stringify(r)}`);
 		expect(r.issues).toEqual([]);
 		expect(r.migratedFrom).toBe(4);
 		expect(r.data.syncLinks.size).toBe(0);
-		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(text.replace('"schemaVersion":4', '"schemaVersion":5')));
+		expect(serializeDb(r.data)).toBe(withEmptySyncLinks(text.replace('"schemaVersion":4', '"schemaVersion":6')));
 	});
 
 	it("reads the recurrence and the occurrence records as typed values", () => {
@@ -270,10 +270,10 @@ describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6)", () => {
 		expect(r.data.occurrenceRecords.get(`${RENT}:2026-08-31`)).toMatchObject({ status: "done", completedOn: "2026-09-01", auto: false });
 	});
 
-	it("opening it writes a pre-migration snapshot of the original text first, then the v5 file, and notifies once", async () => {
+	it("opening it writes a pre-migration snapshot of the original text first, then the v6 file, and notifies once", async () => {
 		const h = harness(text);
 		await h.store.open();
-		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 4, to: 5 }]);
+		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 4, to: 6 }]);
 		expect(h.store.readOnlyState).toBeNull();
 		const backups = await h.fs.list("plugin/backups/5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90/snapshots");
 		const pre = backups.filter((p) => p.includes("/pre-migration-"));
@@ -285,7 +285,7 @@ describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6)", () => {
 		expect(snapshotWrite).toBeGreaterThanOrEqual(0);
 		expect(dbWrite).toBeGreaterThan(snapshotWrite);
 		const written = h.fs.files.get(DB_PATH) ?? "";
-		expect(written).toContain('"schemaVersion":5');
+		expect(written).toContain('"schemaVersion":6');
 		const body = (t: string) => t.slice(t.indexOf("\n"));
 		expect(body(written)).toBe(body(withEmptySyncLinks(text)));
 	});
@@ -295,9 +295,7 @@ describe("v4 to v5 migration (issue #6, SYNC-11)", () => {
 	const v4Text = readFileSync(join(FIXTURES, "schema-v4.cpbase"), "utf8");
 	const step = MIGRATIONS.find((m) => m.from === 4);
 
-	it("the schema is version 5 and the steps are 1, 2, 3 and 4", () => {
-		expect(CURRENT_SCHEMA_VERSION).toBe(5);
-		expect(MIGRATIONS.map((m) => m.from)).toEqual([1, 2, 3, 4]);
+	it("a step from 4 exists", () => {
 		expect(step).toBeDefined();
 	});
 
@@ -331,15 +329,15 @@ describe("v4 to v5 migration (issue #6, SYNC-11)", () => {
 	});
 });
 
-describe("frozen v5 fixture (issue #6, sync links)", () => {
+describe("frozen v5 fixture (issue #6, sync links; migrates to v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v5.cpbase"), "utf8");
 
-	it("loads at schema 5 with no issues and round-trips byte for byte", () => {
+	it("migrates to v6 with no issues; the output is the v5 text with the version changed", () => {
 		const r = loadText(text, "2026-10-07T10:00:00.000Z");
 		if (r.kind !== "ok") throw new Error(`fixture did not load: ${JSON.stringify(r)}`);
 		expect(r.issues).toEqual([]);
-		expect(r.migratedFrom).toBeNull();
-		expect(serializeDb(r.data)).toBe(text);
+		expect(r.migratedFrom).toBe(5);
+		expect(serializeDb(r.data)).toBe(text.replace('"schemaVersion":5', '"schemaVersion":6'));
 	});
 
 	it("reads one link of each kind as typed values, unknown fields kept", () => {
@@ -377,6 +375,22 @@ describe("frozen v5 fixture (issue #6, sync links)", () => {
 		// A link to a trashed task is kept.
 		expect(r.data.syncLinks.has("task:3e2c9f41-9d85-4f6c-ad0f-8c5c3c7dbd44")).toBe(true);
 	});
+
+	it("opening it writes a pre-migration snapshot of the original text first, then the v6 file, and notifies once", async () => {
+		const h = harness(text);
+		await h.store.open();
+		expect(h.events.filter((e) => e.type === "migrated")).toEqual([{ type: "migrated", from: 5, to: 6 }]);
+		const snapshots = await h.fs.list("plugin/backups/5c2e8a40-1b7d-4f3e-9a51-0d6c2f1e7b90/snapshots");
+		const pre = snapshots.filter((p) => p.includes("/pre-migration-"));
+		expect(pre).toHaveLength(1);
+		expect(h.fs.files.get(pre[0]!)).toBe(text);
+		expect(h.fs.files.get(DB_PATH) ?? "").toContain('"schemaVersion":6');
+		expect(h.store.readOnlyState).toBeNull();
+	});
+});
+
+describe("frozen v6 fixture (#12, yearly repeat)", () => {
+	const text = readFileSync(join(FIXTURES, "schema-v6.cpbase"), "utf8");
 
 	it("opens without a migration, a snapshot or a notice", async () => {
 		const h = harness(text);

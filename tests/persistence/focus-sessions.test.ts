@@ -40,8 +40,8 @@ function loaded(text: string) {
 }
 
 describe("focus sessions in the file (D1)", () => {
-	it("adds no schema version of its own (v4 is M7's, v5 issue #6's)", () => {
-		expect(CURRENT_SCHEMA_VERSION).toBe(5); // other features bumped it; focus sessions added none
+	it("adds no schema version of its own (v4 is M7's, v5 issue #6's, v6 #12's)", () => {
+		expect(CURRENT_SCHEMA_VERSION).toBe(6); // other features bumped it; focus sessions added none
 	});
 
 	it("round-trips byte for byte, defaults included", () => {
@@ -190,7 +190,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(Object.keys(rec)).not.toContain("setId");
 		expect(Object.keys(rec)).not.toContain("setRounds");
 		expect(serializeDb(r.data)).toBe(text);
-		expect(CURRENT_SCHEMA_VERSION).toBe(5); // other features bumped it; focus sessions added none
+		expect(CURRENT_SCHEMA_VERSION).toBe(6); // other features bumped it; focus sessions added none
 	});
 
 	it("P3: an unreadable setId or setRounds is dropped with an issue", () => {

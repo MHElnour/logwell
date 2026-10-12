@@ -60,10 +60,10 @@ function loaded(text: string) {
 const lineOf = (text: string, id: string) => text.split("\n").find((l) => l.includes(`"id":"${id}"`))!;
 
 describe("habits and check-ins in the file (D1)", () => {
-	it("adds no schema version of its own (v4 is M7's, v5 issue #6's), and the empty database is unchanged", () => {
-		expect(CURRENT_SCHEMA_VERSION).toBe(5);
+	it("adds no schema version of its own (v4 is M7's, v5 issue #6's, v6 #12's), and the empty database is unchanged", () => {
+		expect(CURRENT_SCHEMA_VERSION).toBe(6);
 		expect(emptyDbText()).toBe(
-			'{"format":"checkpoint-db","schemaVersion":5,"dbId":"db-1","revision":"r-000000000000","baseRevision":null,"history":[],"writtenBy":"d-other","writtenAt":"2026-10-01T08:00:00.000Z",\n' +
+			'{"format":"checkpoint-db","schemaVersion":6,"dbId":"db-1","revision":"r-000000000000","baseRevision":null,"history":[],"writtenBy":"d-other","writtenAt":"2026-10-01T08:00:00.000Z",\n' +
 				'"categories":[\n{"id":"inbox","name":"Inbox","icon":"📥","nameKey":"inbox","isInbox":true,"sortKey":"0V","createdAt":"2026-10-01T08:00:00.000Z","modifiedAt":"2026-10-01T08:00:00.000Z"}\n],\n' +
 				'"sections":[],\n"tags":[],\n"tasks":[],\n"occurrenceRecords":[],\n"habits":[],\n"checkins":[],\n"focusSessions":[],\n"savedFilters":[],\n"trash":[],\n"syncLinks":[]\n}\n',
 		);

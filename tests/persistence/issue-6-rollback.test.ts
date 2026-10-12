@@ -38,7 +38,7 @@ describe("CpbaseStore: a v4 file arriving externally (issue #6)", () => {
 		await h.store.handleExternalChange();
 		expect(h.events).toContainEqual({ type: "migrated", from: 4, to: CURRENT_SCHEMA_VERSION });
 		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
-		expect(h.store.data.meta.schemaVersion).toBe(5);
+		expect(h.store.data.meta.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
 		expect(h.store.readOnlyState).toBeNull();
 	});
 

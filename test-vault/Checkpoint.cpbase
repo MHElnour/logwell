@@ -1,4 +1,4 @@
-{"format":"checkpoint-db","schemaVersion":5,"dbId":"e2e00000-0000-4000-8000-000000000001","revision":"r-e2e000000001","baseRevision":null,"history":[],"writtenBy":"d-e2e-seed","writtenAt":"2026-10-01T00:00:00.000Z",
+{"format":"checkpoint-db","schemaVersion":6,"dbId":"e2e00000-0000-4000-8000-000000000001","revision":"r-e2e000000001","baseRevision":null,"history":[],"writtenBy":"d-e2e-seed","writtenAt":"2026-10-01T00:00:00.000Z",
 "categories":[
 {"id":"inbox","name":"Inbox","icon":"📥","nameKey":"inbox","isInbox":true,"sortKey":"0V","createdAt":"2026-10-01T00:00:00.000Z","modifiedAt":"2026-10-01T00:00:00.000Z"}
 ],

@@ -549,7 +549,7 @@ describe("repeatRuleProblem and normalizeRepeatRule", () => {
 	});
 
 	it.each([
-		[rule({ freq: "yearly" as never })],
+		[rule({ freq: "hourly" as never })],
 		[rule({ interval: 0 })],
 		[rule({ interval: 1.5 })],
 		[rule({ freq: "weekly", weekdays: [] })],

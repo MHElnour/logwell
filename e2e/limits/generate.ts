@@ -20,7 +20,7 @@ import { type DbData, createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 
 // The data side of the limits harness (docs/development/performance.md). `generateDb(dimension, count)` builds a valid
-// schema-v5 database through the project's own types and `serializeDb`, with one dimension at its matrix count
+// current-schema database through the project's own types and `serializeDb`, with one dimension at its matrix count
 // and everything else at the README baseline: 500 tasks, 10 lists, 20 tags, 5 habits, 200 focus records.
 // Deterministic: a seeded generator, and dates relative to the `today` passed in.
 //

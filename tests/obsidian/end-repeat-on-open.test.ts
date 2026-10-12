@@ -13,6 +13,7 @@ vi.mock("../../src/obsidian/notices", () => ({
 }));
 
 const V5 = readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v5.cpbase"), "utf8");
+const V6 = readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v6.cpbase"), "utf8");
 const PATH = "Checkpoint.cpbase";
 const RENT = "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d";
 const GYM = "4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8";
@@ -33,11 +34,11 @@ describe("the session ends exhausted series on open", () => {
 		expect(fake.files.get(PATH)).not.toContain('"title":"Pay rent","categoryId":"inbox","status":"open"');
 	});
 
-	it("an untouched current-schema (v5) database is not rewritten", async () => {
+	it("an untouched current-schema (v6) database is not rewritten", async () => {
 		const fake = fakeApp();
-		fake.files.set(PATH, V5);
+		fake.files.set(PATH, V6);
 		const plugin = await loadPlugin(fake, PATH);
 		await plugin.session!.store.flush();
-		expect(fake.files.get(PATH)).toBe(V5);
+		expect(fake.files.get(PATH)).toBe(V6);
 	});
 });

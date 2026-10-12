@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
-import { EVERY_WEEKDAY, describeEnd, describeRule, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
-import { addDays, isValidLocalDate, utcDay } from "../domain/time";
+import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
+import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
 	type MonthlyOn,
@@ -46,19 +46,29 @@ export function withTime(text: string, rule: Pick<RepeatRule, "time">): string {
 	return rule.time === null ? text : `${text} at ${rule.time}`;
 }
 
-/** "every Fri", "every Mon at 17:00": the short rule text of chips and notices. */
-export function ruleText(choice: RepeatChoice, anchor: LocalDate): string {
-	return withTime(describeRule(recurrenceOf(choice, anchor)), choice.rule);
+/**
+ * The date a rule's text names. A yearly rule on an existing series follows the series' first date (`seriesAnchor`): a
+ * rule change keeps the anchor, so "yearly on Jan 15" is what the engine schedules, whatever date is on screen. Every
+ * other rule, and a new series, names `anchor`.
+ */
+function textAnchor(rule: Pick<RepeatRule, "freq">, anchor: LocalDate, seriesAnchor: LocalDate | undefined): LocalDate {
+	return rule.freq === "yearly" && seriesAnchor !== undefined ? seriesAnchor : anchor;
+}
+
+/** "every Fri", "every Mon at 17:00": the short rule text of chips and notices. `seriesAnchor`: see textAnchor. */
+export function ruleText(choice: RepeatChoice, anchor: LocalDate, seriesAnchor?: LocalDate): string {
+	return withTime(describeRule(recurrenceOf(choice, textAnchor(choice.rule, anchor, seriesAnchor))), choice.rule);
 }
 
 const LONG_DAY_BY_SHORT: Readonly<Record<string, string>> = Object.fromEntries(WEEKDAYS.map((d) => [WEEKDAY_ABBR[d], WEEKDAY_LONG[d]]));
 
 /**
  * The Repeat line of the picker and the field's value: "every Fri · ends after 10 times", or "Never". `long`
- * spells the weekdays out ("every Friday"), as the custom editor's summary does.
+ * spells the weekdays out ("every Friday"), as the custom editor's summary does. `seriesAnchor`: see textAnchor.
  */
-export function repeatLine(choice: RepeatChoice | null, anchor: LocalDate, today: LocalDate, long = false): string {
+export function repeatLine(choice: RepeatChoice | null, given: LocalDate, today: LocalDate, long = false, seriesAnchor?: LocalDate): string {
 	if (choice === null) return "Never";
+	const anchor = textAnchor(choice.rule, given, seriesAnchor);
 	const rec = recurrenceOf(choice, anchor);
 	const end = describeEnd(rec, today);
 	let text = describeRule(rec);
@@ -68,6 +78,8 @@ export function repeatLine(choice: RepeatChoice | null, anchor: LocalDate, today
 		const r = choice.rule;
 		const day = r.freq !== "monthly" || r.afterCompletion ? 0 : r.monthly === null ? Number(anchor.slice(8, 10)) : r.monthly.kind === "day" ? r.monthly.day : 0;
 		if (day >= 29) text = text.replace(/on the \d+(st|nd|rd|th)/u, (m) => `${m} (or the month's last day)`);
+		// A yearly Feb 29 falls on Feb 28 in other years.
+		if (r.freq === "yearly" && !r.afterCompletion && anchor.slice(5) === "02-29") text = `${text} (or Feb 28)`;
 	}
 	text = withTime(text, choice.rule);
 	return end === null ? text : `${text} · ${end}`;
@@ -75,9 +87,9 @@ export function repeatLine(choice: RepeatChoice | null, anchor: LocalDate, today
 
 // -- presets ------------------------------------------------------------------------
 
-export type PresetId = "never" | "daily" | "weekday" | "weekly" | "monthly" | "custom";
+export type PresetId = "never" | "daily" | "weekday" | "weekly" | "monthly" | "yearly" | "custom";
 
-export const PRESET_IDS: readonly PresetId[] = ["never", "daily", "weekday", "weekly", "monthly", "custom"];
+export const PRESET_IDS: readonly PresetId[] = ["never", "daily", "weekday", "weekly", "monthly", "yearly", "custom"];
 
 const sameDays = (a: readonly Weekday[], b: readonly Weekday[]) => a.length === b.length && a.every((d) => b.includes(d));
 
@@ -92,16 +104,18 @@ export function presetOf(choice: RepeatChoice | null, anchor: LocalDate): Preset
 		if (sameDays(r.weekdays, EVERY_WEEKDAY)) return "weekday";
 		return r.weekdays.length === 1 && r.weekdays[0] === weekdayOf(anchor) ? "weekly" : "custom";
 	}
+	if (r.freq === "yearly") return "yearly";
 	const m = r.monthly;
 	if (m === null) return "monthly";
 	return m.kind === "day" && m.day === Number(anchor.slice(8, 10)) ? "monthly" : "custom";
 }
 
-/** The small text of a preset: "Mon–Fri", "on Friday", "on the 9th". */
-export function presetHint(id: PresetId, anchor: LocalDate): string | null {
+/** The small text of a preset: "Mon–Fri", "on Friday", "on the 9th", "on Oct 9". `seriesAnchor`: see textAnchor. */
+export function presetHint(id: PresetId, anchor: LocalDate, seriesAnchor?: LocalDate): string | null {
 	if (id === "weekday") return "Mon–Fri";
 	if (id === "weekly") return `on ${WEEKDAY_LONG[weekdayOf(anchor)]}`;
 	if (id === "monthly") return `on the ${ordinal(Number(anchor.slice(8, 10)))}`;
+	if (id === "yearly") return `on ${monthDayText(textAnchor({ freq: "yearly" }, anchor, seriesAnchor))}`;
 	return null;
 }
 
@@ -111,6 +125,7 @@ export const PRESET_LABEL: Readonly<Record<PresetId, string>> = {
 	weekday: "Every weekday",
 	weekly: "Weekly",
 	monthly: "Monthly",
+	yearly: "Yearly",
 	custom: "Custom…",
 };
 
@@ -127,6 +142,8 @@ export function presetChoice(id: Exclude<PresetId, "custom">, current: RepeatCho
 	if (id === "daily") return { rule: { ...base, freq: "daily", weekdays: null, monthly: null }, end };
 	if (id === "weekday") return { rule: { ...base, freq: "weekly", weekdays: [...EVERY_WEEKDAY], monthly: null }, end };
 	if (id === "weekly") return { rule: { ...base, freq: "weekly", weekdays: explicitFor === undefined ? null : [weekdayOf(explicitFor)], monthly: null }, end };
+	// Yearly has no explicit form: it always follows the anchor's month and day.
+	if (id === "yearly") return { rule: { ...base, freq: "yearly", weekdays: null, monthly: null }, end };
 	const monthly = explicitFor === undefined ? null : ({ kind: "day", day: Number(explicitFor.slice(8, 10)) } as const);
 	return { rule: { ...base, freq: "monthly", weekdays: null, monthly }, end };
 }
@@ -217,14 +234,15 @@ export function afterCompletionBlock(d: RepeatDraft): string | null {
 	return null;
 }
 
-/** `date` plus `n` days, weeks or months (a month end clamps: Jan 31 + 1 month is Feb 28). */
+/** `date` plus `n` days, weeks, months or years (a month end clamps: Jan 31 + 1 month is Feb 28, Feb 29 + 1 year is Feb 28). */
 function plusUnits(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
 	if (freq === "daily") return addDays(date, n);
 	if (freq === "weekly") return addDays(date, 7 * n);
-	return DateTime.fromISO(date, { zone: "UTC" }).plus({ months: n }).toISODate() ?? date;
+	return DateTime.fromISO(date, { zone: "UTC" }).plus({ months: freq === "yearly" ? 12 * n : n }).toISODate() ?? date;
 }
 
-const shortDate = (date: LocalDate): string => utcDay(date).toFormat("LLL d");
+/** "Oct 5", or "Oct 5, 2027" with the year (a yearly next date, which would otherwise read as the same day). */
+const shortDate = (date: LocalDate, withYear = false): string => (withYear ? `${monthDayText(date)}, ${date.slice(0, 4)}` : monthDayText(date));
 
 /**
  * The small text under the checkbox: an example from today and the draft's interval ("Done on Oct 5 →
@@ -236,7 +254,8 @@ export function afterCompletionHint(d: RepeatDraft, today: LocalDate): string {
 	const n = Number(d.interval);
 	const k = Number.isInteger(n) && n >= 1 && n <= 999 ? n : 1;
 	const late = addDays(today, 5);
-	return `Done on ${shortDate(today)} → next ${shortDate(plusUnits(today, d.freq, k))}. Done late on ${shortDate(late)} → next ${shortDate(plusUnits(late, d.freq, k))}.`;
+	const yearly = d.freq === "yearly";
+	return `Done on ${shortDate(today)} → next ${shortDate(plusUnits(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(plusUnits(late, d.freq, k), yearly)}.`;
 }
 
 /** The rule a draft describes, before the domain checks it. */
