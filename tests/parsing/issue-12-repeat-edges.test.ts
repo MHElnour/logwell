@@ -105,12 +105,22 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 			expect(rec(r), input).toBe(key);
 			expect(sched(r), input).toBeUndefined();
 		}
-		for (const input of ["Gym every 3 days monday", "Gym every monday at 7 wednesday", "Gym every month 15th", "Gym every other 2nd tuesday"]) {
+		// A form that takes no weekday keeps its words; the weekday after it is a date (the repeat grammar, rule 40).
+		const dated: [string, string, string | undefined, string | undefined][] = [
+			["Gym every 3 days monday", "Gym", "daily/3", "2026-10-12"],
+			["Gym every monday at 7 wednesday", "Gym every monday at 7 wednesday", undefined, undefined],
+			["Gym every month 15th", "Gym 15th", "monthly", undefined],
+		];
+		for (const [input, title, key, date] of dated) {
 			const r = parse(input, zone);
-			expect(sched(r), input).toBeUndefined();
-			expect(r.fields.recurrence, input).toBeUndefined();
-			expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.notice ?? ""}`), input).toEqual([`recurrence|unsupported|${REC}`]);
+			expect(r.title, input).toBe(title);
+			expect(rec(r), input).toBe(key);
+			expect(sched(r), input).toBe(date);
 		}
+		expect(parse("Gym every monday at 7 wednesday", zone).chips.map((c) => `${c.kind}|${c.status}`)).toEqual(["recurrence|choice", "scheduled|choice"]);
+		const other = parse("Gym every other 2nd tuesday", zone);
+		expect(other.fields.recurrence).toBeUndefined();
+		expect(other.chips.map((c) => `${c.kind}|${c.status}|${c.notice ?? ""}`)).toEqual([`recurrence|unsupported|${REC}`]);
 	});
 
 	it("`sat` and `sun` continue a space-joined list only at the end of the text; the full names always do", () => {

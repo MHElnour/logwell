@@ -551,7 +551,22 @@ describe("A14 robustness", () => {
 	});
 
 	it("parses long repeat lists and runs of lead words in reasonable time (#12)", () => {
-		for (const input of ["every " + "mon ".repeat(2000), "until ".repeat(800), "every 1 ".repeat(800), "Gym " + "daily ".repeat(800), "every " + "sun ".repeat(2000), "every mon " + "sat ".repeat(2000) + "cream", "Gym every other " + "mon ".repeat(2000) + "x"]) {
+		const long = (unit: string): string => unit.repeat(Math.ceil(5000 / unit.length)).slice(0, 5000);
+		for (const input of [
+			"every " + "mon ".repeat(2000),
+			"until ".repeat(800),
+			"every 1 ".repeat(800),
+			"Gym " + "daily ".repeat(800),
+			"every " + "sun ".repeat(2000),
+			"every mon " + "sat ".repeat(2000) + "cream",
+			"Gym every other " + "mon ".repeat(2000) + "x",
+			// The repeat grammar on 5,000 characters: forms with dates, ranges and ends after them, a compound chain, and
+			// a list word before a date on every form.
+			long("Gym every mon, wed and fri, Oct 12 to Dec 1 until Dec 1 for 2 weeks "),
+			long("every 2nd and 4th tuesday and "),
+			long("Pay every day, 12 Oct every month on the 15th Mon-Fri "),
+			long("every May 5 to May 10 "),
+		]) {
 			const started = performance.now();
 			parse(input);
 			expect(performance.now() - started, input.slice(0, 12)).toBeLessThan(2000);

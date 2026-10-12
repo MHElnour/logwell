@@ -46,7 +46,7 @@ End the repeat in the same line:
 
 An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, a range such as `Oct 12 to Dec 1` is one suggested date, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement.
 
-A repeat Quick Add cannot make yet, such as `every 3 hours` or `every 2nd and 4th tuesday`, stays in the title marked "Recurrence not supported yet", and is never read as a date. Counting from completion is set in the picker.
+The repeat ends with its own words, so what you write after it is read on its own: `Gym every day, Oct 12`, `Pay every month Oct 15` and `Gym every monday Mon-Fri` keep the repeat and read the date or the range. A repeat Quick Add cannot make yet stays in the title marked "Recurrence not supported yet", and is never read as a date: `every 3 hours`, `every May 5` (write `every year on May 5`), `every mon-fri` (write `every weekday`), and a repeat with more days or numbers joined to it by a comma, `and` or `&`, such as `every 2nd and 4th tuesday` or `every monday & 2 others`. Counting from completion is set in the picker.
 
 ## Set a custom repeat
 
