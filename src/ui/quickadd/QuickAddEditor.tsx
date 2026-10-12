@@ -44,7 +44,7 @@ export function QuickAddEditor(props: {
 	useEffect(() => {
 		const input = inputRef.current;
 		if (input === null) return;
-		const suggest = props.attachTokenSuggest(input, (d) => model.bind(d));
+		const suggest = props.attachTokenSuggest(input, (d) => model.bind(d, input.ownerDocument.defaultView ?? undefined));
 		model.suggesterBusy = () => suggest.isOpen();
 		return () => {
 			model.suggesterBusy = () => false;

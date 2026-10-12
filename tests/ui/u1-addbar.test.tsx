@@ -808,6 +808,8 @@ describe("popover fit (short views, Quick Add modal, status bar)", () => {
 		expect(maxOf(datePop(m.root)!)).toBe(`${476 - 152 - 8 - 12}px`);
 	});
 
+	// Without the Popover API (this environment) the popover stays in place, so a clipping container
+	// still limits it. In the top layer only the window does (#85, issue-85-popover-layer.test.tsx).
 	it("stops at the bottom of a clipping container, like the Quick Add modal", async () => {
 		fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 420 });
 		const m = await mountForm();

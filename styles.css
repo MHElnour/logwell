@@ -1086,6 +1086,28 @@ body.is-mobile .checkpoint-view .cp-app {
 	margin-bottom: var(--size-4-3);
 }
 
+/* Quick Add's "All fields": three columns on purpose, two in a narrow window. */
+.checkpoint-quick-add-modal .cp-quick-add-all {
+	container-type: inline-size;
+	container-name: cp-qa-fields;
+}
+
+.checkpoint-quick-add-modal .cp-quick-add-fields {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@container cp-qa-fields (max-width: 420px) {
+	.checkpoint-quick-add-modal .cp-quick-add-fields {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+/* A row of its own in a field grid: the flags, the tags, the note link. */
+.checkpoint-view .cp-field-row,
+.checkpoint-quick-add-modal .cp-field-row {
+	grid-column: 1 / -1;
+}
+
 .checkpoint-view .cp-field,
 .checkpoint-quick-add-modal .cp-field {
 	display: flex;
@@ -1093,6 +1115,34 @@ body.is-mobile .checkpoint-view .cp-app {
 	gap: var(--size-2-1);
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
+}
+
+/* Why a field is disabled ("needs a date"), next to its label. */
+.checkpoint-view .cp-field-hint,
+.checkpoint-quick-add-modal .cp-field-hint {
+	color: var(--text-faint);
+}
+
+/* A select in a field is drawn like the inputs next to it. */
+.checkpoint-view .cp-field select.dropdown,
+.checkpoint-quick-add-modal .cp-field select.dropdown {
+	background-color: var(--background-modifier-form-field);
+	border: var(--input-border-width) solid var(--background-modifier-border);
+	box-shadow: none;
+}
+
+@media (hover: hover) {
+	.checkpoint-view .cp-field select.dropdown:not(:disabled):hover,
+	.checkpoint-quick-add-modal .cp-field select.dropdown:not(:disabled):hover {
+		background-color: var(--background-modifier-form-field-hover);
+		border-color: var(--background-modifier-border-hover);
+	}
+}
+
+.checkpoint-view .cp-field select.dropdown:focus-visible,
+.checkpoint-quick-add-modal .cp-field select.dropdown:focus-visible {
+	border-color: var(--background-modifier-border-focus);
+	box-shadow: 0 0 0 var(--input-border-width-focus) var(--background-modifier-border-focus);
 }
 
 .checkpoint-view .cp-date-field {
@@ -1289,7 +1339,8 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-quick-add-modal .cp-flags {
 	flex-direction: row;
-	align-items: flex-end;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--size-4-3);
 }
 
@@ -2093,6 +2144,32 @@ body.is-mobile .checkpoint-view .cp-app {
 .checkpoint-quick-add-modal .cp-pop.is-above {
 	top: auto;
 	bottom: calc(100% + 8px);
+}
+
+/* In the top layer (popoverFit.ts): placed in window coordinates from the variables the script sets,
+   so no modal or scroller clips it. The browser's own popover box (inset, margin, padding, overflow;
+   its border, colors and size are already set above) is reset to the look above. */
+.checkpoint-view .cp-pop[popover],
+.checkpoint-quick-add-modal .cp-pop[popover] {
+	position: fixed;
+	inset: auto;
+	top: var(--cp-pop-top);
+	left: var(--cp-pop-left);
+	max-width: calc(100% - 16px);
+	margin: 0;
+}
+
+/* Low specificity on purpose: the more menu's own padding and scrolling still apply. */
+.checkpoint-view :where(.cp-pop[popover]),
+.checkpoint-quick-add-modal :where(.cp-pop[popover]) {
+	padding: 0;
+	overflow: visible;
+}
+
+.checkpoint-view .cp-pop[popover].is-above,
+.checkpoint-quick-add-modal .cp-pop[popover].is-above {
+	top: auto;
+	bottom: var(--cp-pop-bottom);
 }
 
 /* The date popover scrolls its body; Clear / OK are a footer that never scrolls away. */
@@ -4212,9 +4289,11 @@ body.is-mobile .checkpoint-view .cp-app {
 	display: none;
 }
 
+/* The padding keeps the focus ring of an edge icon inside the scrolling box. */
 .checkpoint-new-list .cp-icon-grid {
 	max-height: 220px;
 	overflow-y: auto;
+	padding: var(--size-2-2);
 }
 
 .checkpoint-new-list .cp-icon-choice[aria-pressed="true"] {
