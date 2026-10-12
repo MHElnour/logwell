@@ -9,6 +9,7 @@ import {
 	isSeriesEnded,
 	normalizeRepeatRule,
 	occurrenceRecordId,
+	repeatEndProblem,
 	repeatRuleProblem,
 	ruleAt,
 	startRecurrence,
@@ -66,12 +67,11 @@ export function recordsOfTask(tx: Tx, taskId: ID): OccurrenceRecord[] {
 	return out.sort((a, b) => compareSortKeys(a.occurrenceDate, b.occurrenceDate));
 }
 
-/** Throws InvalidValue when `end` cannot be stored. */
+/** Throws InvalidValue when `end` cannot be stored (repeatEndProblem); returns its stored form. */
 export function requireRepeatEnd(end: RepeatEnd): RepeatEnd {
-	if (end.kind === "never") return { kind: "never" };
-	if (end.kind === "date" && isValidLocalDate(end.date)) return { kind: "date", date: end.date };
-	if (end.kind === "count" && Number.isInteger(end.count) && end.count >= 1) return { kind: "count", count: end.count };
-	return invalidValue(end.kind === "count" ? "End after 1 or more times." : "The end date is not valid.");
+	const problem = repeatEndProblem(end);
+	if (problem !== null) invalidValue(problem);
+	return end.kind === "date" ? { kind: "date", date: end.date } : end.kind === "count" ? { kind: "count", count: end.count } : { kind: "never" };
 }
 
 /**

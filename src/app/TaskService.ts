@@ -3,7 +3,7 @@ import type { IdGenerator } from "../domain/ports";
 import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, rewriteNotePath, sanitizeNoteName } from "../domain/notes";
 import { assertCanBecomeSubtask, compareTasksBySortKey, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
-import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
+import { currentOccurrence, isSeriesEnded, occurrenceRecordId, repeatEndProblem, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
 import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
 import {
 	type DateSpec,
@@ -357,6 +357,9 @@ export class TaskService {
 			const end = input.repeat.end === undefined ? undefined : requireRepeatEnd(input.repeat.end);
 			const zone = this.settings.zone();
 			recurrence = startRecurrence(scheduled, rule, end, todayIn(zone, this.store.clock), zone, this.settings.weekStart()).recurrence;
+			// An end before the first date would let the hourly sweep end the task just created (Repeating tasks rule 19).
+			const endProblem = repeatEndProblem(recurrence.end, recurrence.anchor);
+			if (endProblem !== null) throw new DomainError("InvalidValue", endProblem);
 			scheduled = null;
 		}
 		const task: Task = {

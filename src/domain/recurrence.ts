@@ -1,6 +1,6 @@
 import type { QueryContext } from "./queries";
 import { plural } from "./text";
-import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidZone, weekStartOfDay as weekStartNum } from "./time";
+import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidLocalDate, isValidZone, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
 	ID,
@@ -9,6 +9,7 @@ import type {
 	OccurrenceRecord,
 	Recurrence,
 	RepeatEnd,
+	RepeatFreq,
 	RepeatRule,
 	RepeatVersion,
 	Task,
@@ -202,6 +203,14 @@ function plusInterval(base: number, r: RepeatRule, times = 1): number {
 	const k = monthStep(r) * times;
 	const { mi, day } = monthIndexOf(base);
 	return firstOfMonth(mi + k) + Math.min(day, daysInMonth(mi + k)) - 1;
+}
+
+/**
+ * `date` plus `n` periods of `freq` (days, weeks, months or years), with the engine's month-end clamp: Jan 31 plus
+ * a month is Feb 28. `n` may be 0 or negative.
+ */
+export function periodsAfter(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
+	return dateOf(plusInterval(dayNum(date), { freq, interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null }, n));
 }
 
 /** What after completion counts from: the day of the most recently resolved record, and the taken dates. */
@@ -499,7 +508,7 @@ export function describeRule(rec: Recurrence, at?: LocalDate): string {
 }
 
 /** "ends Dec 31", "ends after 10 times", or null when it never ends. The year shows when it differs from `today`'s. */
-export function describeEnd(rec: Recurrence, today?: LocalDate): string | null {
+export function describeEnd(rec: Pick<Recurrence, "end">, today?: LocalDate): string | null {
 	const end = rec.end;
 	if (end.kind === "never") return null;
 	if (end.kind === "count") return `ends after ${plural(end.count, "time")}`;
@@ -718,6 +727,17 @@ export function repeatRuleProblem(rule: RepeatRule): string | null {
 		if (rule.tz === null || !isValidZone(rule.tz)) return "The time zone is not valid.";
 	}
 	return null;
+}
+
+/**
+ * Why an end cannot be stored, or null when it can: a count of 1 or more, a real date and, with `anchor` (the
+ * series' first date), a date on or after it. The picker, Quick Add and the services show this message.
+ */
+export function repeatEndProblem(end: RepeatEnd, anchor?: LocalDate): string | null {
+	if (end.kind === "never") return null;
+	if (end.kind === "count") return Number.isInteger(end.count) && end.count >= 1 ? null : "End after 1 or more times.";
+	if (end.kind !== "date" || !isValidLocalDate(end.date)) return "The end date is not valid.";
+	return anchor !== undefined && end.date < anchor ? "The end date is before the first date." : null;
 }
 
 /**

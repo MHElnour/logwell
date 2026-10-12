@@ -1,5 +1,4 @@
-import { DateTime } from "luxon";
-import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
+import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
@@ -234,13 +233,6 @@ export function afterCompletionBlock(d: RepeatDraft): string | null {
 	return null;
 }
 
-/** `date` plus `n` days, weeks, months or years (a month end clamps: Jan 31 + 1 month is Feb 28, Feb 29 + 1 year is Feb 28). */
-function plusUnits(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
-	if (freq === "daily") return addDays(date, n);
-	if (freq === "weekly") return addDays(date, 7 * n);
-	return DateTime.fromISO(date, { zone: "UTC" }).plus({ months: freq === "yearly" ? 12 * n : n }).toISODate() ?? date;
-}
-
 /** "Oct 5", or "Oct 5, 2027" with the year (a yearly next date, which would otherwise read as the same day). */
 const shortDate = (date: LocalDate, withYear = false): string => (withYear ? `${monthDayText(date)}, ${date.slice(0, 4)}` : monthDayText(date));
 
@@ -255,7 +247,7 @@ export function afterCompletionHint(d: RepeatDraft, today: LocalDate): string {
 	const k = Number.isInteger(n) && n >= 1 && n <= 999 ? n : 1;
 	const late = addDays(today, 5);
 	const yearly = d.freq === "yearly";
-	return `Done on ${shortDate(today)} → next ${shortDate(plusUnits(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(plusUnits(late, d.freq, k), yearly)}.`;
+	return `Done on ${shortDate(today)} → next ${shortDate(periodsAfter(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(periodsAfter(late, d.freq, k), yearly)}.`;
 }
 
 /** The rule a draft describes, before the domain checks it. */
@@ -291,14 +283,9 @@ export function draftProblem(d: RepeatDraft, anchor: LocalDate): string | null {
 	const rule = ruleOfDraft(d);
 	const problem = repeatRuleProblem(rule);
 	if (problem !== null) return problem;
-	if (d.endKind === "count" && !(Number.isInteger(Number(d.endCount)) && Number(d.endCount) >= 1 && d.endCount.trim() !== "")) {
-		return "End after 1 or more times.";
-	}
-	if (d.endKind === "date") {
-		if (!isValidLocalDate(d.endDate)) return "Pick an end date.";
-		if (d.endDate < anchor) return "The end date is before the first date.";
-	}
-	return null;
+	// An empty date field asks for a date; every other end check is the domain's.
+	if (d.endKind === "date" && !isValidLocalDate(d.endDate)) return "Pick an end date.";
+	return repeatEndProblem(endOfDraft(d), anchor);
 }
 
 /** The value of a valid draft, in its stored form. */
