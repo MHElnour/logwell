@@ -273,13 +273,14 @@ function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
 
 /**
  * The end of the run of repeat words at `from` (over spaces), with the glue words between them and none at its end;
- * `from` when no repeat word comes first ("every time", "every chapter"; "other" or "every" may lead). An `at <time>`
- * after a repeat word is one more ("every monday at 9 and friday at 5"). A date or a date range stops the run: the
- * date reader reads them.
+ * `from` when no repeat word comes first ("every time", "every chapter"; "other" and "every" may each lead once, so the
+ * run after each `every` of "every every …" stops within two words). An `at <time>` after a repeat word is one more
+ * ("every monday at 9 and friday at 5"). A date or a date range stops the run: the date reader reads them.
  */
 function repeatWordsEnd(s: string, from: number, after = false): number {
 	let i = from;
 	let end = from;
+	const leads = new Set<string>();
 	for (;;) {
 		// A time is one more word of the run only after a repeat word ("friday at 5", `after`: one came before `from`);
 		// alone after a list word it is a time read on its own ("every day, at 7").
@@ -296,7 +297,8 @@ function repeatWordsEnd(s: string, from: number, after = false): number {
 		if (k === j || sticky(RANGE_START_RE, s, j) !== null || sticky(DATE_START_RE, s, j) !== null) break;
 		const word = s.slice(j, k).toLowerCase();
 		if (REPEAT_WORD_RE.test(word)) end = k;
-		else if (!(end === from ? GLUE_LEAD.has(word) : GLUE.has(word))) break;
+		else if (end === from ? !GLUE_LEAD.has(word) || leads.has(word) : !GLUE.has(word)) break;
+		else if (end === from) leads.add(word);
 		i = k;
 	}
 	return end;
