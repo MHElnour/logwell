@@ -412,6 +412,24 @@ describe.each(ZONES)("5. Not supported in %s", (zone) => {
 		}
 	});
 
+	it("#12: a date joined by and, & or a comma after a repeat Quick Add cannot build applies nothing", () => {
+		for (const [input, phrase] of [
+			["Gym every May 5 and Dec 25", "every May 5"],
+			["Gym every May 5, Dec 25", "every May 5"],
+			["Gym every May 5 & Dec 25", "every May 5"],
+			["Gym every May 5, and Dec 25", "every May 5"],
+			["Take pills every 8 hours and tomorrow", "every 8 hours"],
+			["Take pills every 8 hours & Oct 12", "every 8 hours"],
+		] as const) {
+			unsupported(input, zone, phrase);
+			expect(parse(input, zone).chips.find((c) => c.kind === "scheduled")?.status, input).toBe("suggestion");
+		}
+		// Title words between the repeat and the date: the date is read on its own, as without a repeat.
+		const r = parse("Take pills every 8 hours and call the bank tomorrow", zone);
+		expect(r.chips.find((c) => c.kind === "recurrence")).toMatchObject({ status: "unsupported", notice: NOTICE });
+		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-08" });
+	});
+
 	it("a repeat with two starts", () => {
 		for (const input of ["Bday every year on May 5 from Oct 12", "Bday every year on May 5 from Oct 12 to Dec 1", "Bday every year on May 5 starting Oct 12"]) {
 			const r = parse(input, zone);

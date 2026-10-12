@@ -328,7 +328,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
 	// A date range led by a start word (`starting Oct 12 to Dec 1`) or right after a typed repeat that stays is that
 	// repeat's start and end (Repeating tasks rule 19); a repeat picked by hand never splits one.
-	const afterRepeat = (at: number): boolean => repeatEnds.some((end) => end <= at && /^[\s,]*$/u.test(input.slice(end, at)));
+	const afterRepeat = (at: number, joined = /^[\s,]*$/u): boolean => repeatEnds.some((end) => end <= at && joined.test(input.slice(end, at)));
+	// After a repeat Quick Add cannot build, a date joined to it by `and` or `&` is as close as one after a comma
+	// (`every May 5 and Dec 25`): it is offered at most.
+	const JOINED = /^[\s,&]*(?:and[\s,&]+)?$/iu;
 	// A start that is a choice: the end follows the alternative chosen for it (`starting Wednesday until Friday`, "Next week").
 	const rangeEnd = (range: NonNullable<DateCandidate["range"]>): DateCandidate => {
 		const o = range.start.outcome;
@@ -349,8 +352,8 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		} else if (typed && !built && (c.kind === "end" || c.lead?.kind === "schedule" || c.lead?.kind === "end")) {
 			// A start or end part of a repeat Quick Add cannot build applies nothing.
 			drafts.push(draft(input, c.kind === "end" ? "repeatEnd" : "scheduled", c.span, "unsupported", { notice: NOTICE.recurrence }));
-		} else if (typed && !built && c.kind === "scheduled" && afterRepeat(c.span.start)) {
-			// Nor does a date right after it, its start as typed: it is offered at most.
+		} else if (typed && !built && c.kind === "scheduled" && afterRepeat(c.span.start, JOINED)) {
+			// Nor does a date right after it, its start as typed, or joined to it by `and` or `&`: it is offered at most.
 			drafts.push(offerDraft(input, c));
 		} else if (c.kind === "end") {
 			// The end of a repeat picked by hand is not a typed value it replaces, so the hand-picked repeat does not turn

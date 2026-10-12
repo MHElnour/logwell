@@ -194,8 +194,8 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 		expect(r.fields.recurrence, because).toBeUndefined();
 		expect(r.title, because).toContain(f.text);
 		if ((w.kind === "date" || w.kind === "leap" || w.kind === "range") && !fromGB && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
-		// A date right after the phrase (over a comma at most) is its start as typed: offered, never applied.
-		else if ((w.kind === "date" || w.kind === "leap") && (sep === "" || sep === ",")) expect(chip(r, "scheduled")?.status, because).toBe("suggestion");
+		// A date right after the phrase (over a comma, `and` or `&` at most) is its start as typed: offered, never applied.
+		else if ((w.kind === "date" || w.kind === "leap") && (sep === "" || sep === "," || sep === " and")) expect(chip(r, "scheduled")?.status, because).toBe("suggestion");
 		else if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chip(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
 		if (w.kind === "end") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
 		if ((w.kind === "periods" || w.kind === "count") && sep !== " and") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
@@ -439,7 +439,7 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 			["Call every 3 hours Mon-Fri", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Mon-Fri"]],
 			["Call every 3 hours until Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "repeatEnd|unsupported|until Dec 1"]],
 			["Taxes every May 5", "every May 5", ["recurrence|unsupported|every May 5"]],
-			["Taxes every May 5 and Dec 25", "every May 5", ["recurrence|unsupported|every May 5", "scheduled|applied|Dec 25"]],
+			["Taxes every May 5 and Dec 25", "every May 5", ["recurrence|unsupported|every May 5", "scheduled|suggestion|Dec 25"]],
 			["Gym every 2nd and 4th tuesday of every month", "every 2nd and 4th tuesday of every month", ["recurrence|unsupported|every 2nd and 4th tuesday of every month"]],
 			["Gym every 2nd, 4th tuesday", "every 2nd, 4th tuesday", ["recurrence|unsupported|every 2nd, 4th tuesday"]],
 		];
