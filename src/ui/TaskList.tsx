@@ -85,8 +85,8 @@ export function TaskList(props: {
 	/** Set in a dashboard block, whose rows have no menu and complete through this handler. */
 	block?: BlockRowOps;
 	/**
-	 * The subtask counts of the rows' parents, for a block that knows its few parents. Without it the list counts
-	 * the subtasks of every task in the database.
+	 * The subtask counts of the rows' parents, for a section that already reads them. Without it the list reads them
+	 * itself (`useSubtaskCounts`: the task index).
 	 */
 	subtaskCounts?: ReadonlyMap<ID, SubtaskCount>;
 }) {

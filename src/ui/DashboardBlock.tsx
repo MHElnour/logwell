@@ -2,7 +2,6 @@ import { useMemo, useRef } from "preact/hooks";
 import type { ViewGroup } from "../app/views";
 import type { ListEntry, QueryContext } from "../domain/queries";
 import { plural } from "../domain/text";
-import { type SubtaskCount, subtaskCountsFor } from "../domain/tasks";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { type IconHost, IconButton } from "./common";
@@ -47,8 +46,6 @@ interface BlockTasksBody {
 	onOpenTask: (id: ID) => void;
 	/** The rows' completion handler. One object for the life of the block. */
 	row: BlockRowOps;
-	/** The subtask counts of the shown parents (`subtaskCountsFor`); counted here when left out. */
-	counts?: ReadonlyMap<ID, SubtaskCount>;
 	/** The window of the block's element, whose timers hold a completed row for its check animation. Default: this window. */
 	win?: Window;
 }
@@ -125,15 +122,6 @@ function TasksBody(props: BlockTasksBody) {
 	const entries = withHeld(props.entries, shown.current, held, props.state.tasks);
 	shown.current = entries;
 	const groups = useMemo<ViewGroup[]>(() => [{ key: "block", date: null, entries }], [entries]);
-	// Only the shown parents are counted: one pass that reads each task's parent, not a map of every task's subtasks.
-	// A row held by the completion animation is not in the query's counts, so its parent is counted here.
-	const counts = useMemo(() => {
-		if (props.counts === undefined) return subtaskCountsFor(new Set(entries.filter((e) => e.task.parentId === null).map((e) => e.task.id)), props.state.tasks.values());
-		const queried = new Set(props.entries.map((e) => e.task.id));
-		const held = entries.filter((e) => e.task.parentId === null && !queried.has(e.task.id)).map((e) => e.task.id);
-		if (held.length === 0) return props.counts;
-		return new Map([...props.counts, ...subtaskCountsFor(new Set(held), props.state.tasks.values())]);
-	}, [props.counts, props.entries, entries, props.state.tasks]);
 	if (entries.length === 0) return <Message tone="info" lines={[NO_TASKS_TEXT]} />;
 	return (
 		<div class="cp-block-body">
@@ -151,7 +139,6 @@ function TasksBody(props: BlockTasksBody) {
 				scroller={BODY_SCROLLER}
 				completed={NO_COMPLETED}
 				block={props.row}
-				subtaskCounts={counts}
 			/>
 		</div>
 	);

@@ -7,7 +7,7 @@ import type { Change } from "../app/tx";
 import type { TaskView } from "../app/views";
 import { type BlockMatcher, compileBlockQuery, runBlockQuery } from "../domain/blockQuery";
 import type { ListEntry } from "../domain/queries";
-import { type SubtaskCount, subtaskCountsFor } from "../domain/tasks";
+import type { SubtaskCount } from "../domain/tasks";
 import type { ID, Task } from "../domain/types";
 import { type BlockParse, describeBlockFilters, parseBlockQuery } from "../parsing/blockQuery";
 import { accentClass } from "../ui/accent";
@@ -79,7 +79,7 @@ type BlockContext = Pick<MarkdownPostProcessorContext, "sourcePath" | "addChild"
 /** What the shown rows of the last draw say about the changes that can alter them. */
 interface SeenList {
 	entries: ListEntry[];
-	/** The subtask counts of the shown parents. */
+	/** The subtask counts of the shown parents, taken from the task index (`TaskIndex.subtaskCounts()`). */
 	counts: ReadonlyMap<ID, SubtaskCount>;
 	/** Every shown task. */
 	ids: ReadonlySet<ID>;
@@ -504,7 +504,13 @@ class DashboardBlockChild extends MarkdownRenderChild {
 			if (task.parentId === null) shownParents.add(task.id);
 			else parents.add(task.parentId);
 		}
-		const counts = subtaskCountsFor(shownParents, state.tasks.values());
+		// The index keeps every parent's count per change: the block picks its shown parents' and scans nothing.
+		const indexed = session.app.tasks.lists.subtaskCounts();
+		const counts = new Map<ID, SubtaskCount>();
+		for (const id of shownParents) {
+			const count = indexed.get(id);
+			if (count !== undefined) counts.set(id, count);
+		}
 		this.seen = { ...read, list: { entries: result.entries, counts, ids, parents } };
 		return {
 			kind: "tasks",
@@ -515,7 +521,6 @@ class DashboardBlockChild extends MarkdownRenderChild {
 			showList: filters.list === undefined,
 			onOpenTask: this.openTask,
 			row: this.row,
-			counts,
 			win: this.containerEl.win,
 		};
 	}

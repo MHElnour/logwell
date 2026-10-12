@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { type BlockQueryState, compileBlockQuery, runBlockQuery } from "../../src/domain/blockQuery";
 import { type ListEntry, type QueryContext, quadrantOf } from "../../src/domain/queries";
 import { scheduleResolver } from "../../src/domain/recurrence";
-import { subtaskCounts, subtaskCountsFor } from "../../src/domain/tasks";
 import type { Category, DateSpec, ID, OccurrenceRecord, Priority, Section, Tag, Task, WeekStart } from "../../src/domain/types";
 import { type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
 import { done, repeating, rule, series } from "./recurrence-fixtures";
@@ -698,25 +697,5 @@ describe("compileBlockQuery: the per-task test behind runBlockQuery", () => {
 			if (m.kind !== "ok") throw new Error(source);
 			expect(tasks.filter((t) => m.matches(t)).map((t) => t.id)).toEqual(ids(source, { tasks }));
 		}
-	});
-});
-
-describe("subtaskCountsFor", () => {
-	it("counts the subtasks of the given parents, as subtaskCounts does for all of them", () => {
-		const all = [
-			task("p1"),
-			task("p2"),
-			task("c1", { parentId: "p1" }),
-			task("c2", { parentId: "p1", status: "completed", completedAt: TS }),
-			task("c3", { parentId: "p2" }),
-			task("x"),
-		];
-		const some = subtaskCountsFor(new Set(["p1", "x"]), all);
-		expect([...some.entries()]).toEqual([["p1", { total: 2, done: 1 }]]);
-		expect(some.get("p1")).toEqual(subtaskCounts(all).get("p1"));
-	});
-
-	it("reads no task when there are no parents", () => {
-		expect(subtaskCountsFor(new Set(), [task("a", { parentId: "b" })]).size).toBe(0);
 	});
 });

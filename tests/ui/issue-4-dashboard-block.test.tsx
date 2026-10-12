@@ -289,7 +289,7 @@ describe("rows in block mode", () => {
 });
 
 describe("subtask counts in block mode", () => {
-	it("counts the subtasks of the shown parents only, and never builds the count of every task", async () => {
+	it("reads the subtask counts from the task index, and never counts every task again", async () => {
 		const m = await mount();
 		const parent = (await m.h.app.tasks.create({ title: "Parent" })).task;
 		const c1 = (await m.h.app.tasks.create({ title: "C1", parentId: parent.id })).task;
@@ -297,20 +297,16 @@ describe("subtask counts in block mode", () => {
 		await m.h.app.tasks.complete(c1.id);
 		const other = (await m.h.app.tasks.create({ title: "Other" })).task;
 		await m.h.app.tasks.create({ title: "Other child", parentId: other.id });
+		// The index is built by the first read (any open view does that); a block reads it, never counts again.
+		m.h.app.tasks.lists.subtaskCounts();
+		const rebuilds = m.h.app.tasks.lists.rebuilds;
 		vi.mocked(domainTasks.subtaskCounts).mockClear();
 		await m.draw("");
 		const label = (title: string) => rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim() === title)!.querySelector(".cp-meta-subtasks")?.textContent.replace(/\s/g, "");
 		expect(label("Parent")).toBe("1/2");
 		expect(label("Other")).toBe("0/1");
 		expect(allTaskCounts()).toBe(0);
-	});
-
-	it("uses the counts the block was given instead of counting again", async () => {
-		const m = await mount();
-		const parent = (await m.h.app.tasks.create({ title: "Parent" })).task;
-		await m.h.app.tasks.create({ title: "Child", parentId: parent.id });
-		await m.draw("", { counts: new Map([[parent.id, { total: 7, done: 3 }]]) });
-		expect(rows(m)[0]!.querySelector(".cp-meta-subtasks")!.textContent.replace(/\s/g, "")).toBe("3/7");
+		expect(m.h.app.tasks.lists.rebuilds).toBe(rebuilds);
 	});
 });
 
@@ -402,7 +398,7 @@ describe("completing from the block", () => {
 		await m.h.app.tasks.complete(child.id);
 		await m.h.app.tasks.complete(parent.id);
 		// Nothing of the family is open: the block's own query returns no row and counts no parent.
-		await m.draw("", { counts: new Map() });
+		await m.draw("");
 		expect(titles(m)).toContain("Parent");
 		const row = rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim() === "Parent")!;
 		expect(row.querySelector(".cp-meta-subtasks")!.textContent.replace(/\s/g, "")).toBe("1/1");
