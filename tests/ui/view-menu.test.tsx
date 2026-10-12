@@ -1,104 +1,11 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { byLabel, cal, type CalMount, click, entries, mountCal, openCalendar, settle } from "./calendar-helpers";
 import { mountHabits, openHabits, q, qa, rowOf, seedMockup } from "./habits-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 import type { DateSpec } from "../../src/domain/types";
 import { LINGER_MS } from "../../src/ui/useLingering";
 import { card, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, titlesIn } from "./matrix-helpers";
-
-describe("section state written with an updater", () => {
-	// Section state is written with an updater, never by spreading the `ui` object a render captured: a
-	// menu that stays open past a later change must not bring back what that change replaced.
-
-	beforeAll(() => {
-		(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-			const el = this.ownerDocument.createElement("div");
-			el.className = o.cls;
-			this.appendChild(el);
-			return el;
-		};
-	});
-
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
-	const tasksEl = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-tasks")!;
-	const selected = (m: CalMount) =>
-		[...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row.is-selected")].map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
-
-	async function twoTasks() {
-		const m = await mountCal();
-		mounted.push(m);
-		const work = await m.h.app.categories.create("Work");
-		const a = (await m.h.app.tasks.create({ title: "Alpha", categoryId: work.id })).task;
-		const b = (await m.h.app.tasks.create({ title: "Beta", categoryId: work.id })).task;
-		const view = { kind: "category" as const, id: work.id };
-		m.handle.current!.showTasks(view, a.id);
-		await settle();
-		expect(selected(m)).toEqual(["Alpha"]);
-		return { m, view, b };
-	}
-
-	describe("Tasks view menu after the selection changed", () => {
-		for (const pick of ["Sort: by priority", "Add section", "Show completed"]) {
-			it(`"${pick}" keeps the task selected in the meantime`, async () => {
-				const { m, view, b } = await twoTasks();
-				const menu = await openViewMenu(m, tasksEl(m));
-				m.handle.current!.showTasks(view, b.id);
-				await settle();
-				expect(selected(m)).toEqual(["Beta"]);
-				await pickItem(m, menu, pick);
-				expect(selected(m)).toEqual(["Beta"]);
-			});
-		}
-	});
-
-	describe("Search results opening a list", () => {
-		it("keeps what another change wrote to the Tasks state in the same turn", async () => {
-			const m = await mountCal();
-			mounted.push(m);
-			const work = await m.h.app.categories.create("Work");
-			const x = (await m.h.app.tasks.create({ title: "Target", categoryId: work.id })).task;
-			const typeIn = async (selector: string, text: string) => {
-				const input = m.root.querySelector<HTMLInputElement>(selector)!;
-				input.value = text;
-				input.dispatchEvent(new Event("input", { bubbles: true }));
-				await settle();
-			};
-			await typeIn('.cp-tasks input[aria-label="Search this list"]', "zzz");
-			await click(byLabel(m.root, "Search"));
-			await typeIn(".cp-search input[type=search]", "Work");
-			const link = [...m.root.querySelectorAll<HTMLButtonElement>(".cp-search-categories .cp-link-button")].find((b) => b.textContent.includes("Work"))!;
-			// One synchronous turn: another change clears the list's search text, then the result is clicked.
-			m.handle.current!.showTasks({ kind: "inbox" }, x.id);
-			link.click();
-			await settle();
-			expect(m.root.querySelector<HTMLInputElement>('.cp-tasks input[aria-label="Search this list"]')!.value).toBe("");
-			expect(tasksEl(m).querySelector(".cp-main-title")!.textContent).toContain("Work");
-		});
-	});
-
-	describe("Habits page after the selection changed", () => {
-		it("a week strip pick in the same turn keeps the habit that was selected meanwhile", async () => {
-			const m = await mountHabits();
-			mounted.push(m);
-			const habits = await seedMockup(m.h);
-			await m.rerender();
-			const el = await openHabits(m);
-			expect(rowOf(el, "Meditate").classList.contains("is-selected")).toBe(true);
-			const monday = qa<HTMLButtonElement>(el, ".cp-habit-day")[0]!;
-			// One synchronous turn: the selection moves to Read, then the older strip button is pressed.
-			m.handle.current!.showHabit(habits.read.id);
-			monday.click();
-			await settle();
-			expect(rowOf(el, "Read").classList.contains("is-selected")).toBe(true);
-			expect(q(el, ".cp-habit-day.is-selected").getAttribute("aria-label")).toContain("Mon 28");
-		});
-	});
-});
 
 describe("the view menu and the Completed group", () => {
 	// The ⋯ view menu in Tasks and the Completed group. Today is 2026-10-01 (Europe/Berlin).
@@ -108,8 +15,10 @@ describe("the view menu and the Completed group", () => {
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 	});
-	afterEach(() => {
+	afterEach(async () => {
 		for (const m of mounted.splice(0)) m.unmount();
+		// Run what the unmounts left queued (Preact's effect flush) while the fake timers still own it.
+		await vi.runOnlyPendingTimersAsync();
 		vi.useRealTimers();
 	});
 	async function mount() {
@@ -488,6 +397,104 @@ describe("the view menu and the Completed group", () => {
 	});
 });
 
+describe("section state written with an updater", () => {
+	// Section state is written with an updater, never by spreading the `ui` object a render captured: a
+	// menu that stays open past a later change must not bring back what that change replaced.
+
+	const proto = HTMLElement.prototype as unknown as { createDiv?: (o: { cls: string }) => HTMLElement };
+	const ownCreateDiv = proto.createDiv;
+	beforeAll(() => {
+		proto.createDiv = function (this: HTMLElement, o) {
+			const el = this.ownerDocument.createElement("div");
+			el.className = o.cls;
+			this.appendChild(el);
+			return el;
+		};
+	});
+	afterAll(() => {
+		proto.createDiv = ownCreateDiv;
+	});
+
+	const mounted: CalMount[] = [];
+	afterEach(() => {
+		for (const m of mounted.splice(0)) m.unmount();
+	});
+
+	const tasksEl = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-tasks")!;
+	const selected = (m: CalMount) =>
+		[...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row.is-selected")].map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
+
+	async function twoTasks() {
+		const m = await mountCal();
+		mounted.push(m);
+		const work = await m.h.app.categories.create("Work");
+		const a = (await m.h.app.tasks.create({ title: "Alpha", categoryId: work.id })).task;
+		const b = (await m.h.app.tasks.create({ title: "Beta", categoryId: work.id })).task;
+		const view = { kind: "category" as const, id: work.id };
+		m.handle.current!.showTasks(view, a.id);
+		await settle();
+		expect(selected(m)).toEqual(["Alpha"]);
+		return { m, view, b };
+	}
+
+	describe("Tasks view menu after the selection changed", () => {
+		for (const pick of ["Sort: by priority", "Add section", "Show completed"]) {
+			it(`"${pick}" keeps the task selected in the meantime`, async () => {
+				const { m, view, b } = await twoTasks();
+				const menu = await openViewMenu(m, tasksEl(m));
+				m.handle.current!.showTasks(view, b.id);
+				await settle();
+				expect(selected(m)).toEqual(["Beta"]);
+				await pickItem(m, menu, pick);
+				expect(selected(m)).toEqual(["Beta"]);
+			});
+		}
+	});
+
+	describe("Search results opening a list", () => {
+		it("keeps what another change wrote to the Tasks state in the same turn", async () => {
+			const m = await mountCal();
+			mounted.push(m);
+			const work = await m.h.app.categories.create("Work");
+			const x = (await m.h.app.tasks.create({ title: "Target", categoryId: work.id })).task;
+			const typeIn = async (selector: string, text: string) => {
+				const input = m.root.querySelector<HTMLInputElement>(selector)!;
+				input.value = text;
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+				await settle();
+			};
+			await typeIn('.cp-tasks input[aria-label="Search this list"]', "zzz");
+			await click(byLabel(m.root, "Search"));
+			await typeIn(".cp-search input[type=search]", "Work");
+			const link = [...m.root.querySelectorAll<HTMLButtonElement>(".cp-search-categories .cp-link-button")].find((b) => b.textContent.includes("Work"))!;
+			// One synchronous turn: another change clears the list's search text, then the result is clicked.
+			m.handle.current!.showTasks({ kind: "inbox" }, x.id);
+			link.click();
+			await settle();
+			expect(m.root.querySelector<HTMLInputElement>('.cp-tasks input[aria-label="Search this list"]')!.value).toBe("");
+			expect(tasksEl(m).querySelector(".cp-main-title")!.textContent).toContain("Work");
+		});
+	});
+
+	describe("Habits page after the selection changed", () => {
+		it("a week strip pick in the same turn keeps the habit that was selected meanwhile", async () => {
+			const m = await mountHabits();
+			mounted.push(m);
+			const habits = await seedMockup(m.h);
+			await m.rerender();
+			const el = await openHabits(m);
+			expect(rowOf(el, "Meditate").classList.contains("is-selected")).toBe(true);
+			const monday = qa<HTMLButtonElement>(el, ".cp-habit-day")[0]!;
+			// One synchronous turn: the selection moves to Read, then the older strip button is pressed.
+			m.handle.current!.showHabit(habits.read.id);
+			monday.click();
+			await settle();
+			expect(rowOf(el, "Read").classList.contains("is-selected")).toBe(true);
+			expect(q(el, ".cp-habit-day.is-selected").getAttribute("aria-label")).toContain("Mon 28");
+		});
+	});
+});
+
 describe("the Lists… loop", () => {
 	// "Lists…" and "Tags…" show their menu again after a pick. The loop must end when the
 	// menu is dismissed, when the section is hidden and when it unmounts.
@@ -496,8 +503,10 @@ describe("the Lists… loop", () => {
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 	});
-	afterEach(() => {
+	afterEach(async () => {
 		for (const m of mounted.splice(0)) m.unmount();
+		// Run what the unmounts left queued (Preact's effect flush) while the fake timers still own it.
+		await vi.runOnlyPendingTimersAsync();
 		vi.useRealTimers();
 	});
 	async function mountWithCategory() {

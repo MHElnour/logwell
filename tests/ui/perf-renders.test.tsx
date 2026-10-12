@@ -327,6 +327,9 @@ describe("render passes", () => {
 });
 
 describe("rows and sync links", () => {
+	// Performance: the "Not synced" chip reads links, and a write to links must redraw only the rows whose own
+	// link (or whose list's link) changed, never every row.
+
 	const mounted: CalMount[] = [];
 	afterEach(() => {
 		for (const m of mounted.splice(0)) m.unmount();
@@ -373,6 +376,9 @@ describe("rows and sync links", () => {
 });
 
 describe("Tasks section memoization", () => {
+	// The Tasks section builds its rows and its Completed group (one `buildList`) only when their inputs change:
+	// selecting a row, which only moves `selectedId`, must not rebuild them.
+
 	const mounted: CalMount[] = [];
 	afterEach(() => {
 		for (const m of mounted.splice(0)) m.unmount();
@@ -397,10 +403,15 @@ describe("Tasks section memoization", () => {
 });
 
 describe("render passes with the hold", () => {
+	// Completing a task renders the Tasks section once (the row is held among the open rows in that same pass),
+	// then once more when the 450 ms hold ends. Fake timers drive the hold; what they still hold is run before the
+	// real timers return, so Preact's effect scheduling is not left waiting for the next test.
+
 	const mounted: CalMount[] = [];
-	afterEach(() => {
-		vi.useRealTimers();
+	afterEach(async () => {
 		for (const m of mounted.splice(0)) m.unmount();
+		if (vi.isFakeTimers()) await vi.runOnlyPendingTimersAsync();
+		vi.useRealTimers();
 	});
 
 	const builds = () => vi.mocked(views.buildList).mock.calls.length;

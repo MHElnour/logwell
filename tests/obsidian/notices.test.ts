@@ -67,6 +67,8 @@ describe("notice durations", () => {
 });
 
 describe("sync notices", () => {
+	// The one-time Sync notice closes by itself after 15 s and has a "Got it" button.
+
 	beforeEach(() => {
 		created.length = 0;
 		const g = window as unknown as Record<string, unknown>;
