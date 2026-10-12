@@ -1,11 +1,12 @@
 import type { WallTimeWarning } from "../domain/time";
-import type { DateLocale, DateSpec, Priority, RepeatRule } from "../domain/types";
+import type { DateLocale, DateSpec, LocalDate, Priority, RepeatEnd, RepeatRule, WeekStart } from "../domain/types";
 
 // Quick Add parser contract.
 
 export type { DateLocale };
 export type ParsedField = "scheduled" | "deadline" | "duration" | "category" | "tags" | "note" | "priority" | "recurrence";
-export type ChipKind = "scheduled" | "deadline" | "duration" | "category" | "tag" | "note" | "recurrence" | "priority";
+/** "repeatEnd": the end of a typed repeat (`until Dec 1`, `for 5 times`); it belongs to the recurrence field. */
+export type ChipKind = "scheduled" | "deadline" | "duration" | "category" | "tag" | "note" | "recurrence" | "repeatEnd" | "priority";
 
 /** UTF-16 offsets into the input; end is exclusive. */
 export interface Span {
@@ -57,6 +58,8 @@ export interface Chip {
 	candidates?: string[];
 	/** The rule of a typed `every …` that was built (applied, or a suggestion for an ambiguous time). */
 	rule?: RepeatRule;
+	/** The end of a "repeatEnd" chip: a date or a count (`for N weeks` is a date, set once the start is known). */
+	end?: RepeatEnd;
 	/** Sentence-case text shown with the chip, e.g. "Recurrence not supported yet". */
 	notice?: string;
 }
@@ -71,8 +74,10 @@ export interface ParsedFields {
 	tagKeys: string[]; // existing tags
 	newTags: string[]; // names to create on save, as typed; deduped by key, first casing wins
 	notePath?: string;
-	/** Set only when a recurrence chip is applied. No end and no anchor: the service starts it from the date. */
+	/** Set only when a recurrence chip is applied. No anchor: the service starts it from the date. */
 	recurrence?: RepeatRule;
+	/** The typed end, when a "repeatEnd" chip is applied: of `recurrence`, or of a repeat picked by hand. */
+	recurrenceEnd?: RepeatEnd;
 }
 
 export interface ParseResult {
@@ -82,7 +87,7 @@ export interface ParseResult {
 	title: string;
 	titleFallback: boolean;
 	fields: ParsedFields;
-	/** Ids of chips that block saving (unresolved categories). */
+	/** Ids of chips that block saving: unresolved categories, invalid repeat ends. */
 	blocking: string[];
 }
 
@@ -98,4 +103,15 @@ export interface ParseContext {
 	resolveNote: (linktext: string) => string[];
 	decisions: readonly SpanDecision[];
 	manual: ReadonlySet<ParsedField>;
+	/**
+	 * The date a task starts from when no date is typed: one picked by hand or a view's preset. A typed repeat end counts
+	 * from it (`for 2 weeks`) and is checked against it; absent means today.
+	 */
+	startDate?: LocalDate;
+	/** The week start setting, for checking an end against a weekly repeat of several weeks; default Monday. */
+	weekStart?: WeekStart;
+	/** The repeat picked by hand has an end of its own: a typed end replaces it only when accepted. */
+	pickedEnd?: boolean;
+	/** The rule of the repeat picked by hand: a typed end with no typed repeat is checked against it. */
+	pickedRule?: RepeatRule;
 }

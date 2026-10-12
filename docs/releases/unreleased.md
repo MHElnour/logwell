@@ -24,6 +24,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#52) `tag:` in a task block takes several tags separated by commas; a task with any of them shows.
 - (#52) A task block has a new `scheduled:` filter for a task's planned date (a repeating task's current one), with the values `today`, `overdue`, `this week` and `next 7 days`.
 - (#12) Added a yearly repeat: pick **Yearly** in the repeat picker. Once this version opens a database, older Logwell versions open it read-only, so update every device.
+- (#12) Quick Add reads more repeats: `every mon wed fri`, `every mon-fri`, `daily`, `mondays`, `weekly on mon, fri`, `quarterly`, `every year`, `every year on May 5`, `every 15th`, `the 15th of each month`, `the 2nd tuesday of every month`, `last day of the month`, `every morning`, a time with `at` after any of them, a start with `starting`, `from` or `on`, and an end with `until Dec 1`, `for 5 times` or `for 2 weeks`, or a start and end with `starting Oct 12 to Dec 1`. The full list is in the Repeating tasks page. A repeat it cannot do yet, such as `every 3 hours` or `every monday at 9 and friday at 5`, shows a notice instead of a wrong date.
 - (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag. Undo of a new or renamed tag is refused once a synced task uses it, so no task is left with a tag that no longer exists.
 
 ## Changed
@@ -34,10 +35,21 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 - (#9) A parent tag is now a tag of its own: creating `@home/calls` also creates `home`, and every tag in the sidebar has a color and the full menu. Adding a task from a parent's view gives it that tag. Deleting a parent moves its child tags to the top level (`home/calls` becomes `calls`) on every task, including tasks in the Trash, in one step with Undo.
 
+- (#12) A weekly repeat on picked weekdays now starts on the first of those weekdays on or after the task's date, in Quick Add, the repeat picker and the details pane alike, so "every 2 weeks on Monday" made on a Wednesday first falls on the coming Monday.
+- (#12) A repeat can end after at most 999 times, in Quick Add and the picker.
+- (#12) Duplicating a repeating task keeps its end, unless that end would come before the copy's first date: then the copy never ends.
+- (#12) In Quick Add, `until` before a date is a deadline when the task does not repeat (`Pay rent until Oct 20`); with a repeat it is the repeat's end. A lone comma left where a recognized phrase was removed no longer stays in the title (`Read every day, 20 pages` is "Read 20 pages").
+- (#12) In Quick Add, a repeat with a bare hour, such as `every day at 7`, now waits for you to choose 07:00 or 19:00 before the task is saved: Enter opens the choice. Start and end words count only after a repeat Quick Add can make, and `until 5pm` after a repeat is offered as a date instead of being applied.
+- (#12) In Quick Add, `a day` or `a week` alone, as in `3 times a day`, is no longer read as a date.
+- (#12) In Quick Add, a two-digit number after a comma is no longer read as a year: `Party May 5, 20 guests` is May 5 with "20 guests" in the title.
+- (#12) In Quick Add with the Day/month date order, `from 12 Oct` is now the date 12 October, not a time.
+- (#12) In Quick Add, a date typed without a year that this year does not have, such as `Feb 29`, now means the next year that has it.
+
 - (#52) In a task block, `due:` now matches only a task's deadline. Use the new `scheduled:` filter, with the same values, for a task's planned date (a repeating task's current one). A block that used `due:` for planned dates needs `scheduled:` instead.
 
 ## Fixed
 
+- (#88) Typing today's date in Quick Add, such as `Pay Oct 7` on Oct 7, now means today at any time of day, not the same day next year, and weekdays, relative words and dates no longer depend on the computer's time zone. `in 1 hour` counts from the task's own clock even while the computer's clock is skipping an hour for daylight saving.
 - (#85) Quick Add's date and ⋯ popovers are no longer cut off by the Quick Add window or a short view, and the All fields form lines up: consistent spacing and field styles, and Time says it needs a date.
 
 ## Security

@@ -29,7 +29,7 @@ import {
 	type RenameTimers,
 	type SettingsPort,
 } from "./ports";
-import { COMPLETE_OCCURRENCE_LABEL, RecurrenceService, recordsOfTask, requireRepeatEnd, requireRepeatRule, requireTask } from "./RecurrenceService";
+import { COMPLETE_OCCURRENCE_LABEL, RecurrenceService, recordsOfTask, requireEndInSeries, requireRepeatEnd, requireRepeatRule, requireTask } from "./RecurrenceService";
 import { storableDbId } from "../persistence/schema";
 import { TRASH_RETENTION_DAYS } from "./settings";
 import { TagService } from "./CategoryService";
@@ -59,7 +59,8 @@ export interface TaskInput {
 	notePath?: string | null;
 	/**
 	 * Create the task repeating, in one write (Quick Add). The anchor is the date of `scheduled`, else
-	 * today; `scheduled` is then stored as null. Not with `deadline` or `parentId` (InvalidValue).
+	 * today (a weekly rule with picked weekdays: the first of them on or after it, `seriesAnchor`); `scheduled` is then
+	 * stored as null. Not with `deadline` or `parentId` (InvalidValue).
 	 */
 	repeat?: { rule: RepeatRule; end?: RepeatEnd } | null;
 }
@@ -357,6 +358,8 @@ export class TaskService {
 			const end = input.repeat.end === undefined ? undefined : requireRepeatEnd(input.repeat.end);
 			const zone = this.settings.zone();
 			recurrence = startRecurrence(scheduled, rule, end, todayIn(zone, this.store.clock), zone, this.settings.weekStart()).recurrence;
+			// An end before the first date would let the hourly sweep end the task just created (Repeating tasks rule 19).
+			requireEndInSeries(recurrence.end, recurrence, this.settings.weekStart());
 			scheduled = null;
 		}
 		const task: Task = {

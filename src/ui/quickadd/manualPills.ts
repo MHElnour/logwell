@@ -56,12 +56,13 @@ export function manualPills(model: QuickAddModel): ManualPill[] {
 			remove: () => model.revertManual("duration"),
 		});
 	}
-	// A repeat picked by hand. "Never" has no pill (like a priority of none); it only keeps a typed `every …` from applying.
+	// A repeat picked by hand, with the end that will be saved (a typed `until` ends it). "Never" has no pill (like a
+	// priority of none); it only keeps a typed `every …` from applying.
 	if (model.manual.has("recurrence") && vals.repeat !== null) {
 		out.push({
 			key: "recurrence",
 			kind: "recurrence",
-			label: `Repeat: ${repeatLine(vals.repeat, model.repeatAnchor(), today)}`,
+			label: `Repeat: ${repeatLine(model.repeatValue(), model.repeatAnchor(), today)}`,
 			icon: "repeat",
 			remove: () => model.revertManual("recurrence"),
 		});

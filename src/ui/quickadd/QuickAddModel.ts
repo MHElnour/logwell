@@ -145,7 +145,19 @@ export class QuickAddModel {
 			resolveNote: (t) => this.env.resolveNote(t),
 			decisions: this.decisions,
 			manual: this.manual,
+			// A typed repeat end counts from the date picked by hand, else the preset's (else today).
+			...(this.startDate() === null ? {} : { startDate: this.startDate()! }),
+			weekStart: app.queryContext().weekStart,
+			// A typed end over a repeat picked by hand that has its own end is a "Replace repeat end?" suggestion.
+			pickedEnd: this.manual.has("recurrence") && this.vals.repeat !== null && this.vals.repeat.end.kind !== "never",
+			// A typed end of a repeat picked by hand is checked against that repeat.
+			...(this.manual.has("recurrence") && this.vals.repeat !== null ? { pickedRule: this.vals.repeat.rule } : {}),
 		});
+	}
+
+	private startDate(): LocalDate | null {
+		// A date cleared by hand saves without one (today is the start), so the preset no longer counts.
+		return this.manual.has("scheduled") ? this.vals.date || null : this.presetDate();
 	}
 
 	/** Reparses after any change and tells the view. */
@@ -201,6 +213,18 @@ export class QuickAddModel {
 		this.focusTick++;
 	}
 
+	/**
+	 * A value picked by hand for `field`. The hand pick wins again over the typed chips of that field: an earlier "use
+	 * it" (accept) of one of them, or a reading chosen or edited on it (a date, a repeat's hour), is forgotten, so the chip
+	 * is a "Replace …?" offer again and its text stays in the title (a repeat end belongs to the repeat).
+	 */
+	private pickManual(field: ManualFieldName): void {
+		this.manual.add(field);
+		const spans = this.result.chips.filter((c) => (c.kind === "repeatEnd" ? "recurrence" : c.kind) === field).map((c) => c.span);
+		const chosen = (d: SpanDecision): boolean => d.kind === "accept" || d.kind === "date" || d.kind === "rule";
+		this.decisions = this.decisions.filter((d) => !chosen(d) || !spans.some((s) => s.start === d.span.start && s.end === d.span.end));
+	}
+
 	private clearManual(field: ManualFieldName): void {
 		if (field === "category" && this.parent !== undefined) return; // fixed by the parent task
 		this.manual.delete(field);
@@ -248,15 +272,14 @@ export class QuickAddModel {
 
 	/**
 	 * The date popover's Clear: removes the manual date, time, deadline, duration and repeat, and keeps
-	 * the text of any applied typed date, deadline, duration or repeat chip literal (like x on the chip).
+	 * the text of any applied typed date, deadline, duration or repeat chip literal (like x on the chip). A repeat end
+	 * goes with its repeat whatever its status (invalid, waiting), so it never comes back as a deadline on its own.
 	 * Focus stays where it is.
 	 */
 	clearDateFields(): void {
 		for (const chip of this.result.chips) {
-			if (chip.status !== "applied") continue;
-			if (chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence") {
-				this.decide({ span: chip.span, text: chip.text, kind: "literal" });
-			}
+			const dated = chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence";
+			if (chip.kind === "repeatEnd" || (dated && chip.status === "applied")) this.decide({ span: chip.span, text: chip.text, kind: "literal" });
 		}
 		for (const field of ["scheduled", "deadline", "duration", "recurrence"] as const) this.clearManual(field);
 		this.update();
@@ -266,27 +289,37 @@ export class QuickAddModel {
 	accept(chip: Chip): void {
 		if (this.isFixedCategory(chip)) return;
 		this.decide({ span: chip.span, text: chip.text, kind: "accept" });
-		if (isManualField(chip.kind)) this.clearManual(chip.kind);
+		// A typed repeat end belongs to the typed repeat: using it brings that repeat back over one picked by hand. Without a
+		// typed repeat it only replaces the picked repeat's end (repeatValue), so the picked repeat stays.
+		const field = chip.kind !== "repeatEnd" ? chip.kind : this.result.chips.some((c) => c.kind === "recurrence") ? "recurrence" : null;
+		if (field !== null && isManualField(field)) this.clearManual(field);
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
 	}
 
-	/** A chosen alternative or an edited date or time for a date chip. */
+	/** A chosen alternative or an edited date or time for a date chip. Opened by Enter on a blocking choice, the pick saves. */
 	setChipDate(chip: Chip, value: DateSpec): void {
+		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "date", value });
 		if (isManualField(chip.kind)) this.clearManual(chip.kind);
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
+		if (save) void this.submit();
 	}
 
-	/** The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual repeat. */
+	/**
+	 * The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual
+	 * repeat. The choice blocks saving, so Enter opens it and the pick saves.
+	 */
 	setChipRule(chip: Chip, rule: RepeatRule): void {
+		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "rule", rule });
 		this.clearManual("recurrence");
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
+		if (save) void this.submit();
 	}
 
 	/** The picker of an unresolved category chip. */
@@ -431,9 +464,15 @@ export class QuickAddModel {
 	 * end and no date of its own: the service makes the scheduled date, or today, the anchor.
 	 */
 	repeatValue(): RepeatChoice | null {
-		if (this.manual.has("recurrence")) return this.vals.repeat;
+		const typedEnd = this.result.fields.recurrenceEnd;
+		if (this.manual.has("recurrence")) {
+			// A typed end (`until Dec 1`) ends a repeat picked by hand: at once when it has no end of its own, else once
+			// the "Replace repeat end?" suggestion is used (the parser applies the chip only then).
+			const picked = this.vals.repeat;
+			return picked !== null && typedEnd !== undefined ? { rule: picked.rule, end: typedEnd } : picked;
+		}
 		const parsed = this.result.fields.recurrence;
-		return parsed === undefined ? null : { rule: parsed, end: NEVER_END };
+		return parsed === undefined ? null : { rule: parsed, end: typedEnd ?? NEVER_END };
 	}
 
 	/** The date a rule starts from, for the picker's hints: the picked date, else today. */
@@ -478,7 +517,7 @@ export class QuickAddModel {
 
 	setDate(date: string): void {
 		const before = this.dateInputs();
-		this.manual.add("scheduled");
+		this.pickManual("scheduled");
 		this.vals.date = date;
 		this.vals.time = date === "" ? "" : before.time;
 		if (date === "" && this.presetDate() === null) this.manual.delete("scheduled");
@@ -487,7 +526,7 @@ export class QuickAddModel {
 
 	setTime(time: string): void {
 		const before = this.dateInputs();
-		this.manual.add("scheduled");
+		this.pickManual("scheduled");
 		this.vals.date = before.date;
 		this.vals.time = time;
 		this.update();
@@ -496,7 +535,7 @@ export class QuickAddModel {
 	setDeadline(date: string): void {
 		this.vals.deadline = date;
 		if (date === "") this.manual.delete("deadline");
-		else this.manual.add("deadline");
+		else this.pickManual("deadline");
 		this.update();
 	}
 
@@ -510,7 +549,7 @@ export class QuickAddModel {
 			this.manual.delete("recurrence");
 			this.vals.repeat = null;
 		} else {
-			this.manual.add("recurrence");
+			this.pickManual("recurrence");
 			this.vals.repeat = choice;
 		}
 		this.update();
@@ -519,13 +558,13 @@ export class QuickAddModel {
 	setDuration(raw: string): void {
 		this.vals.duration = raw;
 		if (raw === "") this.manual.delete("duration");
-		else this.manual.add("duration");
+		else this.pickManual("duration");
 		this.update();
 	}
 
 	setCategory(id: ID): void {
 		if (this.parent !== undefined) return;
-		this.manual.add("category");
+		this.pickManual("category");
 		this.vals.categoryId = id;
 		this.update();
 	}
@@ -533,7 +572,7 @@ export class QuickAddModel {
 	setNote(path: string | null): void {
 		this.vals.notePath = path;
 		if (path === null) this.manual.delete("note");
-		else this.manual.add("note");
+		else this.pickManual("note");
 		this.update();
 	}
 
@@ -545,7 +584,7 @@ export class QuickAddModel {
 	 */
 	setPriority(priority: Priority): void {
 		if (!isPriority(priority)) throw new RangeError("Priority must be 0, 1, 2 or 3");
-		this.manual.add("priority");
+		this.pickManual("priority");
 		this.vals.priority = priority;
 		this.update();
 	}
@@ -611,6 +650,13 @@ export class QuickAddModel {
 		}
 		// A subtask's category is fixed by its parent, so an unknown category stays literal text and never blocks.
 		const blocking = this.result.chips.find((c) => this.result.blocking.includes(c.id) && !this.isFixedCategory(c));
+		if (blocking?.kind === "repeatEnd") {
+			// An invalid repeat end: its notice says why, and saving waits until it is fixed or dismissed.
+			this.message = blocking.notice ?? null;
+			this.requestFocus({ kind: "chip", id: blocking.id });
+			this.notify();
+			return "invalid";
+		}
 		if (blocking !== undefined) {
 			this.openChipId = blocking.id;
 			this.saveAfterPick = true;

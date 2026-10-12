@@ -278,6 +278,7 @@ const CHIP_ICON: Record<Chip["kind"], string> = {
 	note: "file-text",
 	priority: "flag",
 	recurrence: "repeat",
+	repeatEnd: "repeat",
 };
 
 /** The highlight class of a span by kind: date blue, duration neutral, list accent, priority by level. */
@@ -295,6 +296,7 @@ function spanKindClass(chip: Chip): string {
 		case "tag":
 			return "cp-qa-tok-tag";
 		case "recurrence":
+		case "repeatEnd":
 			return "cp-qa-tok-repeat";
 		default:
 			return "cp-qa-tok-other";

@@ -1,27 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-	completionPlan,
-	currentOccurrence,
-	describeEnd,
-	describeRule,
-	effectiveSchedule,
-	explicitRule,
-	indexOccurrenceRecords,
-	isSeriesEnded,
-	normalizeRepeatRule,
-	occurrencesBetween,
-	ordinal,
-	projectOccurrences,
-	remainingCount,
-	repeatRuleProblem,
-	ruleAt,
-	scheduleResolver,
-	startRecurrence,
-	versionAt,
-	weekdayOf,
-} from "../../src/domain/recurrence";
 import type { QueryContext } from "../../src/domain/queries";
-import type { OccurrenceRecord } from "../../src/domain/types";
+import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
+import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type Task } from "../../src/domain/types";
 import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-fixtures";
 
 const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
@@ -705,9 +685,172 @@ describe("M7 deep-review fixes in the engine", () => {
 		expect(explicitRule(daily, "2026-10-31")).toBe(daily);
 	});
 
-	it("ordinal and weekdayOf are exported for the UI", () => {
+	it("ordinal gives a day number its English suffix, teens included, and weekdayOf names the weekday of a date", () => {
 		expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "31st"]);
 		expect(weekdayOf("2026-10-05")).toBe("MO");
 		expect(weekdayOf("2026-09-06")).toBe("SU");
+	});
+});
+
+describe("yearly repeats", () => {
+	// A yearly repeat (#12): every N years on the anchor's month and day (Repeating tasks rules 1 and 5).
+
+	const yearly = (patch: Parameters<typeof rule>[0] = {}) => rule({ freq: "yearly", ...patch });
+	const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
+
+	describe("yearly occurrences (Repeating tasks rules 1 and 5, #12)", () => {
+		it("#12: is a stored frequency", () => {
+			expect(REPEAT_FREQS).toContain("yearly");
+			expect(repeatRuleProblem(yearly())).toBeNull();
+			expect(repeatRuleProblem(yearly({ interval: 999 }))).toBeNull();
+			expect(repeatRuleProblem(yearly({ interval: 1000 }))).not.toBeNull();
+		});
+
+		it("#12: repeats on the anchor's month and day", () => {
+			expect(occurrencesBetween(series("2026-10-09", yearly()), "2026-01-01", "2029-12-31", "MO")).toEqual([
+				"2026-10-09",
+				"2027-10-09",
+				"2028-10-09",
+				"2029-10-09",
+			]);
+		});
+
+		it("#12: a Feb 29 anchor falls on Feb 28 in other years and comes back on Feb 29", () => {
+			expect(occurrencesBetween(series("2028-02-29", yearly()), "2028-01-01", "2032-12-31", "MO")).toEqual([
+				"2028-02-29",
+				"2029-02-28",
+				"2030-02-28",
+				"2031-02-28",
+				"2032-02-29",
+			]);
+		});
+
+		it("#12: every 2 years counts from the anchor's year, whatever the window", () => {
+			const rec = series("2026-10-09", yearly({ interval: 2 }));
+			expect(occurrencesBetween(rec, "2026-01-01", "2031-12-31", "MO")).toEqual(["2026-10-09", "2028-10-09", "2030-10-09"]);
+			expect(occurrencesBetween(rec, "2027-01-01", "2029-01-01", "MO")).toEqual(["2028-10-09"]);
+		});
+
+		it("#12: an end date caps the series", () => {
+			const rec = series("2026-03-14", yearly(), { kind: "date", date: "2028-03-13" });
+			expect(occurrencesBetween(rec, "2026-01-01", "2035-12-31", "MO")).toEqual(["2026-03-14", "2027-03-14"]);
+		});
+
+		it("#12: a count end allows that many occurrences", () => {
+			const task = repeating(series("2026-03-14", yearly(), { kind: "count", count: 3 }));
+			const shown = projectOccurrences(task, [], "2026-01-01", "2035-12-31", "MO");
+			expect(shown.map((o) => o.date)).toEqual(["2026-03-14", "2027-03-14", "2028-03-14"]);
+			const records = [done("2026-03-14"), done("2027-03-14"), done("2028-03-14")];
+			expect(currentOccurrence(task, records, "2028-03-14", "MO")).toBeNull();
+		});
+
+		it("#12: completing an overdue yearly series skips the missed years before today", () => {
+			const task = repeating(series("2024-03-14", yearly()));
+			expect(completionPlan(task, [], "2026-10-05", "MO")).toEqual({ done: "2024-03-14", autoSkipped: ["2025-03-14", "2026-03-14"] });
+		});
+
+		it("#12: a timed rule keeps its wall time and zone on every year", () => {
+			const task = repeating(series("2026-10-09", yearly({ time: "09:00", tz: "Europe/Berlin" })));
+			expect(effectiveSchedule(task, [done("2026-10-09")], ctx)).toEqual({ kind: "datetime", local: "2027-10-09T09:00", tz: "Europe/Berlin" });
+		});
+
+		it("#12: a monthly series changed to yearly keeps the anchor's phase", () => {
+			const rec = series("2026-01-15", [
+				["2026-01-15", rule({ freq: "monthly" })],
+				["2026-06-01", yearly()],
+			]);
+			expect(occurrencesBetween(rec, "2026-01-01", "2028-12-31", "MO")).toEqual([
+				"2026-01-15",
+				"2026-02-15",
+				"2026-03-15",
+				"2026-04-15",
+				"2026-05-15",
+				"2027-01-15",
+				"2028-01-15",
+			]);
+		});
+	});
+
+	describe("yearly after completion (Repeating tasks rule 7, #12)", () => {
+		it("#12: the next date is the completion day one interval later", () => {
+			const task = repeating(series("2026-03-14", yearly({ afterCompletion: true })));
+			expect(currentOccurrence(task, [], "2026-03-01", "MO")).toBe("2026-03-14");
+			const records: OccurrenceRecord[] = [done("2026-03-14", "2026-03-20")];
+			expect(currentOccurrence(task, records, "2026-03-20", "MO")).toBe("2027-03-20");
+		});
+
+		it("#12: every 2 years, completed on Feb 29, comes back on Feb 28", () => {
+			const task = repeating(series("2028-02-20", yearly({ afterCompletion: true, interval: 2 })));
+			expect(currentOccurrence(task, [done("2028-02-20", "2028-02-29")], "2028-02-29", "MO")).toBe("2030-02-28");
+		});
+
+		it("#12: a taken next date moves on by whole years", () => {
+			const task = repeating(series("2026-03-14", yearly({ afterCompletion: true })));
+			const records: OccurrenceRecord[] = [
+				{ ...done("2027-03-20", "2026-01-10"), resolvedAt: "2026-01-10T09:00:00.000Z" },
+				{ ...done("2026-03-14", "2026-03-20"), resolvedAt: "2026-03-20T09:00:00.000Z" },
+			];
+			expect(currentOccurrence(task, records, "2026-03-20", "MO")).toBe("2028-03-20");
+		});
+	});
+
+	describe("yearly wording and stored form (#12)", () => {
+		it("#12: describes the rule with the anchor's month and day", () => {
+			expect(describeRule(series("2026-03-14", yearly()))).toBe("yearly on Mar 14");
+			expect(describeRule(series("2026-03-14", yearly({ interval: 2 })))).toBe("every 2 years on Mar 14");
+			expect(describeRule(series("2026-03-14", yearly({ afterCompletion: true })))).toBe("1 year after done");
+			expect(describeRule(series("2026-03-14", yearly({ afterCompletion: true, interval: 3 })))).toBe("3 years after done");
+			expect(describeRule(series("2028-02-29", yearly()))).toBe("yearly on Feb 29");
+		});
+
+		it("#12: normalizing clears weekdays and the day of month", () => {
+			expect(normalizeRepeatRule(yearly({ weekdays: ["MO"], monthly: { kind: "day", day: 3 } }), "SU")).toEqual(yearly());
+		});
+
+		it("#12: making a task repeat yearly anchors it on its date and takes a timed date's time", () => {
+			const started = startRecurrence({ kind: "datetime", local: "2026-10-09T08:30", tz: "Europe/Berlin" }, yearly(), undefined, "2026-10-05", "Europe/Berlin");
+			expect(started.recurrence.anchor).toBe("2026-10-09");
+			expect(started.recurrence.versions[0]!.rule).toEqual(yearly({ time: "08:30", tz: "Europe/Berlin" }));
+		});
+	});
+});
+
+// Duplicating a yearly series (#12, Repeating tasks rule 17). The copy starts on the source's current occurrence
+// and takes its month and day from there. A copy of a Feb 29 series is anchored on Feb 28 (the clamped date), so
+// it falls on Feb 28 in leap years too: one day before the original.
+
+const TODAY = "2025-01-10";
+const yearly = (patch: Parameters<typeof rule>[0] = {}) => rule({ freq: "yearly", ...patch });
+const withSeries = (rec: Recurrence) => repeating(rec) as Task & { recurrence: Recurrence };
+
+function copyOf(rec: Recurrence, records = [done(rec.anchor)]): Recurrence {
+	return restartedSeries(withSeries(rec), records, TODAY, "MO");
+}
+
+describe("Duplicate of a yearly series (#12)", () => {
+	it("#12: a Feb 29 source: the copy is anchored on Feb 28 and stays there in leap years", () => {
+		const source = series("2024-02-29", yearly());
+		const copy = copyOf(source);
+		expect(copy.anchor).toBe("2025-02-28");
+		expect(occurrencesBetween(copy, "2025-01-01", "2028-12-31", "MO")).toEqual(["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-28"]);
+		expect(occurrencesBetween(source, "2028-01-01", "2028-12-31", "MO")).toEqual(["2028-02-29"]);
+	});
+
+	it("#12: a Feb 29 source every 3 years: the copy keeps the interval from Feb 28", () => {
+		const copy = copyOf(series("2024-02-29", yearly({ interval: 3 })));
+		expect(copy.anchor).toBe("2027-02-28");
+		expect(occurrencesBetween(copy, "2025-01-01", "2036-12-31", "MO")).toEqual(["2027-02-28", "2030-02-28", "2033-02-28", "2036-02-28"]);
+	});
+
+	it("#12: a source on another day keeps its dates", () => {
+		const source = series("2024-03-14", yearly());
+		const copy = copyOf(source);
+		expect(copy.anchor).toBe("2025-03-14");
+		expect(occurrencesBetween(copy, "2025-01-01", "2032-12-31", "MO")).toEqual(occurrencesBetween(source, copy.anchor, "2032-12-31", "MO"));
+	});
+
+	it("#12: a Feb 29 source counting from completion starts on its current occurrence (it counts from the completion)", () => {
+		const copy = copyOf(series("2024-02-29", yearly({ afterCompletion: true })));
+		expect(copy.anchor).toBe("2025-02-28");
 	});
 });

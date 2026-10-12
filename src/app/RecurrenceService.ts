@@ -9,6 +9,7 @@ import {
 	isSeriesEnded,
 	normalizeRepeatRule,
 	occurrenceRecordId,
+	repeatEndProblem,
 	repeatRuleProblem,
 	ruleAt,
 	startRecurrence,
@@ -66,12 +67,26 @@ export function recordsOfTask(tx: Tx, taskId: ID): OccurrenceRecord[] {
 	return out.sort((a, b) => compareSortKeys(a.occurrenceDate, b.occurrenceDate));
 }
 
-/** Throws InvalidValue when `end` cannot be stored. */
-export function requireRepeatEnd(end: RepeatEnd): RepeatEnd {
-	if (end.kind === "never") return { kind: "never" };
-	if (end.kind === "date" && isValidLocalDate(end.date)) return { kind: "date", date: end.date };
-	if (end.kind === "count" && Number.isInteger(end.count) && end.count >= 1) return { kind: "count", count: end.count };
-	return invalidValue(end.kind === "count" ? "End after 1 or more times." : "The end date is not valid.");
+/**
+ * Throws InvalidValue when `end` cannot be stored (repeatEndProblem); returns its stored form. `kept`, the end already
+ * stored, passes unchanged: a count above 999 from an older file is not refused on the next edit.
+ */
+export function requireRepeatEnd(end: RepeatEnd, kept?: RepeatEnd): RepeatEnd {
+	const stored: RepeatEnd = end.kind === "date" ? { kind: "date", date: end.date } : end.kind === "count" ? { kind: "count", count: end.count } : { kind: "never" };
+	if (kept !== undefined && sameValue(stored, kept)) return stored;
+	const problem = repeatEndProblem(end);
+	if (problem !== null) invalidValue(problem);
+	return stored;
+}
+
+/**
+ * Throws InvalidValue when an end date leaves `series` no occurrence (repeatEndProblem): the sweep would end it at
+ * once. A count is checked by requireRepeatEnd.
+ */
+export function requireEndInSeries(end: RepeatEnd, series: Pick<Recurrence, "anchor" | "versions">, weekStart: WeekStart): void {
+	if (end.kind !== "date") return;
+	const problem = repeatEndProblem(end, series, weekStart);
+	if (problem !== null) invalidValue(problem);
 }
 
 /**
@@ -236,11 +251,12 @@ export class RecurrenceService {
 			// the setting.
 			const weekStart = rule?.weekStart ?? (rec === null ? undefined : ruleAt(rec, eff).weekStart) ?? this.weekStart();
 			const stored = rule === null ? null : requireRepeatRule(rule, weekStart);
-			const storedEnd = end === undefined ? undefined : requireRepeatEnd(end);
+			const storedEnd = end === undefined ? undefined : requireRepeatEnd(end, rec?.end);
 			if (stored !== null && task.parentId !== null) invalidValue("A subtask cannot repeat.");
 			if (rec === null) {
 				if (stored === null) return this.result(EDIT_REPEAT_LABEL, { wrote: false });
 				const started = startRecurrence(task.scheduled, stored, storedEnd, from ?? today, this.settings.zone(), this.weekStart()).recurrence;
+				requireEndInSeries(started.end, started, this.weekStart());
 				// Records from an earlier time the task repeated are history: after completion starts afresh
 				// (anchoredAt) and a count end counts from now (countFrom).
 				const recurrence = recordsOfTask(tx, taskId).length > 0 ? { ...started, anchoredAt: tx.now, countFrom: tx.now } : started;
@@ -275,6 +291,8 @@ export class RecurrenceService {
 			if (sameRule(ruleAt(rec, eff))) versions = rec.versions.filter((v) => v.effectiveFrom <= eff);
 			else if (previous !== undefined && sameRule(previous.rule)) versions = before;
 			else versions = [...before, { effectiveFrom: eff, rule: stored }];
+			// The end (new or kept) must leave the series a first date under the new rule; one its records reached ends it below.
+			requireEndInSeries(storedEnd ?? rec.end, { anchor: rec.anchor, versions }, this.weekStart());
 			let next: Recurrence = { ...rec, versions, end: storedEnd ?? rec.end, endedAt: null };
 			const ended = isSeriesEnded(next, records, this.weekStart());
 			if (ended) next = { ...next, endedAt: rec.endedAt ?? tx.now };

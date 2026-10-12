@@ -1,6 +1,6 @@
 import type { QueryContext } from "./queries";
 import { plural } from "./text";
-import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidZone, weekStartOfDay as weekStartNum } from "./time";
+import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidLocalDate, isValidZone, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
 	ID,
@@ -9,6 +9,7 @@ import type {
 	OccurrenceRecord,
 	Recurrence,
 	RepeatEnd,
+	RepeatFreq,
 	RepeatRule,
 	RepeatVersion,
 	Task,
@@ -202,6 +203,19 @@ function plusInterval(base: number, r: RepeatRule, times = 1): number {
 	const k = monthStep(r) * times;
 	const { mi, day } = monthIndexOf(base);
 	return firstOfMonth(mi + k) + Math.min(day, daysInMonth(mi + k)) - 1;
+}
+
+/**
+ * `date` plus `n` periods of `freq` (days, weeks, months or years), with the engine's month-end clamp: Jan 31 plus
+ * a month is Feb 28. `n` may be 0 or negative.
+ */
+export function periodsAfter(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
+	return dateOf(plusInterval(dayNum(date), plainRule(freq), n));
+}
+
+/** The rule "every N <freq>" with no weekdays, day of the month, time or zone: the one literal of a plain rule. */
+export function plainRule(freq: RepeatFreq, interval = 1): RepeatRule {
+	return { freq, interval, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
 }
 
 /** What after completion counts from: the day of the most recently resolved record, and the taken dates. */
@@ -499,7 +513,7 @@ export function describeRule(rec: Recurrence, at?: LocalDate): string {
 }
 
 /** "ends Dec 31", "ends after 10 times", or null when it never ends. The year shows when it differs from `today`'s. */
-export function describeEnd(rec: Recurrence, today?: LocalDate): string | null {
+export function describeEnd(rec: Pick<Recurrence, "end">, today?: LocalDate): string | null {
 	const end = rec.end;
 	if (end.kind === "never") return null;
 	if (end.kind === "count") return `ends after ${plural(end.count, "time")}`;
@@ -634,7 +648,8 @@ export function restartedSeries(task: Task & { recurrence: Recurrence }, records
 	// A yearly rule takes its month and day from the anchor: a copy of a Feb 29 series is anchored on its clamped
 	// date (Feb 28), so it falls on Feb 28 in leap years too (Repeating tasks rule 17).
 	const versions = [{ effectiveFrom: anchor, rule: explicitRule(ruleAt(rec, anchor), rec.anchor) }];
-	const end: RepeatEnd = rec.end.kind === "date" && rec.end.date < anchor ? { kind: "never" } : rec.end;
+	// An end date that leaves the copy no date of its own is dropped: the sweep would end the copy at once.
+	const end: RepeatEnd = rec.end.kind === "date" && repeatEndProblem(rec.end, { anchor, versions }, weekStart) !== null ? { kind: "never" } : rec.end;
 	const { anchoredAt: _moved, countFrom: _counted, ...rest } = rec;
 	return { ...rest, anchor, versions, end, endedAt: null };
 }
@@ -720,6 +735,24 @@ export function repeatRuleProblem(rule: RepeatRule): string | null {
 	return null;
 }
 
+/** The most times a count end allows, like the largest interval. */
+const MAX_END_COUNT = 999;
+
+/**
+ * Why an end cannot be stored, or null when it can: a count of 1 to 999 and a real date. With `series` (the series the
+ * end would close; its records and its own end are ignored), an end date that leaves the series no occurrence at all:
+ * before its anchor or before its first date (every Friday from a Monday, ending on the Wednesday). Such a series would
+ * be ended by the sweep as soon as it is written. The picker, Quick Add and the services all show this message.
+ */
+export function repeatEndProblem(end: RepeatEnd, series?: Pick<Recurrence, "anchor" | "versions">, weekStart: WeekStart = "MO"): string | null {
+	if (end.kind === "never") return null;
+	if (end.kind === "count") return Number.isInteger(end.count) && end.count >= 1 && end.count <= MAX_END_COUNT ? null : `End after 1 to ${MAX_END_COUNT} times.`;
+	if (end.kind !== "date" || !isValidLocalDate(end.date)) return "The end date is not valid.";
+	if (series === undefined) return null;
+	const closed: Recurrence = { anchor: series.anchor, versions: series.versions, end, endedAt: null };
+	return end.date < series.anchor || nextUnresolved(closed, [], weekStart) === null ? "The repeat ends before its first date." : null;
+}
+
 /**
  * The stored form of a valid rule: weekdays deduplicated in Monday-first order, unused fields null. A
  * weekly rule keeps its own week start, else takes `weekStart` (the setting); without either it has
@@ -748,9 +781,30 @@ export interface StartedRecurrence {
 	timeFromSpec: boolean;
 }
 
+/** A series with one version: `rule` from `anchor` on, ending as `end` says (never by default). */
+export function singleVersionRecurrence(anchor: LocalDate, rule: RepeatRule, end: RepeatEnd = { kind: "never" }): Recurrence {
+	return { anchor, versions: [{ effectiveFrom: anchor, rule }], end, endedAt: null };
+}
+
+/**
+ * The anchor of a new series from its start date (Repeating tasks rules 11 and 19): a weekly rule with picked weekdays
+ * starts on the first of them on or after `start`, so `every 2 weeks on Monday` made on a Wednesday first falls on the
+ * coming Monday, not the one two weeks after it; every other rule starts on `start`. Quick Add, setRepeat and the
+ * picker's checks all go through it.
+ */
+export function seriesAnchor(start: LocalDate, rule: RepeatRule): LocalDate {
+	if (rule.freq !== "weekly" || rule.weekdays === null || rule.weekdays.length === 0) return start;
+	const n = dayNum(start);
+	for (let d = n; d < n + 7; d++) {
+		const date = dateOf(d);
+		if (rule.weekdays.includes(weekdayOf(date))) return date;
+	}
+	return start;
+}
+
 /**
  * "Make repeating" (Quick Add and setRepeat share it). The anchor is the date of `scheduled` in the
- * display zone, else `fallback`. A timed spec gives the rule its wall time and zone when the rule has
+ * display zone, else `fallback`, moved to the first picked weekday by `seriesAnchor`. A timed spec gives the rule its wall time and zone when the rule has
  * none; the anchor is then the spec's own wall date, so the first occurrence is the scheduled moment.
  * The rule is normalized; validate it with repeatRuleProblem first.
  */
@@ -775,7 +829,7 @@ export function startRecurrence(
 		}
 	}
 	return {
-		recurrence: { anchor, versions: [{ effectiveFrom: anchor, rule: r }], end: end ?? { kind: "never" }, endedAt: null },
+		recurrence: singleVersionRecurrence(seriesAnchor(anchor, r), r, end),
 		timeFromSpec,
 	};
 }

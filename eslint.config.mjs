@@ -29,7 +29,6 @@ const LUXON_ALLOWED = [
 	"src/ui/format.ts",
 	"src/ui/habits/format.ts",
 	"src/ui/hooks.ts",
-	"src/ui/repeat.ts",
 ];
 const NEW_DATE_ALLOWED = [
 	"src/domain/time.ts",

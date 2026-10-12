@@ -1,5 +1,4 @@
-import { DateTime } from "luxon";
-import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
+import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, seriesAnchor, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
@@ -36,9 +35,9 @@ export function weekdaysFrom(weekStart: WeekStart): Weekday[] {
 	return [...WEEKDAYS.slice(first), ...WEEKDAYS.slice(0, first)];
 }
 
-/** A single-version series for `rule`, so the domain's descriptions (which read the anchor) can be used. */
+/** A single-version series for `rule` from `anchor` (moved to the first picked weekday, as a new series is), so the domain's descriptions and checks can be used. */
 export function recurrenceOf(choice: RepeatChoice, anchor: LocalDate): Recurrence {
-	return { anchor, versions: [{ effectiveFrom: anchor, rule: choice.rule }], end: choice.end, endedAt: null };
+	return singleVersionRecurrence(seriesAnchor(anchor, choice.rule), choice.rule, choice.end);
 }
 
 /** The time of a timed rule is part of what it says: "every Mon at 17:00". */
@@ -234,13 +233,6 @@ export function afterCompletionBlock(d: RepeatDraft): string | null {
 	return null;
 }
 
-/** `date` plus `n` days, weeks, months or years (a month end clamps: Jan 31 + 1 month is Feb 28, Feb 29 + 1 year is Feb 28). */
-function plusUnits(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
-	if (freq === "daily") return addDays(date, n);
-	if (freq === "weekly") return addDays(date, 7 * n);
-	return DateTime.fromISO(date, { zone: "UTC" }).plus({ months: freq === "yearly" ? 12 * n : n }).toISODate() ?? date;
-}
-
 /** "Oct 5", or "Oct 5, 2027" with the year (a yearly next date, which would otherwise read as the same day). */
 const shortDate = (date: LocalDate, withYear = false): string => (withYear ? `${monthDayText(date)}, ${date.slice(0, 4)}` : monthDayText(date));
 
@@ -252,10 +244,10 @@ export function afterCompletionHint(d: RepeatDraft, today: LocalDate): string {
 	const block = afterCompletionBlock(d);
 	if (block !== null) return block;
 	const n = Number(d.interval);
-	const k = Number.isInteger(n) && n >= 1 && n <= 999 ? n : 1;
+	const k = Number.isInteger(n) && n >= 1 && n <= MAX_INTERVAL ? n : 1;
 	const late = addDays(today, 5);
 	const yearly = d.freq === "yearly";
-	return `Done on ${shortDate(today)} → next ${shortDate(plusUnits(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(plusUnits(late, d.freq, k), yearly)}.`;
+	return `Done on ${shortDate(today)} → next ${shortDate(periodsAfter(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(periodsAfter(late, d.freq, k), yearly)}.`;
 }
 
 /** The rule a draft describes, before the domain checks it. */
@@ -286,19 +278,20 @@ function endOfDraft(d: RepeatDraft): RepeatEnd {
 	return NEVER_END;
 }
 
-/** Why the draft cannot be saved (the domain's message for the rule, or for the end), or null. */
-export function draftProblem(d: RepeatDraft, anchor: LocalDate): string | null {
+/**
+ * Why the draft cannot be saved (the domain's message for the rule, or for the end in a series from `anchor`), or null.
+ * `kept`, the end the value being edited already stores, passes unchanged, as the services let it (a count above 999
+ * from an older file is not refused by the picker it was opened in).
+ */
+export function draftProblem(d: RepeatDraft, anchor: LocalDate, weekStart: WeekStart = "MO", kept?: RepeatEnd): string | null {
 	const rule = ruleOfDraft(d);
 	const problem = repeatRuleProblem(rule);
 	if (problem !== null) return problem;
-	if (d.endKind === "count" && !(Number.isInteger(Number(d.endCount)) && Number(d.endCount) >= 1 && d.endCount.trim() !== "")) {
-		return "End after 1 or more times.";
-	}
-	if (d.endKind === "date") {
-		if (!isValidLocalDate(d.endDate)) return "Pick an end date.";
-		if (d.endDate < anchor) return "The end date is before the first date.";
-	}
-	return null;
+	// An empty date field asks for a date; every other end check is the domain's.
+	if (d.endKind === "date" && !isValidLocalDate(d.endDate)) return "Pick an end date.";
+	const end = endOfDraft(d);
+	if (end.kind === "count" && kept?.kind === "count" && kept.count === end.count) return null;
+	return repeatEndProblem(end, recurrenceOf({ rule: normalizeRepeatRule(rule), end: NEVER_END }, anchor), weekStart);
 }
 
 /** The value of a valid draft, in its stored form. */
