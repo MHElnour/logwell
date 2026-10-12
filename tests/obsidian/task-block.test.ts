@@ -97,6 +97,11 @@ describe("the block processor", () => {
 		};
 	});
 
+	afterAll(() => {
+		// Obsidian's additions do not exist on happy-dom's HTMLElement: removing them restores it.
+		for (const key of ["empty", "win", "doc", "createDiv", "isShown"]) Reflect.deleteProperty(HTMLElement.prototype, key);
+	});
+
 	beforeEach(() => {
 		currentWin = window;
 		shown = true;
@@ -1144,6 +1149,7 @@ describe("subtask counts", () => {
 	});
 	afterAll(() => {
 		vi.unstubAllGlobals();
+		for (const key of ["empty", "win", "doc", "createDiv", "isShown"]) Reflect.deleteProperty(HTMLElement.prototype, key);
 	});
 
 	const children: { unload(): void }[] = [];
