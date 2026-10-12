@@ -254,7 +254,7 @@ export class QuickAddModel {
 	clearDateFields(): void {
 		for (const chip of this.result.chips) {
 			if (chip.status !== "applied") continue;
-			if (chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence") {
+			if (chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence" || chip.kind === "repeatEnd") {
 				this.decide({ span: chip.span, text: chip.text, kind: "literal" });
 			}
 		}
@@ -266,7 +266,9 @@ export class QuickAddModel {
 	accept(chip: Chip): void {
 		if (this.isFixedCategory(chip)) return;
 		this.decide({ span: chip.span, text: chip.text, kind: "accept" });
-		if (isManualField(chip.kind)) this.clearManual(chip.kind);
+		// A typed repeat end belongs to the repeat: using it replaces a repeat picked by hand.
+		const field = chip.kind === "repeatEnd" ? "recurrence" : chip.kind;
+		if (isManualField(field)) this.clearManual(field);
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
 	}
@@ -433,7 +435,7 @@ export class QuickAddModel {
 	repeatValue(): RepeatChoice | null {
 		if (this.manual.has("recurrence")) return this.vals.repeat;
 		const parsed = this.result.fields.recurrence;
-		return parsed === undefined ? null : { rule: parsed, end: NEVER_END };
+		return parsed === undefined ? null : { rule: parsed, end: this.result.fields.recurrenceEnd ?? NEVER_END };
 	}
 
 	/** The date a rule starts from, for the picker's hints: the picked date, else today. */

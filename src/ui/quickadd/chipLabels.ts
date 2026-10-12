@@ -1,4 +1,5 @@
 import { DST_WARNING_TEXT } from "../../app/TaskService";
+import { describeEnd } from "../../domain/recurrence";
 import { tagLabel } from "../../domain/tags";
 import type { Category, LocalDate, Priority, Tag } from "../../domain/types";
 import type { Chip } from "../../parsing";
@@ -51,6 +52,11 @@ export function chipLabel(chip: Chip, env: LabelEnv): string {
 		case "recurrence":
 			// An applied chip shows the rule it became ("every Fri"); a chip that is not applied keeps the typed text.
 			return chip.rule === undefined ? `Repeat: ${chip.text}` : `Repeat: ${ruleText({ rule: chip.rule, end: NEVER_END }, env.anchor ?? env.today)}`;
+		case "repeatEnd": {
+			// "Repeat: ends Dec 1", "Repeat: ends after 5 times".
+			const end = chip.end === undefined ? null : describeEnd({ end: chip.end }, env.today);
+			return end === null ? `Repeat end: ${chip.text}` : `Repeat: ${end}`;
+		}
 	}
 }
 

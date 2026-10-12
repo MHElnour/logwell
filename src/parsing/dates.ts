@@ -29,10 +29,44 @@ export type DateOutcome =
 	| { status: "choice"; alternatives: { label: string; value: DateSpec }[] };
 
 export interface DateCandidate {
-	kind: "scheduled" | "deadline";
-	/** Includes a leading "by" or "at" when one directly precedes the date text. */
+	/** "end": a repeat's end (`until Dec 1`); the parser makes it a deadline when nothing repeats. */
+	kind: "scheduled" | "deadline" | "end";
+	/** Includes the lead word (LEADS) that directly precedes the date text. */
 	span: Span;
 	outcome: DateOutcome;
+}
+
+/** What a lead word directly before a date makes of it: a deadline, a joined time, a repeat end or the start. */
+export type LeadKind = "deadline" | "time" | "end" | "schedule";
+
+/**
+ * The lead words before a date (Tasks and Quick Add rule 28, Repeating tasks rule 19), lower case, single spaces.
+ * The span widens over the lead word; "time" joins only a date whose hour is certain.
+ */
+export const LEADS: readonly { words: string; kind: LeadKind }[] = [
+	{ words: "by", kind: "deadline" },
+	{ words: "at", kind: "time" },
+	{ words: "until", kind: "end" },
+	{ words: "till", kind: "end" },
+	{ words: "ending on", kind: "end" },
+	{ words: "ending", kind: "end" },
+	{ words: "ends on", kind: "end" },
+	{ words: "starting on", kind: "schedule" },
+	{ words: "starting", kind: "schedule" },
+	{ words: "starts on", kind: "schedule" },
+	{ words: "beginning", kind: "schedule" },
+];
+
+/** The lead word that ends right before `index` (over spaces), the longest when several fit; null when none does. */
+export function leadBefore(s: string, index: number): { start: number; kind: LeadKind } | null {
+	let best: { start: number; kind: LeadKind } | null = null;
+	for (const lead of LEADS) {
+		let at = index;
+		const words = lead.words.split(" ");
+		for (let w = words.length - 1; w >= 0 && at !== -1; w--) at = wordBefore(s, at, words[w]!);
+		if (at !== -1 && (best === null || at < best.start)) best = { start: at, kind: lead.kind };
+	}
+	return best;
 }
 
 export interface DateEnv {
@@ -174,18 +208,15 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 				: { status: "applied", date: res.value };
 		}
 
-		// The span: chrono's text, widened to a directly preceding "by" (deadline) or "at" (a time).
+		// The span: chrono's text, widened over a directly preceding lead word (LEADS).
 		let spanStart = r.index;
-		let kind: "scheduled" | "deadline" = "scheduled";
-		const by = wordBefore(masked, spanStart, "by");
-		if (by !== -1) {
-			spanStart = by;
-			kind = "deadline";
+		let kind: DateCandidate["kind"] = "scheduled";
+		const lead = leadBefore(masked, spanStart);
+		if (lead !== null && (lead.kind !== "time" || hourCertain)) {
+			spanStart = lead.start;
+			if (lead.kind === "deadline" || lead.kind === "end") kind = lead.kind;
 		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
 			kind = "deadline";
-		} else if (hourCertain) {
-			const atPos = wordBefore(masked, spanStart, "at");
-			if (atPos !== -1) spanStart = atPos;
 		}
 		out.push({ kind, span: { start: spanStart, end: r.index + r.text.length }, outcome });
 	}

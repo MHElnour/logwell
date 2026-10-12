@@ -20,15 +20,32 @@ A subtask cannot repeat, but a repeating task can have subtasks: they come back 
 | You type | It repeats |
 | --- | --- |
 | `every day`, `every weekday`, `every weekend` | Daily, Monday to Friday, or Saturday and Sunday |
-| `every week`, `every month` | On the task's weekday or day of the month |
-| `every 3 days`, `every 2 weeks`, `every 6 months` | At that interval, up to 999 |
+| `every morning`, `every evening`, `every night` | Daily, with no time |
+| `every week`, `every month`, `every year` | On the task's weekday, day of the month, or month and day |
+| `every 3 days`, `every 2 weeks`, `every 6 months`, `every 2 years` | At that interval, up to 999 |
 | `every other day`, `every other week`, `every other friday` | Every second day, week or Friday |
-| `every mon, wed and fri`, `every tuesday & thursday` | On those weekdays |
-| `every month on the 15th`, `every 3 months on day 5` | On that day of the month |
-| `every first monday`, `every last friday of the month` | On that weekday of the month: first to fourth, or last |
+| `every mon wed fri`, `every mon, wed and fri`, `every tuesday & thursday` | On those weekdays |
+| `every week on mon, fri`, `every 2 weeks on tuesday` | On those weekdays, every week or every N weeks |
+| `every 15th`, `every 1st of the month`, `every month on the 15th`, `every 3 months on day 5` | On that day of the month |
+| `every first monday`, `every last friday of the month`, `last friday of the month` | On that weekday of the month: first to fourth, or last |
 | `every last day of the month` | On the month's last day |
+| `every year on May 5` | Yearly, starting on that date |
 
-Add a time with `at`, such as `every monday at 9am`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00. Other forms, such as `every year`, stay in the title: pick **Yearly** in the picker instead. Counting from completion and an end are set in the picker.
+At the end of the text, after the title, a single word also repeats: `daily`, `weekly`, `fortnightly`, `monthly`, `yearly`, `annually`, `weekdays`, `weekends`, or weekdays in the plural such as `mondays` or `mondays and fridays`. So `Stretch daily` repeats, but `Daily standup` keeps its title.
+
+Add a time with `at`, such as `every monday at 9am`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00. Start on another date with `starting`, such as `every monday starting next week`.
+
+End the repeat in the same line:
+
+| You type | It ends |
+| --- | --- |
+| `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included |
+| `for 5 times`, `5 times` | After 5 times |
+| `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the first date |
+
+An end before the first date is refused: its chip says so and the text stays in the title. Without a repeat, `until Dec 1` is a deadline, and `for 30m` is always a duration.
+
+A repeat Quick Add cannot make yet, such as `every 3 hours` or `every 2nd and 4th tuesday`, stays in the title marked "Recurrence not supported yet", and is never read as a date. Counting from completion is set in the picker.
 
 ## Set a custom repeat
 

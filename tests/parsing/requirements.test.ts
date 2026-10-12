@@ -450,10 +450,10 @@ describe("A10 recurrence", () => {
 	});
 
 	it("a form it does not build stays in the title as unsupported, with no rule", () => {
-		const r = parse("Gym every year");
+		const r = parse("Gym every 3 hours");
 		expect(r.chips[0]).toMatchObject({ kind: "recurrence", status: "unsupported", notice: "Recurrence not supported yet" });
 		expect(r.chips[0]?.rule).toBeUndefined();
-		expect(r.title).toBe("Gym every year");
+		expect(r.title).toBe("Gym every 3 hours");
 		expect(Object.keys(r.fields).sort()).toEqual(["newTags", "tagKeys"]);
 	});
 
@@ -520,7 +520,7 @@ describe("A13 title", () => {
 	});
 
 	it("leaves unapplied spans in the title", () => {
-		expect(parse("x #Nope sun [[Plan]] every year").title).toBe("x #Nope sun [[Plan]] every year");
+		expect(parse("x #Nope sun [[Plan]] every 3 hours").title).toBe("x #Nope sun [[Plan]] every 3 hours");
 	});
 });
 
@@ -547,6 +547,14 @@ describe("A14 robustness", () => {
 			const started = performance.now();
 			parse(ch.repeat(5000));
 			expect(performance.now() - started, ch).toBeLessThan(2000);
+		}
+	});
+
+	it("parses long repeat lists and runs of lead words in reasonable time (#12)", () => {
+		for (const input of ["every " + "mon ".repeat(2000), "until ".repeat(800), "every 1 ".repeat(800), "Gym " + "daily ".repeat(800)]) {
+			const started = performance.now();
+			parse(input);
+			expect(performance.now() - started, input.slice(0, 12)).toBeLessThan(2000);
 		}
 	});
 

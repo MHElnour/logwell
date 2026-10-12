@@ -1,5 +1,5 @@
 import { MAX_DURATION_MIN } from "../domain/tasks";
-import { isSpaceChar, wordBoundaryBefore } from "./text";
+import { isSpaceChar, LIST_SEP_PATTERN, wordBoundaryBefore } from "./text";
 
 // "for <duration>". Matched by hand-written sticky regexes
 // so a long input cannot cause catastrophic backtracking.
@@ -10,7 +10,7 @@ const UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
 // A digit may follow a unit ("1h30m"); a letter may not ("5 meetings").
 const NOT_LETTER = "(?![\\p{L}])";
 const PART_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${UNIT}${NOT_LETTER}`, "iyu");
-const AND_PART_RE = new RegExp(`(?:\\s*,\\s*(?:and\\s+)?|\\s+and\\s+|\\s*&\\s*|\\s*)(\\d+(?:\\.\\d+)?)\\s*${UNIT}${NOT_LETTER}`, "iyu");
+const AND_PART_RE = new RegExp(`(?:${LIST_SEP_PATTERN}|\\s*)(\\d+(?:\\.\\d+)?)\\s*${UNIT}${NOT_LETTER}`, "iyu");
 const BARE_MINUTES_RE = /(\d{1,2})(?![\p{L}\p{N}.:])/yu;
 const WORDS_RE = /(half\s+an?\s+hour|half\s+hour|an?\s+hour|an?\s+minute)(?![\p{L}\p{N}])/iyu;
 
