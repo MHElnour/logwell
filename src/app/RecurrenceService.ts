@@ -67,15 +67,24 @@ export function recordsOfTask(tx: Tx, taskId: ID): OccurrenceRecord[] {
 	return out.sort((a, b) => compareSortKeys(a.occurrenceDate, b.occurrenceDate));
 }
 
-/** Throws InvalidValue when `end` cannot be stored (repeatEndProblem); returns its stored form. */
-export function requireRepeatEnd(end: RepeatEnd): RepeatEnd {
+/**
+ * Throws InvalidValue when `end` cannot be stored (repeatEndProblem); returns its stored form. `kept`, the end already
+ * stored, passes unchanged: a count above 999 from an older file is not refused on the next edit.
+ */
+export function requireRepeatEnd(end: RepeatEnd, kept?: RepeatEnd): RepeatEnd {
+	const stored: RepeatEnd = end.kind === "date" ? { kind: "date", date: end.date } : end.kind === "count" ? { kind: "count", count: end.count } : { kind: "never" };
+	if (kept !== undefined && sameValue(stored, kept)) return stored;
 	const problem = repeatEndProblem(end);
 	if (problem !== null) invalidValue(problem);
-	return end.kind === "date" ? { kind: "date", date: end.date } : end.kind === "count" ? { kind: "count", count: end.count } : { kind: "never" };
+	return stored;
 }
 
-/** Throws InvalidValue when `end` leaves `series` no occurrence (repeatEndProblem): the sweep would end it at once. */
+/**
+ * Throws InvalidValue when an end date leaves `series` no occurrence (repeatEndProblem): the sweep would end it at
+ * once. A count is checked by requireRepeatEnd.
+ */
 export function requireEndInSeries(end: RepeatEnd, series: Pick<Recurrence, "anchor" | "versions">, weekStart: WeekStart): void {
+	if (end.kind !== "date") return;
 	const problem = repeatEndProblem(end, series, weekStart);
 	if (problem !== null) invalidValue(problem);
 }
@@ -242,7 +251,7 @@ export class RecurrenceService {
 			// the setting.
 			const weekStart = rule?.weekStart ?? (rec === null ? undefined : ruleAt(rec, eff).weekStart) ?? this.weekStart();
 			const stored = rule === null ? null : requireRepeatRule(rule, weekStart);
-			const storedEnd = end === undefined ? undefined : requireRepeatEnd(end);
+			const storedEnd = end === undefined ? undefined : requireRepeatEnd(end, rec?.end);
 			if (stored !== null && task.parentId !== null) invalidValue("A subtask cannot repeat.");
 			if (rec === null) {
 				if (stored === null) return this.result(EDIT_REPEAT_LABEL, { wrote: false });
@@ -282,8 +291,8 @@ export class RecurrenceService {
 			if (sameRule(ruleAt(rec, eff))) versions = rec.versions.filter((v) => v.effectiveFrom <= eff);
 			else if (previous !== undefined && sameRule(previous.rule)) versions = before;
 			else versions = [...before, { effectiveFrom: eff, rule: stored }];
-			// A new end must leave the series a first date; an end reached by its records ends it below.
-			if (storedEnd !== undefined) requireEndInSeries(storedEnd, { anchor: rec.anchor, versions }, this.weekStart());
+			// The end (new or kept) must leave the series a first date under the new rule; one its records reached ends it below.
+			requireEndInSeries(storedEnd ?? rec.end, { anchor: rec.anchor, versions }, this.weekStart());
 			let next: Recurrence = { ...rec, versions, end: storedEnd ?? rec.end, endedAt: null };
 			const ended = isSeriesEnded(next, records, this.weekStart());
 			if (ended) next = { ...next, endedAt: rec.endedAt ?? tx.now };

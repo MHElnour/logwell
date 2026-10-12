@@ -91,6 +91,40 @@ describe("Quick Add repeat end (#12)", () => {
 		expect(draftProblem({ ...d, endDate: "2026-10-09" }, "2026-10-05", "MO")).toBeNull();
 	});
 
+	it("a typed end over a repeat picked by hand with its own end is a suggestion; using it replaces the end", async () => {
+		const { h, m } = await model();
+		m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "count", count: 5 } });
+		m.setInput("Pills until Dec 1");
+		const end = m.result.chips.find((c) => c.kind === "repeatEnd")!;
+		expect(end).toMatchObject({ status: "suggestion", notice: "Replace repeat end?" });
+		expect(m.result.title).toBe("Pills until Dec 1");
+		expect(m.repeatValue()?.end).toEqual({ kind: "count", count: 5 });
+		m.accept(end);
+		expect(m.repeatValue()).toMatchObject({ rule: { freq: "daily" }, end: { kind: "date", date: "2026-12-01" } });
+		expect(m.result.title).toBe("Pills");
+		expect(await m.submit()).toBe("saved");
+		expect([...h.app.store.state.tasks.values()][0]!.recurrence?.end).toEqual({ kind: "date", date: "2026-12-01" });
+	});
+
+	it("a cleared date in a view with a preset counts from today, as the save does", async () => {
+		for (const [input, end] of [
+			["Stretch daily for 2 weeks", { kind: "date", date: "2026-10-20" }],
+			["Stretch daily until Oct 15", { kind: "date", date: "2026-10-15" }],
+		] as const) {
+			const h = await appHarness();
+			h.clock.set("2026-10-07T08:00:00.000Z");
+			const m = new QuickAddModel(
+				{ app: h.app, preset: { date: "2026-10-20" }, locale: () => "en", resolveNote: () => [], onSaved: () => undefined, onError: (e) => { throw e; }, keepOpen: () => true, onClose: () => undefined },
+				() => undefined,
+			);
+			m.setDate("");
+			m.setInput(input);
+			expect(m.repeatValue()?.end, input).toEqual(end);
+			expect(await m.submit(), input).toBe("saved");
+			expect([...h.app.store.state.tasks.values()][0]!.recurrence, input).toMatchObject({ anchor: "2026-10-07", end });
+		}
+	});
+
 	it("Clear in the date popover keeps the end as text too", async () => {
 		const { m } = await model();
 		m.setInput("Pills every day until Dec 1");

@@ -144,4 +144,33 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 			expect(endKey(r), input).toBe(end);
 		}
 	});
+
+	it("`every year on Feb 29` starts on the next Feb 29", () => {
+		const r = parse("Bday every year on Feb 29", zone);
+		expect(r.title).toBe("Bday");
+		expect(rec(r)).toBe("yearly");
+		expect(sched(r)).toBe("2028-02-29");
+		expect(parse("Bday every year on 29th February", zone).fields.scheduled).toEqual({ kind: "date", date: "2028-02-29" });
+		const before = parse("Bday every year on Feb 29 until Feb 28 2028", zone);
+		expect(before.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "invalid", notice: "The repeat ends before its first date." });
+	});
+
+	it("`every year on` followed by no readable date is not supported, never a repeat from today", () => {
+		const r = parse("Bday every year on 45", zone);
+		expect(r.fields.recurrence).toBeUndefined();
+		expect(r.fields.scheduled).toBeUndefined();
+		expect(r.chips.find((c) => c.kind === "recurrence")?.status).toBe("unsupported");
+	});
+
+	it("`for N <periods>` anywhere after a repeat is its end, never part of a date", () => {
+		for (const input of ["Gym every day starting Friday for 2 weeks", "Gym every day for 2 weeks starting Friday", "Gym every day from Friday for 2 weeks"]) {
+			const r = parse(input, zone);
+			expect(sched(r), input).toBe("2026-10-09");
+			expect(endKey(r), input).toBe("2026-10-22");
+			expect(rec(r), input).toBe("daily");
+		}
+		expect(parse("Gym every day starting Friday for 2 weeks", zone).title).toBe("Gym");
+		// Without a repeat nothing changes.
+		expect(parse("Travel for 2 weeks", zone).chips).toEqual([]);
+	});
 });

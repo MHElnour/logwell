@@ -128,6 +128,31 @@ export interface RepeatToken {
 	/** False for a repeat Quick Add cannot build ("every 3 hours"): it stays text with a notice, never a date. */
 	supported: boolean;
 	end: RepeatCount | null;
+	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
+	onDate: boolean;
+	/** "Feb 29" after "every year on": the start is the next Feb 29. */
+	leapDay: Span | null;
+}
+
+const NO_ON_DATE: Pick<RepeatToken, "onDate" | "leapDay"> = { onDate: false, leapDay: null };
+const LEAP_DAY_RE = /\s+((?:feb(?:ruary)?\.?\s+29(?:th)?|29(?:th)?\s+(?:of\s+)?feb(?:ruary)?))(?![\p{L}\p{N}])/iyu;
+
+/**
+ * `for N <periods>` or `for N times` anywhere in the text: with a typed repeat it is the repeat's end, never part of
+ * a date ("every day starting Friday for 2 weeks"). The parser asks only when a repeat is typed.
+ */
+export function findRepeatCounts(s: string, taken: Taken): RepeatCount[] {
+	const out: RepeatCount[] = [];
+	const re = /for/giu;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(s)) !== null) {
+		if (!wordBoundaryBefore(s, m.index)) continue;
+		const found = repeatCountAt(s, m.index);
+		if (found === null || taken(found.span.start, found.span.end)) continue;
+		out.push(found);
+		re.lastIndex = found.span.end;
+	}
+	return out;
 }
 
 const NOT_WORD_AFTER = "(?![\\p{L}\\p{N}])";
@@ -169,8 +194,8 @@ const EVERY_BEFORE_RE = /(?:^|[^\p{L}\p{N}_])every\s+$/iu;
 const NTH_OF_MONTH_RE = new RegExp(`(?:the\\s+)?${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}${OF_MONTH}${NOT_WORD_AFTER}`, "giu");
 const BARE_RE = new RegExp(`(?:${BARE_REPEAT_PATTERN}|${PLURAL_WEEKDAY_PATTERN}(?:${SEP}${PLURAL_WEEKDAY_PATTERN})*)${NOT_WORD_AFTER}`, "giu");
 // An end right after the repeat; a comma before it goes with it ("daily, for 10 times").
-const COUNT_RE = new RegExp(`(\\s*,)?\\s+((?:for\\s+)?(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
-const PERIODS_RE = new RegExp(`(\\s*,)?\\s+(for\\s+(\\d+)\\s+(${PERIOD_UNIT_PATTERN}|${WEEKDAY_PATTERN}))${NOT_WORD_AFTER}`, "iyu");
+const COUNT_RE = new RegExp(`(\\s*,)?\\s*((?:for\\s+)?(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
+const PERIODS_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+(${PERIOD_UNIT_PATTERN}|${WEEKDAY_PATTERN}))${NOT_WORD_AFTER}`, "iyu");
 
 // The words of a repeat Quick Add cannot build yet (Tasks and Quick Add rule 40): a number, ordinal, weekday,
 // period or unit, day part or month name, and the small words between them.
@@ -249,10 +274,10 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 	const out: RepeatToken[] = [];
 	const free = (start: number, end: number): boolean =>
 		!taken(start, end) && !out.some((t) => (t.span.start < end && start < t.span.end) || (t.end !== null && t.end.span.start < end && start < t.end.span.end));
-	const push = (span: Span, bare: boolean, supported: boolean): number => {
-		const found = repeatCountAt(s, span.end);
+	const push = (span: Span, bare: boolean, supported: boolean, on: Pick<RepeatToken, "onDate" | "leapDay"> = NO_ON_DATE): number => {
+		const found = on.onDate ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported, end });
+		out.push({ span, bare, supported, end, ...on });
 		return end === null ? span.end : end.span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {
@@ -282,6 +307,16 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 			end = repeatWordsEnd(s, body);
 			supported = false;
 			if (end === body) continue;
+		} else if (/\son$/iu.test(main[0])) {
+			// "every year on <date>": the date is the start. Feb 29 is read here (the date reader takes no Feb 29 in a
+			// year without one); parse.ts makes any other unreadable date unsupported.
+			end = start + main[0].length;
+			if (!free(start, end)) continue;
+			const leap = sticky(LEAP_DAY_RE, s, end);
+			const leapDay = leap === null ? null : { start: end + leap[0].length - leap[1]!.length, end: end + leap[0].length };
+			push({ start, end }, false, true, { onDate: true, leapDay });
+			re.lastIndex = Math.max(re.lastIndex, leapDay?.end ?? end);
+			continue;
 		} else {
 			// A form followed by more repeat words ("every 2nd and 4th tuesday", "every monday at 7 wednesday") is not
 			// that form: the whole run is unsupported, never a date.

@@ -110,4 +110,6 @@ export interface ParseContext {
 	startDate?: LocalDate;
 	/** The week start setting, for checking an end against a weekly repeat of several weeks; default Monday. */
 	weekStart?: WeekStart;
+	/** The repeat picked by hand has an end of its own: a typed end replaces it only when accepted. */
+	pickedEnd?: boolean;
 }

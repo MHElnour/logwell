@@ -643,7 +643,8 @@ export function restartedSeries(task: Task & { recurrence: Recurrence }, records
 	// A yearly rule takes its month and day from the anchor: a copy of a Feb 29 series is anchored on its clamped
 	// date (Feb 28), so it falls on Feb 28 in leap years too (Repeating tasks rule 17).
 	const versions = [{ effectiveFrom: anchor, rule: explicitRule(ruleAt(rec, anchor), rec.anchor) }];
-	const end: RepeatEnd = rec.end.kind === "date" && rec.end.date < anchor ? { kind: "never" } : rec.end;
+	// An end date that leaves the copy no date of its own is dropped: the sweep would end the copy at once.
+	const end: RepeatEnd = rec.end.kind === "date" && repeatEndProblem(rec.end, { anchor, versions }, weekStart) !== null ? { kind: "never" } : rec.end;
 	const { anchoredAt: _moved, countFrom: _counted, ...rest } = rec;
 	return { ...rest, anchor, versions, end, endedAt: null };
 }

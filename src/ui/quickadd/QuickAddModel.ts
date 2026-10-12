@@ -148,11 +148,14 @@ export class QuickAddModel {
 			// A typed repeat end counts from the date picked by hand, else the preset's (else today).
 			...(this.startDate() === null ? {} : { startDate: this.startDate()! }),
 			weekStart: app.queryContext().weekStart,
+			// A typed end over a repeat picked by hand that has its own end is a "Replace repeat end?" suggestion.
+			pickedEnd: this.manual.has("recurrence") && this.vals.repeat !== null && this.vals.repeat.end.kind !== "never",
 		});
 	}
 
 	private startDate(): LocalDate | null {
-		return this.manual.has("scheduled") && this.vals.date !== "" ? this.vals.date : this.presetDate();
+		// A date cleared by hand saves without one (today is the start), so the preset no longer counts.
+		return this.manual.has("scheduled") ? this.vals.date || null : this.presetDate();
 	}
 
 	/** Reparses after any change and tells the view. */
@@ -273,9 +276,10 @@ export class QuickAddModel {
 	accept(chip: Chip): void {
 		if (this.isFixedCategory(chip)) return;
 		this.decide({ span: chip.span, text: chip.text, kind: "accept" });
-		// A typed repeat end belongs to the repeat: using it replaces a repeat picked by hand.
-		const field = chip.kind === "repeatEnd" ? "recurrence" : chip.kind;
-		if (isManualField(field)) this.clearManual(field);
+		// A typed repeat end belongs to the typed repeat: using it brings that repeat back over one picked by hand. Without a
+		// typed repeat it only replaces the picked repeat's end (repeatValue), so the picked repeat stays.
+		const field = chip.kind !== "repeatEnd" ? chip.kind : this.result.chips.some((c) => c.kind === "recurrence") ? "recurrence" : null;
+		if (field !== null && isManualField(field)) this.clearManual(field);
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
 	}
@@ -442,9 +446,10 @@ export class QuickAddModel {
 	repeatValue(): RepeatChoice | null {
 		const typedEnd = this.result.fields.recurrenceEnd;
 		if (this.manual.has("recurrence")) {
-			// A typed end (`until Dec 1`) ends a repeat picked by hand that has no end of its own.
+			// A typed end (`until Dec 1`) ends a repeat picked by hand: at once when it has no end of its own, else once
+			// the "Replace repeat end?" suggestion is used (the parser applies the chip only then).
 			const picked = this.vals.repeat;
-			return picked !== null && picked.end.kind === "never" && typedEnd !== undefined ? { rule: picked.rule, end: typedEnd } : picked;
+			return picked !== null && typedEnd !== undefined ? { rule: picked.rule, end: typedEnd } : picked;
 		}
 		const parsed = this.result.fields.recurrence;
 		return parsed === undefined ? null : { rule: parsed, end: typedEnd ?? NEVER_END };

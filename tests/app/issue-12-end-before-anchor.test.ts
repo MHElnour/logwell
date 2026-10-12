@@ -119,4 +119,49 @@ describe("RecurrenceService.setRepeat refuses a repeat that ends before its firs
 		await h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-10" });
 		expect(h.app.store.state.tasks.get(task.id)?.recurrence?.end).toEqual({ kind: "date", date: "2026-10-10" });
 	});
+
+	it("a rule change that leaves the kept end before the new first date is refused", async () => {
+		const h = await setup();
+		// Every Monday from Monday Oct 5, ending Oct 20; changed today to monthly on the 25th: no date before Oct 20.
+		const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: rule({ freq: "weekly", weekdays: ["MO"] }), end: { kind: "date", date: "2026-10-20" } } });
+		await refused(h.app.recurrence.setRepeat(task.id, rule({ freq: "monthly", monthly: { kind: "day", day: 25 } })), ENDS_BEFORE);
+		expect(h.app.store.state.tasks.get(task.id)?.recurrence?.versions).toHaveLength(1);
+		await h.app.recurrence.setRepeat(task.id, rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }));
+		expect(h.app.store.state.tasks.get(task.id)?.recurrence?.versions.at(-1)?.rule.monthly).toEqual({ kind: "day", day: 15 });
+	});
+
+	it("a stored count above 999 is kept by later edits; only a new count must be 1 to 999", async () => {
+		const h = await setup();
+		const { task } = await h.app.tasks.create({ title: "Pills", repeat: { rule: rule(), end: { kind: "count", count: 5 } } });
+		await h.app.store.run("Seed", (tx) => {
+			const t = tx.get("tasks", task.id)!;
+			tx.put("tasks", { ...t, recurrence: { ...t.recurrence!, end: { kind: "count", count: 1500 } } });
+		});
+		await h.app.recurrence.setRepeat(task.id, rule({ interval: 2 }));
+		await h.app.recurrence.setRepeat(task.id, rule({ interval: 3 }), undefined, { kind: "count", count: 1500 });
+		expect(h.app.store.state.tasks.get(task.id)?.recurrence?.end).toEqual({ kind: "count", count: 1500 });
+		await refused(h.app.recurrence.setRepeat(task.id, rule({ interval: 3 }), undefined, { kind: "count", count: 2000 }), "End after 1 to 999 times.");
+	});
+});
+
+describe("Duplicate keeps an end only when the copy still has a date before it", () => {
+	it("a copy whose end comes before its first date never ends, and the sweep leaves it open", async () => {
+		const h = await appHarness();
+		h.clock.set("2026-10-02T10:00:00.000Z"); // Friday
+		const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-14" } } });
+		h.clock.set("2026-10-12T10:00:00.000Z"); // Monday: the copy starts today, and its next Friday is after the end
+		const copy = await h.app.tasks.duplicate(task.id);
+		expect(copy.recurrence?.end).toEqual({ kind: "never" });
+		await h.app.recurrence.endExhaustedSeries();
+		expect(h.app.store.state.tasks.get(copy.id)?.status).toBe("open");
+	});
+
+	it("a copy that still has a date before the end keeps it", async () => {
+		const h = await appHarness();
+		h.clock.set("2026-10-02T10:00:00.000Z");
+		const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-20" } } });
+		h.clock.set("2026-10-12T10:00:00.000Z");
+		const copy = await h.app.tasks.duplicate(task.id);
+		expect(copy.recurrence?.end).toEqual({ kind: "date", date: "2026-10-20" });
+	});
 });
