@@ -73,7 +73,7 @@ async function undoNoticeText(): Promise<string> {
 	});
 }
 
-describe("Group by (G1)", function () {
+describe("Group by", function () {
 	let wasNative: boolean | undefined;
 
 	before(async function () {

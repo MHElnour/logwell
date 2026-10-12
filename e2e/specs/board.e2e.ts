@@ -55,7 +55,7 @@ async function scrollTopOf(selector: string): Promise<number> {
 	}, selector);
 }
 
-describe("Board and list drag (K1a)", function () {
+describe("Board and list drag", function () {
 	let today = "";
 	let zone = "";
 

@@ -33,7 +33,7 @@ describe("Data portability and write safety", function () {
 		expect(await readVaultFile("Second.cpbase")).toContain(id);
 	});
 
-	it("finding #1: an external write that lands before a pending save is never overwritten", async function () {
+	it("an external write that lands before a pending save is never overwritten", async function () {
 		const before = await conflictCount();
 		await browser.executeObsidian(async ({ app, plugins }, dbPath) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -211,7 +211,7 @@ async function setAppWidth(width: number | null): Promise<void> {
 }
 
 async function setTheme(mode: "light" | "dark"): Promise<void> {
-	// Same switch as u1-theme.e2e.ts: Obsidian's internal changeTheme, then the body classes the
+	// Same switch as theme.e2e.ts: Obsidian's internal changeTheme, then the body classes the
 	// plugin's rules key on. Obsidian can re-apply its own theme a moment later (seen once in three
 	// full runs), so the classes are checked after a pause and forced again, at most 4 times.
 	for (let attempt = 0; attempt < 4; attempt++) {
@@ -276,7 +276,7 @@ async function detachAppLeaves(): Promise<void> {
 	});
 }
 
-describe("Calendar (M3)", function () {
+describe("Calendar", function () {
 	let nativeMenus: boolean | undefined;
 	before(async function () {
 		// macOS shows native menus, which WebDriver cannot see; the view menu needs Obsidian's DOM menu.

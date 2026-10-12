@@ -194,7 +194,7 @@ async function clickModalButton(text: string): Promise<void> {
 	);
 }
 
-describe("Focus (M5)", function () {
+describe("Focus", function () {
 	// The round menu is an Obsidian Menu. On macOS it is native by default (no DOM to click), so the specs
 	// ask for the DOM menu for the whole run.
 	let wasNative: boolean | undefined;

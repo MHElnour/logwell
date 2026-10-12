@@ -127,7 +127,7 @@ async function addAmount(row: ChainablePromiseElement, value: string): Promise<v
 	await row.$(".cp-habit-add").click();
 }
 
-describe("Habits (M6)", function () {
+describe("Habits", function () {
 	let wasNative: boolean | undefined;
 
 	before(async function () {
@@ -233,7 +233,7 @@ describe("Habits (M6)", function () {
 		await expect(habitRow(habits, "Read").$(".cp-habit-progress")).toHaveText("0 of 20 min");
 	});
 
-	it("a binary habit toggles on and off, and Undo from the notice restores it with the store's label (HAB-06, #140)", async function () {
+	it("a binary habit toggles on and off, and Undo from the notice restores it with the store's label (HAB-06)", async function () {
 		const id = await createHabit({ name: "Meditate", timeOfDay: "morning", goal: { type: "binary", target: 1, unit: null, period: "day" } });
 		const habits = await visibleHabits();
 		const check = () => habitRow(habits, "Meditate").$(".cp-habit-check");

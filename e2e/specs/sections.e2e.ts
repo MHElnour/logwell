@@ -96,7 +96,7 @@ async function focusedOnNameField(): Promise<void> {
 	});
 }
 
-describe("Sections (K1b)", function () {
+describe("Sections", function () {
 	let wasNative: boolean | undefined;
 	let study = "";
 

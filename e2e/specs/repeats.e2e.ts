@@ -92,7 +92,7 @@ async function expandCompleted(section: WebdriverIO.Element): Promise<void> {
 	if ((await toggle.getAttribute("aria-expanded")) !== "true") await domClick(toggle);
 }
 
-describe("Recurrence (M7)", function () {
+describe("Recurrence", function () {
 	let wasNative: boolean | undefined;
 
 	before(async function () {
@@ -157,7 +157,7 @@ describe("Recurrence (M7)", function () {
 		expect((await recurrenceOf(task!.id as string))!.versions[0]!.rule).toMatchObject({ freq: "monthly", interval: 1 });
 	});
 
-	it("completing from Today moves the series to its next date, with the Undo notice and its label (REC-02, D4, #140)", async function () {
+	it("completing from Today moves the series to its next date, with the Undo notice and its label (REC-02, D4)", async function () {
 		const today = await appToday();
 		const id = await createRepeating("Stretch", DAILY_RULE, { scheduled: { kind: "date", date: today } });
 		const section = await visibleTasksSection();

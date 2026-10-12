@@ -121,7 +121,7 @@ async function detachAppLeaves(): Promise<void> {
 	});
 }
 
-describe("Matrix (M4)", function () {
+describe("Matrix", function () {
 	let nativeMenus: boolean | undefined;
 	before(async function () {
 		// macOS shows native menus, which WebDriver cannot see; the view menu needs Obsidian's DOM menu.

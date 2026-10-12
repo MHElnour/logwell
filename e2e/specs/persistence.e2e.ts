@@ -125,7 +125,7 @@ describe("Persistence in Obsidian", function () {
 		expect(restored).toContain("Before the merge");
 	});
 
-	it("follows a rename of the database file (#28)", async function () {
+	it("follows a rename of the database file", async function () {
 		await browser.executeObsidian(async ({ app }, dbPath) => {
 			const file = app.vault.getFileByPath(dbPath);
 			if (file === null) throw new Error("missing db");

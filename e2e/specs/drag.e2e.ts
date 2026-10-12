@@ -47,7 +47,7 @@ async function detachAppLeaves(): Promise<void> {
 	});
 }
 
-describe("Calendar drag (M4)", function () {
+describe("Calendar drag", function () {
 	let zone = "";
 	let days: string[] = [];
 
