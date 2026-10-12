@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DomainError } from "../../src/domain/errors";
 import { TAG_REPEAT_MESSAGE, TagNames, requireUniqueTagName, tagLabel, tagLeaf, tagNameClashMessage } from "../../src/domain/tags";
 import { fieldHashes } from "../../src/domain/ticktick/mapping";
-import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName, unsyncedTagKeys } from "../../src/domain/ticktick/tags";
+import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName } from "../../src/domain/ticktick/tags";
 import type { Tag } from "../../src/domain/types";
 
 // A tag name (the last segment of its key) is used once, whatever its parent. Existing duplicates
@@ -122,7 +122,6 @@ describe("tags and TickTick", () => {
 		expect(isSyncedTag(names, "work/calls")).toBe(false);
 		expect(isSyncedTag(names, "a/b/c")).toBe(false);
 		expect(isSyncedTag(names, "x/home")).toBe(false);
-		expect(unsyncedTagKeys(names, ["plain", "work/calls", "home/calls", "a/b/c"])).toEqual(["work/calls", "a/b/c"]);
 		expect(syncedTagLeaves(names, ["plain", "work/calls", "home/calls", "plain"])).toEqual(["calls", "plain"]);
 	});
 

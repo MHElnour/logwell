@@ -16,7 +16,7 @@ import {
 	syncDateOf,
 	tagsHash,
 } from "../domain/ticktick/mapping";
-import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName, unsyncedTagKeys } from "../domain/ticktick/tags";
+import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName } from "../domain/ticktick/tags";
 import {
 	TICKTICK_BATCH_MAX,
 	TICKTICK_COMPLETED_MAX,
@@ -648,21 +648,6 @@ export class SyncService {
 			this.pendingCreates.delete(listId);
 			return { wrote, label: TICKTICK_UNLINK_LABEL };
 		});
-	}
-
-	/**
-	 * The tags of a task that do not sync with TickTick ("Not synced"): a later tag whose name an older one owns,
-	 * a tag nested deeper than one level, or one whose parent's name is owned elsewhere. Empty for a task that does not
-	 * sync (not in a linked list, repeating, or kept in Logwell only).
-	 */
-	unsyncedTagKeys(taskId: ID): string[] {
-		const state = this.store.state;
-		const t = state.tasks.get(taskId);
-		if (t === undefined || t.tagKeys.length === 0 || t.recurrence !== null) return [];
-		if (!state.syncLinks.has(syncLinkId("list", t.categoryId))) return [];
-		const link = state.syncLinks.get(syncLinkId("task", t.id));
-		if (link !== undefined && (link.mode ?? "sync") !== "sync") return [];
-		return unsyncedTagKeys(tagNamesOf(state.tags), t.tagKeys);
 	}
 
 	/** Whether a task the pull may take in carries a tag name Logwell does not know. */

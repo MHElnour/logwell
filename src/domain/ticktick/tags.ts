@@ -26,11 +26,6 @@ export function syncedTagLeaves(names: TagNames, keys: readonly string[]): strin
 	return [...out].sort();
 }
 
-/** The tags of a task that do not sync with TickTick (shown as "Not synced"), in the task's order. */
-export function unsyncedTagKeys(names: TagNames, keys: readonly string[]): string[] {
-	return keys.filter((key) => !isSyncedTag(names, key));
-}
-
 /**
  * A TickTick task's tag name that Logwell takes in, lowercase; null when Logwell cannot hold it (not a valid key) or
  * its name belongs to a Logwell tag that does not sync. Such a name stays on the TickTick task and is never pulled.

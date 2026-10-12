@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { TickTickError } from "../../src/app/ports";
 import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/SyncService";
+import { tagNamesOf } from "../../src/domain/tags";
+import { isSyncedTag } from "../../src/domain/ticktick/tags";
 import { syncLinkId } from "../../src/domain/types";
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
@@ -101,11 +103,13 @@ describe("push", () => {
 			tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
 			tx.put("tags", { key: "plain", displayName: "Plain", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
 		});
-		const { task } = await s.h.app.tasks.create({ title: "Ring the office", categoryId: s.listId, tagKeys: ["work/calls", "plain"] });
+		await s.h.app.tasks.create({ title: "Ring the office", categoryId: s.listId, tagKeys: ["work/calls", "plain"] });
 		await s.sync.sync();
 		expect(s.tt.get(s.ttIdOf("Ring the office"))?.tags).toEqual(["plain"]);
 		expect(s.tt.tags.has("calls")).toBe(false);
-		expect(s.sync.unsyncedTagKeys(task.id)).toEqual(["work/calls"]);
+		const names = tagNamesOf(s.h.app.store.state.tags);
+		expect(isSyncedTag(names, "work/calls")).toBe(false);
+		expect(isSyncedTag(names, "plain")).toBe(true);
 		const n = pushes(s);
 		s.tick();
 		await s.sync.sync();
@@ -130,16 +134,6 @@ describe("push", () => {
 		expect((await s.sync.sync()).ok).toBe(true);
 		expect(s.tt.findByTitle("Pay rent")?.tags).toEqual(["bills"]);
 		expect(s.tt.count("listTags")).toBe(2);
-	});
-
-	it("unsyncedTagKeys is empty for a task outside a linked list", async () => {
-		const s = await setup();
-		await s.h.app.store.run("Seed", (tx) => {
-			tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
-			tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
-		});
-		const { task } = await s.h.app.tasks.create({ title: "Local", tagKeys: ["work/calls"] });
-		expect(s.sync.unsyncedTagKeys(task.id)).toEqual([]);
 	});
 
 	it("keeps TickTick names Logwell cannot hold when it pushes a tag change", async () => {
@@ -242,7 +236,7 @@ describe("pull", () => {
 		const clean = s.task("Clean");
 		expect(clean.tagKeys).toEqual(["home"]);
 		expect(s.tt.get(s.ttIdOf("Clean"))?.tags).toEqual(["home"]);
-		expect(s.sync.unsyncedTagKeys(clean.id)).toEqual([]);
+		expect(isSyncedTag(tagNamesOf(s.h.app.store.state.tags), "home")).toBe(true);
 	});
 
 	it("a tag read that fails for another reason is reported as a warning", async () => {
