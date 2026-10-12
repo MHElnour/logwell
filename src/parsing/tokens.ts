@@ -11,6 +11,8 @@ import {
 	BARE_REPEAT_PATTERN,
 	RANGE_TO_PATTERN,
 	DAY_PART_PATTERN,
+	NUMBER_WORD_PATTERN,
+	PERIOD_PATTERN,
 	PERIOD_UNIT_PATTERN,
 	UNIT_PATTERN,
 	WEEKDAY_FULL_PATTERN,
@@ -116,7 +118,7 @@ export function findWordTokens(
 
 // -- repeats ----------------------------------------------------------------------------------
 
-/** The end of a typed repeat that follows it: `(for) N times`, or `for N <periods>` (N periods from the start). */
+/** The end of a typed repeat that follows it: `for N times`, or `for N <periods>` (N periods from the start). */
 export interface RepeatCount {
 	span: Span;
 	count?: number;
@@ -129,6 +131,8 @@ export interface RepeatToken {
 	bare: boolean;
 	/** False for a repeat Quick Add cannot build ("every 3 hours"): it stays text with a notice, never a date. */
 	supported: boolean;
+	/** `each …` ("each monday"): repeat words Quick Add never reads; they stay title text with no chip, never a date. */
+	silent: boolean;
 	end: RepeatCount | null;
 	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
 	onDate: boolean;
@@ -160,11 +164,12 @@ export function findRepeatCounts(s: string, from: number, taken: Taken): RepeatC
 const NOT_WORD_AFTER = "(?![\\p{L}\\p{N}])";
 
 // -- the repeat grammar (Repeating tasks rule 19, Tasks and Quick Add rule 40) ---------------------------------------
-// A typed repeat is `every` + a form Quick Add builds (EVERY_RE) + an optional `at <time>`. The phrase ends there:
-// whatever follows (a comma, a date, a range, a time, a lead word, title text) is read by the date reader and the end
-// logic. Two things make an `every …` unsupported, never a date: no form fits (the phrase is the run of repeat words
-// after `every`: `every 3 hours`, `every May 5`), or a list word joins more repeat words to a form (a compound repeat:
-// `every 2nd and 4th tuesday`, `every monday & 2 others`; a plain number alone is title text: `every day, 20 pages`).
+// A typed repeat is `every` + a form Quick Add builds (EVERY_RE) + an optional `at <time>`; a bare word (BARE_RE) is the
+// same form without `every`. The phrase ends there: whatever follows (a comma, a date, a range, a time, a lead word,
+// title text) is read by the date reader and the end logic. Two things make an `every …` unsupported, never a date: no
+// form fits (the phrase is the run of repeat words after `every`: `every 3 hours`, `every May 5`, `every two weeks`), or
+// a list word or `except` joins more repeat words to a form (a compound repeat: `every 2nd and 4th tuesday`, `every
+// monday at 9 and friday at 5`, `every day except sunday`; a plain number alone is title text: `every day, 20 pages`).
 // `repeatPhraseAt` is the one owner of that boundary.
 
 const RANGE_DAY = `(?:${DAY_NUMBER_PATTERN}|\\d{1,2})`;
@@ -188,53 +193,74 @@ const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
 // follows ("every mon wed sat", not "every monday sun cream"); joined by a comma, "and" or "&", they always do.
 const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN})?[\\s\\p{P}]*$)`;
 const WEEKDAY_LIST = `(?:${WEEKDAY_RANGE}|${DAY})(?:${LIST_SEP_PATTERN}${DAY}|\\s+${DAY_FULL}|\\s+${DAY_ABBR}${LIST_ENDS_HERE})*`;
-const PERIOD = "(?:weekday|weekend|week|month|year|day)";
 const OF_MONTH = "\\s+of\\s+(?:the|each|every)\\s+month";
-// "on the 15th", "on day 15", "on 15": the day of the month of a monthly repeat.
-const MONTH_ON = "(?:\\s+on\\s+(?:the\\s+|day\\s+)?\\d{1,2}(?:st|nd|rd|th)?)?";
+// "on the 15th", "on day 15", "on 15", "on the last day": the day of a monthly repeat; a bare number before a month
+// name ("on 15 Oct") is a start date instead.
+const MONTH_ON = `(?:\\s+on\\s+(?:(?:the\\s+|day\\s+)\\d{1,2}(?:st|nd|rd|th)?|${DAY_NUMBER_PATTERN}|\\d{1,2}(?!\\s+${MONTH_PATTERN}${NOT_WORD_AFTER})|the\\s+last\\s+day))?`;
+// "every year on May 5", "yearly on May 5": the date after "on" is the start, read by the date reader.
+const YEAR_ON = `(?:\\s+on(?:\\s+the)?(?=\\s+(?:${MONTH_PATTERN}|\\d)))?`;
+// The day of the month, "15th of each month" or "15th"; not an ordinal before a unit or weekday ("every 2nd day" is an
+// ordinal, "every 5th friday" a fifth weekday: neither fits a form; a range of weekdays after it is a range).
+const DAY_OF_MONTH = `${DAY_NUMBER_PATTERN}(?:${OF_MONTH}|(?!\\s+(?:${UNIT_PATTERN}|${DAY})))`;
 /** The forms Quick Add builds, in the order they are tried (the monthly forms before the periods, which stop at "month"). */
 const EVERY_RE = new RegExp(
 	"every\\s+(?:" +
 		"last\\s+day\\s+of\\s+(?:the\\s+|each\\s+|every\\s+)?month" +
 		`|${ORDINAL_PATTERN}\\s+${DAY}(?:${OF_MONTH})?` +
-		// "every 2nd day" is an ordinal, not the 2nd of the month: a unit after the day number fits no form.
-		`|${DAY_NUMBER_PATTERN}(?:${OF_MONTH})?(?!\\s+${UNIT_PATTERN}${NOT_WORD_AFTER})` +
+		`|${DAY_OF_MONTH}` +
 		`|(?:(?:other\\s+)?month|\\d+\\s*months?)${MONTH_ON}` +
-		// "every year on May 5": the date after "on" is the start, read by the date reader.
-		`|(?:(?:other\\s+)?year|\\d+\\s*years?)(?:\\s+on(?:\\s+the)?(?=\\s+(?:${MONTH_PATTERN}|\\d)))?` +
+		`|(?:(?:other\\s+)?year|\\d+\\s*years?)${YEAR_ON}` +
 		`|(?:(?:other\\s+)?week|\\d+\\s*weeks?)\\s+(?:on\\s+)?${WEEKDAY_LIST}` +
-		`|other\\s+(?:${PERIOD}${NOT_WORD_AFTER}|${WEEKDAY_LIST})` +
-		`|\\d+\\s*${PERIOD}s?` +
+		`|other\\s+(?:${PERIOD_PATTERN}${NOT_WORD_AFTER}|${WEEKDAY_LIST})` +
+		`|\\d+\\s*${PERIOD_PATTERN}s?` +
 		`|${WEEKDAY_LIST}` +
 		`|${DAY_PART_PATTERN}` +
-		`|${PERIOD}` +
+		`|${PERIOD_PATTERN}` +
 		`)${NOT_WORD_AFTER}`,
 	"iyu",
 );
-// A time typed right after the form ("every monday at 9") belongs to the repeat.
+// A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
 const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+// The same time as one word of a run of repeat words, where a list word may have taken the space before it.
+const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
 // starts with a month name. Elsewhere a month name is a date, never a repeat word.
 const EVERY_MONTH_RE = new RegExp(`every\\s+(?!${RANGE_START})${MONTH_PATTERN}(?:\\s+${RANGE_DAY})?${NOT_WORD_AFTER}`, "iyu");
-// A list word after a form: what joins a compound repeat ("every 2nd and 4th tuesday", "every monday & 2 others").
-const JOIN_RE = new RegExp(LIST_SEP_PATTERN, "iyu");
-// The words of a repeat (rule 40): a number or ordinal, a weekday, a period or unit, a day part, "others" ("& 2 others").
-const REPEAT_WORD_RE = new RegExp(`^(?:\\d+(?:st|nd|rd|th)?|${ORDINAL_PATTERN}|${WEEKDAY_PATTERN}|${UNIT_PATTERN}|${DAY_PART_PATTERN}s?|others)$`, "iu");
+// A list word or "except" after a form: what joins a compound repeat ("every 2nd and 4th tuesday", "every monday & 2
+// others", "every day except sunday").
+const JOIN_RE = new RegExp(`${LIST_SEP_PATTERN}|\\s+except\\s+`, "iyu");
+// The words of a repeat (rule 40): a number, number word or ordinal, a weekday, a period or unit, a day part, "others"
+// ("& 2 others").
+const REPEAT_WORD_RE = new RegExp(`^(?:\\d+(?:st|nd|rd|th)?|${NUMBER_WORD_PATTERN}|${ORDINAL_PATTERN}|${WEEKDAY_PATTERN}|${UNIT_PATTERN}|${DAY_PART_PATTERN}s?|others)$`, "iu");
 // A run of plain numbers and glue after a list word is title text, not a compound repeat ("every day, 20 pages").
-const NUMBERS_ONLY_RE = /^(?:\d+|and|of|the|each|every|other|[\s,&])*$/iu;
-// The small words between repeat words ("every 2nd and 4th tuesday of every month"); "other" may also lead the run
-// ("every other 2nd tuesday"). Not "on": it leads a date ("every 3 hours on Monday").
+const NUMBERS_ONLY_RE = new RegExp(`^(?:\\d+|${NUMBER_WORD_PATTERN}|and|of|the|each|every|other|[\\s,&])*$`, "iu");
+// The small words between repeat words ("every 2nd and 4th tuesday of every month"); "other" and "every" may also lead
+// the run ("every other 2nd tuesday", "every day and every week"). Not "on": it leads a date ("every 3 hours on Monday").
 const GLUE: ReadonlySet<string> = new Set(["and", "&", ",", "of", "the", "each", "every", "other"]);
+const GLUE_LEAD: ReadonlySet<string> = new Set(["other", "every"]);
 // "on mondays", "on the last friday of the month": the "on" goes with the repeat.
 const ON_BEFORE_RE = /(?:^|[^\p{L}\p{N}_])(on\s+)$/iu;
-// Without "every": the Nth weekday of the month counts anywhere, the bare words only at the end (parse.ts).
-const NTH_OF_MONTH_RE = new RegExp(`(?:the\\s+)?${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}${OF_MONTH}${NOT_WORD_AFTER}`, "giu");
+// Without "every", anywhere in the text: the Nth weekday, the day or the last day of each month.
+const OF_EACH_MONTH = `(?:${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}|${DAY_NUMBER_PATTERN}|last\\s+day)${OF_MONTH}`;
+const ANYWHERE_RE = new RegExp(`(?:the\\s+)?${OF_EACH_MONTH}${NOT_WORD_AFTER}`, "giu");
 // The "every" of "the 2nd tuesday of every month" belongs to that phrase, not to an `every month` of its own.
-const NTH_TAIL_RE = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}\\s+of\\s+$`, "iu");
-// "weekly mon-fri", "weekly on tue-thu": the bare word with a range of weekdays, like `every week on mon-fri`.
-const BARE_RE = new RegExp(`(?:weekly\\s+(?:on\\s+)?${WEEKDAY_RANGE}|${BARE_REPEAT_PATTERN}|${PLURAL_WEEKDAY_PATTERN}(?:${SEP}${PLURAL_WEEKDAY_PATTERN})*)${NOT_WORD_AFTER}`, "giu");
+const ANYWHERE_TAIL_RE = new RegExp(`(?:^|[^\\p{L}\\p{N}_])(?:${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}|${DAY_NUMBER_PATTERN}|last\\s+day)\\s+of\\s+$`, "iu");
+// Without "every", at the end of the text (parse.ts): the bare words, each with what its `every …` form takes after it
+// ("weekly on mon, fri", "weekly mon-fri", "monthly on the 15th", "yearly on <date>"), and the plural weekdays.
+const BARE_RE = new RegExp(
+	"(?:" +
+		`weekly\\s+(?:on\\s+)?${WEEKDAY_LIST}` +
+		`|monthly${MONTH_ON}` +
+		`|(?:yearly|annually)${YEAR_ON}` +
+		`|${BARE_REPEAT_PATTERN}` +
+		`|${PLURAL_WEEKDAY_PATTERN}(?:${SEP}${PLURAL_WEEKDAY_PATTERN})*` +
+		`)${NOT_WORD_AFTER}`,
+	"giu",
+);
+// A form that ends with the "on" leading into its start date.
+const ON_DATE_TAIL_RE = /\son(?:\sthe)?$/iu;
 // An end right after the repeat; a comma before it goes with it ("daily, for 10 times").
-const COUNT_RE = new RegExp(`(\\s*,)?\\s*((?:for\\s+)?(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
+const COUNT_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
 const PERIODS_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+(${PERIOD_UNIT_PATTERN}|${WEEKDAY_PATTERN}))${NOT_WORD_AFTER}`, "iyu");
 
 function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
@@ -244,14 +270,21 @@ function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
 
 /**
  * The end of the run of repeat words at `from` (over spaces), with the glue words between them and none at its end;
- * `from` when no repeat word comes first ("every time", "every chapter"; "other" may lead). A date or a date range
- * stops the run: the date reader reads them.
+ * `from` when no repeat word comes first ("every time", "every chapter"; "other" or "every" may lead). An `at <time>`
+ * after a repeat word is one more ("every monday at 9 and friday at 5"). A date or a date range stops the run: the
+ * date reader reads them.
  */
-function repeatWordsEnd(s: string, from: number): number {
+function repeatWordsEnd(s: string, from: number, after = false): number {
 	let i = from;
 	let end = from;
-	let first = true;
 	for (;;) {
+		// A time is one more word of the run only after a repeat word ("friday at 5", `after`: one came before `from`);
+		// alone after a list word it is a time read on its own ("every day, at 7").
+		const time = end > from || after ? sticky(RUN_TIME_RE, s, i) : null;
+		if (time !== null) {
+			i = end = i + time[0].length;
+			continue;
+		}
 		let j = i;
 		while (j < s.length && isSpaceChar(charAt(s, j))) j++;
 		let k = j;
@@ -260,8 +293,7 @@ function repeatWordsEnd(s: string, from: number): number {
 		if (k === j || sticky(RANGE_START_RE, s, j) !== null || sticky(DATE_START_RE, s, j) !== null) break;
 		const word = s.slice(j, k).toLowerCase();
 		if (REPEAT_WORD_RE.test(word)) end = k;
-		else if (!(end === from ? first && word === "other" : GLUE.has(word))) break;
-		first = false;
+		else if (!(end === from ? GLUE_LEAD.has(word) : GLUE.has(word))) break;
 		i = k;
 	}
 	return end;
@@ -270,38 +302,44 @@ function repeatWordsEnd(s: string, from: number): number {
 interface RepeatPhrase {
 	end: number;
 	supported: boolean;
+	silent: boolean;
 	/** "every year on …": the span ends with the "on" that leads into the start date. */
 	onDate: boolean;
 }
 
 /**
- * The typed repeat phrase whose `every` starts at `start`: where it ends and whether Quick Add builds it (the grammar
- * above). Null when `every` leads no repeat word.
+ * The typed repeat phrase whose `every` (or `each`) starts at `start`: where it ends and whether Quick Add builds it
+ * (the grammar above). Null when the word leads no repeat word. `each …` is never built: its words are only taken.
  */
-function repeatPhraseAt(s: string, start: number): RepeatPhrase | null {
-	const body = start + "every".length;
+function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | null {
+	const body = start + word.length;
 	if (!isSpaceChar(charAt(s, body))) return null;
+	const phrase = (end: number, supported: boolean, onDate = false): RepeatPhrase => ({ end, supported, silent: false, onDate });
+	if (word.toLowerCase() === "each") {
+		const end = repeatWordsEnd(s, body);
+		return end === body ? null : { end, supported: false, silent: true, onDate: false };
+	}
 	const form = sticky(EVERY_RE, s, start);
 	if (form === null) {
 		const month = sticky(EVERY_MONTH_RE, s, start);
 		const from = month === null ? body : start + month[0].length;
-		const end = Math.max(from, repeatWordsEnd(s, from));
-		return end === body ? null : { end, supported: false, onDate: false };
+		const end = Math.max(from, repeatWordsEnd(s, from, month !== null));
+		return end === body ? null : phrase(end, false);
 	}
 	let end = start + form[0].length;
-	if (/\son(?:\sthe)?$/iu.test(form[0])) return { end, supported: true, onDate: true };
+	if (ON_DATE_TAIL_RE.test(form[0])) return phrase(end, true, true);
 	const time = sticky(EVERY_TIME_RE, s, end);
 	if (time !== null) end += time[0].length;
 	const join = sticky(JOIN_RE, s, end);
 	const joined = join === null ? end : end + join[0].length;
 	const more = join === null ? end : repeatWordsEnd(s, joined);
 	const compound = more > joined && !NUMBERS_ONLY_RE.test(s.slice(joined, more));
-	return compound ? { end: more, supported: false, onDate: false } : { end, supported: true, onDate: false };
+	return compound ? phrase(more, false) : phrase(end, true);
 }
 
 /**
- * The end typed right after a repeat that ends at `from`: `(for) N times` (a count) or `for N days|weeks|months|
- * years|<weekdays>` (N periods from the start; a weekday counts as a week). Null when none follows.
+ * The end typed right after a repeat that ends at `from`: `for N times` (a count) or `for N days|weeks|months|years|
+ * <weekdays>` (N periods from the start; a weekday counts as a week). Null when none follows.
  */
 export function repeatCountAt(s: string, from: number): RepeatCount | null {
 	const count = sticky(COUNT_RE, s, from);
@@ -322,40 +360,45 @@ function withOn(s: string, start: number): number {
 }
 
 /**
- * Typed repeats: `every …` (a form Quick Add builds, or any other run of repeat words, unsupported), the Nth
- * weekday of the month anywhere, and the bare words, each with the end typed right after it.
+ * Typed repeats: `every …` (a form Quick Add builds, or any other run of repeat words, unsupported), `each …` (taken,
+ * never read), the Nth weekday, the day or the last day of each month anywhere, and the bare words, each with its
+ * time and the end typed right after it.
  */
 export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 	const out: RepeatToken[] = [];
 	const free = (start: number, end: number): boolean =>
 		!taken(start, end) && !out.some((t) => (t.span.start < end && start < t.span.end) || (t.end !== null && t.end.span.start < end && start < t.end.span.end));
-	const push = (span: Span, bare: boolean, supported: boolean, onDate = false): number => {
-		const found = onDate ? null : repeatCountAt(s, span.end);
+	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate">): number => {
+		const found = phrase.onDate || phrase.silent ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported, end, onDate });
+		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate });
 		return end === null ? span.end : end.span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {
-		const end = found.index + found[0].length;
-		if (!wordBoundaryBefore(s, found.index) || !free(found.index, end)) return;
+		let end = found.index + found[0].length;
+		if (!wordBoundaryBefore(s, found.index)) return;
+		const onDate = ON_DATE_TAIL_RE.test(found[0]);
+		const time = onDate ? null : sticky(EVERY_TIME_RE, s, end);
+		if (time !== null) end += time[0].length;
+		if (!free(found.index, end)) return;
 		// "on mondays", "on weekends", "on the last friday of the month"; not "on daily".
 		const start = bare && !/s$/iu.test(found[0]) ? found.index : withOn(s, found.index);
-		push({ start: free(start, end) ? start : found.index, end }, bare, true);
+		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate });
 	};
 
 	// The `every` phrases first, so "every 2nd and 4th tuesday of every month" is one unsupported phrase; the "every" of
 	// "the 2nd tuesday of every month" is left to that form below.
-	const re = /every/giu;
+	const re = /every|each/giu;
 	let m: RegExpExecArray | null;
 	while ((m = re.exec(s)) !== null) {
 		const start = m.index;
-		if (!wordBoundaryBefore(s, start) || NTH_TAIL_RE.test(s.slice(Math.max(0, start - 40), start))) continue;
-		const phrase = repeatPhraseAt(s, start);
+		if (!wordBoundaryBefore(s, start) || ANYWHERE_TAIL_RE.test(s.slice(Math.max(0, start - 40), start))) continue;
+		const phrase = repeatPhraseAt(s, start, m[0]);
 		if (phrase === null || !free(start, phrase.end)) continue;
-		re.lastIndex = push({ start, end: phrase.end }, false, phrase.supported, phrase.onDate);
+		re.lastIndex = push({ start, end: phrase.end }, false, phrase);
 	}
 
-	for (const found of s.matchAll(NTH_OF_MONTH_RE)) pushOn(found, false);
+	for (const found of s.matchAll(ANYWHERE_RE)) pushOn(found, false);
 	for (const found of s.matchAll(BARE_RE)) pushOn(found, true);
 	return out.sort((a, b) => a.span.start - b.span.start);
 }

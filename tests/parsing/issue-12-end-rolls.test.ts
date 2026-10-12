@@ -25,7 +25,7 @@ describe.each(ZONES)("a repeat end before its start in %s", (zone) => {
 			expect(endChip(r), r.input).toMatchObject({ status: "applied", end: { kind: "date", date: "2027-12-01" } });
 			expect(r.blocking, r.input).toEqual([]);
 		}
-		expect(comma.title).toBe("Birthday ,");
+		expect(comma.title).toBe("Birthday");
 	});
 
 	it("an end with its own year, or naming its own day, stays where it is: invalid before the start", () => {
@@ -60,10 +60,10 @@ describe.each(ZONES)("a two-digit number after a comma in %s", (zone) => {
 		const yearly = parse(`Birthday every year on ${jun3}, 25 people`, zone, "2026-10-07T10:00", locale);
 		expect(yearly.fields.recurrence?.freq).toBe("yearly");
 		expect(sched(yearly)).toBe("2027-06-03");
-		expect(yearly.title).toBe("Birthday , 25 people");
+		expect(yearly.title).toBe("Birthday 25 people");
 		const guests = parse(`Party ${may5}, 20 guests`, zone, "2026-10-07T10:00", locale);
 		expect(sched(guests)).toBe("2027-05-05");
-		expect(guests.title).toBe("Party , 20 guests");
+		expect(guests.title).toBe("Party 20 guests");
 		expect(guests.chips.map((c) => c.text)).toEqual([may5]);
 		// Four digits are a year.
 		expect(sched(parse(`Party ${jun3}, 2025 people`, zone, "2026-10-07T10:00", locale))).toBe("2025-06-03");

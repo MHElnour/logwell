@@ -1,4 +1,4 @@
-import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, repeatRuleProblem } from "../domain/recurrence";
+import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, plainRule, repeatRuleProblem } from "../domain/recurrence";
 import { collapseWhitespace } from "../domain/text";
 import { pad2 } from "../domain/time";
 import { WEEKDAYS, type MonthlyOn, type RepeatRule, type Weekday } from "../domain/types";
@@ -15,7 +15,8 @@ import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, R
 // - "At <time>" sets `time` ("HH:mm") and `tz` (the parse zone). A bare hour 1–12 without am/pm is
 //   ambiguous (09:00 or 21:00): `rule` has the first reading and `other` the second, and Quick Add offers both
 //   as a choice, like "at 5" in a date.
-// - A bare word ("daily", "mondays", "last friday of the month") reads like its `every …` form.
+// - A bare word ("daily", "mondays", "last friday of the month") reads like its `every …` form, with what follows it
+//   ("monthly on the 15th" is "every month on the 15th").
 // - The end of a series is its own token (tokens.ts repeatCountAt, dates.ts LEADS); after completion is picker-only.
 
 export interface ParsedRepeat {
@@ -27,12 +28,8 @@ export interface ParsedRepeat {
 	other: RepeatRule | null;
 }
 
-interface Body {
-	freq: RepeatRule["freq"];
-	interval: number;
-	weekdays: Weekday[] | null;
-	monthly: MonthlyOn | null;
-}
+/** A rule without its time: what the body of a phrase says. */
+type Body = Pick<RepeatRule, "freq" | "interval" | "weekdays" | "monthly">;
 
 const LIST_SPLIT_RE = new RegExp(`${LIST_SEP_PATTERN}|\\s+`, "u");
 // "mon-fri", "monday to friday": every weekday from the first to the last, round the week ("fri-mon").
@@ -73,7 +70,8 @@ function every(other: string | undefined, count: string | undefined): number | n
 	return other !== undefined ? 2 : count !== undefined ? interval(count) : 1;
 }
 
-const plain = (freq: RepeatRule["freq"], n: number): Body => ({ freq, interval: n, weekdays: null, monthly: null });
+const plain = (freq: RepeatRule["freq"], n: number): Body => plainRule(freq, n);
+const lastDay: Body = { freq: "monthly", interval: 1, weekdays: null, monthly: { kind: "lastDay" } };
 
 // The whole body is one day part ("every morning").
 const REPEAT_DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
@@ -81,14 +79,13 @@ const REPEAT_DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
 /** The part after "every ", lower case, single spaces, without the time. */
 function parseBody(body: string): Body | null {
 	if (body === "day" || REPEAT_DAY_PART_RE.test(body)) return plain("daily", 1);
-	if (body === "weekday") return { freq: "weekly", interval: 1, weekdays: [...EVERY_WEEKDAY], monthly: null };
+	if (body === "weekday" || body === "workday") return { freq: "weekly", interval: 1, weekdays: [...EVERY_WEEKDAY], monthly: null };
 	if (body === "weekend") return { freq: "weekly", interval: 1, weekdays: ["SA", "SU"], monthly: null };
 	if (body === "week") return plain("weekly", 1);
-	if (/^last day of (?:the |each |every )?month$/u.test(body)) {
-		return { freq: "monthly", interval: 1, weekdays: null, monthly: { kind: "lastDay" } };
-	}
+	if (body === "quarter") return plain("monthly", 3);
+	if (/^last day of (?:the |each |every )?month$/u.test(body)) return lastDay;
 
-	// "month", "other month", "3 months", each with an optional "on the 15th".
+	// "month", "other month", "3 months", each with an optional "on the 15th" or "on the last day".
 	const month = /^(?:(other)\s+|(\d+)\s*)?(months?)(?:\s+on\s+(.+))?$/u.exec(body);
 	if (month !== null) {
 		const prefixed = month[1] !== undefined || month[2] !== undefined;
@@ -97,6 +94,7 @@ function parseBody(body: string): Body | null {
 		if (n === null) return null;
 		let monthly: MonthlyOn | null = null;
 		if (month[4] !== undefined) {
+			if (/^(?:the )?last day$/u.test(month[4])) return { ...lastDay, interval: n };
 			const day = dayNumber(month[4]);
 			if (day === null) return null;
 			monthly = { kind: "day", day };
@@ -156,15 +154,18 @@ function parseBody(body: string): Body | null {
 	return days === null ? null : { freq: "weekly", interval: 1, weekdays: days, monthly: null };
 }
 
-/** The `every …` body of a typed span: the text after "every", or what a bare form stands for. */
+/**
+ * The `every …` body of a typed span without its time: the text after "every", or what a bare form stands for with
+ * what follows it ("weekly on mon-fri" is "week on mon-fri", "monthly on the 15th" is "month on the 15th").
+ */
 function bodyOf(text: string): string {
 	if (text.startsWith("every ")) return text.slice("every ".length);
 	// "mondays and fridays", "the 2nd tuesday of the month", "on mondays": the "on" goes with the repeat.
 	const bare = text.replace(/^on (?:the )?|^the /u, "");
-	// "weekly mon-fri", "weekly on mon-fri" read as "every week on mon-fri".
-	const weekly = /^weekly (?:on )?(.+)$/u.exec(bare);
-	if (weekly !== null) return `week on ${weekly[1]!}`;
-	return Object.hasOwn(BARE_REPEAT_WORDS, bare) ? BARE_REPEAT_WORDS[bare]! : bare;
+	const word = /^(\S+)(?:\s+(.*))?$/u.exec(bare);
+	if (word === null || !Object.hasOwn(BARE_REPEAT_WORDS, word[1]!)) return bare;
+	const form = BARE_REPEAT_WORDS[word[1]!]!;
+	return word[2] === undefined ? form : `${form} ${word[2]}`;
 }
 
 /**
@@ -173,18 +174,18 @@ function bodyOf(text: string): string {
  * of an `at` time.
  */
 export function parseRepeatText(text: string, zone: string): ParsedRepeat | null {
-	let body = bodyOf(collapseWhitespace(text.toLowerCase()));
+	let phrase = collapseWhitespace(text.toLowerCase());
 	let time: string | null = null;
 	let ambiguous = false;
-	const at = /^(.*?) at (.+)$/u.exec(body);
+	const at = /^(.*?) at (.+)$/u.exec(phrase);
 	if (at !== null) {
 		const clock = readClock(at[2]!);
 		if (clock === null) return null;
-		body = at[1]!;
+		phrase = at[1]!;
 		time = clock.time;
 		ambiguous = clock.ambiguous;
 	}
-	const parsed = parseBody(body);
+	const parsed = parseBody(bodyOf(phrase));
 	if (parsed === null) return null;
 	const rule = normalizeRepeatRule({ ...parsed, afterCompletion: false, time, tz: time === null ? null : zone });
 	if (repeatRuleProblem(rule) !== null) return null;

@@ -55,15 +55,28 @@ function applied(r: ParseResult) {
 	return r.chips.filter((c) => c.status === "applied");
 }
 
-function expectedTitle(input: string, r: ParseResult): string {
-	let s = "";
+/** The title the parser owes: the segments between applied spans, a lone "," or ";" next to a removed span dropped. */
+function titleSegments(input: string, r: ParseResult): string[] {
+	const parts: string[] = [];
 	let at0 = 0;
 	for (const c of applied(r)) {
-		s += input.slice(at0, c.span.start);
+		parts.push(input.slice(at0, c.span.start));
 		at0 = c.span.end;
 	}
-	s += input.slice(at0);
-	const collapsed = s.replace(/\s+/g, " ").trim();
+	parts.push(input.slice(at0));
+	for (let i = 0; i + 1 < parts.length; i++) {
+		parts[i] = parts[i]!.replace(/[,;]\s*$/u, "");
+		parts[i + 1] = parts[i + 1]!.replace(/^\s*[,;]/u, "");
+	}
+	return parts;
+}
+
+function expectedTitle(input: string, r: ParseResult): string {
+	const parts = titleSegments(input, r);
+	const last = applied(r).at(-1);
+	// A sentence's last punctuation after a repeat that leaves the title goes with it.
+	if (parts.length > 1 && (last?.kind === "recurrence" || last?.kind === "repeatEnd") && /^[.,;:!?]+\s*$/u.test(parts.at(-1)!) && /\s$/u.test(parts.at(-2)!)) parts[parts.length - 1] = "";
+	const collapsed = parts.join("").replace(/\s+/g, " ").trim();
 	return collapsed === "" ? input : collapsed;
 }
 
@@ -229,14 +242,7 @@ describe("parser properties", () => {
 });
 
 function expectedTitleIsEmpty(input: string, r: ParseResult): boolean {
-	let s = "";
-	let at0 = 0;
-	for (const c of applied(r)) {
-		s += input.slice(at0, c.span.start);
-		at0 = c.span.end;
-	}
-	s += input.slice(at0);
-	return s.replace(/\s+/g, " ").trim() === "";
+	return expectedTitle(input, r) === input && applied(r).length > 0 && titleSegments(input, r).join("").trim() === "";
 }
 
 describe("rebaseDecisions properties", () => {

@@ -21,17 +21,18 @@ const sched = (r: ParseResult): string | undefined => {
 };
 
 describe("the date reader instances", () => {
-	it("are clones with the short-year and implied-year refiners after chrono's forward step and right before the filter of impossible dates; the shared chrono instances untouched", () => {
+	it("are clones with date-over-time first, and the short-year and implied-year refiners after chrono's forward step and right before the filter of impossible dates; the shared chrono instances untouched", () => {
 		for (const [reader, base] of [
 			[DATE_READERS.en, chrono.en.casual],
 			[DATE_READERS["en-GB"], chrono.en.GB],
 		] as const) {
 			expect(reader).not.toBe(base);
-			expect(reader.refiners.length).toBe(base.refiners.length + 2);
+			expect(reader.refiners.length).toBe(base.refiners.length + 3);
 			const added = reader.refiners.filter((r) => !base.refiners.includes(r));
-			// Only the two refiners are added; chrono's own refiners, the range merge included, are kept.
-			expect(added.length).toBe(2);
-			const names = reader.refiners.map((r) => (r === added[0] ? "shortYear" : r === added[1] ? "impliedYear" : r.constructor.name));
+			// Only the three refiners are added; chrono's own refiners, the range merge included, are kept.
+			expect(added.length).toBe(3);
+			const names = reader.refiners.map((r) => (r === added[0] ? "dateOverTime" : r === added[1] ? "shortYear" : r === added[2] ? "impliedYear" : r.constructor.name));
+			expect(names[0]).toBe("dateOverTime");
 			const filter = names.indexOf("UnlikelyFormatFilter");
 			expect(names.slice(filter - 2, filter)).toEqual(["shortYear", "impliedYear"]);
 			expect(names.indexOf("ForwardDateRefiner")).toBeLessThan(filter - 2);

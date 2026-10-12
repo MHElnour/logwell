@@ -118,10 +118,11 @@ const GUARDS: ReadonlyArray<readonly [string, DateLocale, string, readonly strin
 	["Trip from Oct 12 to Oct 20", "en", "Trip from Oct 12 to Oct 20", ["scheduled suggestion Oct 12 to Oct 20"]],
 	["Work from 9 until 5", "en", "Work from 9 until 5", ["scheduled suggestion from 9 until 5"]],
 	["Call 2pm until 3pm", "en", "Call 2pm until 3pm", ["scheduled suggestion 2pm until 3pm"]],
-	["Gym every day at 9 until 5pm", "en", "Gym every day at 9 until 5pm", ["repeatEnd suggestion until 5pm"]],
+	// A time alone is never an end: it is read on its own, as without a repeat.
+	["Gym every day at 9 until 5pm", "en", "Gym every day at 9 until", ["scheduled applied 5pm"]],
 	["Gym every day starting Oct 12 until 5pm", "en", "Gym starting Oct 12 until 5pm", ["scheduled suggestion 12 until 5pm"]],
 	["Gym every day starting Oct 12 to 15", "en", "Gym starting Oct 12 to 15", ["scheduled suggestion starting Oct 12 to 15"]],
-	["Gym every day from Oct 12", "en", "Gym from", ["scheduled applied Oct 12"]],
+	["Gym every day from Oct 12", "en", "Gym", ["scheduled applied from Oct 12"]],
 	["Daily standup from Oct 12 to Dec 1", "en", "Daily standup from Oct 12 to Dec 1", ["scheduled suggestion Oct 12 to Dec 1"]],
 ];
 
@@ -154,11 +155,11 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 // an end: they stay the one visible suggestion they always were, unless `starting` or `beginning` leads them (a range
 // right after `every`, `every week (on)` or `weekly (on)` is the repeat's weekday list instead). [input, title, the chips]
 const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]> = [
-	["Standup every week from Monday to Friday", "Standup from Monday to Friday", ["recurrence applied every week", "scheduled suggestion Monday to Friday"]],
-	["Run every week from Mon to Fri at 7am", "Run from Mon to Fri at 7am", ["recurrence applied every week", "scheduled suggestion Mon to Fri at 7am"]],
+	["Standup every week from Monday to Friday", "Standup from Monday to Friday", ["recurrence applied every week", "scheduled suggestion from Monday to Friday"]],
+	["Run every week from Mon to Fri at 7am", "Run from Mon to Fri at 7am", ["recurrence applied every week", "scheduled suggestion from Mon to Fri at 7am"]],
 	["Gym daily Mon-Fri", "Gym Mon-Fri", ["recurrence applied daily", "scheduled suggestion Mon-Fri"]],
 	["Gym daily Mon to Fri", "Gym Mon to Fri", ["recurrence applied daily", "scheduled suggestion Mon to Fri"]],
-	["Shop every weekday from Monday to Friday", "Shop from Monday to Friday", ["recurrence applied every weekday", "scheduled suggestion Monday to Friday"]],
+	["Shop every weekday from Monday to Friday", "Shop from Monday to Friday", ["recurrence applied every weekday", "scheduled suggestion from Monday to Friday"]],
 	// The first weekday of the range is not one more repeat word: the repeat keeps its form (Tasks and Quick Add rule 40).
 	["Gym every day Mon-Fri", "Gym Mon-Fri", ["recurrence applied every day", "scheduled suggestion Mon-Fri"]],
 	["Gym every day Mon\u2013Fri", "Gym Mon\u2013Fri", ["recurrence applied every day", "scheduled suggestion Mon\u2013Fri"]],

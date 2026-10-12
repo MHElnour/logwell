@@ -261,7 +261,8 @@ describe.each(ZONES)("4. End in %s", (zone) => {
 		check({ in: "Gym every monday until 5pm", title: "Gym until", rec: "weekly:MO", s: "2026-10-07T17:00" }, zone);
 		const choice = parse("Gym every day until 5", zone);
 		expect(choice.fields.recurrenceEnd).toBeUndefined();
-		expect(choice.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day", "scheduled|choice|5"]);
+		expect(choice.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day"]);
+		expect(choice.title).toBe("Gym until 5");
 	});
 
 	it("an end that leaves no date blocks saving", () => {
@@ -293,9 +294,9 @@ describe.each(ZONES)("5. Not supported in %s", (zone) => {
 	it("several times or several patterns", () => {
 		unsupported("Gym every monday at 9 and friday at 5", zone);
 		unsupported("Gym every 2nd and 4th tuesday", zone);
-		unsupported("Gym every day and every week", zone, "every day");
+		unsupported("Gym every day and every week", zone);
 		unsupported("Gym every day every week", zone, "every day");
-		unsupported("Gym every day, every week", zone, "every day");
+		unsupported("Gym every day, every week", zone);
 	});
 
 	it("exceptions", () => {
@@ -313,7 +314,7 @@ describe.each(ZONES)("5. Not supported in %s", (zone) => {
 	});
 
 	it("several days of the month", () => {
-		unsupported("Pay every month on the 1st and 15th", zone);
+		unsupported("Pay every month on the 1st and 15th", zone, "every month on the 1st and 15th");
 	});
 
 	it("a fifth weekday", () => {

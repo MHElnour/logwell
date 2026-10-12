@@ -5,7 +5,7 @@ import type { ParseResult } from "../../src/parsing/types";
 import { chipLabel } from "../../src/ui/quickadd/chipLabels";
 import { BERLIN, NY, TOKYO, at, chipLines, makeCtx, ruleKey } from "./helpers";
 
-// Repeating tasks rule 19 (#12): an end is `until <date>`, `ending (on) <date>`, `ends on <date>`, `(for) N times` or
+// Repeating tasks rule 19 (#12): an end is `until <date>`, `ending (on) <date>`, `ends on <date>`, `for N times` or
 // `for N <periods>`; an end before the start is refused. A repeat end is never a one-off date. Without a repeat,
 // `until <date>` is a deadline. Wednesday 2026-10-07 10:00 in each zone.
 
@@ -44,7 +44,8 @@ const CASES: Case[] = [
 	{ in: "Gym every Monday until Nov 30 starting Oct 12", title: "Gym", rec: "weekly:MO", s: "2026-10-12", end: "2026-11-30" },
 	// a count (audit 124)
 	{ in: "Pills every day for 5 times", title: "Pills", rec: "daily", end: "5x", chips: ["applied|recurrence|every day|r=daily", "applied|repeatEnd|for 5 times"] },
-	{ in: "Pills every day 5 times", title: "Pills", rec: "daily", end: "5x" },
+	// A count needs `for`: a bare "5 times" is title text, as "3 times a day" is.
+	{ in: "Pills every day 5 times", title: "Pills 5 times", rec: "daily" },
 	{ in: "Gym every monday at 7am for 1 time", title: "Gym", rec: "weekly:MO@07:00", end: "1x" },
 	// N periods after the start: the day before the Nth period from the start (decision 10)
 	{ in: "Gym every day for 2 weeks", title: "Gym", rec: "daily", end: "2026-10-20" },
@@ -87,12 +88,12 @@ describe("Quick Add repeat ends (#12)", () => {
 		expect(endKey(r)).toBe("2026-10-16");
 	});
 
-	it("an uncertain end date is a suggestion, not applied", () => {
+	it("an end must name a day: a month alone is no end, and stays the uncertain date it is", () => {
 		const r = parse("Pills every day until march", NY);
 		expect(r.fields.recurrenceEnd).toBeUndefined();
-		const chip = r.chips.find((c) => c.kind === "repeatEnd");
-		expect(chip?.status).toBe("suggestion");
-		expect(chip?.notice).toBe("Use as end date?");
+		expect(r.chips.find((c) => c.kind === "repeatEnd")).toBeUndefined();
+		expect(r.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "suggestion", text: "march" });
+		expect(r.title).toBe("Pills until march");
 	});
 
 	it("without a repeat, `until <date>` is a deadline (decision 8)", () => {

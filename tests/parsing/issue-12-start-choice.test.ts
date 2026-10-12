@@ -43,8 +43,8 @@ describe.each(ZONES)("a yearly repeat whose start is a choice in %s", (zone) => 
 
 describe.each(ZONES)("a range after an unsupported `every …` in %s", (zone) => {
 	it.each([
-		["Check server every 3 hours from Oct 12 to Oct 20", "every 3 hours", "Oct 12 to Oct 20"],
-		["Standup every 2nd and 4th tuesday from Oct 12 to Dec 1", "every 2nd and 4th tuesday", "Oct 12 to Dec 1"],
+		["Check server every 3 hours from Oct 12 to Oct 20", "every 3 hours", "from Oct 12 to Oct 20"],
+		["Standup every 2nd and 4th tuesday from Oct 12 to Dec 1", "every 2nd and 4th tuesday", "from Oct 12 to Dec 1"],
 		["Call every 3 hours, Oct 12 to Oct 20", "every 3 hours", "Oct 12 to Oct 20"],
 	])("%s stays one suggestion, never a start and an end", (input, phrase, range) => {
 		const r = parse(input, zone);

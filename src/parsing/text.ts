@@ -144,9 +144,11 @@ export const BARE_REPEAT_WORDS: Readonly<Record<string, string>> = {
 	weekly: "week",
 	fortnightly: "other week",
 	monthly: "month",
+	quarterly: "quarter",
 	yearly: "year",
 	annually: "year",
 	weekdays: "weekday",
+	workdays: "weekday",
 	weekends: "weekend",
 };
 
@@ -155,35 +157,44 @@ export const BARE_REPEAT_PATTERN = alternation(Object.keys(BARE_REPEAT_WORDS));
 /** "every morning" and the other day parts: a plain daily repeat. */
 export const DAY_PART_PATTERN = "(?:morning|afternoon|evening|night)";
 
-/** Period and unit words, with the repeat frequency of the periods a repeat can end after (`for 2 weeks`). */
-const UNIT_WORDS: Readonly<Record<string, RepeatFreq | null>> = {
+/**
+ * The periods `every <period>` repeats by, with the frequency of the ones a repeat can also end after (`for 2 weeks`);
+ * null for the periods that are a form of their own (`every weekday`, `every quarter`).
+ */
+const PERIOD_WORDS: Readonly<Record<string, RepeatFreq | null>> = {
 	day: "daily",
 	week: "weekly",
 	month: "monthly",
 	year: "yearly",
 	weekday: null,
+	workday: null,
 	weekend: null,
-	fortnight: null,
 	quarter: null,
-	hour: null,
-	hr: null,
-	minute: null,
-	min: null,
-	second: null,
-	sec: null,
 };
 
+/** The other time units a typed repeat may name; Quick Add builds none of them ("every 3 hours"). */
+const OTHER_UNIT_WORDS = ["fortnight", "hour", "hr", "minute", "min", "second", "sec"];
+
+/** Every period word, singular: "day", "week", "weekday", "quarter". */
+export const PERIOD_PATTERN = alternation(Object.keys(PERIOD_WORDS));
+
 /** Every period or unit word, singular or plural: "days", "hours", "mins". */
-export const UNIT_PATTERN = `${alternation(Object.keys(UNIT_WORDS))}s?`;
+export const UNIT_PATTERN = `${alternation([...Object.keys(PERIOD_WORDS), ...OTHER_UNIT_WORDS])}s?`;
 
 /** The periods a repeat can end after: "days", "weeks", "months", "years". */
-export const PERIOD_UNIT_PATTERN = `${alternation(Object.keys(UNIT_WORDS).filter((w) => UNIT_WORDS[w] !== null))}s?`;
+export const PERIOD_UNIT_PATTERN = `${alternation(Object.keys(PERIOD_WORDS).filter((w) => PERIOD_WORDS[w] !== null))}s?`;
 
 /** The frequency of a period word ("weeks" → weekly), or null. */
 export function unitFreq(word: string): RepeatFreq | null {
 	const w = word.toLowerCase().replace(/s$/u, "");
-	return Object.hasOwn(UNIT_WORDS, w) ? UNIT_WORDS[w]! : null;
+	return Object.hasOwn(PERIOD_WORDS, w) ? PERIOD_WORDS[w]! : null;
 }
+
+/**
+ * Number words and the ordinals past "fourth": repeat words Quick Add never reads as a count ("every two weeks",
+ * "every fifth friday" are not supported), so they are never a date either.
+ */
+export const NUMBER_WORD_PATTERN = "(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifth|sixth|seventh|eighth|ninth|tenth)";
 
 /** The weekday a word names, or undefined. */
 export function weekdayWord(word: string): Weekday | undefined {

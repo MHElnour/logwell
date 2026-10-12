@@ -17,7 +17,8 @@ const TONIGHT_RE = /\btonight\b/iu;
 const STOP_LIST = new Set(["may", "sun", "sat", "march", "second", "now"]);
 const BARE_DURATION_RE =
 	/^(?:at\s+)?\d+(?:\.\d+)?\s*(?:h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?|d|days?|w|wks?|weeks?)$/iu;
-const VAGUE_UNIT_RE = /^(?:the\s+)?(?:day|week|month|year)$/iu;
+// "the week", "a day" ("3 times a day"): a period, not a date.
+const VAGUE_UNIT_RE = /^(?:the\s+|a\s+)?(?:day|week|month|year)$/iu;
 // A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
 const DATE_DAY_PART_RE = new RegExp(`\\b(?:noon|midnight|tonight|${DAY_PART_PATTERN})\\b`, "iu");
 const SHIFT_WORD_RE = /\b(?:next|last|past|previous|coming)\b/iu;
@@ -41,8 +42,8 @@ export interface DateCandidate {
 	textStart: number;
 	/** The lead word counts only when the input repeats (`ending`, `starting` …): without a repeat it is title text. */
 	repeatOnly: boolean;
-	/** A month and day with no typed year: as a repeat's end before the start it rolls to the next such date. */
-	monthDay: boolean;
+	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
+	rolls: RollKind | null;
 	outcome: DateOutcome;
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
@@ -85,22 +86,34 @@ export const LEADS: readonly Lead[] = [
 	{ words: "starting", kind: "schedule", repeatOnly: true },
 	{ words: "starts on", kind: "schedule", repeatOnly: true },
 	{ words: "beginning", kind: "schedule", repeatOnly: true },
+	{ words: "from", kind: "schedule", repeatOnly: true },
+	{ words: "on", kind: "schedule", repeatOnly: true },
 ];
 
+/** The lead words that make two bare weekdays a start and an end (`starting Monday to Friday`); `from` and `on` do not. */
+const PAIRS_WEEKDAYS: ReadonlySet<string> = new Set(["starting", "starting on", "starts on", "beginning"]);
+
+interface LeadFound {
+	start: number;
+	words: string;
+	kind: LeadKind;
+	repeatOnly: boolean;
+}
+
 /** The lead word that ends right before `index` (over spaces), the longest when several fit; null when none does. */
-export function leadBefore(s: string, index: number): { start: number; kind: LeadKind; repeatOnly: boolean } | null {
-	let best: { start: number; kind: LeadKind; repeatOnly: boolean } | null = null;
+export function leadBefore(s: string, index: number): LeadFound | null {
+	let best: LeadFound | null = null;
 	for (const lead of LEADS) {
 		let at = index;
 		const words = lead.words.split(" ");
 		for (let w = words.length - 1; w >= 0 && at !== -1; w--) at = wordBefore(s, at, words[w]!);
-		if (at !== -1 && (best === null || at < best.start)) best = { start: at, kind: lead.kind, repeatOnly: lead.repeatOnly === true };
+		if (at !== -1 && (best === null || at < best.start)) best = { start: at, words: lead.words, kind: lead.kind, repeatOnly: lead.repeatOnly === true };
 	}
 	return best;
 }
 
 /** The first real date with this month and day ("MM-DD") on or after `from`, in its year or the 8 years after it (the next Feb 29). */
-export function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
+function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
 	const firstYear = Number(from.slice(0, 4));
 	for (let year = firstYear; year <= firstYear + 8; year++) {
 		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
@@ -112,6 +125,20 @@ export function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate 
 /** A repeat's end that rolled to more than a year after its start is a suggestion, not applied (Repeating tasks rule 19). */
 export function rollsPastYear(from: LocalDate, to: LocalDate): boolean {
 	return dayNum(to) - dayNum(from) > 366;
+}
+
+/** How an end typed without its year moves past a start: a bare weekday by weeks, a month and day by years. */
+export type RollKind = "week" | "year";
+
+/**
+ * The first date on or after `from` that reads as `end` does: the same weekday (`by` "week") or the same month and
+ * day (`by` "year", the next real one: Feb 29 waits for a leap year). The one rule for an end before its start, in a
+ * typed range (`splitRange`) and for a separate end (`bindEnds`); null when no such date exists.
+ */
+export function rollEnd(end: LocalDate, from: LocalDate, by: RollKind): LocalDate | null {
+	if (end >= from) return end;
+	if (by === "week") return dateOf(dayNum(end) + 7 * Math.ceil((dayNum(from) - dayNum(end)) / 7));
+	return monthDayOnOrAfter(end.slice(5), from);
 }
 
 // A two-digit number after a comma is never a year ("Jun 3, 25 people" is June 3 and "25 people"): the date ends
@@ -162,15 +189,29 @@ const impliedYear: chrono.Refiner = {
 	},
 };
 
+/** A reading of one time with no day of its own ("from 12", "at 5"); not a time range, which chrono keeps as it is. */
+const timeOnly = (r: chrono.ParsedResult): boolean => r.end == null && r.start.isCertain("hour") && !r.start.isCertain("day") && !r.start.isCertain("weekday") && !r.start.isCertain("month");
+
 /**
- * chrono's casual English and en-GB readers with `shortYear` and `impliedYear` right before the filter of impossible
- * dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared
- * instances stay as they are.
+ * Of two readings over the same text, a date wins over a bare time, whatever their lengths: en-GB reads "from 12 Oct"
+ * as the time "from 12" and the date "12 Oct", and chrono's own overlap removal would keep the longer time. Runs first.
+ */
+const dateOverTime: chrono.Refiner = {
+	refine(_context, results) {
+		return results.filter((r, i) => !(timeOnly(r) && results.some((o, j) => j !== i && dayCertainOf(o.start) && o.index < r.index + r.text.length && r.index < o.index + o.text.length)));
+	},
+};
+
+/**
+ * chrono's casual English and en-GB readers with `dateOverTime` first, and `shortYear` and `impliedYear` right before
+ * the filter of impossible dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is.
+ * Clones: chrono's shared instances stay as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
 	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
+	reader.refiners.unshift(dateOverTime);
 	return reader;
 }
 
@@ -235,6 +276,8 @@ function wordBefore(s: string, index: number, word: string): number {
 /** The parse clock, read once per input. */
 interface Clock {
 	env: DateEnv;
+	/** The instant chrono gets: its wall time on the computer's clock is the parse zone's (#88). */
+	ref: Date;
 	today: LocalDate;
 	nowLocal: string;
 	/** 0 = Sunday, chrono's numbering. */
@@ -248,7 +291,7 @@ const optionOf = (clock: Clock): ReaderOption => ({ forwardDate: true, today: cl
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
  * `fixed`: the day to use instead of chrono's, a certain one (a range's end moved past its start).
  */
-function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { date: LocalDate; hourCertain: boolean; outcome: DateOutcome } | null {
+function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { date: LocalDate; dayCertain: boolean; hourCertain: boolean; outcome: DateOutcome } | null {
 	const { env, today, nowLocal, todayWeekday } = clock;
 	const start = r.start;
 	const dayKnown = fixed !== undefined || start.isCertain("day");
@@ -329,7 +372,7 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 			? { status: "applied", date: res.value, warning: res.warning }
 			: { status: "applied", date: res.value };
 	}
-	return { date, hourCertain, outcome };
+	return { date, dayCertain, hourCertain, outcome };
 }
 
 /** A year that was typed, not assumed by chrono or chosen by `impliedYear`. */
@@ -337,6 +380,20 @@ const hasTypedYear = (c: chrono.ParsedComponents): boolean => c.isCertain("year"
 const dayCertainOf = (c: chrono.ParsedComponents): boolean => c.isCertain("day") || c.isCertain("weekday");
 /** A weekday with no day of the month (`Friday`, `next friday`). */
 const weekdayOnly = (c: chrono.ParsedComponents): boolean => c.isCertain("weekday") && !c.isCertain("day");
+
+/**
+ * How a date typed as `text` moves past a start it falls before, as a repeat's end: a bare weekday by weeks (`until
+ * friday`; one with `this`, `next`, `last` … names its week and keeps its reading), a month and day with no typed year
+ * by years (`until Oct 1`); null when it keeps its reading.
+ */
+function rollKindOf(c: chrono.ParsedComponents, text: string): RollKind | null {
+	if (hasTypedYear(c)) return null;
+	if (weekdayOnly(c)) return SHIFT_WORD_RE.test(text) || THIS_WORD_RE.test(text) ? null : "week";
+	return c.isCertain("month") && c.isCertain("day") ? "year" : null;
+}
+
+/** A lead word chrono itself put in a date's text (en-GB: "on 1 Dec", "from 12 Oct"). */
+const OWN_LEAD_RE = /^(?:on|from)\s+/iu;
 
 /** The words chrono's range merge joins two dates with, each a possible split point. */
 const RANGE_JOIN_RE = new RegExp(RANGE_JOIN_PATTERN, "giu");
@@ -352,15 +409,15 @@ interface RangeSplit {
 /**
  * chrono's merged range (`Oct 12 to Dec 1`) as two dates, each read again on its own, so the start keeps its own year
  * (the merge copies the end's onto it). An end with no typed year before the start moves forward as the merge moves it,
- * to the first such date on or after the start: a bare weekday by weeks (one with `this`, `next`, `last` … keeps its
- * reading), a month and day by years. A start that is a choice (`Wednesday` said on a Wednesday) gets an end for each
- * of its alternatives. Null unless both sides name a day and the text splits at a join word into two whole dates; two
- * bare weekdays (`Mon-Fri`: days of the week) only with a start word (`startWord`: `starting`, `beginning`).
+ * to the first such date on or after the start (`rollEnd`: a bare weekday by weeks, a month and day by years). A start
+ * that is a choice (`Wednesday` said on a Wednesday) gets an end for each of its alternatives. Null unless both sides
+ * name a day and the text splits at a join word into two whole dates; two bare weekdays (`Mon-Fri`: days of the week)
+ * only with a start word (`startWord`: `starting`, `beginning`).
  */
-function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: Date, clock: Clock, startWord: boolean): RangeSplit | null {
+function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock, startWord: boolean): RangeSplit | null {
 	if (r.end == null || !dayCertainOf(r.start) || !dayCertainOf(r.end)) return null;
 	const whole = (text: string): chrono.ParsedResult | null => {
-		const found = parser.parse(text, ref, optionOf(clock));
+		const found = parser.parse(text, clock.ref, optionOf(clock));
 		const one = found.length === 1 ? found[0] : undefined;
 		return one !== undefined && one.index === 0 && one.text.trimEnd() === text && one.end == null && dayCertainOf(one.start) ? one : null;
 	};
@@ -377,33 +434,27 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: Date, cl
 		const start = readResult(first, clock);
 		const end = readResult(to, clock);
 		if (start === null || end === null) return null;
-		const typedYear = hasTypedYear(to.start);
-		const byWeek = weekdayOnly(to.start);
-		const keeps = typedYear || (byWeek && (SHIFT_WORD_RE.test(to.text) || THIS_WORD_RE.test(to.text)));
-		// A start with its own year: a month and day end counts from the start, not from today.
-		const fromStart = !keeps && !byWeek && hasTypedYear(first.start);
-		// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
-		const endFrom = (from: LocalDate): DateOutcome | null => {
-			if (keeps) return end.outcome;
-			let moved: LocalDate | null = end.date;
-			// A weekday: the first one on or after the start, in one step.
-			if (byWeek) {
-				if (end.date < from) moved = dateOf(dayNum(end.date) + 7 * Math.ceil((dayNum(from) - dayNum(end.date)) / 7));
-			} else if (fromStart || end.date < from) moved = monthDayOnOrAfter(end.date.slice(5), from);
+			const by = rollKindOf(to.start, to.text);
+			// A start with its own year: a month and day end counts from the start, not from today.
+			const fromStart = by === "year" && hasTypedYear(first.start);
+			// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
+			const endFrom = (from: LocalDate): DateOutcome | null => {
+				if (by === null) return end.outcome;
+				const moved = fromStart ? monthDayOnOrAfter(end.date.slice(5), from) : rollEnd(end.date, from, by);
 				if (moved === null) return null;
 				// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today. An end
 				// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
 				const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
 				if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
 				return outcome.warning === undefined ? { status: "suggestion", date: outcome.date } : { status: "suggestion", date: outcome.date, warning: outcome.warning };
-		};
-		const o = start.outcome;
-		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
-		const ends: DateOutcome[] = [];
-		for (const from of froms) {
-			// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
-			// its reading, as with a start edited by hand (an end before the start is invalid).
-			const e = ends.length === 0 || byWeek || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
+			};
+			const o = start.outcome;
+			const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
+			const ends: DateOutcome[] = [];
+			for (const from of froms) {
+				// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
+				// its reading, as with a start edited by hand (an end before the start is invalid).
+				const e = ends.length === 0 || by === "week" || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
 			if (e === null) return null;
 			ends.push(e);
 		}
@@ -424,7 +475,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
 	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).
 	const ref = zoneNow.setZone("system", { keepLocalTime: true }).toJSDate();
-	const clock: Clock = { env, today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
+	const clock: Clock = { env, ref, today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
@@ -433,35 +484,38 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text)) continue;
 		const read = readResult(r, clock);
 		if (read === null) continue;
-		const { hourCertain, outcome } = read;
+		const { dayCertain, hourCertain, outcome } = read;
 
-		// The span: chrono's text, widened over a directly preceding lead word (LEADS).
+		// The span: chrono's text, widened over a directly preceding lead word (LEADS). A time joins only a date whose hour
+		// is certain; an end must be a date (`until 5pm` is a time read on its own, never an end).
 		let spanStart = r.index;
 		let kind: DateCandidate["kind"] = "scheduled";
 		let repeatOnly = false;
-		const lead = leadBefore(masked, spanStart);
-		if (lead !== null && (lead.kind !== "time" || hourCertain)) {
-			spanStart = lead.start;
-			repeatOnly = lead.repeatOnly;
+		// en-GB reads "on 1 Dec" with its "on": the lead words are looked for before the date itself, and chrono's own word
+		// stays part of the date (the lead found at `r.index` is that word).
+		const own = OWN_LEAD_RE.exec(r.text);
+		const found = leadBefore(masked, r.index + (own === null ? 0 : own[0].length));
+		const lead = found !== null && (found.kind === "time" ? hourCertain : found.kind === "end" ? dayCertain : true) ? found : null;
+		if (lead !== null) {
+			spanStart = Math.min(lead.start, r.index);
+			repeatOnly = lead.repeatOnly && lead.start < r.index;
 			if (lead.kind === "deadline" || lead.kind === "end") kind = lead.kind;
 		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
 			kind = "deadline";
 		}
 		// chrono's text can end in spaces ("April 15, " before "for 3 times"); the span stops at the date.
-			const monthDay = r.start.isCertain("month") && r.start.isCertain("day") && !hasTypedYear(r.start);
-		const candidate: DateCandidate = { kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, monthDay, outcome };
+		const rolls = rollKindOf(r.start, r.text);
+		const candidate: DateCandidate = { kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, rolls, outcome };
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start
 		// and end; the parser decides by where the repeat is.
-		const from = lead === null ? wordBefore(masked, r.index, "from") : -1;
-		const led = lead?.kind === "schedule" || from !== -1;
-		const split = env.repeatRange === true && (lead === null || lead.kind === "schedule") ? splitRange(r, parser, ref, clock, lead !== null) : null;
+		const split = env.repeatRange === true && (lead === null || lead.kind === "schedule") ? splitRange(r, parser, clock, lead !== null && PAIRS_WEEKDAYS.has(lead.words)) : null;
 		if (split !== null) {
 			candidate.range = {
-				led,
-				start: { kind: "scheduled", span: { start: from !== -1 ? from : spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, monthDay, outcome: split.start.outcome },
-					// The end already moved past the start.
-				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, monthDay: false, outcome: split.end.outcome },
+				led: lead !== null,
+				start: { kind: "scheduled", span: { start: spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, rolls, outcome: split.start.outcome },
+				// The end already moved past the start.
+				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, rolls: null, outcome: split.end.outcome },
 				...(split.endByChoice !== undefined ? { endByChoice: split.endByChoice } : {}),
 			};
 		}

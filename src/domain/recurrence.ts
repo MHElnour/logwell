@@ -210,7 +210,12 @@ function plusInterval(base: number, r: RepeatRule, times = 1): number {
  * a month is Feb 28. `n` may be 0 or negative.
  */
 export function periodsAfter(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
-	return dateOf(plusInterval(dayNum(date), { freq, interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null }, n));
+	return dateOf(plusInterval(dayNum(date), plainRule(freq), n));
+}
+
+/** The rule "every N <freq>" with no weekdays, day of the month, time or zone: the one literal of a plain rule. */
+export function plainRule(freq: RepeatFreq, interval = 1): RepeatRule {
+	return { freq, interval, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
 }
 
 /** What after completion counts from: the day of the most recently resolved record, and the taken dates. */

@@ -24,7 +24,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#52) `tag:` in a task block takes several tags separated by commas; a task with any of them shows.
 - (#52) A task block has a new `scheduled:` filter for a task's planned date (a repeating task's current one), with the values `today`, `overdue`, `this week` and `next 7 days`.
 - (#12) Added a yearly repeat: pick **Yearly** in the repeat picker. Once this version opens a database, older Logwell versions open it read-only, so update every device.
-- (#12) Quick Add reads more repeats: `every mon wed fri`, `daily`, `mondays`, `every year`, `every 15th`, `every morning`, and an end with `until Dec 1`, `for 5 times` or `for 2 weeks`, and a start and end with `starting Oct 12 to Dec 1`. A repeat it cannot do yet shows a notice instead of a wrong date.
+- (#12) Quick Add reads more repeats: `every mon wed fri`, `every mon-fri`, `daily`, `mondays`, `weekly on mon, fri`, `quarterly`, `every year`, `every year on May 5`, `every 15th`, `the 15th of each month`, `last day of the month`, `every morning`, a time with `at` after any of them, a start with `starting`, `from` or `on`, and an end with `until Dec 1`, `for 5 times` or `for 2 weeks`, or a start and end with `starting Oct 12 to Dec 1`. The full list is in the Repeating tasks page. A repeat it cannot do yet, such as `every 3 hours` or `every monday at 9 and friday at 5`, shows a notice instead of a wrong date.
 - (#8) Edit a tag from its menu: rename it, move it under another tag or to the top, and change its color in one step with Undo. Renaming a parent renames its child tags' paths, and tasks in the Trash keep the tag. Undo of a new or renamed tag is refused once a synced task uses it, so no task is left with a tag that no longer exists.
 
 ## Changed
@@ -34,6 +34,11 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#11) Tags now show just their own name, like `@calls`, wherever they appear outside the sidebar tree. Two older tags that share a name still show their full paths, and the message for a name that is already used no longer names a parent.
 
 - (#9) A parent tag is now a tag of its own: creating `@home/calls` also creates `home`, and every tag in the sidebar has a color and the full menu. Adding a task from a parent's view gives it that tag. Deleting a parent moves its child tags to the top level (`home/calls` becomes `calls`) on every task, including tasks in the Trash, in one step with Undo.
+
+- (#12) A weekly repeat on picked weekdays now starts on the first of those weekdays on or after the task's date, in Quick Add, the repeat picker and the details pane alike, so "every 2 weeks on Monday" made on a Wednesday first falls on the coming Monday.
+- (#12) A repeat can end after at most 999 times, in Quick Add and the picker.
+- (#12) Duplicating a repeating task keeps its end, unless that end would come before the copy's first date: then the copy never ends.
+- (#12) In Quick Add, `until` before a date is a deadline when the task does not repeat (`Pay rent until Oct 20`); with a repeat it is the repeat's end. A lone comma left where a recognized phrase was removed no longer stays in the title (`Read every day, 20 pages` is "Read 20 pages").
 
 - (#52) In a task block, `due:` now matches only a task's deadline. Use the new `scheduled:` filter, with the same values, for a task's planned date (a repeating task's current one). A block that used `due:` for planned dates needs `scheduled:` instead.
 

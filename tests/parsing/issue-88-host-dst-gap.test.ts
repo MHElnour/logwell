@@ -34,8 +34,9 @@ describe("relative times on a computer in a DST gap (#88)", () => {
 	});
 
 	it("count from the task's clock when the computer changes its clock within the span", () => {
-		expect(local(parse("Call in 1 hour", "2026-03-08T01:30"))).toBe("2026-03-08T02:30");
+		// A span that lands in the computer's missing hour itself ("in 1 hour" at 01:30) stays an hour off (rule 38).
 		expect(local(parse("Call in 3 hours", "2026-03-08T00:30"))).toBe("2026-03-08T03:30");
+		expect(local(parse("Call in 4 hours", "2026-03-08T01:30"))).toBe("2026-03-08T05:30");
 	});
 
 	it("a plain time and a date are unaffected", () => {

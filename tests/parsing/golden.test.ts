@@ -308,7 +308,7 @@ const CASES: Golden[] = [
 	{ in: "Gym every month on the 32nd", title: "Gym every month on the 32nd", chips: [`unsupported|recurrence|every month on the 32nd|n=${REC}`] },
 	{ in: "Gym every month on the 0th", title: "Gym every month on the 0th", chips: [`unsupported|recurrence|every month on the 0th|n=${REC}`] },
 	// "on 5pm" is a time, not a day of the month: the repeat stops at "month"
-	{ in: "Gym every month on 5pm", title: "Gym on", s: "2026-10-01T17:00", rec: "monthly", chips: ["applied|recurrence|every month|r=monthly", "applied|scheduled|5pm"] },
+	{ in: "Gym every month on 5pm", title: "Gym", s: "2026-10-01T17:00", rec: "monthly", chips: ["applied|recurrence|every month|r=monthly", "applied|scheduled|on 5pm"] },
 	{ in: "Gym every 3 months on the 5th", title: "Gym", rec: "monthly/3:d5", chips: ["applied|recurrence|every 3 months on the 5th|r=monthly/3:d5"] },
 	{ in: "Gym every other month on day 20", title: "Gym", rec: "monthly/2:d20", chips: ["applied|recurrence|every other month on day 20|r=monthly/2:d20"] },
 	{ in: "Gym every last friday", title: "Gym", rec: "monthly:FR#-1", chips: ["applied|recurrence|every last friday|r=monthly:FR#-1"] },
@@ -349,7 +349,8 @@ const CASES: Golden[] = [
 	{ in: "Gym every monday for 30m", title: "Gym", dur: 30, rec: "weekly:MO", chips: ["applied|recurrence|every monday|r=weekly:MO", "applied|duration|for 30m"] },
 	{ in: "Pay rent every month on the 1st !1 #Study", title: "Pay rent", pri: 1, cat: CAT.study, rec: "monthly:d1", chips: ["applied|recurrence|every month on the 1st|r=monthly:d1", "applied|priority|!1", "applied|category|#Study"] },
 	{ in: "Gym every monday friday", title: "Gym", rec: "weekly:MO,FR", chips: ["applied|recurrence|every monday friday|r=weekly:MO,FR"] },
-	{ in: "Gym every day every week", title: "Gym every day", rec: "weekly", chips: [`superseded|recurrence|every day|r=daily|n=${SUP}`, "applied|recurrence|every week|r=weekly"] },
+	// Two typed repeats are several patterns: not supported (Repeating tasks rule 19).
+	{ in: "Gym every day every week", title: "Gym every day every week", chips: [`unsupported|recurrence|every day|n=${REC}`, `unsupported|recurrence|every week|n=${REC}`] },
 	{ in: "Everyone tomorrow", title: "Everyone", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
 	{ in: "Every", title: "Every" },
 	{ in: "Gym every friday", z: "tokyo", title: "Gym", rec: "weekly:FR", chips: ["applied|recurrence|every friday|r=weekly:FR"] },
@@ -453,7 +454,8 @@ const CASES: Golden[] = [
 	{ in: "🎉 party tomorrow 🎉", title: "🎉 party 🎉", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
 	{ in: "  Buy   milk   tomorrow  ", title: "Buy milk", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
 	{ in: "Buy\tmilk\ntomorrow", title: "Buy milk", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
-	{ in: "Buy milk, tomorrow", title: "Buy milk,", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
+	// A lone comma next to a removed span goes with it (Repeating tasks rule 19).
+	{ in: "Buy milk, tomorrow", title: "Buy milk", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
 	{ in: "tomorrow #Study", title: "tomorrow #Study", fb: true, s: "2026-10-02", cat: CAT.study, chips: ["applied|scheduled|tomorrow", "applied|category|#Study"] },
 	{ in: "#Study @learning [[Big]] tomorrow at 7pm for 45m", title: "#Study @learning [[Big]] tomorrow at 7pm for 45m", fb: true, s: "2026-10-02T19:00", dur: 45, cat: CAT.study, tags: ["learning"], note: "Notes/Big note.md", chips: ["applied|category|#Study", "applied|tag|@learning", "applied|note|[[Big]]", "applied|scheduled|tomorrow at 7pm", "applied|duration|for 45m"] },
 	// --- priority: !1 !2 !3 !high !medium !low ---

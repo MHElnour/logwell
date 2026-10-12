@@ -36,14 +36,14 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date. The **Date order** setting decides what `10/5` means. |
 | A date and time | `at 7pm`, `19:00`, `at noon`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. |
 | | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
-| A deadline | `by friday`, `by Oct 9`, `by 5pm` | `by` right before a date makes it a deadline. |
+| A deadline | `by friday`, `by Oct 9`, `by 5pm`, `until tomorrow` | `by` right before a date makes it a deadline, as does `until` before a date when the task does not repeat (`Wait until tomorrow`). |
 | A planned duration | `for 45m`, `for 1h30m`, `for 90 min`, `for 1.5 hours`, `for half an hour` | From 1 minute to 24 hours. A longer value shows an error chip. |
 | A list | `#Home`, `#Work` | The exact name wins. Otherwise capitals, spaces, `-` and `_` do not matter. If that finds several lists, the name counts as unknown. |
 | A tag | `@errands`, `@home/garden` | Type a tag by its own name, like `@garden` for `home/garden`, or by its full path. A new tag is created when you add the task. A path whose name another tag already uses, like `@work/garden`, stays in the title. |
 | A linked note | `[[Budget]]`, `[[Home/Budget]]`, `[[Budget\|alias]]` | Matches the note by path, then by name. |
 | A priority | `!1` or `!high`, `!2` or `!medium`, `!3` or `!low` | It must be a separate word: `Wow!` and `!4` stay text. |
 
-You can also type a repeat and its end, such as `Pay rent every month on the 1st`, `Stretch daily` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for the forms you can type.
+You can also type a repeat, its time, its first date and its end, such as `Pay rent every month on the 1st`, `Stretch daily at 7am` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for every phrase you can type.
 
 ## Fix an unknown list or note
 
