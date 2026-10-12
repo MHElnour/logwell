@@ -12,6 +12,7 @@ import { QuickAddEditor } from "./quickadd/QuickAddEditor";
 import { RepeatField } from "./RepeatPicker";
 import { useQuickAdd } from "./quickadd/useQuickAdd";
 import { TagInput } from "./TagInput";
+import { useUniqueId } from "./hooks";
 
 // Quick Add: one input that is parsed on every keystroke, chips
 // for what was recognized, and the manual fields below. Enter saves;
@@ -66,6 +67,9 @@ export function QuickAddForm(props: {
 	const dates = model.dateInputs();
 	const categories = app.categories.list();
 	const notePath = model.notePathValue();
+	// Time needs a date first: the field says so instead of only greying out.
+	const timeHintId = useUniqueId("cp-time-hint");
+	const needsDate = dates.date === "";
 
 	const onKeyDown = (e: TargetedKeyboardEvent<HTMLFormElement>) => {
 		if (e.key === "Enter" && !e.isComposing && !e.defaultPrevented) {
@@ -104,11 +108,21 @@ export function QuickAddForm(props: {
 					<input type="date" value={dates.date} onInput={(e) => model.setDate(e.currentTarget.value)} />
 				</label>
 				<label class="cp-field">
-					<span>Time</span>
+					<span>
+						Time
+						{needsDate && (
+							<span id={timeHintId} class="cp-field-hint">
+								{" "}
+								(needs a date)
+							</span>
+						)}
+					</span>
 					<input
 						type="time"
 						value={dates.time}
-						disabled={dates.date === ""}
+						disabled={needsDate}
+						title={needsDate ? "Pick a date first" : undefined}
+						aria-describedby={needsDate ? timeHintId : undefined}
 						onInput={(e) => model.setTime(e.currentTarget.value)}
 					/>
 				</label>
@@ -155,7 +169,7 @@ export function QuickAddForm(props: {
 						))}
 					</select>
 				</label>
-				<div class="cp-field cp-flags">
+				<div class="cp-field cp-flags cp-field-row">
 					<label>
 						<input
 							type="checkbox"
@@ -173,36 +187,38 @@ export function QuickAddForm(props: {
 						Important
 					</label>
 				</div>
-			</div>
-			<TagInput
-				app={app}
-				value={model.tagKeysValue()}
-				onChange={(keys) => model.setTags(keys)}
-				onError={props.onError}
-				normalize={normalizeTagKey}
-			/>
-			<div class="cp-quick-add-note">
-				{notePath === null ? (
-					<button
-						type="button"
-						onClick={() => {
-							void props.pickNote().then((p) => p !== null && model.setNote(p));
-						}}
-					>
-						Link existing note
-					</button>
-				) : (
-					<span class="cp-chip">
-						{notePath}
-						{model.manual.has("note") ? (
-							<button type="button" class="cp-chip-remove" aria-label="Remove note link" onClick={() => model.setNote(null)}>
-								×
-							</button>
-						) : (
-							<span class="cp-hint"> (from the text)</span>
-						)}
-					</span>
-				)}
+				<div class="cp-field-row">
+					<TagInput
+						app={app}
+						value={model.tagKeysValue()}
+						onChange={(keys) => model.setTags(keys)}
+						onError={props.onError}
+						normalize={normalizeTagKey}
+					/>
+				</div>
+				<div class="cp-quick-add-note cp-field-row">
+					{notePath === null ? (
+						<button
+							type="button"
+							onClick={() => {
+								void props.pickNote().then((p) => p !== null && model.setNote(p));
+							}}
+						>
+							Link existing note
+						</button>
+					) : (
+						<span class="cp-chip">
+							{notePath}
+							{model.manual.has("note") ? (
+								<button type="button" class="cp-chip-remove" aria-label="Remove note link" onClick={() => model.setNote(null)}>
+									×
+								</button>
+							) : (
+								<span class="cp-hint"> (from the text)</span>
+							)}
+						</span>
+					)}
+				</div>
 			</div>
 			</details>
 			<div class="cp-quick-add-footer">

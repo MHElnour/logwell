@@ -215,13 +215,16 @@ export class QuickAddModel {
 		else this.vals.notePath = null;
 	}
 
-	/** A choice from the suggester: a bound category, tag or note. The suggester dispatches `input` first. */
-	bind(d: SpanDecision): void {
+	/**
+	 * A choice from the suggester: a bound category, tag or note. The suggester dispatches `input` first.
+	 * `win` is the input's window, so the timer runs in a pop-out window too.
+	 */
+	bind(d: SpanDecision, win: Pick<Window, "setTimeout"> = window): void {
 		this.decide(d);
 		if (d.kind === "category") this.clearManual("category");
 		else if (d.kind === "note") this.clearManual("note");
 		this.justBound = true;
-		window.setTimeout(() => {
+		win.setTimeout(() => {
 			this.justBound = false;
 		}, 0);
 		this.update();

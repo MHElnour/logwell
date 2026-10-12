@@ -62,7 +62,7 @@ The add bar has two buttons.
 
 Picked values show as pills next to the chips, with × to remove them. A value set by hand wins: typed text for it shows as a suggestion such as "Replace date?".
 
-In the Quick add task window, **All fields** shows plain fields for **Date**, **Time**, **Deadline**, **Repeat**, **Duration (min)**, **List**, **Urgent** and **Important**, plus tags and **Link existing note**.
+In the Quick add task window, **All fields** shows plain fields for **Date**, **Time**, **Deadline**, **Repeat**, **Duration (min)**, **List**, **Urgent** and **Important**, plus tags and **Link existing note**. **Time** needs a date first.
 
 A repeating task has no deadline. If you add both, the task is saved without the deadline and a notice says so.
 

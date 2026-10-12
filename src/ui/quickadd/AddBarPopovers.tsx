@@ -24,13 +24,14 @@ import { monthTitle } from "../calendar/format";
 import { quadrantWords } from "../matrix/quadrants";
 import { pad2, weekdayInitials } from "../format";
 import { focusables, popoverKeyDown } from "../popoverKeys";
-import { applyPopoverFit } from "./popoverFit";
+import { applyPopoverFit, attachPopover } from "./popoverFit";
 import { QaIcon, type SetIcon } from "./QaIcon";
 import type { QuickAddModel } from "./QuickAddModel";
 
 // The add bar's two popovers: the date popover and the more menu.
-// They render inside the plugin container (never on the body) and apply values through the
-// QuickAddModel's manual-field API, so the rules for typed and manual values apply unchanged.
+// They render inside the plugin container (never on the body; popoverFit.ts lifts them into the
+// top layer without moving them) and apply values through the QuickAddModel's manual-field API,
+// so the rules for typed and manual values apply unchanged.
 //
 // Keys: Escape closes only the popover (and stops there, so neither the form, the view nor the
 // modal also acts); Enter inside the popover activates the focused control and never saves;
@@ -42,22 +43,21 @@ interface PopoverProps {
 }
 
 /**
- * Fits the popover to the space it has (see popoverFit.ts). It runs after every render, because
- * a tab or an edit row changes the height, and again when the window is resized. It only
- * touches the element's style, so it cannot cause another render.
+ * Attaches the popover to its add bar while it is open (top layer, resize and scroll; see
+ * popoverFit.ts) and fits it to the space it has after every render, because a tab or an edit row
+ * changes the height. Fitting only touches the element's style, so it cannot cause another render.
+ * A scroll that takes the bar out of the window closes the popover.
  */
-function usePopoverFit(ref: { current: HTMLElement | null }): void {
+function usePopoverFit(ref: { current: HTMLElement | null }, model: QuickAddModel): void {
+	// Declared first: on open the popover must be in the top layer before it is measured.
+	useLayoutEffect(() => {
+		const el = ref.current;
+		if (el === null) return;
+		return attachPopover(el, () => model.closePopover(false));
+	}, []);
 	useLayoutEffect(() => {
 		if (ref.current !== null) applyPopoverFit(ref.current);
 	});
-	useEffect(() => {
-		const el = ref.current;
-		const view = el?.ownerDocument.defaultView;
-		if (el === null || !view) return;
-		const onResize = () => applyPopoverFit(el);
-		view.addEventListener("resize", onResize);
-		return () => view.removeEventListener("resize", onResize);
-	}, []);
 }
 
 function Row(props: {
@@ -152,7 +152,8 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 	const doneEditing = (row: "time" | "deadline" | "repeat") => {
 		setEditing(null);
 		// The field unmounts; put focus back on its row so keyboard users keep their place.
-		window.setTimeout(() => rootRef.current?.querySelector<HTMLElement>(`.cp-pop-row[data-row="${row}"]`)?.focus(), 0);
+		const root = rootRef.current;
+		root?.ownerDocument.defaultView?.setTimeout(() => root.querySelector<HTMLElement>(`.cp-pop-row[data-row="${row}"]`)?.focus(), 0);
 	};
 	// True when the next render should put focus on the roving day (on open and after arrow keys).
 	const moveFocus = useRef(true);
@@ -163,7 +164,7 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 		rootRef.current?.querySelector<HTMLElement>(`.cp-cal-day[data-date="${focusDateRef.current}"]`)?.focus();
 	});
 
-	usePopoverFit(rootRef);
+	usePopoverFit(rootRef, model);
 	const close = (refocus: boolean) => model.closePopover(refocus);
 	const show = (date: LocalDate, focus: boolean) => {
 		moveFocus.current = focus;
@@ -447,7 +448,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 	const tagKeys = model.tagKeysValue();
 	const notePath = model.notePathValue();
 	const close = (refocus: boolean) => model.closePopover(refocus);
-	usePopoverFit(rootRef);
+	usePopoverFit(rootRef, model);
 
 	// Focus goes to the current priority flag when the menu opens, and to the first control of a submenu.
 	useEffect(() => {

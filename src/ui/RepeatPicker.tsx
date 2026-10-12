@@ -162,7 +162,7 @@ export function RepeatCustom(props: PickerEnv & { value: RepeatChoice | null; on
 		const next = MONTH_KINDS[(at + step + MONTH_KINDS.length) % MONTH_KINDS.length]!;
 		set({ monthKind: next });
 		// Focus follows the selection once the radios have re-rendered.
-		window.setTimeout(() => rootRef.current?.querySelector<HTMLElement>(`input[data-kind="${next}"]`)?.focus(), 0);
+		target.ownerDocument.defaultView?.setTimeout(() => rootRef.current?.querySelector<HTMLElement>(`input[data-kind="${next}"]`)?.focus(), 0);
 	};
 
 	return (

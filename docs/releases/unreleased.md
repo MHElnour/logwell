@@ -38,4 +38,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#85) Quick Add's date and ⋯ popovers are no longer cut off by the Quick Add window or a short view, and the All fields form lines up: consistent spacing and field styles, and Time says it needs a date.
+
 ## Security
