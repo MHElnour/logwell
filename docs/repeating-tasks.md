@@ -29,13 +29,13 @@ Quick Add reads a fixed set of phrases. A phrase from the tables below becomes t
 | `every 2 weeks`, `every other week`, `fortnightly` | Every 2 weeks |
 | `every monday`, `every mon`, `mondays` | Weekly on Monday |
 | `every other monday` | Every 2 weeks on Monday |
-| `every mon, wed, fri`, `every mon wed fri`, `every mon and fri`, `every mon & fri`, `weekly on mon, fri`, `every week on mon, fri` | Weekly on those days (`sat` and `sun` joined by plain spaces count only when no title words follow) |
+| `every mon, wed, fri`, `every mon wed fri`, `every mon and fri`, `every mon & fri`, `weekly on mon, fri`, `weekly mon, fri`, `every week on mon, fri` | Weekly on those days (`sat` and `sun` joined by plain spaces count only when no title words follow) |
 | `every mon-fri`, `every monday to friday`, `every tue-thu`, `every week on mon-fri`, `weekly mon-fri`, `weekly on mon-fri` | Weekly on every day from the first to the last, round the week: `every fri-mon` is Friday, Saturday, Sunday and Monday |
-| `every 2 weeks on mon, fri`, `every other week on tue` | Every 2 weeks on those days |
+| `every 2 weeks on mon, fri`, `every 2 weeks tuesday`, `every other week on tue` | Every 2 weeks on those days |
 | `every month`, `monthly` | Monthly, on the day of the first date |
 | `every 3 months`, `every other month` | Every 3 months, every second month |
 | `quarterly`, `every quarter` | Every 3 months |
-| `every 15th`, `every month on the 15th`, `monthly on the 15th`, `on the 15th of every month`, `the 15th of each month` | Monthly on the 15th |
+| `every 15th`, `every month on the 15th`, `every month on 15`, `monthly on the 15th`, `monthly on day 15`, `on the 15th of every month`, `the 15th of each month` | Monthly on the 15th |
 | `every last day of the month`, `monthly on the last day`, `last day of the month`, `last day of every month` | Monthly on the last day |
 | `every first friday`, `every second friday`, `every third friday`, `every fourth friday`, `every last friday`, `every 1st friday`, `every 2nd friday of the month`, `last friday of the month` | Monthly on that weekday |
 | `every year`, `yearly`, `annually` | Yearly, on the month and day of the first date |
@@ -44,13 +44,13 @@ Quick Add reads a fixed set of phrases. A phrase from the tables below becomes t
 
 A number is written in digits, from 1 to 999: `every 0 days` and `every 1000 days` are refused, and `every two weeks` is not read. A single word such as `daily`, `weekly`, `monthly`, `yearly`, `quarterly`, `weekdays` or `mondays` repeats only when its phrase ends the text: the word alone, or followed only by its `on …`, a time, a start or an end (`Pay rent monthly on the 1st`, `Bday yearly on May 5`). So `Stretch daily` repeats, but `Daily standup` keeps its title.
 
-Add a time with `at` right after the repeat, such as `every monday at 9am` or `daily at 7:30pm`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00; the repeat applies once you choose.
+Add a time with `at` right after the repeat, such as `every monday at 9am` or `daily at 7:30pm`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00; the repeat applies once you choose, and the task is not saved before: Enter opens the choice, and choosing saves.
 
 Set the first and last date in the same line, after the repeat and its time, in any order:
 
 | You type | It does |
 | --- | --- |
-| `starting Oct 12`, `from Oct 12`, `beginning Oct 12`, `on Oct 15` (not after a weekly form, where `on` names the days) | Starts on that date |
+| `starting Oct 12`, `from Oct 12`, `beginning Oct 12`, `on Oct 15` (not after a weekly form, where `on` names the days: `every week on Oct 12` only offers the date with "Use as date?"; write `every week starting Oct 12`) | Starts on that date |
 | `every day Oct 12`, `every day, Oct 12`, `every month Oct 15` | Starts on that date: a date right after the repeat, or after a comma, is read on its own |
 | `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ending on Dec 1`, `ends on Dec 1` | Ends on that date, the last occurrence included |
 | `for 5 times` | Ends after 5 times |
@@ -58,7 +58,7 @@ Set the first and last date in the same line, after the repeat and its time, in 
 | `from Oct 12 until Dec 1`, `from Oct 12 to Dec 1`, `starting Oct 12 to Dec 1`, `starting Oct 12 ending Dec 1`, `Oct 12 to Dec 1` right after the repeat | Starts on Oct 12 and ends on Dec 1 |
 | `starting Monday until Friday`, `beginning Monday to Friday` | Starts on the coming Monday and ends on the Friday after it |
 
-An end must be a date: `until 5pm` is a time, read on its own. An end with no year that comes before the start is the next one, so `starting Dec 20 until Jan 5` ends in January; an end more than a year past the start is offered with "Use as end date?". An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. `for …` ends a repeat only after it: `Plan meals for 7 days every sunday` keeps "for 7 days" in the title. Two bare weekdays such as `Mon-Fri` or `from Monday to Friday` after a complete repeat, as in `every day Mon-Fri`, are neither a start and an end nor the repeat's days: they stay one "Use as date?" suggestion. Write `starting Monday until Friday` for a start and an end, or `every mon-fri` for those weekdays.
+A start or an end counts only after the repeat: in `Wait until Friday then call the bank every monday`, `until Friday` is read as it would be without a repeat. An end must be a date: after a repeat, `until 5pm` is only offered with "Use as date?". An end with no year that comes before the start is the next one, so `starting Dec 20 until Jan 5` ends in January; an end more than a year past the start is offered with "Use as end date?". An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. `for …` ends a repeat only after it: `Plan meals for 7 days every sunday` keeps "for 7 days" in the title. Two bare weekdays such as `Mon-Fri` or `from Monday to Friday` after a complete repeat, as in `every day Mon-Fri`, are neither a start and an end nor the repeat's days: they stay one "Use as date?" suggestion. Write `starting Monday until Friday` for a start and an end, or `every mon-fri` for those weekdays.
 
 Not supported yet. These show "Recurrence not supported yet" and set nothing:
 
@@ -68,8 +68,9 @@ Not supported yet. These show "Recurrence not supported yet" and set nothing:
 - Several days of the month: `every month on the 1st and 15th`.
 - A fifth weekday: `every 5th friday`, `every fifth friday`.
 - A repeat with two first dates: `every year on May 5 from Oct 12`.
+- A start or an end after a repeat Quick Add cannot make: in `every 8 hours starting tomorrow`, `starting tomorrow` sets nothing either.
 
-These stay plain title text: `3 times a day`, `twice a week`, `biweekly`, `bimonthly`, `each monday`, `each day`, and a day part after a weekday (`every sunday evening` repeats on Sunday; "evening" stays text). `every monday 9am` repeats on Monday and reads `9am` as a time on its own. Counting from completion is set in the picker.
+These stay plain title text: `3 times a day`, `twice a week`, `biweekly`, `bimonthly`, `each monday`, `each day`, `the 1st of the month` without `each` or `every` (write `the 1st of each month`), and a day part after a weekday (`every sunday evening` repeats on Sunday; "evening" stays text). `every monday 9am` repeats on Monday and reads `9am` as a time on its own. Counting from completion is set in the picker.
 
 A value you pick by hand wins: the typed one is offered as a "Replace …?" chip. Without a repeat, `until Dec 1` is a deadline, a range such as `Oct 12 to Dec 1` is one suggested date, and `ending`, `starting`, `till`, `beginning` and `from` stay part of the title. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement. The title keeps everything that was not read, with no stray comma: `Read every day, 20 pages` becomes "Read 20 pages".
 

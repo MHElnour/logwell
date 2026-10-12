@@ -23,7 +23,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - Press × on a chip to keep its words in the title as plain text.
 - When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value".
 - Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
-- Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week.
+- Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.
 
@@ -33,7 +33,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | --- | --- | --- |
 | A date | `today`, `tomorrow`, `in 3 days`, `next week`, `this weekend`, `the day after tomorrow` | `next week` is seven days from today. |
 | | `friday`, `next fri`, `this monday`, `on friday` | A weekday means its next date. |
-| | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date. The **Date order** setting decides what `10/5` means. |
+| | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date: today's date is today, and `Feb 29` is the next leap day. A two-digit number after a comma is not a year: `Party May 5, 20 guests` is May 5 with "20 guests" in the title. The **Date order** setting decides what `10/5` means; with Day/month order, `from 12 Oct` is a date. `a day` and `a week` alone, as in `3 times a day`, are not dates. |
 | A date and time | `at 7pm`, `19:00`, `at noon`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. |
 | | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
 | A deadline | `by friday`, `by Oct 9`, `by 5pm`, `until tomorrow` | `by` right before a date makes it a deadline, as does `until` before a date when the task does not repeat (`Wait until tomorrow`). |

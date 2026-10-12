@@ -39,6 +39,11 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#12) A repeat can end after at most 999 times, in Quick Add and the picker.
 - (#12) Duplicating a repeating task keeps its end, unless that end would come before the copy's first date: then the copy never ends.
 - (#12) In Quick Add, `until` before a date is a deadline when the task does not repeat (`Pay rent until Oct 20`); with a repeat it is the repeat's end. A lone comma left where a recognized phrase was removed no longer stays in the title (`Read every day, 20 pages` is "Read 20 pages").
+- (#12) In Quick Add, a repeat with a bare hour, such as `every day at 7`, now waits for you to choose 07:00 or 19:00 before the task is saved: Enter opens the choice. Start and end words count only after a repeat Quick Add can make, and `until 5pm` after a repeat is offered as a date instead of being applied.
+- (#12) In Quick Add, `a day` or `a week` alone, as in `3 times a day`, is no longer read as a date.
+- (#12) In Quick Add, a two-digit number after a comma is no longer read as a year: `Party May 5, 20 guests` is May 5 with "20 guests" in the title.
+- (#12) In Quick Add with the Day/month date order, `from 12 Oct` is now the date 12 October, not a time.
+- (#12) In Quick Add, a date typed without a year that this year does not have, such as `Feb 29`, now means the next year that has it.
 
 - (#52) In a task block, `due:` now matches only a task's deadline. Use the new `scheduled:` filter, with the same values, for a task's planned date (a repeating task's current one). A block that used `due:` for planned dates needs `scheduled:` instead.
 
