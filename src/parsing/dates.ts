@@ -278,6 +278,9 @@ interface Clock {
 	env: DateEnv;
 	/** The instant chrono gets: its wall time on the computer's clock is the parse zone's (#88). */
 	ref: Date;
+	/** The wall times of `ref` on the computer's clock and of the reference time in the parse zone, as UTC, for spans. */
+	refWall: DateTime;
+	zoneNowWall: DateTime;
 	today: LocalDate;
 	nowLocal: string;
 	/** 0 = Sunday, chrono's numbering. */
@@ -286,6 +289,17 @@ interface Clock {
 
 /** What every parse call hands the reader: a forward reading, and today for `impliedYear`. */
 const optionOf = (clock: Clock): ReaderOption => ({ forwardDate: true, today: clock.today });
+
+/** chrono's own tag on a result it counted from the reference instant with a time ("in 1 hour", "30 minutes ago"). */
+const RELATIVE_TIME_TAG = "result/relativeDateAndTime";
+
+/** A wall time as UTC, so spans between wall times are plain arithmetic and no zone moves a reading. */
+const wallOf = (dt: DateTime): DateTime => DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute);
+
+/** The date, hour and minute of chrono's components, as a wall time (`wallOf`). Invalid for an impossible date. */
+function componentsIn(c: chrono.ParsedComponents, zone: "utc"): DateTime {
+	return DateTime.fromObject({ year: c.get("year") ?? 0, month: c.get("month") ?? 0, day: c.get("day") ?? 0, hour: c.get("hour") ?? 0, minute: c.get("minute") ?? 0 }, { zone });
+}
 
 /**
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
@@ -297,14 +311,18 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 	const dayKnown = fixed !== undefined || start.isCertain("day");
 	const dayCertain = dayKnown || start.isCertain("weekday");
 	const hourCertain = start.isCertain("hour");
-	const base = DateTime.fromObject(
-		{ year: start.get("year") ?? 0, month: start.get("month") ?? 0, day: start.get("day") ?? 0 },
-		{ zone: env.zone },
-	);
-	let date = fixed ?? (base.isValid ? isoDate(base) : null);
+	// The wall time chrono read, as UTC: its fields are the date, hour and minute, whatever the zone.
+	let wall = componentsIn(start, "utc");
+	if (hourCertain && fixed === undefined && start.tags().has(RELATIVE_TIME_TAG)) {
+		// "in 1 hour": chrono counted it on the computer's wall clock from `clock.ref`, whose wall time there stands for the
+		// task's clock. When the computer has no such wall time (a DST gap), the clock it counted from is an hour on, so
+		// the reading is too: the wall-clock span it counted is taken from the task's own clock instead (#88).
+		wall = clock.zoneNowWall.plus(wall.toMillis() - clock.refWall.toMillis());
+	}
+	let date = fixed ?? (wall.isValid ? isoDate(wall) : null);
 	if (date === null) return null;
-	const hour = start.get("hour") ?? 0;
-	const minute = start.get("minute") ?? 0;
+	const hour = wall.isValid ? wall.hour : 0;
+	const minute = wall.isValid ? wall.minute : 0;
 	const weekday = start.get("weekday");
 
 	// chrono's forwardDate puts "last friday" in the future; take the most recent past one.
@@ -475,7 +493,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
 	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).
 	const ref = zoneNow.setZone("system", { keepLocalTime: true }).toJSDate();
-	const clock: Clock = { env, ref, today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
+	const clock: Clock = { env, ref, refWall: wallOf(DateTime.fromJSDate(ref)), zoneNowWall: wallOf(zoneNow), today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
