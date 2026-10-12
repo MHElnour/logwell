@@ -55,7 +55,6 @@ describe("sync after a tag rename", () => {
 		const names = tagNamesOf(s.h.app.store.state.tags);
 		expect(names.owner("calls")).toBe("home/calls");
 		expect(isSyncedTag(names, "home/calls")).toBe(true);
-		expect(s.sync.unsyncedTagKeys(s.task("Ring mum").id)).toEqual([]);
 		const r = await s.sync.sync();
 		expect(r.ok).toBe(true);
 		expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["calls"]);
@@ -79,15 +78,15 @@ describe("sync after a tag rename", () => {
 			tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
 		});
 		await s.h.app.tasks.create({ title: "Ring mum", categoryId: listId, tagKeys: ["home/calls"] });
-		const { task: office } = await s.h.app.tasks.create({ title: "Ring the office", categoryId: listId, tagKeys: ["work/calls"] });
+		await s.h.app.tasks.create({ title: "Ring the office", categoryId: listId, tagKeys: ["work/calls"] });
 		await s.sync.sync();
-		expect(s.sync.unsyncedTagKeys(office.id)).toEqual(["work/calls"]);
+		expect(isSyncedTag(tagNamesOf(s.h.app.store.state.tags), "work/calls")).toBe(false);
 		expect(s.tt.get(s.ttIdOf("Ring the office"))?.tags ?? []).toEqual([]);
 		s.tick();
 
 		await s.h.app.tags.edit("home/calls", { name: "Phone", parentKey: "home", color: null });
 		expect(tagNamesOf(s.h.app.store.state.tags).owner("calls")).toBe("work/calls");
-		expect(s.sync.unsyncedTagKeys(office.id)).toEqual([]);
+		expect(isSyncedTag(tagNamesOf(s.h.app.store.state.tags), "work/calls")).toBe(true);
 		await s.sync.sync();
 		expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["phone"]);
 		expect(s.tt.get(s.ttIdOf("Ring the office"))?.tags).toEqual(["calls"]);
