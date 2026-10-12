@@ -110,25 +110,13 @@ const rollover: chrono.Refiner = {
 	},
 };
 
-/** chrono's date range merge: the merge whose words between include `until` (class names do not survive minifying). */
-interface RangeMerge extends chrono.Refiner {
-	patternBetween(): RegExp;
-}
-const isRangeMerge = (r: chrono.Refiner): r is RangeMerge =>
-	typeof (r as Partial<RangeMerge>).patternBetween === "function" && (r as RangeMerge).patternBetween().test(" until ");
-// The words a date range keeps: `until` and `till` lead a repeat end or a deadline of their own (LEADS).
-const RANGE_BETWEEN_RE = /^\s*(?:to|-|–|through)\s*$/iu;
-
 /**
  * chrono's casual English and en-GB readers: the year rollover first and again right before the filter of impossible
- * dates (the one refiner with a `strictMode` field), and a date range that never joins over `until` or `till`, so
- * `Oct 12 until Dec 1` is a start and an end. Clones: chrono's shared instances stay as they are.
+ * dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared
+ * instances stay as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
-	reader.refiners = reader.refiners.map((r) =>
-		isRangeMerge(r) ? Object.assign(Object.create(r) as RangeMerge, { patternBetween: () => RANGE_BETWEEN_RE }) : r,
-	);
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
 	if (filter !== -1) reader.refiners.splice(filter, 0, rollover);
 	reader.refiners.unshift(rollover);

@@ -3,20 +3,22 @@ import { describe, expect, it } from "vitest";
 import type { RepeatRule } from "../../src/domain/types";
 import { parseQuickAdd } from "../../src/parsing";
 import { DATE_READERS } from "../../src/parsing/dates";
-import type { ParseResult } from "../../src/parsing/types";
+import type { DateLocale, ParseResult } from "../../src/parsing/types";
 import { BERLIN, NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
 
-// Repeating tasks rule 19 (#12): `<date> until <date>` is a start and a repeat end, never one date range; without a
-// repeat the `until` date is a deadline (decision 8). Other range words (`to`, `-`, `through`) stay one range.
-// A typed end under a repeat picked by hand is checked against that repeat. Wednesday 2026-10-07 10:00 in each zone.
+// Repeating tasks rule 19 (#12): a date range joined by `until` or `till` (`Oct 12 until Dec 1`, `tomorrow until 5pm`)
+// is chrono's range, as for `to`: it stays ONE visible suggestion and nothing is applied silently (no start, no end,
+// no deadline from it) until #6's range-pairing rule. A lone `until <date>` is a repeat end under a repeat and a
+// deadline without one. A typed end under a repeat picked by hand is checked against that repeat.
+// Wednesday 2026-10-07 10:00 in each zone.
 
 const ZONES = [NY, BERLIN, TOKYO] as const;
 
 const daily: RepeatRule = { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
 const friday: RepeatRule = { ...daily, freq: "weekly", weekdays: ["FR"] };
 
-function parse(input: string, zone: string, extra: { pickedRule?: RepeatRule } = {}): ParseResult {
-	const ctx = makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), manual: extra.pickedRule === undefined ? [] : ["recurrence"] });
+function parse(input: string, zone: string, extra: { pickedRule?: RepeatRule; locale?: DateLocale } = {}): ParseResult {
+	const ctx = makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), locale: extra.locale ?? "en", manual: extra.pickedRule === undefined ? [] : ["recurrence"] });
 	return parseQuickAdd(input, extra.pickedRule === undefined ? ctx : { ...ctx, pickedRule: extra.pickedRule });
 }
 
@@ -29,68 +31,95 @@ const end = (r: ParseResult): string | undefined => {
 	return e === undefined ? undefined : e.kind === "date" ? e.date : e.kind;
 };
 
-describe.each(ZONES)("`<date> until <date>` in %s", (zone) => {
-	it("a start and an end of a repeat", () => {
-		for (const input of [
-			"Pills every day starting Oct 12 until Dec 1",
-			"Pills every day starting Oct 12 till Dec 1",
-			"Pills every day Oct 12 until Dec 1",
-		]) {
+const noDateApplied = (r: ParseResult): void => {
+	expect(r.fields.scheduled).toBeUndefined();
+	expect(r.fields.deadline).toBeUndefined();
+	expect(r.fields.recurrenceEnd).toBeUndefined();
+	expect(r.chips.filter((c) => c.kind === "scheduled" || c.kind === "deadline" || c.kind === "repeatEnd").every((c) => c.status === "suggestion")).toBe(true);
+	expect(r.blocking).toEqual([]);
+};
+
+// What the date reader gives with chrono's own range merge: [input, locale, the suggestion's text]. The text is also
+// kept in the title.
+const RANGES: ReadonlyArray<readonly [string, DateLocale, string]> = [
+	["Meeting tomorrow until 5pm", "en", "tomorrow until 5pm"],
+	["Party Friday until midnight", "en", "Friday until midnight"],
+	["Meeting Oct 12 until noon", "en", "Oct 12 until noon"],
+	["Meeting 12 Oct until 5pm", "en-GB", "12 Oct until 5pm"],
+	["Trip Oct 12 till Dec 1", "en", "Oct 12 till Dec 1"],
+	["Trip tomorrow till Friday", "en", "tomorrow till Friday"],
+	["Trip Monday until Friday", "en", "Monday until Friday"],
+	["Trip 20/10 until 12/10", "en-GB", "20/10 until 12/10"],
+	["Trip Oct 12 until Oct 20", "en", "Oct 12 until Oct 20"],
+	["Trip Oct 12 to Oct 20", "en", "Oct 12 to Oct 20"],
+	["Trip Oct 12 through Oct 20", "en", "Oct 12 through Oct 20"],
+	["Trip Oct 12 - Oct 20", "en", "Oct 12 - Oct 20"],
+];
+
+describe.each(ZONES)("a date range in %s", (zone) => {
+	it.each(RANGES)("%s (%s) is one visible suggestion, nothing applied, text kept", (input, locale, text) => {
+		const r = parse(input, zone, { locale });
+		noDateApplied(r);
+		expect(r.title).toBe(input);
+		const dates = r.chips.filter((c) => c.kind === "scheduled" || c.kind === "deadline");
+		expect(dates).toHaveLength(1);
+		expect(dates[0]?.status).toBe("suggestion");
+		expect(dates[0]?.text).toBe(text);
+	});
+
+	it("under a repeat the repeat applies and the date part stays a visible suggestion, text kept", () => {
+		for (const [input, text] of [
+			["Pills every day starting Oct 12 until Dec 1", "Oct 12 until Dec 1"],
+			["Pills every day starting Oct 12 till Dec 1", "Oct 12 till Dec 1"],
+			["Pills every day Oct 12 until Dec 1", "Oct 12 until Dec 1"],
+			["Standup every day starting Monday until Friday", "Monday until Friday"],
+		] as const) {
 			const r = parse(input, zone);
-			expect(r.title, input).toBe("Pills");
 			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe("daily");
-			expect(day(r, "scheduled"), input).toBe("2026-10-12");
-			expect(end(r), input).toBe("2026-12-01");
-			expect(r.fields.deadline, input).toBeUndefined();
-			const endChip = r.chips.find((c) => c.kind === "repeatEnd");
-			expect(endChip?.text.toLowerCase().startsWith("until") || endChip?.text.toLowerCase().startsWith("till"), input).toBe(true);
+			noDateApplied(r);
+			expect(r.chips.find((c) => c.kind === "recurrence")?.status, input).toBe("applied");
+			const date = r.chips.find((c) => c.kind === "scheduled");
+			expect(date?.status, input).toBe("suggestion");
+			expect(date?.text.endsWith(text), input).toBe(true);
+			expect(r.title.endsWith(text), input).toBe(true);
+			expect(r.chips.some((c) => c.status === "invalid"), input).toBe(false);
 		}
 	});
 
-	it("a yearly repeat on a date keeps its own year when the end has one", () => {
+	it("a lone `until <date>` is a repeat end under a repeat and a deadline without one", () => {
+		const withRepeat = parse("Pills every day until Dec 1", zone);
+		expect(withRepeat.title).toBe("Pills");
+		expect(end(withRepeat)).toBe("2026-12-01");
+		expect(withRepeat.fields.deadline).toBeUndefined();
+		const alone = parse("Gym until Dec 1", zone);
+		expect(alone.title).toBe("Gym");
+		expect(day(alone, "deadline")).toBe("2026-12-01");
+		expect(alone.fields.recurrenceEnd).toBeUndefined();
+	});
+
+	it("a yearly repeat on a date with an `until` range stays visible, never a silent value", () => {
 		const r = parse("Taxes every year on April 15 until Apr 16 2030", zone);
-		expect(r.title).toBe("Taxes");
-		expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence)).toBe("yearly");
-		expect(day(r, "scheduled")).toBe("2027-04-15");
-		expect(end(r)).toBe("2030-04-16");
-		expect(r.chips.some((c) => c.status === "unsupported" || c.status === "suggestion")).toBe(false);
-	});
-
-	it("without a repeat the start is the date and the `until` date a deadline", () => {
-		const r = parse("Trip Oct 12 until Oct 20", zone);
-		expect(r.title).toBe("Trip");
-		expect(day(r, "scheduled")).toBe("2026-10-12");
-		expect(day(r, "deadline")).toBe("2026-10-20");
-		expect(r.fields.recurrenceEnd).toBeUndefined();
-	});
-
-	it("other range words stay one date range (a suggestion)", () => {
-		for (const input of ["Trip Oct 12 to Oct 20", "Trip Oct 12 through Oct 20", "Trip Oct 12 - Oct 20"]) {
-			const r = parse(input, zone);
-			const dates = r.chips.filter((c) => c.kind === "scheduled" || c.kind === "deadline");
-			expect(dates, input).toHaveLength(1);
-			expect(dates[0]?.status, input).toBe("suggestion");
-			expect(r.fields.deadline, input).toBeUndefined();
-		}
+		expect(r.title).toBe("Taxes every year on April 15 until Apr 16 2030");
+		expect(r.fields.recurrence).toBeUndefined();
+		noDateApplied(r);
+		expect(r.chips.some((c) => c.kind === "recurrence" && c.status === "unsupported")).toBe(true);
 	});
 });
 
 describe("the date readers and the range words", () => {
-	it("read `until` and `till` as two dates, `to` as one range; the shared chrono instance still merges `until`", () => {
+	it("merge `until`, `till` and `to` ranges exactly like chrono's own readers", () => {
 		const ref = { instant: at(NY, "2026-10-07T10:00"), timezone: -240 };
-		for (const reader of [DATE_READERS.en, DATE_READERS["en-GB"]]) {
-			expect(reader.parse("Oct 12 until Dec 1", ref, { forwardDate: true }).map((r) => [r.index, r.text, r.end === null])).toEqual([
-				[0, "Oct 12", true],
-				[13, "Dec 1", true],
-			]);
-			expect(reader.parse("Oct 12 till Dec 1", ref, { forwardDate: true })).toHaveLength(2);
-			const range = reader.parse("Oct 12 to Dec 1", ref, { forwardDate: true });
+		const own = { en: chrono.en.casual, "en-GB": chrono.en.GB };
+		for (const locale of ["en", "en-GB"] as const) {
+			for (const input of ["Oct 12 until Dec 1", "Oct 12 till Dec 1", "Oct 12 to Dec 1", "tomorrow until 5pm"]) {
+				const mine = DATE_READERS[locale].parse(input, ref, { forwardDate: true }).map((r) => [r.index, r.text, r.end === null]);
+				const theirs = own[locale].parse(input, ref, { forwardDate: true }).map((r) => [r.index, r.text, r.end === null]);
+				expect(mine, `${locale} ${input}`).toEqual(theirs);
+			}
+			const range = DATE_READERS[locale].parse("Oct 12 until Dec 1", ref, { forwardDate: true });
 			expect(range).toHaveLength(1);
 			expect(range[0]?.end).not.toBeNull();
 		}
-		const shared = chrono.en.casual.parse("Oct 12 until Dec 1", ref, { forwardDate: true });
-		expect(shared).toHaveLength(1);
-		expect(shared[0]?.end).not.toBeNull();
 	});
 });
 

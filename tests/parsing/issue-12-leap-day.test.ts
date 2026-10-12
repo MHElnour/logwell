@@ -29,8 +29,8 @@ describe("the date reader instances", () => {
 			expect(reader).not.toBe(base);
 			expect(reader.refiners.length).toBe(base.refiners.length + 2);
 			const added = reader.refiners.filter((r) => !base.refiners.includes(r));
-			// The rollover twice, and the range merge without `until`/`till` in place of chrono's.
-			expect(new Set(added).size).toBe(2);
+			// Only the rollover is added (twice, one object); chrono's own refiners, the range merge included, are kept.
+			expect(new Set(added).size).toBe(1);
 			const rollover = reader.refiners[0]!;
 			const names = reader.refiners.map((r) => (r === rollover ? "rollover" : r.constructor.name));
 			const filter = names.indexOf("UnlikelyFormatFilter");
