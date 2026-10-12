@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { ComponentChild, ContainerNode } from "preact";
+import { type ComponentChild, type ContainerNode, options } from "preact";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { type CheckpointSettings, DEFAULT_SETTINGS } from "../../src/app/settings";
 import type { HabitInput } from "../../src/domain/habits";
@@ -12,11 +12,11 @@ import { Plugin } from "../app/obsidian-stub";
 import { settle } from "../ui/calendar-helpers";
 import { U1Host } from "../ui/app-helpers";
 
-/** The first argument of every Preact render a block made: a tree to draw, or null to unmount. */
-const drawn = vi.hoisted(() => ({ trees: [] as unknown[] }));
 // The `logwell` code block processor. The environment (database session, task opening) is a fake; the
 // element's `win`, `doc` and `isShown` are Obsidian's additions to HTMLElement, defined here over happy-dom.
 
+/** The first argument of every Preact render a block made: a tree to draw, or null to unmount. */
+const drawn = vi.hoisted(() => ({ trees: [] as unknown[] }));
 vi.mock("../../src/domain/blockQuery", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/domain/blockQuery")>();
 	return { ...actual, runBlockQuery: vi.fn(actual.runBlockQuery) };
@@ -67,6 +67,17 @@ describe("the block processor", () => {
 	let currentWin: Record<string, unknown> | Window = window;
 	let shown = true;
 	let settings: CheckpointSettings = DEFAULT_SETTINGS;
+
+	// Preact runs effects after a frame through the window's timers. Faked timers that are dropped before that frame
+	// leave its queue stuck for every later test, and the frame itself counts as a timer of the block. A microtask
+	// runs the effects instead, whichever timers the test uses.
+	const ownFrame = options.requestAnimationFrame;
+	beforeAll(() => {
+		options.requestAnimationFrame = (flush) => void Promise.resolve().then(flush);
+	});
+	afterAll(() => {
+		options.requestAnimationFrame = ownFrame;
+	});
 
 	beforeAll(() => {
 		const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
