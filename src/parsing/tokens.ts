@@ -364,12 +364,19 @@ export function repeatCountAt(s: string, from: number): RepeatCount | null {
  */
 export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 	const out: RepeatToken[] = [];
-	const free = (start: number, end: number): boolean =>
-		!taken(start, end) && !out.some((t) => (t.span.start < end && start < t.span.end) || (t.end !== null && t.end.span.start < end && start < t.end.span.end));
+	// The characters a token found so far (or the end typed after it) covers: each check reads only its own span.
+	const covered = new Uint8Array(s.length);
+	const free = (start: number, end: number): boolean => {
+		if (taken(start, end)) return false;
+		for (let i = start; i < end; i++) if (covered[i] === 1) return false;
+		return true;
+	};
 	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate">): number => {
 		const found = phrase.onDate || phrase.silent ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
 		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate });
+		covered.fill(1, span.start, span.end);
+		if (end !== null) covered.fill(1, end.span.start, end.span.end);
 		return end === null ? span.end : end.span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {

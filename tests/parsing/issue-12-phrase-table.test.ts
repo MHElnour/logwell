@@ -153,6 +153,21 @@ describe.each(ZONES)("1. Repeat forms in %s", (zone) => {
 	];
 	it.each(rows)("$in", (row) => check(row, zone));
 
+	it("the Nth weekday of each or every month, anywhere in the text; of the month alone stays text", () => {
+		const days = { monday: "MO", tuesday: "TU", friday: "FR", sunday: "SU" } as const;
+		const nth = { "1st": 1, first: 1, "2nd": 2, second: 2, "3rd": 3, third: 3, "4th": 4, fourth: 4, last: -1 } as const;
+		for (const [ord, n] of Object.entries(nth)) {
+			for (const [day, code] of Object.entries(days)) {
+				for (const each of ["each", "every"]) check({ in: `Report the ${ord} ${day} of ${each} month`, title: "Report", rec: `monthly:${code}#${n}` }, zone);
+				if (ord === "last") continue;
+				const input = `Report the ${ord} ${day} of the month review`;
+				const r = parse(input, zone);
+				expect(r.chips.some((c) => c.kind === "recurrence"), input).toBe(false);
+				expect(r.title, input).toContain(`the ${ord}`);
+			}
+		}
+	});
+
 	it.each(LOCALES)("%s: every year on <date>, yearly on <date>, annually on <date> start on that date", (locale) => {
 		const may5 = spelt(locale, "May", 5);
 		for (const form of ["every year on", "yearly on", "annually on"]) {
@@ -390,6 +405,11 @@ describe.each(ZONES)("5. Not supported in %s", (zone) => {
 		unsupported("Take pills every 8 hours until Friday", zone, "every 8 hours");
 		unsupported("Take pills every 8 hours until 5pm", zone, "every 8 hours");
 		unsupported("Gym every day every week starting Monday", zone, "every day");
+		// A date right after it, with no lead word, applies nothing either: at most a visible suggestion.
+		for (const input of ["Take pills every 8 hours tomorrow", "Take pills every 8 hours, Oct 12", "Take pills every 8 hours next week"]) {
+			unsupported(input, zone, "every 8 hours");
+			expect(parse(input, zone).chips.find((c) => c.kind === "scheduled")?.status, input).toBe("suggestion");
+		}
 	});
 
 	it("a repeat with two starts", () => {

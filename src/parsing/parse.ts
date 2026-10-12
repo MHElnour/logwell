@@ -295,8 +295,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			if (end !== null) dropped.add(end);
 		}
 		if (dropped.size > 0) {
-			const freed = [...dropped].map((d) => d.chip.span);
-			for (let i = taken.length - 1; i >= 0; i--) if (freed.some((f) => f.start === taken[i]!.start && f.end === taken[i]!.end)) taken.splice(i, 1);
+			const freed = new Set([...dropped].map((d) => `${d.chip.span.start}:${d.chip.span.end}`));
+			let kept = 0;
+			for (const t of taken) if (!freed.has(`${t.start}:${t.end}`)) taken[kept++] = t;
+			taken.length = kept;
 			dates = datesNow();
 		}
 	}
@@ -347,6 +349,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		} else if (typed && !built && (c.kind === "end" || c.lead?.kind === "schedule" || c.lead?.kind === "end")) {
 			// A start or end part of a repeat Quick Add cannot build applies nothing.
 			drafts.push(draft(input, c.kind === "end" ? "repeatEnd" : "scheduled", c.span, "unsupported", { notice: NOTICE.recurrence }));
+		} else if (typed && !built && c.kind === "scheduled" && afterRepeat(c.span.start)) {
+			// Nor does a date right after it, its start as typed: it is offered at most.
+			drafts.push(offerDraft(input, c));
 		} else if (c.kind === "end") {
 			// The end of a repeat picked by hand is not a typed value it replaces, so the hand-picked repeat does not turn
 			// it into a suggestion.

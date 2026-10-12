@@ -194,6 +194,8 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 		expect(r.fields.recurrence, because).toBeUndefined();
 		expect(r.title, because).toContain(f.text);
 		if ((w.kind === "date" || w.kind === "leap" || w.kind === "range") && !fromGB && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
+		// A date right after the phrase (over a comma at most) is its start as typed: offered, never applied.
+		else if ((w.kind === "date" || w.kind === "leap") && (sep === "" || sep === ",")) expect(chip(r, "scheduled")?.status, because).toBe("suggestion");
 		else if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chip(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
 		if (w.kind === "end") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
 		if ((w.kind === "periods" || w.kind === "count") && sep !== " and") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
@@ -431,7 +433,8 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 	it("a date, a range or a lead word right after an unsupported `every …` is read: the phrase ends at its own words", () => {
 		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
 		const rows: [string, string, string[]][] = [
-			["Call every 3 hours Oct 12", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|applied|Oct 12"]],
+			// Right after it, the date is the phrase's start as typed: offered, never applied (phrase table 5).
+			["Call every 3 hours Oct 12", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Oct 12"]],
 			["Call every 3 hours Oct 12 to Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Oct 12 to Dec 1"]],
 			["Call every 3 hours Mon-Fri", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Mon-Fri"]],
 			["Call every 3 hours until Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "repeatEnd|unsupported|until Dec 1"]],

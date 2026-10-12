@@ -37,7 +37,7 @@ Quick Add reads a fixed set of phrases. A phrase from the tables below becomes t
 | `quarterly`, `every quarter` | Every 3 months |
 | `every 15th`, `every month on the 15th`, `every month on 15`, `monthly on the 15th`, `monthly on day 15`, `on the 15th of every month`, `the 15th of each month` | Monthly on the 15th |
 | `every last day of the month`, `monthly on the last day`, `last day of the month`, `last day of every month` | Monthly on the last day |
-| `every first friday`, `every second friday`, `every third friday`, `every fourth friday`, `every last friday`, `every 1st friday`, `every 2nd friday of the month`, `last friday of the month` | Monthly on that weekday |
+| `every first friday`, `every second friday`, `every third friday`, `every fourth friday`, `every last friday`, `every 1st friday`, `every 2nd friday of the month`, `last friday of the month`, `the 2nd tuesday of every month`, `the 2nd tuesday of each month` | Monthly on that weekday (`the 2nd tuesday of the month`, without `each` or `every`, stays text) |
 | `every year`, `yearly`, `annually` | Yearly, on the month and day of the first date |
 | `every 2 years`, `every other year` | Every 2 years |
 | `every year on May 5`, `yearly on May 5`, `annually on May 5` | Yearly, starting on that date; a date with no year is its next one, so Feb 29 starts on the next leap day |
@@ -68,7 +68,7 @@ Not supported yet. These show "Recurrence not supported yet" and set nothing:
 - Several days of the month: `every month on the 1st and 15th`.
 - A fifth weekday: `every 5th friday`, `every fifth friday`.
 - A repeat with two first dates: `every year on May 5 from Oct 12`.
-- A start or an end after a repeat Quick Add cannot make: in `every 8 hours starting tomorrow`, `starting tomorrow` sets nothing either.
+- A start or an end after a repeat Quick Add cannot make, or a date right after it: in `every 8 hours starting tomorrow` and `every 8 hours tomorrow`, the date sets nothing either; a date right after it is only offered with "Use as date?".
 
 These stay plain title text: `3 times a day`, `twice a week`, `biweekly`, `bimonthly`, `each monday`, `each day`, `the 1st of the month` without `each` or `every` (write `the 1st of each month`), and a day part after a weekday (`every sunday evening` repeats on Sunday; "evening" stays text). `every monday 9am` repeats on Monday and reads `9am` as a time on its own. Counting from completion is set in the picker.
 
