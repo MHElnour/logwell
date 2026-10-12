@@ -20,6 +20,8 @@ const VAGUE_UNIT_RE = /^(?:the\s+)?(?:day|week|month|year)$/iu;
 // A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
 const DATE_DAY_PART_RE = new RegExp(`\\b(?:noon|midnight|tonight|${DAY_PART_PATTERN})\\b`, "iu");
 const SHIFT_WORD_RE = /\b(?:next|last|past|previous|coming)\b/iu;
+// "this friday" also names its week: a range's end with it, or with a shift word, is never moved a week.
+const THIS_WORD_RE = /\bthis\b/iu;
 // "0H:MM" with a leading-zero two-digit hour (01-09) is written 24-hour style and is certain.
 // No lookbehind (iOS): the character before is matched and ignored.
 const LEADING_ZERO_TIME_RE = /(?:^|[^\d:.])0[1-9]:[0-5]\d(?!\d)/u;
@@ -44,7 +46,13 @@ export interface DateCandidate {
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
 	 * it. The parser uses it only next to a typed repeat it keeps (Repeating tasks rule 19).
 	 */
-	range?: { led: boolean; start: DateCandidate; end: DateCandidate };
+	range?: {
+		led: boolean;
+		start: DateCandidate;
+		end: DateCandidate;
+		/** A start that is a choice: the end for each of its alternatives, in order (`end` is the first's). */
+		endByChoice?: readonly DateOutcome[];
+	};
 }
 
 /** What a lead word directly before a date makes of it: a deadline, a joined time, a repeat end or the start. */
@@ -88,29 +96,35 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 	return best;
 }
 
+/** The first real date with this month and day ("MM-DD") on or after `from`, within 8 years (the next Feb 29). */
+function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
+	const fromYear = Number(from.slice(0, 4));
+	for (let year = fromYear; year <= fromYear + 8; year++) {
+		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
+		if (isValidLocalDate(date) && date >= from) return date;
+	}
+	return null;
+}
+
+/** The tag `rollover` puts on a date whose year it chose. */
+const ROLLED_YEAR = "logwell/rolledYear";
+
 /**
  * A month and day with no year that does not exist in the year chrono assumes (Feb 29 in 2027) moves to the first
  * later year where it exists, from today on (at most 8 years: the next Feb 29). chrono would drop it as an
  * impossible date. It runs first, and again right before chrono's filter of impossible dates: chrono's forward step
  * moves a past Feb 29 of a leap year (said from March on) into the next year, which has none. Today comes from
- * chrono's own zone-adjusted reference.
+ * chrono's own zone-adjusted reference. The year it sets is certain to chrono and tagged ROLLED_YEAR: it was not typed.
  */
 const rollover: chrono.Refiner = {
 	refine(context, results) {
 		const ref = context.createParsingComponents();
-		const today = `${ref.get("year") ?? 0}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
+		const today = `${String(ref.get("year") ?? 0).padStart(4, "0")}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
 		for (const r of results) {
 			const s = r.start;
 			if (!s.isCertain("month") || !s.isCertain("day") || s.isCertain("year") || s.isValidDate()) continue;
-			const implied = s.get("year") ?? 0;
-			const monthDay = `${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`;
-			for (let year = implied; year <= implied + 8; year++) {
-				const date = `${year}-${monthDay}`;
-				if (isValidLocalDate(date) && date >= today) {
-					s.assign("year", year);
-					break;
-				}
-			}
+			const date = monthDayOnOrAfter(`${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`, today);
+			if (date !== null) s.assign("year", Number(date.slice(0, 4))).addTag(ROLLED_YEAR);
 		}
 		return results;
 	},
@@ -285,22 +299,29 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 }
 
 const dayCertainOf = (c: chrono.ParsedComponents): boolean => c.isCertain("day") || c.isCertain("weekday");
+/** A weekday with no day of the month (`Friday`, `next friday`). */
+const weekdayOnly = (c: chrono.ParsedComponents): boolean => c.isCertain("weekday") && !c.isCertain("day");
 
 /** The words chrono's range merge joins two dates with (ENMergeDateRangeRefiner), each a possible split point. */
 const RANGE_JOIN_RE = /\s*(?:\b(?:to|until|till|through)\b|[-\u2013])\s*/giu;
 
+interface RangeSplit {
+	start: { text: string; outcome: DateOutcome };
+	joinAt: number;
+	end: { at: number; text: string; outcome: DateOutcome };
+	/** A start that is a choice: the end for each of its alternatives (`end.outcome` is the first's). */
+	endByChoice?: DateOutcome[];
+}
+
 /**
  * chrono's merged range (`Oct 12 to Dec 1`) as two dates, each read again on its own, so the start keeps its own year
- * (the merge copies the end's onto it). An end without a year before the start moves forward as the merge moves it:
- * a weekday by weeks, a month and day by years, to the first such date on or after the start. Null unless both sides
- * name a day and the text splits at a join word into two whole dates.
+ * (the merge copies the end's onto it). An end with no typed year before the start moves forward as the merge moves it,
+ * to the first such date on or after the start: a bare weekday by weeks (one with `this`, `next`, `last` … keeps its
+ * reading), a month and day by years. A start that is a choice (`Wednesday` said on a Wednesday) gets an end for each
+ * of its alternatives. Null unless both sides name a day and the text splits at a join word into two whole dates; two
+ * bare weekdays (`Mon-Fri`: days of the week) only with a start word (`startWord`: `starting`, `beginning`).
  */
-function splitRange(
-	r: chrono.ParsedResult,
-	parser: chrono.Chrono,
-	ref: chrono.ParsingReference,
-	clock: Clock,
-): { start: { text: string; outcome: DateOutcome }; joinAt: number; end: { at: number; text: string; outcome: DateOutcome } } | null {
+function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.ParsingReference, clock: Clock, startWord: boolean): RangeSplit | null {
 	if (r.end == null || !dayCertainOf(r.start) || !dayCertainOf(r.end)) return null;
 	const whole = (text: string): chrono.ParsedResult | null => {
 		const found = parser.parse(text, ref, { forwardDate: true });
@@ -316,31 +337,36 @@ function splitRange(
 		const first = whole(left);
 		const to = first === null ? null : whole(right);
 		if (first === null || to === null) continue;
+		if (!startWord && weekdayOnly(first.start) && weekdayOnly(to.start)) return null;
 		const start = readResult(first, clock);
-		let end = readResult(to, clock);
+		const end = readResult(to, clock);
 		if (start === null || end === null) return null;
-		// A start that is a choice (`Wednesday` said on a Wednesday) counts as its first, preselected reading.
-		const o = start.outcome;
-		const startDate = o.status === "choice" ? dateSpecDate(o.alternatives[0]!.value, clock.env.zone) : start.date;
-		if (end.date < startDate && !to.start.isCertain("year")) {
-			let moved: LocalDate | null = null;
-			if (to.start.isCertain("weekday") && !to.start.isCertain("day")) {
-				moved = end.date;
-				while (moved < startDate) moved = addDays(moved, 7);
-			} else {
-				const monthDay = end.date.slice(4);
-				const fromYear = Number(startDate.slice(0, 4));
-				for (let year = fromYear; year <= fromYear + 8 && moved === null; year++) {
-					const d = `${String(year).padStart(4, "0")}${monthDay}`;
-					if (isValidLocalDate(d) && d >= startDate) moved = d;
-				}
-			}
-			if (moved === null) return null;
+		const typedYear = to.start.isCertain("year") && !to.start.tags().has(ROLLED_YEAR);
+		const byWeek = weekdayOnly(to.start);
+		const keeps = typedYear || (byWeek && (SHIFT_WORD_RE.test(to.text) || THIS_WORD_RE.test(to.text)));
+		// The end for one start date; null when it cannot move.
+		const endFrom = (from: LocalDate): DateOutcome | null => {
+			if (end.date >= from || keeps) return end.outcome;
+			let moved: LocalDate | null = end.date;
+			if (byWeek) while (moved < from) moved = addDays(moved, 7);
+			else moved = monthDayOnOrAfter(end.date.slice(5), from);
 			// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today.
-			end = readResult(to, clock, moved);
-			if (end === null) return null;
+			return moved === null ? null : (readResult(to, clock, moved)?.outcome ?? null);
+		};
+		const o = start.outcome;
+		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
+		const ends: DateOutcome[] = [];
+		for (const from of froms) {
+			const e = endFrom(from);
+			if (e === null) return null;
+			ends.push(e);
 		}
-		return { start: { text: left, outcome: start.outcome }, joinAt: m.index + (m[0].length - m[0].trimStart().length), end: { at, text: right, outcome: end.outcome } };
+		return {
+			start: { text: left, outcome: o },
+			joinAt: m.index + (m[0].length - m[0].trimStart().length),
+			end: { at, text: right, outcome: ends[0]! },
+			...(o.status === "choice" ? { endByChoice: ends } : {}),
+		};
 	}
 	return null;
 }
@@ -380,12 +406,13 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		// and end; the parser decides by where the repeat is.
 		const from = lead === null ? wordBefore(masked, r.index, "from") : -1;
 		const led = lead?.kind === "schedule" || from !== -1;
-		const split = env.repeatRange === true && (lead === null || lead.kind === "schedule") ? splitRange(r, parser, ref, clock) : null;
+		const split = env.repeatRange === true && (lead === null || lead.kind === "schedule") ? splitRange(r, parser, ref, clock, lead !== null) : null;
 		if (split !== null) {
 			candidate.range = {
 				led,
 				start: { kind: "scheduled", span: { start: from !== -1 ? from : spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, outcome: split.start.outcome },
 				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, outcome: split.end.outcome },
+				...(split.endByChoice !== undefined ? { endByChoice: split.endByChoice } : {}),
 			};
 		}
 		out.push(candidate);

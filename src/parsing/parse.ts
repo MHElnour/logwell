@@ -3,7 +3,7 @@ import { periodsAfter, repeatEndProblem, singleVersionRecurrence } from "../doma
 import type { LocalDate, RepeatFreq, RepeatRule, WeekStart } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
-import { addDays, dateSpecDate } from "../domain/time";
+import { addDays, dateSpecDate, sameDateSpec } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
 import { findDates, resolveDateSpec, todayOf, type DateCandidate, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
@@ -302,7 +302,15 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A date range led by a start word (`starting Oct 12 to Dec 1`) or right after a typed repeat that stays is that
 	// repeat's start and end (Repeating tasks rule 19); a repeat picked by hand never splits one.
 	const afterRepeat = (at: number): boolean => repeatEnds.some((end) => end <= at && /^[\s,]*$/u.test(input.slice(end, at)));
-	const readings = dates.flatMap((c) => (c.range !== undefined && typed && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, c.range.end] : [c]));
+	// A start that is a choice: the end follows the alternative chosen for it (`starting Wednesday until Friday`, "Next week").
+	const rangeEnd = (range: NonNullable<DateCandidate["range"]>): DateCandidate => {
+		const o = range.start.outcome;
+		const chosen = decisions.byChip.get(`${range.start.span.start}:${range.start.span.end}`);
+		if (o.status !== "choice" || range.endByChoice === undefined || chosen?.kind !== "date") return range.end;
+		const outcome = range.endByChoice[o.alternatives.findIndex((alt) => sameDateSpec(alt.value, chosen.value))];
+		return outcome === undefined ? range.end : { ...range.end, outcome };
+	};
+	const readings = dates.flatMap((c) => (c.range !== undefined && typed && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
 	for (const c of readings) {
 		if (repeats || !c.repeatOnly) {
 			// `until <date>` without a repeat is a deadline (decision 8). The end of a repeat picked by hand is not a

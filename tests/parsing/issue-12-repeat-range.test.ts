@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "../../src/parsing";
-import type { DateLocale, ParseResult } from "../../src/parsing/types";
+import type { DateLocale, ParseResult, SpanDecision } from "../../src/parsing/types";
 import { BERLIN, NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
 
 // Repeating tasks rule 19 (#12): under a typed repeat, a date range (`starting Oct 12 to Dec 1`, `from … till …`, or
@@ -145,5 +145,78 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 	it("the end typed before the start still gives both", () => {
 		const r = parse("Gym every day until Dec 1 starting Oct 12", zone);
 		expect([rule(r), r.title, day(r), end(r)]).toEqual(["daily", "Gym", "2026-10-12", "2026-12-01"]);
+	});
+});
+
+// Two bare weekdays joined as a range under a repeat name the days of the week, not a start and an end: they stay the
+// one visible suggestion they always were, unless `starting` or `beginning` leads them. [input, title, the chips]
+const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]> = [
+	["Standup weekly Mon-Fri", "Standup Mon-Fri", ["recurrence applied weekly", "scheduled suggestion Mon-Fri"]],
+	["Standup every week from Monday to Friday", "Standup from Monday to Friday", ["recurrence applied every week", "scheduled suggestion Monday to Friday"]],
+	["Run every week from Mon to Fri at 7am", "Run from Mon to Fri at 7am", ["recurrence applied every week", "scheduled suggestion Mon to Fri at 7am"]],
+	["Gym daily Mon-Fri", "Gym Mon-Fri", ["recurrence applied daily", "scheduled suggestion Mon-Fri"]],
+	["Gym daily Mon to Fri", "Gym Mon to Fri", ["recurrence applied daily", "scheduled suggestion Mon to Fri"]],
+	["Shop every weekday from Monday to Friday", "Shop from Monday to Friday", ["recurrence applied every weekday", "scheduled suggestion Monday to Friday"]],
+];
+
+const decide = (r: ParseResult, kind: "scheduled" | "repeatEnd", choose: (c: ParseResult["chips"][number]) => SpanDecision): SpanDecision => choose(r.chips.find((c) => c.kind === kind)!);
+
+describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
+	describe.each(["en", "en-GB"] as const)("%s", (locale) => {
+		it.each(WEEKDAY_PAIRS)("%s stays one suggestion", (input, title, chips) => {
+			const r = parse(input, zone, locale);
+			expect(r.title).toBe(title);
+			expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`)).toEqual(chips);
+			expect(r.fields.scheduled).toBeUndefined();
+			expect(r.fields.recurrenceEnd).toBeUndefined();
+			expect(r.blocking).toEqual([]);
+		});
+	});
+
+	it("two weekdays led by starting are still the start and the end", () => {
+		const r = parse("Standup every day starting Monday until Friday", zone);
+		expect([rule(r), r.title, day(r), end(r), r.blocking]).toEqual(["daily", "Standup", "2026-10-12", "2026-10-16", []]);
+	});
+
+	it("an end with a past word keeps its reading: a suggestion before the start, invalid once used", () => {
+		const input = "Gym every day starting Monday until last friday";
+		const r = parse(input, zone);
+		expect(day(r)).toBe("2026-10-12");
+		expect(r.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "suggestion", text: "until last friday", end: { kind: "date", date: "2026-10-02" } });
+		expect(r.fields.recurrenceEnd).toBeUndefined();
+		expect(r.blocking).toEqual([]);
+		const accepted = parseQuickAdd(input, makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), decisions: [decide(r, "repeatEnd", (c) => ({ span: c.span, text: c.text, kind: "accept" }))] }));
+		const chip = accepted.chips.find((c) => c.kind === "repeatEnd");
+		expect(chip).toMatchObject({ status: "invalid", notice: "The repeat ends before its first date." });
+		expect(accepted.blocking).toEqual([chip!.id]);
+	});
+
+	it.each([
+		["Gym every day starting Oct 20 until this friday", "until this friday"],
+		["Gym every day starting Oct 20 until tomorrow", "until tomorrow"],
+	])("%s: an end that names its own day before the start is invalid", (input, text) => {
+		const r = parse(input, zone);
+		expect(day(r)).toBe("2026-10-20");
+		const chip = r.chips.find((c) => c.kind === "repeatEnd");
+		expect(chip).toMatchObject({ status: "invalid", text, notice: "The repeat ends before its first date." });
+		expect(r.blocking).toEqual([chip!.id]);
+		expect(r.fields.recurrenceEnd).toBeUndefined();
+	});
+
+	it("a Feb 29 end after a start with its own year is the next Feb 29 on or after the start", () => {
+		const r = parse("Gym every day starting Oct 12 2028 to Feb 29", zone);
+		expect([day(r), end(r), r.blocking]).toEqual(["2028-10-12", "2032-02-29", []]);
+	});
+
+	it("the end follows the chosen start: Next week ends on the Friday after it", () => {
+		const input = "Gym every day starting Wednesday until Friday";
+		const r = parse(input, zone);
+		const choose = (label: string) => (c: ParseResult["chips"][number]): SpanDecision => ({ span: c.span, text: c.text, kind: "date", value: c.alternatives!.find((a) => a.label === label)!.value! });
+		const reread = (label: string): ParseResult =>
+			parseQuickAdd(input, makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), decisions: [decide(r, "scheduled", choose(label))] }));
+		const next = reread("Next week");
+		expect([day(next), end(next), next.blocking, next.title]).toEqual(["2026-10-14", "2026-10-16", [], "Gym"]);
+		const today = reread("Today");
+		expect([day(today), end(today), today.blocking, today.title]).toEqual(["2026-10-07", "2026-10-09", [], "Gym"]);
 	});
 });
