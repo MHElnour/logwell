@@ -401,18 +401,18 @@ describe("Recurrence (M7)", function () {
 			);
 		await open(path, text);
 		await browser.waitUntil(
-			async () => (await browser.execute(() => Array.from(document.querySelectorAll(".notice")).filter((n) => (n.textContent ?? "").includes("upgraded from schema 3 to 5")).length)) >= 1,
+			async () => (await browser.execute(() => Array.from(document.querySelectorAll(".notice")).filter((n) => (n.textContent ?? "").includes("upgraded from schema 3 to 6")).length)) >= 1,
 			{ timeout: 10000, timeoutMsg: "no migration notice" },
 		);
 		await flush();
-		expect(await browser.execute(() => Array.from(document.querySelectorAll(".notice")).filter((n) => (n.textContent ?? "").includes("upgraded from schema 3 to 5")).length)).toBe(1);
+		expect(await browser.execute(() => Array.from(document.querySelectorAll(".notice")).filter((n) => (n.textContent ?? "").includes("upgraded from schema 3 to 6")).length)).toBe(1);
 		const kinds = await browser.executeObsidian(async ({ plugins }) => {
 			const list = (await (plugins as any).logwell.session.store.listSnapshots()) as { kind: string }[];
 			return list.map((s) => s.kind);
 		});
 		expect(kinds.filter((k) => k === "pre-migration")).toHaveLength(1);
 		const onDisk = JSON.parse(await browser.executeObsidian(async ({ app }, p) => app.vault.adapter.read(p), path));
-		expect(onDisk.schemaVersion).toBe(5);
+		expect(onDisk.schemaVersion).toBe(6);
 		for (const t of onDisk.tasks) expect(t.recurrence ?? null).toBeNull();
 
 		// A series made in the migrated database is saved and survives the plugin being reloaded.
