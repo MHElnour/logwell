@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { LocalDate, RepeatFreq, Weekday, WeekStart } from "../domain/types";
+import { type LocalDate, REPEAT_FREQS, type RepeatFreq, type Weekday, type WeekStart } from "../domain/types";
 import { SrOnly } from "./common";
 import { capitalize } from "./format";
 import { useUniqueId } from "./hooks";
@@ -118,8 +118,7 @@ export function RepeatPresets(props: {
 
 // -- Custom -----------------------------------------------------------------------------
 
-const UNIT_LABEL: Readonly<Record<RepeatFreq, string>> = { daily: "days", weekly: "weeks", monthly: "months" };
-const FREQS: readonly RepeatFreq[] = ["daily", "weekly", "monthly"];
+const UNIT_LABEL: Readonly<Record<RepeatFreq, string>> = { daily: "days", weekly: "weeks", monthly: "months", yearly: "years" };
 const MONTH_KINDS: readonly MonthKind[] = ["day", "nth", "lastDay"];
 const ENDS: readonly { kind: "never" | "date" | "count"; label: string }[] = [
 	{ kind: "never", label: "Never" },
@@ -179,7 +178,7 @@ export function RepeatCustom(props: PickerEnv & { value: RepeatChoice | null; on
 						onInput={(e) => set({ interval: e.currentTarget.value })}
 					/>
 					<select class="dropdown" aria-label="Unit" value={draft.freq} onChange={(e) => set({ freq: e.currentTarget.value as RepeatFreq })}>
-						{FREQS.map((f) => (
+						{REPEAT_FREQS.map((f) => (
 							<option key={f} value={f} selected={draft.freq === f}>
 								{UNIT_LABEL[f]}
 							</option>

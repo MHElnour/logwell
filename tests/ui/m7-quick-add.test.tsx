@@ -119,7 +119,7 @@ describe("the date popover's Repeat row", () => {
 		await click(repeatRow(m.root));
 		expect(repeatRow(m.root).getAttribute("aria-expanded")).toBe("true");
 		const list = q(m.root, '.cp-date-pop [role="listbox"]');
-		expect(list.querySelectorAll('[role="option"]')).toHaveLength(6);
+		expect(list.querySelectorAll('[role="option"]')).toHaveLength(7);
 		expect(document.activeElement).toBe(opt(m.root, "never"));
 	});
 

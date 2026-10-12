@@ -333,8 +333,9 @@ export interface Checkin {
 // Recurrence. A repeating task stores its rule here; each resolved
 // occurrence is one OccurrenceRecord.
 
-export type RepeatFreq = "daily" | "weekly" | "monthly";
-export const REPEAT_FREQS: readonly RepeatFreq[] = ["daily", "weekly", "monthly"];
+/** Yearly (schema 6) repeats on the anchor's month and day; a Feb 29 anchor falls on Feb 28 in other years. */
+export type RepeatFreq = "daily" | "weekly" | "monthly" | "yearly";
+export const REPEAT_FREQS: readonly RepeatFreq[] = ["daily", "weekly", "monthly", "yearly"];
 
 /** By day of month (29–31 fall back to the month's last day), the Nth weekday, or the last day. */
 export type MonthlyOn =
@@ -344,7 +345,7 @@ export type MonthlyOn =
 
 export interface RepeatRule {
 	freq: RepeatFreq;
-	/** Every N days, weeks or months; a whole number >= 1. */
+	/** Every N days, weeks, months or years; a whole number >= 1. */
 	interval: number;
 	/** Weekly only; null = the anchor's weekday. "Every weekday" is MO..FR. */
 	weekdays: Weekday[] | null;

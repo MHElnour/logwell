@@ -30,6 +30,7 @@ const fixedRuleArb: fc.Arbitrary<RepeatRule> = fc.oneof(
 	fc.integer({ min: 1, max: 9 }).map((interval) => rule({ interval })),
 	fc.record({ interval: fc.integer({ min: 1, max: 4 }), weekdays: fc.option(weekdaysArb, { nil: null }) }).map((r) => rule({ freq: "weekly", ...r })),
 	fc.record({ interval: fc.integer({ min: 1, max: 4 }), monthly: monthlyArb }).map((r) => rule({ freq: "monthly", ...r })),
+	fc.integer({ min: 1, max: 3 }).map((interval) => rule({ freq: "yearly", interval })),
 );
 
 /** `base` + times·interval units, months clamped to the month's end (from the base, never chained). */
@@ -38,7 +39,7 @@ function occurrencesAfter(base: string, r: RepeatRule, times: number): string {
 	if (r.freq === "daily") return plusDays(base, k);
 	if (r.freq === "weekly") return plusDays(base, 7 * k);
 	const y = Number(base.slice(0, 4));
-	const m0 = Number(base.slice(5, 7)) - 1 + k;
+	const m0 = Number(base.slice(5, 7)) - 1 + (r.freq === "yearly" ? 12 * k : k);
 	const yy = y + Math.floor(m0 / 12);
 	const mm = (m0 % 12) + 1;
 	const dd = Math.min(Number(base.slice(8, 10)), daysInMonth(yy, mm));
@@ -80,6 +81,24 @@ describe("D12 recurrence properties", () => {
 					const m = Number(d.slice(5, 7));
 					expect(Number(d.slice(8, 10))).toBe(Math.min(day, daysInMonth(y, m)));
 				}
+			}),
+		);
+	});
+
+	it("(2b) yearly is anchor + n·interval years on the anchor's month and day, Feb 29 on Feb 28 in other years (#12)", () => {
+		fc.assert(
+			fc.property(dateArb, fc.integer({ min: 1, max: 4 }), (anchor, interval) => {
+				const to = plusDays(anchor, 365 * 13);
+				const dates = occurrencesBetween(series(anchor, rule({ freq: "yearly", interval })), anchor, to, "MO");
+				const ay = Number(anchor.slice(0, 4));
+				const am = Number(anchor.slice(5, 7));
+				const ad = Number(anchor.slice(8, 10));
+				const expected: string[] = [];
+				for (let k = 0; k <= 13; k += interval) {
+					const d = `${ay + k}-${anchor.slice(5, 7)}-${String(Math.min(ad, daysInMonth(ay + k, am))).padStart(2, "0")}`;
+					if (d <= to) expected.push(d);
+				}
+				expect(dates).toEqual(expected);
 			}),
 		);
 	});
@@ -150,7 +169,7 @@ describe("D12 recurrence properties", () => {
 	it("(7) after completion: each next date is the completion day plus the interval, or the first free multiple", () => {
 		fc.assert(
 			fc.property(
-				fc.constantFrom<"daily" | "weekly" | "monthly">("daily", "weekly", "monthly"),
+				fc.constantFrom<"daily" | "weekly" | "monthly" | "yearly">("daily", "weekly", "monthly", "yearly"),
 				fc.integer({ min: 1, max: 4 }),
 				dateArb,
 				fc.array(fc.integer({ min: -10, max: 10 }), { minLength: 1, maxLength: 12 }),

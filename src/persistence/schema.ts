@@ -13,8 +13,10 @@ export const DB_EXTENSION = "cpbase";
  * opens a database with repeating tasks read-only instead of completing a whole series.
  * v5 adds `syncLinks`, so a schema 4 device opens it read-only instead of
  * writing the file back without the TickTick links.
+ * v6 allows the yearly repeat, so a schema 5 device opens it read-only instead of
+ * dropping the yearly repeats it cannot read.
  */
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 export const HISTORY_LIMIT = 50;
 /**
  * The `dbId` the store holds for a damaged database it never knew (no readable

@@ -248,7 +248,7 @@ describe("recurrence reader (M7 D2)", () => {
 	});
 
 	it("no readable version clears the recurrence", () => {
-		for (const versions of [[], null, [{ effectiveFrom: "x", rule: rule() }], [{ effectiveFrom: "2026-10-05", rule: rule({ freq: "yearly" }) }]]) {
+		for (const versions of [[], null, [{ effectiveFrom: "x", rule: rule() }], [{ effectiveFrom: "2026-10-05", rule: rule({ freq: "hourly" }) }]]) {
 			const r = loadRec(rec({ versions }));
 			expect(r.value).toBeNull();
 			expect(r.issues.length).toBeGreaterThan(0);

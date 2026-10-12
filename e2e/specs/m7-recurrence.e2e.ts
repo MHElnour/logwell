@@ -145,7 +145,7 @@ describe("Recurrence (M7)", function () {
 		await domClick(modal.$('.cp-pop-row[data-row="repeat"]'));
 		const options = modal.$('.cp-date-pop [role="listbox"]');
 		await options.waitForExist({ timeout: 5000, timeoutMsg: "the presets did not open" });
-		await expect(options.$$('[role="option"]')).toBeElementsArrayOfSize(6);
+		await expect(options.$$('[role="option"]')).toBeElementsArrayOfSize(7);
 		await domClick(options.$('[data-preset="monthly"]'));
 		await expect(modal.$('.cp-qa-manual[data-kind="recurrence"] .cp-qa-manual-label')).toHaveText(expect.stringContaining("Repeat: monthly on the"));
 		await domClick(modal.$(".cp-pop-ok"));

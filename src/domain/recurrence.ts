@@ -26,8 +26,10 @@ import { compareSortKeys } from "./sortKey";
 //
 // Rules of the engine, in one place:
 // - A version is in force from its effectiveFrom until the next version; the first one is in force from
-//   the anchor whatever its effectiveFrom. Every version counts its period (weeks, months, every N days)
-//   from the anchor, so editing a rule never shifts the dates of the versions before it.
+//   the anchor whatever its effectiveFrom. Every version counts its period (weeks, months, years, every N
+//   days) from the anchor, so editing a rule never shifts the dates of the versions before it.
+// - Yearly is every 12·N months on the anchor's month and day: a Feb 29 anchor falls on Feb 28 in other
+//   years, as a monthly day 29 to 31 falls on a shorter month's last day.
 // - Fixed mode: the current occurrence is the earliest generated date >= anchor with no record.
 // - After completion: the next date is the completion day plus
 //   the interval, early or late. The base is the most recently resolved record (greatest resolvedAt, ties
@@ -42,13 +44,18 @@ import { compareSortKeys } from "./sortKey";
 //   after `countFrom` when it is set) or no date left before
 //   `end.date`. The count is enforced by the writes, not by generation.
 
-/** The largest interval a rule may have: every 999 days, weeks or months. */
+/** The largest interval a rule may have: every 999 days, weeks, months or years. */
 export const MAX_INTERVAL = 999;
 
 /** The interval the engine uses: a whole number in 1..MAX_INTERVAL, whatever is stored. */
 function intervalOf(r: RepeatRule): number {
 	const k = Math.floor(r.interval);
 	return Number.isFinite(k) ? Math.min(MAX_INTERVAL, Math.max(1, k)) : MAX_INTERVAL;
+}
+
+/** The step in months of a monthly or yearly rule: a year is 12 months on the anchor's day, clamped like a month. */
+function monthStep(r: RepeatRule): number {
+	return intervalOf(r) * (r.freq === "yearly" ? 12 : 1);
 }
 
 /** "Every weekday": Monday to Friday. */
@@ -171,25 +178,28 @@ function ruleNext(c: Compiled, span: Span, n: number, weekStart: WeekStart): num
 			start = origin + 7 * w;
 		}
 	}
+	// Monthly and yearly: a yearly rule is every 12·k months with no form (the anchor's month and day).
+	const step = monthStep(r);
 	const off = monthIndexOf(n).mi - c.anchorMonth;
-	let j = Math.max(0, Math.ceil(off / k) * k);
+	let j = Math.max(0, Math.ceil(off / step) * step);
+	const form = r.freq === "monthly" ? r.monthly : null;
 	for (;;) {
-		const d = monthlyDay(c.anchorMonth + j, r.monthly, c.anchorDay);
+		const d = monthlyDay(c.anchorMonth + j, form, c.anchorDay);
 		// Past the representable dates there is no occurrence (never an endless loop).
 		if (!Number.isFinite(d)) return Infinity;
 		if (d >= n) return d;
-		j += k;
+		j += step;
 	}
 }
 
 /**
  * `base` plus `times` intervals (after completion), each computed from the base, never chained; months
- * keep the base's day where it exists (else the month's last day).
+ * and years keep the base's day where it exists (else the month's last day: Feb 29 + 1 year is Feb 28).
  */
 function plusInterval(base: number, r: RepeatRule, times = 1): number {
-	const k = intervalOf(r) * times;
-	if (r.freq === "daily") return base + k;
-	if (r.freq === "weekly") return base + 7 * k;
+	if (r.freq === "daily") return base + intervalOf(r) * times;
+	if (r.freq === "weekly") return base + 7 * intervalOf(r) * times;
+	const k = monthStep(r) * times;
 	const { mi, day } = monthIndexOf(base);
 	return firstOfMonth(mi + k) + Math.min(day, daysInMonth(mi + k)) - 1;
 }
@@ -249,10 +259,9 @@ function afterBaseOf(records: readonly OccurrenceRecord[], anchoredAt: string | 
 
 /** The smallest `times` with base + times intervals > `d` (arithmetic: no walk over a long gap). */
 function timesAfter(base: number, r: RepeatRule, d: number): number {
-	const k = intervalOf(r);
 	let times: number;
-	if (r.freq === "monthly") times = Math.max(0, Math.floor((monthIndexOf(d).mi - monthIndexOf(base).mi) / k));
-	else times = Math.max(0, Math.floor((d - base) / (r.freq === "weekly" ? 7 * k : k)));
+	if (r.freq === "monthly" || r.freq === "yearly") times = Math.max(0, Math.floor((monthIndexOf(d).mi - monthIndexOf(base).mi) / monthStep(r)));
+	else times = Math.max(0, Math.floor((d - base) / (r.freq === "weekly" ? 7 * intervalOf(r) : intervalOf(r))));
 	// The estimate is at most one step short (the month-end clamp); finish exactly.
 	while (plusInterval(base, r, times) <= d) times++;
 	return times;
@@ -443,6 +452,11 @@ export function ordinal(n: number): string {
 	return `${n}${suffix}`;
 }
 
+/** "Oct 9": the month and day of a date, always English. */
+export function monthDayText(date: LocalDate): string {
+	return `${MONTH_SHORT[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8, 10))}`;
+}
+
 /** The weekday of a date. */
 export function weekdayOf(date: LocalDate): Weekday {
 	return WEEKDAYS[isoWeekday(dayNum(date)) - 1]!;
@@ -450,9 +464,14 @@ export function weekdayOf(date: LocalDate): Weekday {
 
 function describeVersion(r: RepeatRule, anchor: LocalDate): string {
 	const k = r.interval;
-	const unit = r.freq === "daily" ? "day" : r.freq === "weekly" ? "week" : "month";
+	const unit = r.freq === "daily" ? "day" : r.freq === "weekly" ? "week" : r.freq === "monthly" ? "month" : "year";
 	if (r.afterCompletion) return `${plural(k, unit)} after done`;
 	if (r.freq === "daily") return k === 1 ? "every day" : `every ${k} days`;
+	if (r.freq === "yearly") {
+		// The chip stays short; the picker's summary spells out the Feb 29 fallback.
+		const on = `on ${monthDayText(anchor)}`;
+		return k === 1 ? `yearly ${on}` : `every ${k} years ${on}`;
+	}
 	if (r.freq === "weekly") {
 		const days = r.weekdays === null || r.weekdays.length === 0 ? [weekdayOf(anchor)] : WEEKDAYS.filter((d) => r.weekdays!.includes(d));
 		let list: string;
@@ -473,7 +492,7 @@ function describeVersion(r: RepeatRule, anchor: LocalDate): string {
 	return k === 1 ? `monthly ${on}` : `every ${k} months ${on}`;
 }
 
-/** "every Fri", "3 days after done", "monthly on the 1st" (the row chip). `at` picks the version (default: the last). */
+/** "every Fri", "3 days after done", "monthly on the 1st", "yearly on Mar 14" (the row chip). `at` picks the version (default: the last). */
 export function describeRule(rec: Recurrence, at?: LocalDate): string {
 	const v = at === undefined ? rec.versions[rec.versions.length - 1]! : versionAt(rec, at);
 	return describeVersion(v.rule, rec.anchor);
@@ -484,7 +503,7 @@ export function describeEnd(rec: Recurrence, today?: LocalDate): string | null {
 	const end = rec.end;
 	if (end.kind === "never") return null;
 	if (end.kind === "count") return `ends after ${plural(end.count, "time")}`;
-	const label = `${MONTH_SHORT[Number(end.date.slice(5, 7)) - 1]} ${Number(end.date.slice(8, 10))}`;
+	const label = monthDayText(end.date);
 	return today !== undefined && today.slice(0, 4) !== end.date.slice(0, 4) ? `ends ${label}, ${end.date.slice(0, 4)}` : `ends ${label}`;
 }
 

@@ -92,7 +92,7 @@ describe("preset helpers", () => {
 	});
 
 	it("builds every preset as a valid rule and keeps the time, the zone and the end of the value it replaces", () => {
-		for (const id of ["daily", "weekday", "weekly", "monthly"] as const) {
+		for (const id of ["daily", "weekday", "weekly", "monthly", "yearly"] as const) {
 			const c = presetChoice(id, null)!;
 			expect(repeatRuleProblem(c.rule), id).toBeNull();
 			expect(presetOf(c, ANCHOR), id).toBe(id);
@@ -168,7 +168,7 @@ describe("presets face", () => {
 		return { root, onPick, onCustom };
 	}
 
-	it("is a listbox of the six presets with the mockup's small texts", () => {
+	it("is a listbox of the seven presets with the mockup's small texts", () => {
 		const { root } = presets();
 		const list = q(root, '[role="listbox"]');
 		expect(list.getAttribute("aria-labelledby")).toBe("lbl");
@@ -180,11 +180,13 @@ describe("presets face", () => {
 			"Every weekday",
 			"Weekly",
 			"Monthly",
+			"Yearly",
 			"Custom…",
 		]);
 		expect(opt(root, "weekday").querySelector("small")?.textContent).toBe("Mon–Fri");
 		expect(opt(root, "weekly").querySelector("small")?.textContent).toBe("on Friday");
 		expect(opt(root, "monthly").querySelector("small")?.textContent).toBe("on the 9th");
+		expect(opt(root, "yearly").querySelector("small")?.textContent).toBe("on Oct 9");
 		expect(opt(root, "never").querySelector("small")).toBeNull();
 	});
 
@@ -201,6 +203,7 @@ describe("presets face", () => {
 			weekday: { freq: "weekly", interval: 1, weekdays: ["MO", "TU", "WE", "TH", "FR"] },
 			weekly: { freq: "weekly", interval: 1, weekdays: null },
 			monthly: { freq: "monthly", interval: 1, monthly: null },
+			yearly: { freq: "yearly", interval: 1, weekdays: null, monthly: null },
 		};
 		for (const [id, want] of Object.entries(expected)) {
 			const { root, onPick } = presets({ rule: rule({ freq: "daily" }), end: { kind: "count", count: 4 } });
@@ -271,7 +274,7 @@ describe("custom face", () => {
 		expect(q(root, ".cp-repeat-title").textContent).toBe("Custom repeat");
 		expect(interval(root).value).toBe("1");
 		expect(unit(root).value).toBe("weekly");
-		expect([...unit(root).options].map((o) => o.textContent)).toEqual(["days", "weeks", "months"]);
+		expect([...unit(root).options].map((o) => o.textContent)).toEqual(["days", "weeks", "months", "years"]);
 		expect(root.querySelectorAll('.cp-repeat-day[aria-pressed="true"]')).toHaveLength(0);
 		expect(summary(root)).toBe("Every Friday");
 		expect(done(root).disabled).toBe(false);

@@ -5,9 +5,9 @@ import { type Cell, formatCsv, parseCsv } from "../../e2e/limits/csv";
 import { generateDb } from "../../e2e/limits/generate";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { INBOX_ID } from "../../src/domain/types";
-import type { DbData } from "../../src/persistence/schema";
+import { CURRENT_SCHEMA_VERSION, type DbData } from "../../src/persistence/schema";
 
-// The limits harness (docs/development/performance.md): its generator must produce valid current-schema (v5) databases, and its CSV
+// The limits harness (docs/development/performance.md): its generator must produce valid current-schema databases, and its CSV
 // and result helpers must keep the matrix file intact. The e2e run itself is local only (e2e/limits).
 
 const TODAY = "2026-10-06";
@@ -37,13 +37,13 @@ describe("limits matrix", () => {
 	});
 });
 
-describe("generateDb: every dimension at step 1 is a valid v5 database", () => {
+describe("generateDb: every dimension at step 1 is a valid current-schema database", () => {
 	for (const row of rows.filter((r) => r.step === 1)) {
 		it(`${row.dimension} = ${row.count}`, () => {
 			const g = generateDb(row.dimension, row.count, OPTS);
 			const { data, issues } = load(g.text);
 			expect(issues).toEqual([]);
-			expect(data.meta.schemaVersion).toBe(5);
+			expect(data.meta.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
 			expect(data.meta.dbId).toBe(OPTS.dbId);
 			expect(g.sizeKb).toBeGreaterThan(0);
 			// Every marker the harness clicks exists.
