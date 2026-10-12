@@ -231,7 +231,8 @@ const ON_BEFORE_RE = /(?:^|[^\p{L}\p{N}_])(on\s+)$/iu;
 const NTH_OF_MONTH_RE = new RegExp(`(?:the\\s+)?${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}${OF_MONTH}${NOT_WORD_AFTER}`, "giu");
 // The "every" of "the 2nd tuesday of every month" belongs to that phrase, not to an `every month` of its own.
 const NTH_TAIL_RE = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}\\s+of\\s+$`, "iu");
-const BARE_RE = new RegExp(`(?:weekly\\s+on\\s+${WEEKDAY_RANGE}|${BARE_REPEAT_PATTERN}|${PLURAL_WEEKDAY_PATTERN}(?:${SEP}${PLURAL_WEEKDAY_PATTERN})*)${NOT_WORD_AFTER}`, "giu");
+// "weekly mon-fri", "weekly on tue-thu": the bare word with a range of weekdays, like `every week on mon-fri`.
+const BARE_RE = new RegExp(`(?:weekly\\s+(?:on\\s+)?${WEEKDAY_RANGE}|${BARE_REPEAT_PATTERN}|${PLURAL_WEEKDAY_PATTERN}(?:${SEP}${PLURAL_WEEKDAY_PATTERN})*)${NOT_WORD_AFTER}`, "giu");
 // An end right after the repeat; a comma before it goes with it ("daily, for 10 times").
 const COUNT_RE = new RegExp(`(\\s*,)?\\s*((?:for\\s+)?(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
 const PERIODS_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+(${PERIOD_UNIT_PATTERN}|${WEEKDAY_PATTERN}))${NOT_WORD_AFTER}`, "iyu");

@@ -152,9 +152,8 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 
 // Two bare weekdays joined as a range after a repeat form that is complete name the days of the week, not a start and
 // an end: they stay the one visible suggestion they always were, unless `starting` or `beginning` leads them (a range
-// right after `every`, `every week (on)` or `weekly on` is the repeat's weekday list instead). [input, title, the chips]
+// right after `every`, `every week (on)` or `weekly (on)` is the repeat's weekday list instead). [input, title, the chips]
 const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]> = [
-	["Standup weekly Mon-Fri", "Standup Mon-Fri", ["recurrence applied weekly", "scheduled suggestion Mon-Fri"]],
 	["Standup every week from Monday to Friday", "Standup from Monday to Friday", ["recurrence applied every week", "scheduled suggestion Monday to Friday"]],
 	["Run every week from Mon to Fri at 7am", "Run from Mon to Fri at 7am", ["recurrence applied every week", "scheduled suggestion Mon to Fri at 7am"]],
 	["Gym daily Mon-Fri", "Gym Mon-Fri", ["recurrence applied daily", "scheduled suggestion Mon-Fri"]],

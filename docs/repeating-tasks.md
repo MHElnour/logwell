@@ -26,13 +26,13 @@ A subtask cannot repeat, but a repeating task can have subtasks: they come back 
 | `every other day`, `every other week`, `every other friday` | Every second day, week or Friday |
 | `every mon wed fri`, `every mon, wed and fri`, `every tuesday & thursday` | On those weekdays |
 | `every mon-fri`, `every monday to friday`, `every fri-mon` | On every weekday from the first to the last, round the week: Monday to Friday, or Friday, Saturday, Sunday and Monday |
-| `every week on mon, fri`, `every 2 weeks on tuesday`, `every week on mon-fri`, `weekly on mon-fri` | On those weekdays, every week or every N weeks |
+| `every week on mon, fri`, `every 2 weeks on tuesday`, `every week on mon-fri`, `weekly mon-fri`, `weekly on tue-thu` | On those weekdays, every week or every N weeks |
 | `every 15th`, `every 1st of the month`, `every month on the 15th`, `every 3 months on day 5` | On that day of the month |
 | `every first monday`, `every last friday of the month`, `last friday of the month` | On that weekday of the month: first to fourth, or last |
 | `every last day of the month` | On the month's last day |
 | `every year on May 5`, `every year on the 29th of February` | Yearly, starting on that date. A date with no year starts on its next one, so Feb 29 starts on the next leap day |
 
-At the end of the text, after the title, a single word also repeats: `daily`, `weekly`, `fortnightly`, `monthly`, `yearly`, `annually`, `weekdays`, `weekends`, or weekdays in the plural such as `mondays` or `mondays and fridays`. So `Stretch daily` repeats, but `Daily standup` keeps its title.
+At the end of the text, after the title, a single word also repeats: `daily`, `weekly`, `fortnightly`, `monthly`, `yearly`, `annually`, `weekdays`, `weekends`, or weekdays in the plural such as `mondays` or `mondays and fridays`; `weekly` may take a range of weekdays (`Standup weekly mon-fri`). So `Stretch daily` repeats, but `Daily standup` keeps its title.
 
 Add a time with `at`, such as `every monday at 9am`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00. Start on another date with `starting`, such as `every monday starting next week`.
 
@@ -42,7 +42,7 @@ End the repeat in the same line:
 | --- | --- |
 | `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included |
 | `for 5 times`, `5 times` | After 5 times |
-| `starting Oct 12 to Dec 1`, `from Oct 12 till Dec 1`, or `Oct 12 until Dec 1` right after the repeat | Starts on Oct 12 and ends on Dec 1. Both sides need a day; an end with no year that comes before the start is the next one, so `starting Dec 20 to Jan 5` ends in January. Two weekdays such as `Mon-Fri` or `from Monday to Friday` after a complete repeat, as in `every day Mon-Fri` or `weekly Mon-Fri`, keep the repeat as typed and stay one "Use as date?" suggestion: they are not the repeat's days, nor a start and an end. Write `starting Monday until Friday` for a start and an end, or `every mon-fri` for those weekdays |
+| `starting Oct 12 to Dec 1`, `from Oct 12 till Dec 1`, or `Oct 12 until Dec 1` right after the repeat | Starts on Oct 12 and ends on Dec 1. Both sides need a day; an end with no year that comes before the start is the next one, so `starting Dec 20 to Jan 5` ends in January. Two weekdays such as `Mon-Fri` or `from Monday to Friday` after a complete repeat, as in `every day Mon-Fri` or `daily Mon-Fri`, keep the repeat as typed and stay one "Use as date?" suggestion: they are not the repeat's days, nor a start and an end. Write `starting Monday until Friday` for a start and an end, or `every mon-fri` for those weekdays |
 | `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the task's first date: the date you type, pick or the view gives, else today. Only after the repeat: `Plan meals for 7 days every sunday` keeps "for 7 days" in the title |
 
 An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, a range such as `Oct 12 to Dec 1` is one suggested date, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement.

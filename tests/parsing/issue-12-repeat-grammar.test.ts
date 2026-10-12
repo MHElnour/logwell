@@ -94,6 +94,8 @@ const FORMS: Form[] = [
 	list("every fri-mon", ["FR", "SA", "SU", "MO"]),
 	list("every week on mon-fri", ["MO", "TU", "WE", "TH", "FR"]),
 	{ text: "weekly on mon-fri", kind: "bare", key: "weekly:MO,TU,WE,TH,FR" },
+	{ text: "weekly mon-fri", kind: "bare", key: "weekly:MO,TU,WE,TH,FR" },
+	{ text: "weekly fri-mon", kind: "bare", key: "weekly:MO,FR,SA,SU" },
 ];
 
 const TITLES = ["Gym", "Pay the bank", "Plan the May party", "Review for the team", ""];
@@ -204,7 +206,7 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 	const joinsDay = w.kind === "weekday" && f.days !== undefined && listJoin;
 	// `every week Mon-Fri`, `every 2 weeks on Mon-Fri`: a range opens the week form's list (Q3); after a complete list
 	// (`every monday Mon-Fri`) it stays a suggestion.
-	const joinsRange = w.kind === "weekdayRange" && f.weekOn === true && (sep === "" || sep === " on");
+	const joinsRange = w.kind === "weekdayRange" && ((f.weekOn === true && (sep === "" || sep === " on")) || (f.text === "weekly" && sep === ""));
 	// `every month on 12 Oct`: "on 12" is the day of the month, as `on 15` is (the month name is left to the date reader).
 	const joinsMonthDay = f.monthOn === true && sep === " on" && /^\d/u.test(w.text);
 	const dayOn = joinsMonthDay ? w.text.split(" ")[0]! : "";
@@ -232,7 +234,7 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 		expect(r.fields.recurrence, because).toBeUndefined();
 	} else {
 		expect(rec!.status, because).toBe("applied");
-		expect(ruleKey(r.fields.recurrence!), because).toBe(joinsRange ? `weekly${f.interval === 1 ? "" : `/${f.interval}`}:MO,TU,WE,TH,FR` : joinsDay ? keyWith(f, "MO") : joinsMonthDay ? `${f.key}:d${Number(dayOn)}` : f.days !== undefined ? keyWith(f, null) : f.key);
+		expect(ruleKey(r.fields.recurrence!), because).toBe(joinsRange ? `weekly${f.interval === undefined || f.interval === 1 ? "" : `/${f.interval}`}:MO,TU,WE,TH,FR` : joinsDay ? keyWith(f, "MO") : joinsMonthDay ? `${f.key}:d${Number(dayOn)}` : f.days !== undefined ? keyWith(f, null) : f.key);
 	}
 	if (joinsMonthDay) return;
 	const waits = rec!.status === "choice";
@@ -339,6 +341,11 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 			["Gym every 2 weeks on tue-thu", "Gym", "weekly/2:TU,WE,TH"],
 			["Gym every other mon-wed", "Gym", "weekly/2:MO,TU,WE"],
 			["Gym weekly on mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
+			["Gym weekly mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
+			["Gym weekly tue-thu", "Gym", "weekly:TU,WE,TH"],
+			["Shop weekly fri-mon", "Shop", "weekly:MO,FR,SA,SU"],
+			["Gym weekly monday to friday", "Gym", "weekly:MO,TU,WE,TH,FR"],
+			["Gym weekly mon through fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
 			["Gym every mon-wed, fri", "Gym", "weekly:MO,TU,WE,FR"],
 		];
 		for (const [input, title, key] of rows) {
@@ -348,11 +355,23 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 			expect(r.fields.scheduled, input).toBeUndefined();
 			expect(r.chips.map((c) => c.kind), input).toEqual(["recurrence"]);
 		}
+		// A time after the bare word is a time of day for the date reader, as after every bare word (`Stretch daily at 7am`).
+		for (const input of ["Gym weekly mon-fri at 7am", "Gym weekly on mon-fri at 7am"]) {
+			const r = parseQuickAdd(input, ctx);
+			expect(ruleKey(r.fields.recurrence!), input).toBe("weekly:MO,TU,WE,TH,FR");
+			expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`), input).toEqual([`recurrence|applied|${input.slice("Gym ".length, -" at 7am".length)}`, "scheduled|applied|at 7am"]);
+			expect(r.title, input).toBe("Gym");
+		}
 		// A range after a form that takes no list is not its days; `until` leads an end, not a range.
 		const third = parseQuickAdd("Gym every third Mon-Fri", ctx);
 		expect(third.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|unsupported|every third", "scheduled|suggestion|Mon-Fri"]);
 		const daily = parseQuickAdd("Gym every day Mon-Fri", ctx);
 		expect(daily.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day", "scheduled|suggestion|Mon-Fri"]);
+		expect(parseQuickAdd("Gym daily Mon-Fri", ctx).chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|daily", "scheduled|suggestion|Mon-Fri"]);
+		// A bare word counts only at the end, after title text (decision 4): `Weekly Mon-Fri review` keeps its title, and
+		// the weekdays of the dropped phrase are not a date either.
+		const review = parseQuickAdd("Weekly Mon-Fri review", ctx);
+		expect([review.title, review.chips]).toEqual(["Weekly Mon-Fri review", []]);
 		// Dates as the locale reads them (en-GB takes `Nov 30` for a year, #69).
 		const [nov30, dec1] = locale === "en" ? ["Nov 30", "Dec 1"] : ["30 Nov", "1 Dec"];
 		const until = parseQuickAdd(`Gym every Monday until ${nov30}`, ctx);

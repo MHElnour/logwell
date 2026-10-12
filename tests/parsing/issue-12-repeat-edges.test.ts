@@ -103,6 +103,9 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 			["Gym every tuesday to thursday", "Gym", "weekly:TU,WE,TH"],
 			["Gym every other fri-mon", "Gym", "weekly/2:MO,FR,SA,SU"],
 			["Gym every 2 weeks on mon-wed at 9am", "Gym", "weekly/2:MO,TU,WE@09:00"],
+			["Gym weekly mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
+			["Standup weekly monday to friday", "Standup", "weekly:MO,TU,WE,TH,FR"],
+			["Gym weekly tue-thu", "Gym", "weekly:TU,WE,TH"],
 		];
 		for (const [input, title, key] of cases) {
 			const r = parse(input, zone);

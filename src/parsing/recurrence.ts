@@ -161,8 +161,9 @@ function bodyOf(text: string): string {
 	if (text.startsWith("every ")) return text.slice("every ".length);
 	// "mondays and fridays", "the 2nd tuesday of the month", "on mondays": the "on" goes with the repeat.
 	const bare = text.replace(/^on (?:the )?|^the /u, "");
-	// "weekly on mon-fri" reads as "every week on mon-fri".
-	if (bare.startsWith("weekly on ")) return `week on ${bare.slice("weekly on ".length)}`;
+	// "weekly mon-fri", "weekly on mon-fri" read as "every week on mon-fri".
+	const weekly = /^weekly (?:on )?(.+)$/u.exec(bare);
+	if (weekly !== null) return `week on ${weekly[1]!}`;
 	return Object.hasOwn(BARE_REPEAT_WORDS, bare) ? BARE_REPEAT_WORDS[bare]! : bare;
 }
 
