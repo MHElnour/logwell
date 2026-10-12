@@ -102,6 +102,7 @@ describe.each(ZONES)("1. Repeat forms in %s", (zone) => {
 		{ in: "Gym every mon and fri", title: "Gym", rec: "weekly:MO,FR" },
 		{ in: "Gym every mon & fri", title: "Gym", rec: "weekly:MO,FR" },
 		{ in: "Gym weekly on mon, fri", title: "Gym", rec: "weekly:MO,FR" },
+		{ in: "Gym weekly mon, fri", title: "Gym", rec: "weekly:MO,FR" },
 		{ in: "Gym every week on mon, fri", title: "Gym", rec: "weekly:MO,FR" },
 		{ in: "Gym mondays and fridays", title: "Gym", rec: "weekly:MO,FR" },
 		{ in: "Gym every mon-fri", title: "Gym", rec: WEEKDAYS },
@@ -112,6 +113,7 @@ describe.each(ZONES)("1. Repeat forms in %s", (zone) => {
 		{ in: "Gym weekly on mon-fri", title: "Gym", rec: WEEKDAYS },
 		{ in: "Gym every fri-mon", title: "Gym", rec: "weekly:MO,FR,SA,SU" },
 		{ in: "Gym every 2 weeks on mon, fri", title: "Gym", rec: "weekly/2:MO,FR" },
+		{ in: "Gym every 2 weeks tuesday", title: "Gym", rec: "weekly/2:TU" },
 		{ in: "Gym every other week on tue", title: "Gym", rec: "weekly/2:TU" },
 		{ in: "Pay every month", title: "Pay", rec: "monthly" },
 		{ in: "Pay monthly", title: "Pay", rec: "monthly" },
@@ -121,7 +123,9 @@ describe.each(ZONES)("1. Repeat forms in %s", (zone) => {
 		{ in: "Pay every quarter", title: "Pay", rec: "monthly/3" },
 		{ in: "Pay every 15th", title: "Pay", rec: "monthly:d15" },
 		{ in: "Pay every month on the 15th", title: "Pay", rec: "monthly:d15" },
+		{ in: "Pay every month on 15", title: "Pay", rec: "monthly:d15" },
 		{ in: "Pay monthly on the 15th", title: "Pay", rec: "monthly:d15" },
+		{ in: "Pay monthly on day 15", title: "Pay", rec: "monthly:d15" },
 		{ in: "Pay on the 15th of every month", title: "Pay", rec: "monthly:d15" },
 		{ in: "Pay the 15th of each month", title: "Pay", rec: "monthly:d15" },
 		{ in: "Pay rent monthly on the 1st", title: "Pay rent", rec: "monthly:d1" },
@@ -185,11 +189,17 @@ describe.each(ZONES)("2. Time in %s", (zone) => {
 		{ in: "Gym mondays at 6pm", title: "Gym", rec: "weekly:MO@18:00" },
 	])("$in", (row) => check(row, zone));
 
-	it("an unclear hour is a choice; nothing applies until it is chosen, and saving is not blocked", () => {
+	it("an unclear hour is a choice; nothing applies until it is chosen, and saving waits for it", () => {
 		const r = parse("Gym every day at 7", zone);
 		expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|choice|every day at 7"]);
 		expect(r.chips[0]!.alternatives!.map((a) => a.label)).toEqual(["07:00", "19:00"]);
 		expect(r.fields.recurrence).toBeUndefined();
+		expect(r.blocking).toEqual([r.chips[0]!.id]);
+	});
+
+	it("a repeat picked by hand wins: the typed hour's choice is a replacement and never blocks saving", () => {
+		const r = parse("Gym every day at 7", zone, "en", undefined, ["recurrence"]);
+		expect(r.chips[0]).toMatchObject({ kind: "recurrence", status: "choice", notice: "Replace repeat?" });
 		expect(r.blocking).toEqual([]);
 	});
 });
@@ -256,9 +266,15 @@ describe.each(ZONES)("4. End in %s", (zone) => {
 		check({ in: "Gym every day starting Oct 12 at 7am", title: "Gym", rec: "daily", s: "2026-10-12T07:00" }, zone);
 	});
 
-	it("an end must be a date: a time alone is read on its own, never an end", () => {
-		check({ in: "Pills every day until 5pm", title: "Pills until", rec: "daily", s: "2026-10-07T17:00" }, zone);
-		check({ in: "Gym every monday until 5pm", title: "Gym until", rec: "weekly:MO", s: "2026-10-07T17:00" }, zone);
+	it("an end must be a date: `until <time>` after a repeat is a visible suggestion, never applied", () => {
+		for (const [input, rec] of [
+			["Pills every day until 5pm", "daily"],
+			["Gym every monday until 5pm", "weekly:MO"],
+		] as const) {
+			check({ in: input, title: input.replace(/ every \w+/u, ""), rec }, zone);
+			const r = parse(input, zone);
+			expect(r.chips.find((c) => c.kind === "scheduled"), input).toMatchObject({ status: "suggestion", text: "until 5pm", notice: "Use as date?" });
+		}
 		const choice = parse("Gym every day until 5", zone);
 		expect(choice.fields.recurrenceEnd).toBeUndefined();
 		expect(choice.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day"]);
@@ -341,6 +357,39 @@ describe.each(ZONES)("5. Not supported in %s", (zone) => {
 
 	it("a time without `at` is read on its own", () => {
 		check({ in: "Gym every monday 9am", title: "Gym", rec: "weekly:MO", s: "2026-10-08T09:00" }, zone);
+	});
+
+	it("the 1st of the month without each or every stays title text", () => {
+		check({ in: "Visit the 1st of the month market Saturday", title: "Visit the 1st of the month market", s: "2026-10-10" }, zone);
+		check({ in: "Report the 2nd tuesday of the month", title: "Report the 2nd of the month", s: "2026-10-13" }, zone);
+	});
+
+	it("a date after a weekly form with `on` stays text: no start", () => {
+		for (const input of ["Gym every week on Oct 12", "Gym every 2 weeks on Oct 12", "Gym every monday on Oct 12", "Gym weekly on Oct 12"]) {
+			const r = parse(input, zone);
+			const because = `${input}: ${r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`).join(" ; ")}`;
+			expect(r.fields.recurrence, because).toBeDefined();
+			expect(r.fields.scheduled, because).toBeUndefined();
+			expect(r.title, because).toBe(`Gym on Oct 12`);
+		}
+		check({ in: "Gym every week starting Oct 12", title: "Gym", rec: "weekly", s: "2026-10-12" }, zone);
+	});
+
+	it("start or end words before the repeat are not its parts: they read as without a repeat", () => {
+		check({ in: "Wait until Friday then call the bank every monday", title: "Wait then call the bank", rec: "weekly:MO", d: "2026-10-09" }, zone);
+		check({ in: "Stay until Dec 1 and water plants every day", title: "Stay and water plants", rec: "daily", d: "2026-12-01" }, zone);
+		check({ in: "Starting Monday run every day", title: "Starting run", rec: "daily", s: "2026-10-12" }, zone);
+		check({ in: "Trip ending Dec 1 then stretch daily", title: "Trip ending then stretch", s: "2026-12-01", rec: "daily" }, zone);
+		check({ in: "Call from Oct 12 to Dec 1 then every monday", title: "Call from Oct 12 to Dec 1 then", rec: "weekly:MO" }, zone);
+	});
+
+	it("a start or end part after a repeat Quick Add cannot build applies nothing", () => {
+		unsupported("Take pills every 8 hours starting tomorrow", zone, "every 8 hours");
+		unsupported("Take pills every 8 hours on Monday", zone, "every 8 hours");
+		unsupported("Take pills every 8 hours from Oct 12 to Dec 1", zone, "every 8 hours");
+		unsupported("Take pills every 8 hours until Friday", zone, "every 8 hours");
+		unsupported("Take pills every 8 hours until 5pm", zone, "every 8 hours");
+		unsupported("Gym every day every week starting Monday", zone, "every day");
 	});
 
 	it("a repeat with two starts", () => {

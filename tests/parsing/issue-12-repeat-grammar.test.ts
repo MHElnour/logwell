@@ -167,6 +167,10 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 	// `,`, `and` and `&` join more repeat words to an `every …` form: a compound repeat (a bare weekday right after them;
 	// a plain number is title text). A bare word (`daily`) has no list words.
 	const compound = f.kind === "supported" && f.onDate !== true && (sep === "," || sep === " and") && w.kind === "weekday";
+	// A start word before the follower: after an `every …` Quick Add cannot build it applies nothing.
+	const led = sep === " on" || sep === " from" || sep === " starting";
+	// Under a weekly form `on` names days: a date after it is no start, only an offer.
+	const onNoStart = (f.days !== undefined || f.key?.startsWith("weekly") === true) && sep === " on";
 
 	// A day number before a weekday fits no form (`every 15th Monday`, like `every 5th friday`): not supported.
 	if (f.text === "every 15th" && sep === "" && w.kind === "weekday") {
@@ -189,10 +193,11 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 		if (w.kind === "time") expect(chip(r, "scheduled", "applied"), because).toBeUndefined();
 		expect(r.fields.recurrence, because).toBeUndefined();
 		expect(r.title, because).toContain(f.text);
-		if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chip(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
+		if ((w.kind === "date" || w.kind === "leap" || w.kind === "range") && !fromGB && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
+		else if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chip(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
 		if (w.kind === "end") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
 		if ((w.kind === "periods" || w.kind === "count") && sep !== " and") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
-		if (w.kind === "weekday" && (sep === " on" || sep === " from" || sep === " starting")) expect(chip(r, "scheduled", "applied"), because).toBeDefined();
+		if (w.kind === "weekday" && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
 		return;
 	}
 
@@ -256,13 +261,14 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 	// The follower is read by the date reader and the end logic, never by the repeat.
 	switch (w.kind) {
 		case "date":
-			if (!fromGB) expect(dateOf(chip(r, "scheduled", "applied"))?.slice(5), because).toBe("10-12");
-			break;
 		case "leap":
-			if (!fromGB) expect(dateOf(chip(r, "scheduled", "applied"))?.slice(5), because).toBe("02-29");
-			break;
 		case "weekday":
-			if (!joinsDay) expect(chip(r, "scheduled", "applied")?.text.endsWith("Monday"), because).toBe(true);
+			if (onNoStart && !joinsDay) {
+				expect(chip(r, "scheduled", "applied"), because).toBeUndefined();
+				expect(chip(r, "scheduled", "suggestion")?.text, because).toBe(`on ${w.text}`);
+			} else if (w.kind === "weekday") {
+				if (!joinsDay) expect(chip(r, "scheduled", "applied")?.text.endsWith("Monday"), because).toBe(true);
+			} else if (!fromGB) expect(dateOf(chip(r, "scheduled", "applied"))?.slice(5), because).toBe(w.kind === "date" ? "10-12" : "02-29");
 			break;
 		case "time":
 			if (!joinsTime) expect(chip(r, "scheduled", "choice"), because).toBeDefined();

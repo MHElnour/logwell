@@ -32,9 +32,10 @@ describe.each(ZONES)("a yearly repeat whose start is a choice in %s", (zone) => 
 		expect(chosen.title, input).toBe(input.split(" every")[0]);
 	});
 
-	it("a choice that is not a yearly start does not block (the end waits instead)", () => {
+	it("a repeat's time that is a choice blocks and its end waits; a start date that is a choice does not block", () => {
 		const r = parse("Gym every monday at 7 until Dec 1", zone);
-		expect(r.blocking).toEqual([]);
+		expect(r.blocking.map((id) => r.chips.find((c) => c.id === id)?.kind)).toEqual(["recurrence"]);
+		expect(r.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "suggestion", notice: "Applies once the repeat's time is chosen" });
 		const choice = parse("Gym every day starting Wednesday", zone);
 		expect(choice.chips.find((c) => c.kind === "scheduled")?.status).toBe("choice");
 		expect(choice.blocking).toEqual([]);
@@ -43,12 +44,13 @@ describe.each(ZONES)("a yearly repeat whose start is a choice in %s", (zone) => 
 
 describe.each(ZONES)("a range after an unsupported `every …` in %s", (zone) => {
 	it.each([
-		["Check server every 3 hours from Oct 12 to Oct 20", "every 3 hours", "from Oct 12 to Oct 20"],
-		["Standup every 2nd and 4th tuesday from Oct 12 to Dec 1", "every 2nd and 4th tuesday", "from Oct 12 to Dec 1"],
-		["Call every 3 hours, Oct 12 to Oct 20", "every 3 hours", "Oct 12 to Oct 20"],
-	])("%s stays one suggestion, never a start and an end", (input, phrase, range) => {
+		["Check server every 3 hours from Oct 12 to Oct 20", "every 3 hours", "unsupported|from Oct 12 to Oct 20"],
+		["Standup every 2nd and 4th tuesday from Oct 12 to Dec 1", "every 2nd and 4th tuesday", "unsupported|from Oct 12 to Dec 1"],
+		["Call every 3 hours, Oct 12 to Oct 20", "every 3 hours", "suggestion|Oct 12 to Oct 20"],
+	])("%s stays one chip that applies nothing, never a start and an end", (input, phrase, range) => {
 		const r = parse(input, zone);
-		expect(chips(r), input).toEqual([`recurrence|unsupported|${phrase}`, `scheduled|suggestion|${range}`]);
+		// Led by a start word it is the repeat's part, not supported with it; on its own it is the suggestion a range is.
+		expect(chips(r), input).toEqual([`recurrence|unsupported|${phrase}`, `scheduled|${range}`]);
 		expect(r.fields.scheduled, input).toBeUndefined();
 		expect(r.fields.recurrenceEnd, input).toBeUndefined();
 		expect(r.title, input).toBe(input);

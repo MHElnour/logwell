@@ -158,7 +158,7 @@ describe("parser properties", () => {
 		);
 	});
 
-	it("fields mirror the applied chips and blocking lists exactly the unresolved ones", () => {
+	it("fields mirror the applied chips and blocking lists exactly the unresolved ones and a typed repeat's time to choose", () => {
 		fc.assert(
 			fc.property(arbText, arbZone, arbNow, arbManual, (input, zone, now, manual) => {
 				const r = parseUnguarded(input, ctxFrom(zone, now, "en", manual, []));
@@ -173,7 +173,10 @@ describe("parser properties", () => {
 				expect(r.fields.recurrence).toBe(last("recurrence")?.rule);
 				expect(new Set(r.fields.tagKeys).size).toBe(r.fields.tagKeys.length);
 				expect(new Set(r.fields.newTags).size).toBe(r.fields.newTags.length);
-				expect(r.blocking).toEqual(r.chips.filter((c) => c.status === "unresolved").map((c) => c.id));
+				// The fragments type no repeat end and no yearly start: what blocks is an unresolved list and, unless a repeat is
+				// picked by hand, a typed repeat whose hour is a choice.
+				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
+				expect(r.blocking).toEqual(r.chips.filter(blocks).map((c) => c.id));
 				// Per field at most one applied chip.
 				for (const k of ["scheduled", "deadline", "duration", "category", "note", "priority", "recurrence"]) {
 					expect(a.filter((c) => c.kind === k).length).toBeLessThanOrEqual(1);

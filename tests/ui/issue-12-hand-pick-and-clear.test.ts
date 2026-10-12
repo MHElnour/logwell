@@ -90,19 +90,39 @@ describe("the repeat picker and a stored end (#12)", () => {
 });
 
 describe("choosing a typed repeat's hour (#12)", () => {
-	it("never saves by itself: a repeat's hour choice does not block saving, so Enter cannot open it", async () => {
+	it("blocks saving: Enter opens the choice, and the pick saves with the chosen hour", async () => {
 		const { h, m } = await model();
 		m.setInput("Gym every monday at 9");
 		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
-		expect(m.result.blocking).toEqual([]);
-		expect(await m.submit()).toBe("saved");
+		expect(m.result.blocking).toEqual([chip.id]);
+		expect(await m.submit()).toBe("blocked");
+		expect(m.openChipId).toBe(chip.id);
+		expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
+		m.setChipRule(chip, chip.alternatives![1]!.rule!);
 		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
-		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toBeNull();
+		const task = [...h.app.store.state.tasks.values()][0]!;
+		expect(task.title).toBe("Gym");
+		expect(task.recurrence?.versions[0]?.rule).toMatchObject({ freq: "weekly", weekdays: ["MO"], time: "21:00" });
+	});
+
+	it("the end typed after it waits for the hour and saves with it", async () => {
+		const { h, m } = await model();
+		m.setInput("Gym every day at 7 until Dec 1");
+		expect(await m.submit()).toBe("blocked");
+		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
+		m.setChipRule(chip, chip.alternatives![0]!.rule!);
+		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
+		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toMatchObject({ end: { kind: "date", date: "2026-12-01" }, versions: [{ rule: { freq: "daily", time: "07:00" } }] });
+	});
+
+	it("a pick made without Enter only applies the hour: nothing saves by itself", async () => {
+		const { h, m } = await model();
 		m.setInput("Gym every monday at 9");
-		m.activate(m.result.chips.find((c) => c.id === chip.id)!);
-		m.setChipRule(m.result.chips[0]!, chip.alternatives![1]!.rule!);
+		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
+		m.activate(chip);
+		m.setChipRule(chip, chip.alternatives![1]!.rule!);
 		await Promise.resolve();
-		expect([...h.app.store.state.tasks.values()]).toHaveLength(1);
+		expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
 		expect(m.repeatValue()?.rule.time).toBe("21:00");
 	});
 });

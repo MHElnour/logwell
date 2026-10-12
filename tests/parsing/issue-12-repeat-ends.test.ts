@@ -39,7 +39,6 @@ const CASES: Case[] = [
 	{ in: "Pills every day ending Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
 	{ in: "Pills every day ending on Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
 	{ in: "Pills every day ends on Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
-	{ in: "Until Dec 1 take pills every day", title: "take pills", rec: "daily", end: "2026-12-01" },
 	{ in: "Pills daily until Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
 	{ in: "Gym every Monday until Nov 30 starting Oct 12", title: "Gym", rec: "weekly:MO", s: "2026-10-12", end: "2026-11-30" },
 	// a count (audit 124)
@@ -92,8 +91,16 @@ describe("Quick Add repeat ends (#12)", () => {
 		const r = parse("Pills every day until march", NY);
 		expect(r.fields.recurrenceEnd).toBeUndefined();
 		expect(r.chips.find((c) => c.kind === "repeatEnd")).toBeUndefined();
-		expect(r.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "suggestion", text: "march" });
+		expect(r.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "suggestion", text: "until march" });
 		expect(r.title).toBe("Pills until march");
+	});
+
+	it("typed before the repeat, `until <date>` is no part of it: a deadline, as without a repeat", () => {
+		const r = parse("Until Dec 1 take pills every day", NY);
+		expect(r.title).toBe("take pills");
+		expect(r.fields.deadline).toEqual({ kind: "date", date: "2026-12-01" });
+		expect(r.fields.recurrenceEnd).toBeUndefined();
+		expect(ruleKey(r.fields.recurrence!)).toBe("daily");
 	});
 
 	it("without a repeat, `until <date>` is a deadline (decision 8)", () => {

@@ -384,12 +384,16 @@ describe("a typed repeat with a bare hour", () => {
 		expect(tasks(m)[0]?.recurrence?.versions[0]?.rule).toMatchObject({ freq: "daily", time: "09:00" });
 	});
 
-	it("saving without choosing keeps the words in the title and does not repeat", async () => {
+	it("Enter without choosing saves nothing and opens the choice; Apply there saves with the chosen hour", async () => {
 		const m = await mountForm();
 		await typeInto(input(m.root), "Gym every monday at 9");
 		await save(m);
-		expect(tasks(m)[0]?.title).toBe("Gym every monday at 9");
-		expect(tasks(m)[0]?.recurrence).toBeNull();
+		expect(tasks(m)).toHaveLength(0);
+		expect(q(m.root, ".cp-qa-panel-title").textContent).toBe('Choose a value for "every monday at 9"');
+		await click(q(m.root, ".cp-qa-panel .cp-qa-apply"));
+		await settle();
+		expect(tasks(m)[0]?.title).toBe("Gym");
+		expect(tasks(m)[0]?.recurrence?.versions[0]?.rule).toMatchObject({ freq: "weekly", weekdays: ["MO"], time: "09:00" });
 	});
 
 	it("a chosen reading replaces a repeat picked by hand, like a chosen date does", async () => {

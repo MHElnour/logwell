@@ -118,8 +118,8 @@ const GUARDS: ReadonlyArray<readonly [string, DateLocale, string, readonly strin
 	["Trip from Oct 12 to Oct 20", "en", "Trip from Oct 12 to Oct 20", ["scheduled suggestion Oct 12 to Oct 20"]],
 	["Work from 9 until 5", "en", "Work from 9 until 5", ["scheduled suggestion from 9 until 5"]],
 	["Call 2pm until 3pm", "en", "Call 2pm until 3pm", ["scheduled suggestion 2pm until 3pm"]],
-	// A time alone is never an end: it is read on its own, as without a repeat.
-	["Gym every day at 9 until 5pm", "en", "Gym every day at 9 until", ["scheduled applied 5pm"]],
+	// A time alone is never an end: after a repeat, `until <time>` is a visible suggestion, never applied.
+	["Gym every day at 9 until 5pm", "en", "Gym every day at 9 until 5pm", ["scheduled suggestion until 5pm"]],
 	["Gym every day starting Oct 12 until 5pm", "en", "Gym starting Oct 12 until 5pm", ["scheduled suggestion 12 until 5pm"]],
 	["Gym every day starting Oct 12 to 15", "en", "Gym starting Oct 12 to 15", ["scheduled suggestion starting Oct 12 to 15"]],
 	["Gym every day from Oct 12", "en", "Gym", ["scheduled applied from Oct 12"]],
@@ -187,7 +187,7 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 	it("a repeat's time that is a choice keeps its form before two weekdays", () => {
 		const r = parse("Gym every day at 7 Mon-Fri", zone);
 		expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`)).toEqual(["recurrence choice every day at 7", "scheduled suggestion Mon-Fri"]);
-		expect([r.fields.scheduled, r.blocking]).toEqual([undefined, []]);
+		expect([r.fields.scheduled, r.blocking]).toEqual([undefined, [r.chips[0]!.id]]);
 	});
 
 	it("a date range after a comma is not more repeat words: the repeat keeps its form", () => {
