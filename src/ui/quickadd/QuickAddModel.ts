@@ -310,14 +310,16 @@ export class QuickAddModel {
 
 	/**
 	 * The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual
-	 * repeat. A repeat's choice never blocks saving, so the pick never saves by itself.
+	 * repeat. The choice blocks saving, so Enter opens it and the pick saves.
 	 */
 	setChipRule(chip: Chip, rule: RepeatRule): void {
+		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "rule", rule });
 		this.clearManual("recurrence");
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
+		if (save) void this.submit();
 	}
 
 	/** The picker of an unresolved category chip. */

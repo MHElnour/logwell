@@ -42,6 +42,8 @@ export interface DateCandidate {
 	textStart: number;
 	/** The lead word counts only when the input repeats (`ending`, `starting` …): without a repeat it is title text. */
 	repeatOnly: boolean;
+	/** The lead word the span widened over (LEADS), or null. */
+	lead: { words: string; kind: LeadKind } | null;
 	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
 	rolls: RollKind | null;
 	outcome: DateOutcome;
@@ -505,7 +507,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		const { dayCertain, hourCertain, outcome } = read;
 
 		// The span: chrono's text, widened over a directly preceding lead word (LEADS). A time joins only a date whose hour
-		// is certain; an end must be a date (`until 5pm` is a time read on its own, never an end).
+		// is certain; an end must be a date: an end word before a time alone (`until 5pm`) widens the span only next to a
+		// repeat (repeatOnly), where the parser offers the two as a suggestion; without one the time is read on its own.
 		let spanStart = r.index;
 		let kind: DateCandidate["kind"] = "scheduled";
 		let repeatOnly = false;
@@ -514,16 +517,26 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		const own = OWN_LEAD_RE.exec(r.text);
 		const found = leadBefore(masked, r.index + (own === null ? 0 : own[0].length));
 		const lead = found !== null && (found.kind === "time" ? hourCertain : found.kind === "end" ? dayCertain : true) ? found : null;
-		if (lead !== null) {
-			spanStart = Math.min(lead.start, r.index);
-			repeatOnly = lead.repeatOnly && lead.start < r.index;
-			if (lead.kind === "deadline" || lead.kind === "end") kind = lead.kind;
+		const timeEnd = lead === null && found?.kind === "end";
+		const widened = lead ?? (timeEnd ? found : null);
+		if (widened !== null) {
+			spanStart = Math.min(widened.start, r.index);
+			repeatOnly = timeEnd || (widened.repeatOnly && widened.start < r.index);
+			if (lead?.kind === "deadline" || lead?.kind === "end") kind = lead.kind;
 		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
 			kind = "deadline";
 		}
 		// chrono's text can end in spaces ("April 15, " before "for 3 times"); the span stops at the date.
 		const rolls = rollKindOf(r.start, r.text);
-		const candidate: DateCandidate = { kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, rolls, outcome };
+		const candidate: DateCandidate = {
+			kind,
+			span: { start: spanStart, end: r.index + r.text.trimEnd().length },
+			textStart: r.index,
+			repeatOnly,
+			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
+			rolls,
+			outcome,
+		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start
 		// and end; the parser decides by where the repeat is.
@@ -531,9 +544,9 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		if (split !== null) {
 			candidate.range = {
 				led: lead !== null,
-				start: { kind: "scheduled", span: { start: spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, rolls, outcome: split.start.outcome },
+				start: { kind: "scheduled", span: { start: spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, lead: candidate.lead, rolls, outcome: split.start.outcome },
 				// The end already moved past the start.
-				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, rolls: null, outcome: split.end.outcome },
+				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, lead: null, rolls: null, outcome: split.end.outcome },
 				...(split.endByChoice !== undefined ? { endByChoice: split.endByChoice } : {}),
 			};
 		}

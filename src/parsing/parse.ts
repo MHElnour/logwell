@@ -310,12 +310,17 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			delete d.chip.alternatives;
 		}
 	}
-	// A repeat typed, or one picked by hand.
 	const typed = keptRepeats.length > 0;
-	const repeats = typed || ctx.manual.has("recurrence");
-	// Only a repeat Quick Add built (applied, or a time to choose) makes a range its start and end; after an `every …` it
-	// cannot build the range stays the one suggestion it is without a repeat.
+	// Only a repeat Quick Add built (applied, or a time to choose) takes start and end parts and splits a range into them;
+	// after an `every …` it cannot build they apply nothing.
 	const built = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d) && (d.chip.status === "applied" || d.chip.status === "choice"));
+	// Start and end parts belong to the typed repeat only when typed after it, to one picked by hand anywhere: before the
+	// first typed repeat that stays they read as without a repeat (Repeating tasks rule 19).
+	const partsFrom = typed ? Math.min(...keptRepeats.map((d) => d.chip.span.end)) : ctx.manual.has("recurrence") ? 0 : input.length + 1;
+	const isPart = (c: DateCandidate): boolean => c.span.start >= partsFrom;
+	// Under a weekly form `on` names days: `every week on Oct 12` is no start.
+	const typedRule = keptRepeats.length === 1 ? (keptRepeats[0]!.chip.rule ?? keptRepeats[0]!.chip.alternatives?.[0]?.rule) : undefined;
+	const onWeekly = (c: DateCandidate): boolean => typedRule?.freq === "weekly" && c.lead?.words === "on" && isPart(c);
 	// A count or a number of periods ends only a typed repeat that stays and comes before it; otherwise it is text.
 	const repeatEnds = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d)).map((d) => d.chip.span.end);
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
@@ -332,21 +337,27 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	};
 	// The ends typed as a bare weekday or a month and day with no year: before the start they move past it (bindEnds).
 	const rolling = new Map<string, RollKind>();
-	const readings = dates.flatMap((c) => (c.range !== undefined && built && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
+	const readings = dates.flatMap((c) => (c.range !== undefined && built && isPart(c) && !onWeekly(c) && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
 	for (const c of readings) {
-		if (repeats || !c.repeatOnly) {
-			// `until <date>` without a repeat is a deadline (decision 8). The end of a repeat picked by hand is not a
-			// typed value it replaces, so the hand-picked repeat does not turn it into a suggestion.
-			if (c.kind === "end" && repeats) {
-				const end = typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx);
-				if (c.rolls !== null) rolling.set(end.chip.id, c.rolls);
-				drafts.push(end);
-			} else if (c.kind === "end") drafts.push(dateDraft(input, "deadline", c.span, c.outcome));
-			else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
-		} else {
-			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words.
-			drafts.push(dateDraft(input, "scheduled", { start: c.textStart, end: c.span.end }, c.outcome));
-		}
+		if (!isPart(c)) {
+			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words. `until <date>`
+			// without a repeat is a deadline (decision 8).
+			if (c.repeatOnly) drafts.push(dateDraft(input, "scheduled", { start: c.textStart, end: c.span.end }, c.outcome));
+			else drafts.push(dateDraft(input, c.kind === "end" ? "deadline" : c.kind, c.span, c.outcome));
+		} else if (typed && !built && (c.kind === "end" || c.lead?.kind === "schedule" || c.lead?.kind === "end")) {
+			// A start or end part of a repeat Quick Add cannot build applies nothing.
+			drafts.push(draft(input, c.kind === "end" ? "repeatEnd" : "scheduled", c.span, "unsupported", { notice: NOTICE.recurrence }));
+		} else if (c.kind === "end") {
+			// The end of a repeat picked by hand is not a typed value it replaces, so the hand-picked repeat does not turn
+			// it into a suggestion.
+			const end = typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx);
+			if (c.rolls !== null) rolling.set(end.chip.id, c.rolls);
+			drafts.push(end);
+		} else if (c.lead?.kind === "end" || onWeekly(c)) {
+			// A time after an end word (`until 5pm`: an end must be a date) and a date after a weekly form's `on` are
+			// visible offers, never applied as typed.
+			drafts.push(offerDraft(input, c));
+		} else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
 	}
 
 	drafts.sort((a, b) => a.chip.span.start - b.chip.span.start);
@@ -364,9 +375,11 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	supersede(kept);
 
 	const chips = kept.map((d) => d.chip);
-	const openStarts = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
+	const open = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
+	// A typed repeat whose hour is a choice waits for it (Repeating tasks rule 19), unless a repeat picked by hand wins.
+	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
-	return finish(input, chips, openStarts, decisions.literal);
+	return finish(input, chips, open, decisions.literal);
 }
 
 /**
@@ -528,6 +541,16 @@ function draft(input: string, kind: ChipKind, span: Span, status: Chip["status"]
 	return { chip, field: FIELD_OF[kind] ?? null };
 }
 
+/** A date read whole with its lead word, offered as "Use as date?" (or the choice it is), never applied as typed. */
+function offerDraft(input: string, c: DateCandidate): Draft {
+	const d = dateDraft(input, "scheduled", c.span, c.outcome);
+	if (d.chip.status === "applied") {
+		d.chip.status = "suggestion";
+		d.chip.notice = NOTICE.useAsDate;
+	}
+	return d;
+}
+
 function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome): Draft {
 	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives });
 	const extra: Partial<Chip> = { date: outcome.date };
@@ -639,7 +662,7 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 	return collapseWhitespace(parts.join(""));
 }
 
-function finish(input: string, chips: Chip[], openStarts: readonly string[], literal: readonly Span[]): ParseResult {
+function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[]): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
 	for (const c of chips) {
@@ -689,9 +712,9 @@ function finish(input: string, chips: Chip[], openStarts: readonly string[], lit
 		title: collapsed === "" ? input : collapsed,
 		titleFallback: collapsed === "" && appliedCount > 0,
 		fields,
-		// An unresolved list, an invalid repeat end and a yearly repeat's start whose hour is still a choice block saving
-		// until fixed, chosen or dismissed.
-		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid") || openStarts.includes(c.id)).map((c) => c.id),
+		// An unresolved list, an invalid repeat end, and a typed repeat or a yearly repeat's start whose hour is still a
+		// choice (`open`) block saving until fixed, chosen or dismissed.
+		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
 	};
 }
 

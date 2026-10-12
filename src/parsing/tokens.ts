@@ -240,9 +240,12 @@ const GLUE: ReadonlySet<string> = new Set(["and", "&", ",", "of", "the", "each",
 const GLUE_LEAD: ReadonlySet<string> = new Set(["other", "every"]);
 // "on mondays", "on the last friday of the month": the "on" goes with the repeat.
 const ON_BEFORE_RE = /(?:^|[^\p{L}\p{N}_])(on\s+)$/iu;
-// Without "every", anywhere in the text: the Nth weekday, the day or the last day of each month.
-const OF_EACH_MONTH = `(?:${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}|${DAY_NUMBER_PATTERN}|last\\s+day)${OF_MONTH}`;
-const ANYWHERE_RE = new RegExp(`(?:the\\s+)?${OF_EACH_MONTH}${NOT_WORD_AFTER}`, "giu");
+// Without "every", anywhere in the text: the Nth weekday, the day or the last day of each or every month, and the last
+// weekday or the last day of the month. Any other "… of the month" ("the 1st of the month") is title text.
+const OF_EACH_MONTH =
+	`(?:${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}|${DAY_NUMBER_PATTERN}|last\\s+day)\\s+of\\s+(?:each|every)\\s+month` +
+	`|last\\s+(?:${WEEKDAY_PATTERN}|day)\\s+of\\s+the\\s+month`;
+const ANYWHERE_RE = new RegExp(`(?:the\\s+)?(?:${OF_EACH_MONTH})${NOT_WORD_AFTER}`, "giu");
 // The "every" of "the 2nd tuesday of every month" belongs to that phrase, not to an `every month` of its own.
 const ANYWHERE_TAIL_RE = new RegExp(`(?:^|[^\\p{L}\\p{N}_])(?:${ORDINAL_PATTERN}\\s+${WEEKDAY_PATTERN}|${DAY_NUMBER_PATTERN}|last\\s+day)\\s+of\\s+$`, "iu");
 // Without "every", at the end of the text (parse.ts): the bare words, each with what its `every …` form takes after it
