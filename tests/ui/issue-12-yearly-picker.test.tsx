@@ -124,6 +124,14 @@ describe("the years unit of the custom editor (#12)", () => {
 		expect(draftOf({ rule: rule({ interval: 3 }), end: never }, ANCHOR)).toMatchObject({ freq: "yearly", interval: "3" });
 	});
 
+	it("the after-completion hint keeps its wording in every month and across a year end", () => {
+		const d = { ...draftOf(null, ANCHOR), freq: "daily" as const, interval: "1" };
+		expect(afterCompletionHint(d, "2026-12-31")).toBe("Done on Dec 31 → next Jan 1. Done late on Jan 5 → next Jan 6.");
+		expect(afterCompletionHint({ ...d, freq: "monthly" }, "2026-05-01")).toBe("Done on May 1 → next Jun 1. Done late on May 6 → next Jun 6.");
+		expect(afterCompletionHint({ ...d, freq: "weekly" }, "2026-08-27")).toBe("Done on Aug 27 → next Sep 3. Done late on Sep 1 → next Sep 8.");
+		expect(afterCompletionHint({ ...d, freq: "yearly" }, "2026-12-31")).toBe("Done on Dec 31 → next Dec 31, 2027. Done late on Jan 5 → next Jan 5, 2028.");
+	});
+
 	it("the after-completion hint counts whole years and shows the year", () => {
 		const d = { ...draftOf(null, ANCHOR), freq: "yearly" as const, interval: "1" };
 		expect(afterCompletionHint(d, TODAY)).toBe("Done on Oct 5 → next Oct 5, 2027. Done late on Oct 10 → next Oct 10, 2027.");

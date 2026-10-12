@@ -11,7 +11,7 @@ A repeating task, such as "Pay rent" every month, stays one task: each time you 
 
 Type `every …` in Quick Add, such as `Pay rent every month on the 1st #Home`, or use the picker: the **Repeat** row in the add bar's date popover, or the **Repeat** field under **All fields** in the **Quick add task** window or in the details pane.
 
-Pick **Never**, **Daily**, **Every weekday**, **Weekly**, **Monthly**, **Yearly** or **Custom…**. Weekly, Monthly and Yearly follow the task's date, which is also the first date (today if it has none). A yearly repeat on Feb 29 falls on Feb 28 in other years. A task's time applies to every occurrence.
+Pick **Never**, **Daily**, **Every weekday**, **Weekly**, **Monthly**, **Yearly** or **Custom…**. Weekly, Monthly and Yearly follow the task's date, which is also the first date (today if it has none). A yearly repeat on Feb 29 falls on Feb 28 in other years. Changing an existing repeat to Yearly keeps the month and day of the series' first date, which the picker shows. A task's time applies to every occurrence.
 
 A subtask cannot repeat, but a repeating task can have subtasks: they come back unchecked each time. A repeating task has no deadline, so Logwell removes one and says so.
 
@@ -34,7 +34,7 @@ Add a time with `at`, such as `every monday at 9am`. For a bare hour from 1 to 1
 
 Choose **Custom…** in the picker:
 
-- **Every**: a number from 1 to 999, and days, weeks, months or years. Years repeat on the month and day of the task's date.
+- **Every**: a number from 1 to 999, and days, weeks, months or years. Years repeat on the month and day of the task's date; for a task that already repeats, the month and day of the series' first date, as the summary shows.
 - **On**: for weeks, the weekday buttons; pick none to use the weekday of the task's date. For months, **Day N**, such as Day 15 (from the 29th on, a shorter month uses its last day), **The** first to fourth or last weekday, or **The last day of the month**.
 - **Count from when I complete it**: see below.
 - **Ends**: **Never**, **On date** or **After** a number of times.
@@ -79,4 +79,4 @@ Each completed occurrence adds a row to the Completed group of the task's views.
 
 ## Duplicate or delete a repeating task
 
-**Duplicate** makes a copy without history, starting on the current occurrence if that is not past, else the next date from today. **Delete** moves the task and its history to the Trash; deleting it for good removes both. The [CSV export](export.md) lists every done or skipped occurrence.
+**Duplicate** makes a copy without history, starting on the current occurrence if that is not past, else the next date from today. A copy of a yearly repeat on Feb 29 starts on its next Feb 29. **Delete** moves the task and its history to the Trash; deleting it for good removes both. The [CSV export](export.md) lists every done or skipped occurrence.

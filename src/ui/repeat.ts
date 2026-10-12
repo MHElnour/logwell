@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
-import { addDays, isValidLocalDate, utcDay } from "../domain/time";
+import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
 	type MonthlyOn,
@@ -242,7 +242,7 @@ function plusUnits(date: LocalDate, freq: RepeatFreq, n: number): LocalDate {
 }
 
 /** "Oct 5", or "Oct 5, 2027" with the year (a yearly next date, which would otherwise read as the same day). */
-const shortDate = (date: LocalDate, withYear = false): string => utcDay(date).toFormat(withYear ? "LLL d, yyyy" : "LLL d");
+const shortDate = (date: LocalDate, withYear = false): string => (withYear ? `${monthDayText(date)}, ${date.slice(0, 4)}` : monthDayText(date));
 
 /**
  * The small text under the checkbox: an example from today and the draft's interval ("Done on Oct 5 →
