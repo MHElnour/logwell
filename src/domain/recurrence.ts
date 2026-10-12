@@ -729,15 +729,22 @@ export function repeatRuleProblem(rule: RepeatRule): string | null {
 	return null;
 }
 
+/** The most times a count end allows, like the largest interval. */
+export const MAX_END_COUNT = 999;
+
 /**
- * Why an end cannot be stored, or null when it can: a count of 1 or more, a real date and, with `anchor` (the
- * series' first date), a date on or after it. The picker, Quick Add and the services show this message.
+ * Why an end cannot be stored, or null when it can: a count of 1 to 999 and a real date. With `series` (the series the
+ * end would close; its records and its own end are ignored), an end date that leaves the series no occurrence at all:
+ * before its anchor or before its first date (every Friday from a Monday, ending on the Wednesday). Such a series would
+ * be ended by the sweep as soon as it is written. The picker, Quick Add and the services all show this message.
  */
-export function repeatEndProblem(end: RepeatEnd, anchor?: LocalDate): string | null {
+export function repeatEndProblem(end: RepeatEnd, series?: Pick<Recurrence, "anchor" | "versions">, weekStart: WeekStart = "MO"): string | null {
 	if (end.kind === "never") return null;
-	if (end.kind === "count") return Number.isInteger(end.count) && end.count >= 1 ? null : "End after 1 or more times.";
+	if (end.kind === "count") return Number.isInteger(end.count) && end.count >= 1 && end.count <= MAX_END_COUNT ? null : `End after 1 to ${MAX_END_COUNT} times.`;
 	if (end.kind !== "date" || !isValidLocalDate(end.date)) return "The end date is not valid.";
-	return anchor !== undefined && end.date < anchor ? "The end date is before the first date." : null;
+	if (series === undefined) return null;
+	const closed: Recurrence = { anchor: series.anchor, versions: series.versions, end, endedAt: null };
+	return end.date < series.anchor || nextUnresolved(closed, [], weekStart) === null ? "The repeat ends before its first date." : null;
 }
 
 /**

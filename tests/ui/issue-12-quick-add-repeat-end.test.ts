@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
+import { draftOf, draftProblem } from "../../src/ui/repeat";
 import { appHarness } from "../app/harness";
 
 // Repeating tasks rule 19 (#12): a typed repeat end is saved with the repeat, follows it under a repeat picked by hand,
@@ -55,6 +56,39 @@ describe("Quick Add repeat end (#12)", () => {
 		expect(end.status).toBe("suggestion");
 		m.accept(end);
 		expect(m.repeatValue()).toMatchObject({ rule: { freq: "daily" }, end: { kind: "date", date: "2026-12-01" } });
+	});
+
+	it("an invalid end blocks saving with the shared message", async () => {
+		const { h, m } = await model();
+		m.setInput("Gym every friday until Oct 8");
+		expect(await m.submit()).toBe("invalid");
+		expect(m.message).toBe("The repeat ends before its first date.");
+		expect(h.app.store.state.tasks.size).toBe(0);
+	});
+
+	it("`for N …` counts from a date picked by hand", async () => {
+		const { h, m } = await model();
+		m.setDate("2026-10-20");
+		m.setInput("Stretch daily for 2 weeks");
+		expect(m.repeatValue()?.end).toEqual({ kind: "date", date: "2026-11-02" });
+		expect(await m.submit()).toBe("saved");
+		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toMatchObject({ anchor: "2026-10-20", end: { kind: "date", date: "2026-11-02" } });
+	});
+
+	it("a typed end applies to a repeat picked by hand that has none", async () => {
+		const { h, m } = await model();
+		m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "never" } });
+		m.setInput("Pills until Dec 1");
+		expect(m.result.fields.deadline).toBeUndefined();
+		expect(await m.submit()).toBe("saved");
+		const task = [...h.app.store.state.tasks.values()][0]!;
+		expect(task).toMatchObject({ title: "Pills", deadline: null, recurrence: { end: { kind: "date", date: "2026-12-01" } } });
+	});
+
+	it("the picker refuses an end before the first occurrence (a Monday task, weekly on Friday, ending Wednesday)", () => {
+		const d = { ...draftOf(null, "2026-10-05"), freq: "weekly" as const, days: ["FR" as const], endKind: "date" as const, endDate: "2026-10-07" };
+		expect(draftProblem(d, "2026-10-05", "MO")).toBe("The repeat ends before its first date.");
+		expect(draftProblem({ ...d, endDate: "2026-10-09" }, "2026-10-05", "MO")).toBeNull();
 	});
 
 	it("Clear in the date popover keeps the end as text too", async () => {

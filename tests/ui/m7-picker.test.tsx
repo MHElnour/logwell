@@ -414,10 +414,10 @@ describe("custom face", () => {
 		await click(ends(root, "date"));
 		expect(summary(root)).toBe("Pick an end date.");
 		await setValue(q<HTMLInputElement>(root, 'input[aria-label="End date"]'), "2026-10-01");
-		expect(summary(root)).toBe("The end date is before the first date.");
+		expect(summary(root)).toBe("The repeat ends before its first date.");
 		await click(ends(root, "count"));
 		await setValue(q<HTMLInputElement>(root, 'input[aria-label="Times"]'), "0");
-		expect(summary(root)).toBe("End after 1 or more times.");
+		expect(summary(root)).toBe("End after 1 to 999 times.");
 		expect(done(root).disabled).toBe(true);
 	});
 

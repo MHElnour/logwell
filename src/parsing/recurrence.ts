@@ -2,7 +2,7 @@ import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, repeatRuleProblem } f
 import { collapseWhitespace } from "../domain/text";
 import { pad2 } from "../domain/time";
 import type { MonthlyOn, RepeatRule, Weekday } from "../domain/types";
-import { LIST_SEP_PATTERN, ORDINAL_WORDS, dayNumber, readClock, weekdayWord } from "./text";
+import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, dayNumber, readClock, weekdayWord } from "./text";
 
 // Quick Add repeats. The tokenizer (tokens.ts) finds the span; this file turns its text into a RepeatRule.
 // Pure; no chrono, no clock.
@@ -60,21 +60,11 @@ function every(other: string | undefined, count: string | undefined): number | n
 
 const plain = (freq: RepeatRule["freq"], n: number): Body => ({ freq, interval: n, weekdays: null, monthly: null });
 
-/** The bare words and the `every …` body each stands for. */
-const BARE_BODY: Readonly<Record<string, string>> = {
-	daily: "day",
-	weekly: "week",
-	fortnightly: "other week",
-	monthly: "month",
-	yearly: "year",
-	annually: "year",
-	weekdays: "weekday",
-	weekends: "weekend",
-};
+const DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
 
 /** The part after "every ", lower case, single spaces, without the time. */
 function parseBody(body: string): Body | null {
-	if (body === "day" || /^(?:morning|afternoon|evening|night)$/u.test(body)) return plain("daily", 1);
+	if (body === "day" || DAY_PART_RE.test(body)) return plain("daily", 1);
 	if (body === "weekday") return { freq: "weekly", interval: 1, weekdays: [...EVERY_WEEKDAY], monthly: null };
 	if (body === "weekend") return { freq: "weekly", interval: 1, weekdays: ["SA", "SU"], monthly: null };
 	if (body === "week") return plain("weekly", 1);
@@ -106,8 +96,8 @@ function parseBody(body: string): Body | null {
 		return n === null ? null : plain("yearly", n);
 	}
 
-	// "week on mon, fri", "2 weeks on tue thu", "other week on monday".
-	const weekOn = /^(?:(other)\s+|(\d+)\s*)?(weeks?)\s+on\s+(.+)$/u.exec(body);
+	// "week on mon, fri", "2 weeks on tue thu", "other week on monday", "2 weeks tuesday".
+	const weekOn = /^(?:(other)\s+|(\d+)\s*)?(weeks?)\s+(?:on\s+)?(.+)$/u.exec(body);
 	if (weekOn !== null) {
 		if (weekOn[1] === undefined && weekOn[2] === undefined && weekOn[3] === "weeks") return null;
 		const n = every(weekOn[1], weekOn[2]);
@@ -115,13 +105,13 @@ function parseBody(body: string): Body | null {
 		return n === null || days === null ? null : { freq: "weekly", interval: n, weekdays: days, monthly: null };
 	}
 
-	// "other day|week", "other <weekday>" (every second week on that day).
-	const other = /^other\s+(\S+)$/u.exec(body);
+	// "other day|week", "other <weekdays>" (every second week on those days).
+	const other = /^other\s+(.+)$/u.exec(body);
 	if (other !== null) {
 		if (other[1] === "day") return plain("daily", 2);
 		if (other[1] === "week") return plain("weekly", 2);
-		const day = weekdayWord(other[1]!);
-		return day === undefined ? null : { freq: "weekly", interval: 2, weekdays: [day], monthly: null };
+		const days = weekdayList(other[1]!);
+		return days === null ? null : { freq: "weekly", interval: 2, weekdays: days, monthly: null };
 	}
 
 	// "3 days", "2 weeks" ("N weekdays" and "N weekends" are not supported).
@@ -151,11 +141,11 @@ function parseBody(body: string): Body | null {
 }
 
 /** The `every …` body of a typed span: the text after "every", or what a bare form stands for. */
-function bodyOf(lower: string): string {
-	if (lower.startsWith("every ")) return lower.slice("every ".length);
-	if (Object.hasOwn(BARE_BODY, lower)) return BARE_BODY[lower]!;
-	// "the 2nd tuesday of the month", "mondays and fridays".
-	return lower.startsWith("the ") ? lower.slice("the ".length) : lower;
+function bodyOf(text: string): string {
+	if (text.startsWith("every ")) return text.slice("every ".length);
+	// "mondays and fridays", "the 2nd tuesday of the month", "on mondays": the "on" goes with the repeat.
+	const bare = text.replace(/^on (?:the )?|^the /u, "");
+	return Object.hasOwn(BARE_REPEAT_WORDS, bare) ? BARE_REPEAT_WORDS[bare]! : bare;
 }
 
 /**

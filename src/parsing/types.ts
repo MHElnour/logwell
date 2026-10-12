@@ -1,5 +1,5 @@
 import type { WallTimeWarning } from "../domain/time";
-import type { DateLocale, DateSpec, Priority, RepeatEnd, RepeatRule } from "../domain/types";
+import type { DateLocale, DateSpec, LocalDate, Priority, RepeatEnd, RepeatRule, WeekStart } from "../domain/types";
 
 // Quick Add parser contract.
 
@@ -76,7 +76,7 @@ export interface ParsedFields {
 	notePath?: string;
 	/** Set only when a recurrence chip is applied. No anchor: the service starts it from the date. */
 	recurrence?: RepeatRule;
-	/** The typed end of `recurrence`; set only with it, when a "repeatEnd" chip is applied. */
+	/** The typed end, when a "repeatEnd" chip is applied: of `recurrence`, or of a repeat picked by hand. */
 	recurrenceEnd?: RepeatEnd;
 }
 
@@ -87,7 +87,7 @@ export interface ParseResult {
 	title: string;
 	titleFallback: boolean;
 	fields: ParsedFields;
-	/** Ids of chips that block saving (unresolved categories). */
+	/** Ids of chips that block saving: unresolved categories, invalid repeat ends. */
 	blocking: string[];
 }
 
@@ -103,4 +103,11 @@ export interface ParseContext {
 	resolveNote: (linktext: string) => string[];
 	decisions: readonly SpanDecision[];
 	manual: ReadonlySet<ParsedField>;
+	/**
+	 * The date a task starts from when no date is typed: one picked by hand or a view's preset. A typed repeat end counts
+	 * from it (`for 2 weeks`) and is checked against it; absent means today.
+	 */
+	startDate?: LocalDate;
+	/** The week start setting, for checking an end against a weekly repeat of several weeks; default Monday. */
+	weekStart?: WeekStart;
 }

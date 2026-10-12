@@ -3,7 +3,7 @@ import type { IdGenerator } from "../domain/ports";
 import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, rewriteNotePath, sanitizeNoteName } from "../domain/notes";
 import { assertCanBecomeSubtask, compareTasksBySortKey, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
-import { currentOccurrence, isSeriesEnded, occurrenceRecordId, repeatEndProblem, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
+import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
 import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
 import {
 	type DateSpec,
@@ -29,7 +29,7 @@ import {
 	type RenameTimers,
 	type SettingsPort,
 } from "./ports";
-import { COMPLETE_OCCURRENCE_LABEL, RecurrenceService, recordsOfTask, requireRepeatEnd, requireRepeatRule, requireTask } from "./RecurrenceService";
+import { COMPLETE_OCCURRENCE_LABEL, RecurrenceService, recordsOfTask, requireEndInSeries, requireRepeatEnd, requireRepeatRule, requireTask } from "./RecurrenceService";
 import { storableDbId } from "../persistence/schema";
 import { TRASH_RETENTION_DAYS } from "./settings";
 import { TagService } from "./CategoryService";
@@ -358,8 +358,7 @@ export class TaskService {
 			const zone = this.settings.zone();
 			recurrence = startRecurrence(scheduled, rule, end, todayIn(zone, this.store.clock), zone, this.settings.weekStart()).recurrence;
 			// An end before the first date would let the hourly sweep end the task just created (Repeating tasks rule 19).
-			const endProblem = repeatEndProblem(recurrence.end, recurrence.anchor);
-			if (endProblem !== null) throw new DomainError("InvalidValue", endProblem);
+			requireEndInSeries(recurrence.end, recurrence, this.settings.weekStart());
 			scheduled = null;
 		}
 		const task: Task = {

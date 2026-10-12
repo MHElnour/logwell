@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { periodsAfter, repeatEndProblem } from "../domain/recurrence";
-import type { LocalDate, RepeatFreq, RepeatRule } from "../domain/types";
+import type { LocalDate, RepeatFreq, RepeatRule, WeekStart } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
 import { addDays, dateSpecDate } from "../domain/time";
@@ -37,6 +37,7 @@ const NOTICE = {
 	superseded: "Replaced by a later value",
 	useAsDate: "Use as date?",
 	useAsEndDate: "Use as end date?",
+	endWaits: "Applies once the repeat's time is chosen",
 	recurrence: "Recurrence not supported yet",
 	duration: "Duration must be 1 to 1440 minutes",
 } as const;
@@ -264,27 +265,38 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	// chrono reads the text with every taken span masked out.
 	const masked = maskSpans(input, taken);
-	const ends: DateCandidate[] = [];
+	const dates: DateCandidate[] = [];
 	for (const c of findDates(masked, { now: ctx.now, zone: ctx.zone, locale: ctx.locale, ...(ctx.eveningTime !== undefined ? { eveningTime: ctx.eveningTime } : {}) })) {
-		if (isTaken(c.span.start, c.span.end)) continue;
-		if (c.kind === "end") ends.push(c);
-		else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
+		if (!isTaken(c.span.start, c.span.end)) dates.push(c);
 	}
 
 	// A bare repeat word counts only at the end of the text, after title text ("Stretch daily", not "Daily standup").
 	const dropped = new Set<Draft>();
 	if (bare.size > 0) {
-		const notTitle = coveredText(input, [...drafts.map((d) => d.chip.span), ...ends.map((c) => c.span)]);
+		const notTitle = coveredText(input, [...drafts.map((d) => d.chip.span), ...dates.map((c) => c.span)]);
 		for (const [repeat, end] of bare) {
 			if (notTitle.atEnd(repeat.chip.span)) continue;
 			dropped.add(repeat);
 			if (end !== null) dropped.add(end);
 		}
 	}
-	const repeats = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d));
-	// A count or a number of periods ends only a repeat; `until <date>` without one is a deadline.
+	// A repeat typed, or one picked by hand.
+	const typed = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d));
+	const repeats = typed || ctx.manual.has("recurrence");
+	// A count or a number of periods ends only a repeat.
 	for (const d of counts) if (!repeats) dropped.add(d);
-	for (const c of ends) drafts.push(repeats ? endDraft(input, c, ctx.zone) : dateDraft(input, "deadline", c.span, c.outcome));
+	for (const c of dates) {
+		if (repeats || !c.repeatOnly) {
+			// `until <date>` without a repeat is a deadline (decision 8). The end of a repeat picked by hand is not a
+			// typed value it replaces, so the hand-picked repeat does not turn it into a suggestion.
+			if (c.kind === "end" && repeats) drafts.push({ ...endDraft(input, c, ctx.zone), ...(typed ? {} : { field: null }) });
+			else if (c.kind === "end") drafts.push(dateDraft(input, "deadline", c.span, c.outcome));
+			else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
+		} else {
+			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words.
+			drafts.push(dateDraft(input, "scheduled", { start: c.textStart, end: c.span.end }, c.outcome));
+		}
+	}
 
 	drafts.sort((a, b) => a.chip.span.start - b.chip.span.start);
 	// Defensive: spans cannot overlap by construction; keep the first if they ever do.
@@ -301,7 +313,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const chips = kept.map((d) => d.chip);
 	const today = zoneNow.toISODate();
 	if (today === null) throw new RangeError("Invalid reference date");
-	bindEnds(chips, periods, today, ctx.zone);
+	bindEnds(chips, periods, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO" });
 	return finish(input, chips);
 }
 
@@ -332,17 +344,25 @@ function endDraft(input: string, c: DateCandidate, zone: string): Draft {
 	return draft(input, "repeatEnd", c.span, o.status === "suggestion" ? "suggestion" : "applied", extra);
 }
 
+/** Any rule's first date is on or after its anchor; a daily rule's is the anchor itself. */
+const FROM_ANCHOR: RepeatRule = { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
+
 /**
- * Binds the end chips to the typed repeat once the start is known (the applied date, else today): `for N <periods>`
- * becomes the day before N periods from the start; an end before the start is invalid (repeatEndProblem); the end of
- * a repeat Quick Add cannot build is not supported either.
+ * Binds the end chips to the repeat once the start is known (the applied typed date, else `start`: a date picked by
+ * hand, a preset or today): `for N <periods>` becomes the day before N periods from the start; an end that leaves the
+ * series no date is invalid (repeatEndProblem, the services' check); an end waits while its repeat's time is a
+ * choice; the end of a repeat Quick Add cannot build is not supported either.
  */
-function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>, today: LocalDate, zone: string): void {
+function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>, env: { zone: string; start: LocalDate; weekStart: WeekStart }): void {
 	if (!chips.some((c) => c.kind === "repeatEnd")) return;
 	const repeats = chips.filter((c) => c.kind === "recurrence");
-	const unsupported = repeats.every((c) => c.status === "unsupported");
+	const rule = repeats.find((c) => c.status === "applied")?.rule;
+	const waiting = rule === undefined && repeats.some((c) => c.status === "choice");
+	const unsupported = repeats.length > 0 && repeats.every((c) => c.status === "unsupported");
 	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
-	const anchor = date === undefined ? today : dateSpecDate(date, zone);
+	const anchor = date === undefined ? env.start : dateSpecDate(date, env.zone);
+	// A repeat picked by hand is not known here: only its anchor is checked, and the service checks the rest.
+	const series = { anchor, versions: [{ effectiveFrom: anchor, rule: rule ?? FROM_ANCHOR }] };
 	for (const c of chips) {
 		if (c.kind !== "repeatEnd") continue;
 		const p = periods.get(c.id);
@@ -351,12 +371,15 @@ function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq:
 		if (unsupported) {
 			c.status = "unsupported";
 			c.notice = NOTICE.recurrence;
-			continue;
-		}
-		const problem = c.status === "applied" && c.end !== undefined ? repeatEndProblem(c.end, anchor) : null;
-		if (problem !== null) {
-			c.status = "invalid";
-			c.notice = problem;
+		} else if (waiting) {
+			c.status = "suggestion";
+			c.notice = NOTICE.endWaits;
+		} else if (c.status === "applied" && c.end !== undefined) {
+			const problem = repeatEndProblem(c.end, series, env.weekStart);
+			if (problem !== null) {
+				c.status = "invalid";
+				c.notice = problem;
+			}
 		}
 	}
 }
@@ -496,8 +519,6 @@ function finish(input: string, chips: Chip[]): ParseResult {
 				break;
 		}
 	}
-	// An end belongs to a repeat: until one applies (a bare hour still to choose), there is none.
-	if (fields.recurrence === undefined) delete fields.recurrenceEnd;
 	title += input.slice(at);
 	const collapsed = collapseWhitespace(title);
 	return {
@@ -506,7 +527,8 @@ function finish(input: string, chips: Chip[]): ParseResult {
 		title: collapsed === "" ? input : collapsed,
 		titleFallback: collapsed === "" && appliedCount > 0,
 		fields,
-		blocking: chips.filter((c) => c.status === "unresolved").map((c) => c.id),
+		// An unresolved list and an invalid repeat end block saving until fixed or dismissed.
+		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid")).map((c) => c.id),
 	};
 }
 

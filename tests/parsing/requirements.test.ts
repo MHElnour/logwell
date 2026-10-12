@@ -551,7 +551,7 @@ describe("A14 robustness", () => {
 	});
 
 	it("parses long repeat lists and runs of lead words in reasonable time (#12)", () => {
-		for (const input of ["every " + "mon ".repeat(2000), "until ".repeat(800), "every 1 ".repeat(800), "Gym " + "daily ".repeat(800)]) {
+		for (const input of ["every " + "mon ".repeat(2000), "until ".repeat(800), "every 1 ".repeat(800), "Gym " + "daily ".repeat(800), "every " + "sun ".repeat(2000), "every mon " + "sat ".repeat(2000) + "cream", "Gym every other " + "mon ".repeat(2000) + "x"]) {
 			const started = performance.now();
 			parse(input);
 			expect(performance.now() - started, input.slice(0, 12)).toBeLessThan(2000);

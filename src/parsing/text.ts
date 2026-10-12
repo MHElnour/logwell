@@ -1,5 +1,5 @@
 import { pad2 } from "../domain/time";
-import { MONTH_LONG, MONTH_SHORT, type Weekday } from "../domain/types";
+import { MONTH_LONG, MONTH_SHORT, type RepeatFreq, type Weekday } from "../domain/types";
 
 // Small text helpers shared by the tokenizer and the cursor logic, and the parser's vocabulary. No regex
 // lookbehind anywhere in this layer (iOS): boundaries are checked by hand.
@@ -102,6 +102,59 @@ export const WEEKDAY_PATTERN = alternation(Object.keys(WEEKDAY_WORDS));
 
 /** The plural weekdays ("mondays"): a bare repeat at the end of the text. */
 export const PLURAL_WEEKDAY_PATTERN = alternation(Object.keys(WEEKDAY_WORDS).filter((w) => w.endsWith("days")));
+
+/** `sat` and `sun` are also everyday words ("sun cream"): a list joined by plain spaces takes them only at the end. */
+export const WEEKEND_ABBR_PATTERN = "(?:sat|sun)";
+
+/** The weekday words other than `sat` and `sun`. */
+export const WEEKDAY_FULL_PATTERN = alternation(Object.keys(WEEKDAY_WORDS).filter((w) => w !== "sat" && w !== "sun"));
+
+/** The bare words that repeat at the end of the text, and the `every …` form each stands for. */
+export const BARE_REPEAT_WORDS: Readonly<Record<string, string>> = {
+	daily: "day",
+	weekly: "week",
+	fortnightly: "other week",
+	monthly: "month",
+	yearly: "year",
+	annually: "year",
+	weekdays: "weekday",
+	weekends: "weekend",
+};
+
+export const BARE_REPEAT_PATTERN = alternation(Object.keys(BARE_REPEAT_WORDS));
+
+/** "every morning" and the other day parts: a plain daily repeat. */
+export const DAY_PART_PATTERN = "(?:morning|afternoon|evening|night)";
+
+/** Period and unit words, with the repeat frequency of the periods a repeat can end after (`for 2 weeks`). */
+const UNIT_WORDS: Readonly<Record<string, RepeatFreq | null>> = {
+	day: "daily",
+	week: "weekly",
+	month: "monthly",
+	year: "yearly",
+	weekday: null,
+	weekend: null,
+	fortnight: null,
+	quarter: null,
+	hour: null,
+	hr: null,
+	minute: null,
+	min: null,
+	second: null,
+	sec: null,
+};
+
+/** Every period or unit word, singular or plural: "days", "hours", "mins". */
+export const UNIT_PATTERN = `${alternation(Object.keys(UNIT_WORDS))}s?`;
+
+/** The periods a repeat can end after: "days", "weeks", "months", "years". */
+export const PERIOD_UNIT_PATTERN = `${alternation(Object.keys(UNIT_WORDS).filter((w) => UNIT_WORDS[w] !== null))}s?`;
+
+/** The frequency of a period word ("weeks" → weekly), or null. */
+export function unitFreq(word: string): RepeatFreq | null {
+	const w = word.toLowerCase().replace(/s$/u, "");
+	return Object.hasOwn(UNIT_WORDS, w) ? UNIT_WORDS[w]! : null;
+}
 
 /** The weekday a word names, or undefined. */
 export function weekdayWord(word: string): Weekday | undefined {

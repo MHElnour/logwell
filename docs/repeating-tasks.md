@@ -41,9 +41,9 @@ End the repeat in the same line:
 | --- | --- |
 | `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included |
 | `for 5 times`, `5 times` | After 5 times |
-| `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the first date |
+| `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the task's first date: the date you type, pick or the view gives, else today |
 
-An end before the first date is refused: its chip says so and the text stays in the title. Without a repeat, `until Dec 1` is a deadline, and `for 30m` is always a duration.
+An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, `ending` and `starting` stay part of the title, and `for 30m` is always a duration.
 
 A repeat Quick Add cannot make yet, such as `every 3 hours` or `every 2nd and 4th tuesday`, stays in the title marked "Recurrence not supported yet", and is never read as a date. Counting from completion is set in the picker.
 
@@ -54,9 +54,9 @@ Choose **Custom…** in the picker:
 - **Every**: a number from 1 to 999, and days, weeks, months or years. Years repeat on the month and day of the task's date; for a task that already repeats, the month and day of the series' first date, as the summary shows.
 - **On**: for weeks, the weekday buttons; pick none to use the weekday of the task's date. For months, **Day N**, such as Day 15 (from the 29th on, a shorter month uses its last day), **The** first to fourth or last weekday, or **The last day of the month**.
 - **Count from when I complete it**: see below.
-- **Ends**: **Never**, **On date** or **After** a number of times.
+- **Ends**: **Never**, **On date** or **After** 1 to 999 times.
 
-Choose **Done** or **Back**. **Done** is off while a value is missing or the end date is before the first date.
+Choose **Done** or **Back**. **Done** is off while a value is missing or the repeat would end before its first date.
 
 Weeks begin on the **Week starts on** [setting](settings-and-commands.md) in force when you make the repeat.
 

@@ -60,9 +60,9 @@ const CASES: Case[] = [
 		title: "Pills until Dec 1",
 		rec: "daily",
 		s: "2026-12-10",
-		chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|until Dec 1|n=The end date is before the first date.", "applied|scheduled|starting Dec 10"],
+		chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|until Dec 1|n=The repeat ends before its first date.", "applied|scheduled|starting Dec 10"],
 	},
-	{ in: "Pills every day for 0 times", title: "Pills for 0 times", rec: "daily", chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|for 0 times|n=End after 1 or more times."] },
+	{ in: "Pills every day for 0 times", title: "Pills for 0 times", rec: "daily", chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|for 0 times|n=End after 1 to 999 times."] },
 ];
 
 describe("Quick Add repeat ends (#12)", () => {
@@ -124,11 +124,11 @@ describe("Quick Add repeat ends (#12)", () => {
 		expect(chipLines(r)).toEqual(["unsupported|recurrence|every 3 hours|n=Recurrence not supported yet", "unsupported|repeatEnd|until Friday|n=Recurrence not supported yet"]);
 	});
 
-	it("the end applies once a bare-hour choice is made", () => {
+	it("the end waits while the bare hour is still a choice", () => {
 		const r = parse("Gym every monday at 9 until Dec 1", NY);
 		expect(r.fields.recurrence).toBeUndefined();
 		expect(r.fields.recurrenceEnd).toBeUndefined();
-		expect(r.chips.find((c) => c.kind === "repeatEnd")?.status).toBe("applied");
+		expect(r.chips.find((c) => c.kind === "repeatEnd")?.status).toBe("suggestion");
 	});
 
 	it("under a repeat picked by hand the typed end is a suggestion with the repeat", () => {

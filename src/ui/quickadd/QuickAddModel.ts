@@ -145,7 +145,14 @@ export class QuickAddModel {
 			resolveNote: (t) => this.env.resolveNote(t),
 			decisions: this.decisions,
 			manual: this.manual,
+			// A typed repeat end counts from the date picked by hand, else the preset's (else today).
+			...(this.startDate() === null ? {} : { startDate: this.startDate()! }),
+			weekStart: app.queryContext().weekStart,
 		});
+	}
+
+	private startDate(): LocalDate | null {
+		return this.manual.has("scheduled") && this.vals.date !== "" ? this.vals.date : this.presetDate();
 	}
 
 	/** Reparses after any change and tells the view. */
@@ -433,9 +440,14 @@ export class QuickAddModel {
 	 * end and no date of its own: the service makes the scheduled date, or today, the anchor.
 	 */
 	repeatValue(): RepeatChoice | null {
-		if (this.manual.has("recurrence")) return this.vals.repeat;
+		const typedEnd = this.result.fields.recurrenceEnd;
+		if (this.manual.has("recurrence")) {
+			// A typed end (`until Dec 1`) ends a repeat picked by hand that has no end of its own.
+			const picked = this.vals.repeat;
+			return picked !== null && picked.end.kind === "never" && typedEnd !== undefined ? { rule: picked.rule, end: typedEnd } : picked;
+		}
 		const parsed = this.result.fields.recurrence;
-		return parsed === undefined ? null : { rule: parsed, end: this.result.fields.recurrenceEnd ?? NEVER_END };
+		return parsed === undefined ? null : { rule: parsed, end: typedEnd ?? NEVER_END };
 	}
 
 	/** The date a rule starts from, for the picker's hints: the picked date, else today. */
@@ -613,6 +625,13 @@ export class QuickAddModel {
 		}
 		// A subtask's category is fixed by its parent, so an unknown category stays literal text and never blocks.
 		const blocking = this.result.chips.find((c) => this.result.blocking.includes(c.id) && !this.isFixedCategory(c));
+		if (blocking?.kind === "repeatEnd") {
+			// An invalid repeat end: its notice says why, and saving waits until it is fixed or dismissed.
+			this.message = blocking.notice ?? null;
+			this.requestFocus({ kind: "chip", id: blocking.id });
+			this.notify();
+			return "invalid";
+		}
 		if (blocking !== undefined) {
 			this.openChipId = blocking.id;
 			this.saveAfterPick = true;

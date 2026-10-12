@@ -74,6 +74,12 @@ export function requireRepeatEnd(end: RepeatEnd): RepeatEnd {
 	return end.kind === "date" ? { kind: "date", date: end.date } : end.kind === "count" ? { kind: "count", count: end.count } : { kind: "never" };
 }
 
+/** Throws InvalidValue when `end` leaves `series` no occurrence (repeatEndProblem): the sweep would end it at once. */
+export function requireEndInSeries(end: RepeatEnd, series: Pick<Recurrence, "anchor" | "versions">, weekStart: WeekStart): void {
+	const problem = repeatEndProblem(end, series, weekStart);
+	if (problem !== null) invalidValue(problem);
+}
+
 /**
  * Throws InvalidValue when the rule cannot be stored; returns its stored form. A weekly rule takes
  * `weekStart` (the setting) unless it carries its own.
@@ -241,6 +247,7 @@ export class RecurrenceService {
 			if (rec === null) {
 				if (stored === null) return this.result(EDIT_REPEAT_LABEL, { wrote: false });
 				const started = startRecurrence(task.scheduled, stored, storedEnd, from ?? today, this.settings.zone(), this.weekStart()).recurrence;
+				requireEndInSeries(started.end, started, this.weekStart());
 				// Records from an earlier time the task repeated are history: after completion starts afresh
 				// (anchoredAt) and a count end counts from now (countFrom).
 				const recurrence = recordsOfTask(tx, taskId).length > 0 ? { ...started, anchoredAt: tx.now, countFrom: tx.now } : started;
@@ -275,6 +282,8 @@ export class RecurrenceService {
 			if (sameRule(ruleAt(rec, eff))) versions = rec.versions.filter((v) => v.effectiveFrom <= eff);
 			else if (previous !== undefined && sameRule(previous.rule)) versions = before;
 			else versions = [...before, { effectiveFrom: eff, rule: stored }];
+			// A new end must leave the series a first date; an end reached by its records ends it below.
+			if (storedEnd !== undefined) requireEndInSeries(storedEnd, { anchor: rec.anchor, versions }, this.weekStart());
 			let next: Recurrence = { ...rec, versions, end: storedEnd ?? rec.end, endedAt: null };
 			const ended = isSeriesEnded(next, records, this.weekStart());
 			if (ended) next = { ...next, endedAt: rec.endedAt ?? tx.now };
