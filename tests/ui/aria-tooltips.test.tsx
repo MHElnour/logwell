@@ -149,7 +149,7 @@ describe("aria-label tooltips", () => {
 			expectLabelsResolve(m.root);
 		});
 
-		it("K1b section headings, the board's section columns and the name field carry no stray aria-label", async () => {
+		it("section headings, the board's section columns and the name field carry no stray aria-label", async () => {
 			const m = await mount();
 			await seed(m.h);
 			const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");

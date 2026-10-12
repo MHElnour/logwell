@@ -37,7 +37,7 @@ function median(xs: number[]): number {
 	return s[Math.floor(s.length / 2)] ?? 0;
 }
 
-describe("backup retention listings (issue 35)", () => {
+describe("#35: backup retention listings", () => {
 	it(`${PLAIN_SAVES} plain saves list the snapshots folder at most once each`, async () => {
 		const h = harness();
 		await h.store.open();

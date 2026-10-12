@@ -270,7 +270,7 @@ describe("tokenAtCursor", () => {
 	});
 });
 
-describe("review fixes", () => {
+describe("bound tag decisions and unresolved categories", () => {
 	it("M2: a bound tag decision whose tag no longer exists is dropped; the span is re-recognized as a new tag", () => {
 		const input = "x @Gone";
 		const d: SpanDecision = { span: { start: 2, end: 7 }, text: "@Gone", kind: "tag", key: "gone" };

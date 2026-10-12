@@ -57,7 +57,7 @@ async function countHierarchySorts<T>(fn: () => Promise<T> | T): Promise<{ resul
 	}
 }
 
-describe(`one edit with the Tasks view at ${TASKS} tasks (issue 41)`, () => {
+describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 	it("times buildList for Inbox, Today and a list on the state after an edit, ordering no rows", async () => {
 		const { h, lists } = await bigHarness();
 		const views: { name: string; view: TaskView; text: string }[] = [

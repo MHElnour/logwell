@@ -134,7 +134,7 @@ describe("checkReminders (D10)", () => {
 	});
 });
 
-describe("review fixes (D10)", () => {
+describe("edge minutes and zero values (D10)", () => {
 	it("a time set for the next minute fires when it is first seen at its own minute", () => {
 		// Set at 19:59:45 for 20:00; the host's first check after the save is at 20:00:05.
 		const r = checkReminders([read], idx(), seen(DAY, {}), at("20:00"));

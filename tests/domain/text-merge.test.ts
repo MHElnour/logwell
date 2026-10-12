@@ -85,7 +85,7 @@ describe("mergeLines (D30)", () => {
 		expect(mergeLines(L("A"), L("A|B|x|D"), L("A|B|y|D"))).toEqual(["A", "B", "x", MERGE_MARKER, "y", "D"]);
 	});
 
-	it("merging again over any earlier merge whose base was not saved gives the same text (reviewer probe)", () => {
+	it("merging again over any earlier merge whose base was not saved gives the same text", () => {
 		const cases: [string, string, string][] = [
 			["A\nB\nC\nD\nE", "A\nB1\nC\nD1\nE", "A\nB2\nC\nD2\nE"],
 			["A\nB\nC", "A\nX\nY", "A\nP\nC"],

@@ -588,7 +588,7 @@ describe("focus timer", () => {
 			expect(focusOverview(sessions, "2026-10-02", "Europe/Berlin")).toEqual({ todayCount: 1, todaySec: 900, totalCount: 2, totalSec: 1500 });
 		});
 
-		it("a completed round under 60 s is not a pomo, but its time counts (clean-up review 2)", () => {
+		it("a completed round under 60 s is not a pomo, but its time counts", () => {
 			const day2 = Date.parse("2026-10-02T10:00:00.000Z");
 			const later = (sec: number) => new Date(day2 + sec * 1000).toISOString();
 			const short = session("s", { segments: [{ start: later(0), end: later(20) }], startedAt: later(0), endedAt: later(20), status: "completed" });
@@ -728,7 +728,7 @@ describe("sets, Finish and history", () => {
 			expect(save).toMatchObject({ kind: "save", manual: true, session: { status: "completed" } });
 		});
 
-		it("the last round is marked manual unless the set already has a saved round (clean-up review 2)", () => {
+		it("the last round is marked manual unless the set already has a saved round", () => {
 			const one = new Run(cfg(1));
 			one.run(30);
 			expect(one.apply(finish(one.timer!, at(30), DEV, one.ids)).effects[0]).toMatchObject({ kind: "save", manual: true });

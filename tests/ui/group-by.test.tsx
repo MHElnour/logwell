@@ -302,7 +302,7 @@ describe("dragging a row to another group", () => {
 		expect(undo).toHaveBeenCalledWith('Moved "Timed" to Mon, Oct 5.', "Move task", expect.any(Number));
 	});
 
-	it("date: a timed series dropped on another day keeps its time and the notice says it re-anchored (M7 D5)", async () => {
+	it("date: a timed series dropped on another day keeps its time and the notice says it re-anchored (D5)", async () => {
 		const weekly = { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } as const;
 		const { m, root, undo, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
 			await m.h.app.tasks.create({ title: "Mon", scheduled: date("2026-10-05") });

@@ -195,7 +195,7 @@ describe("the Unscheduled drawer", () => {
 		return ev;
 	}
 
-	describe("the Unscheduled drawer's rows (issue 66)", () => {
+	describe("#66: the Unscheduled drawer's rows", () => {
 		it(`draws only the rows near its viewport above ${VIRTUAL_THRESHOLD} tasks, and further rows as it scrolls`, async () => {
 			const m = await mount(400);
 			// The header still counts every task.

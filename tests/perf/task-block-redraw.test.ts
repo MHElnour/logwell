@@ -96,7 +96,7 @@ const badge = (el: HTMLElement, title: string) =>
 const files = (passes: string[]) => [...new Set(passes.map((p) => (p.split(" ")[1] ?? "").replace(/:\d+:\d+$/, "")))].sort();
 const FAKE: NonNullable<Parameters<typeof vi.useFakeTimers>[0]> = { toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] };
 
-describe(`one redraw of a task block at ${TASKS} tasks (issue 75)`, () => {
+describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 	it("a rename of a shown task makes only the command's and the query's passes, in a list block and in a vault-wide block", async () => {
 		const { h, block, cleanup } = await setup();
 		const small = block("list: List 3\npriority: high");

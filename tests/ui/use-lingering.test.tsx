@@ -331,7 +331,7 @@ describe("the hold reads the change feed", () => {
 		vi.useRealTimers();
 	});
 
-	describe("the hold on a just-completed row reads the store's changes (issue 41)", () => {
+	describe("#41: the hold on a just-completed row reads the store's changes", () => {
 		it("holds a task completed through the store for 450 ms, without reading every task", async () => {
 			await draw();
 			await h.app.tasks.complete(a);

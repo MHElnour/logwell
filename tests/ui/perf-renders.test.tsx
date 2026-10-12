@@ -63,7 +63,7 @@ describe("render passes", () => {
 			expect(searches() - s0).toBe(0);
 		});
 
-		it("Search reads the titles once per change while shown, and not again on a render without a change (issue 41)", async () => {
+		it("#41: Search reads the titles once per change while shown, and not again on a render without a change", async () => {
 			const { m, ids } = await mountWithTasks(["Call the bank", "Buy milk", "Call mom"]);
 			await click(m.root.querySelector('.cp-rail [aria-label="Search"]'));
 			const box = m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;

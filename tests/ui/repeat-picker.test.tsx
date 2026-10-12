@@ -122,7 +122,7 @@ describe("the repeat picker", () => {
 		});
 	});
 
-	describe("rule wording (M7 fix round)", () => {
+	describe("rule wording", () => {
 		const timed = (patch: Partial<RepeatRule> = {}): RepeatChoice => ({ rule: rule({ time: "17:00", tz: "Europe/Berlin", weekdays: ["MO"], ...patch }), end: never });
 
 		it("says the time of a timed rule in the short and the long wording", () => {

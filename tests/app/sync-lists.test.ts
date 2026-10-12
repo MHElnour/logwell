@@ -574,7 +574,7 @@ describe("deletions", () => {
 			expect(s.tt.count("getTask")).toBe(2);
 		});
 
-		it("looks up at most LOOKUP_MAX missing tasks per list; the rest wait for the next sync and are not offered (issue #38)", async () => {
+		it("#38: looks up at most LOOKUP_MAX missing tasks per list; the rest wait for the next sync and are not offered", async () => {
 			const s = await withTasks(LOOKUP_MAX + 10);
 			for (const id of s.ids.slice(0, LOOKUP_MAX + 5)) s.tt.remove(s.link("task", id)!.ttId);
 			const r = await s.sync.sync();

@@ -346,7 +346,7 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 	});
 });
 
-describe("WP-A review fixes", () => {
+describe("check-in dates, kept reminders and zero values", () => {
 	it("refuses a date that is not a real day and writes nothing", async () => {
 		const { app } = await setup();
 		const r = await app.habits.create(input());

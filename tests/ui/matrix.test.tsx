@@ -485,7 +485,7 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("M4 fix round: Alt+Arrow routing from the view Scope", () => {
+	describe("Alt+Arrow routing from the view Scope", () => {
 		const alt = (key: string) => new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true });
 
 		it("a focused card gets the move and the key is consumed", async () => {
@@ -531,7 +531,7 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("M4 fix round: matrix live region, drag state and overlays", () => {
+	describe("matrix live region, drag state and overlays", () => {
 		it("announces every move, also two identical messages in a row", async () => {
 			const m = await mount();
 			await seed(m);
@@ -647,7 +647,7 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("K1a D8: autoscroll in a quadrant", () => {
+	describe("D8: autoscroll in a quadrant", () => {
 		it("scrolls the quadrant body while a card is held near its bottom edge, and stops on drop", async () => {
 			const frames: FrameRequestCallback[] = [];
 			const m = await mount();

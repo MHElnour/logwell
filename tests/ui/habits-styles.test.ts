@@ -22,7 +22,7 @@ function selectors(text: string): string[] {
 	return out;
 }
 
-describe("M6 habits stylesheet section", () => {
+describe("habits stylesheet section", () => {
 	it("is present once and closed", () => {
 		expect(css.split(MARK)).toHaveLength(2);
 		expect(css.split(END)).toHaveLength(2);

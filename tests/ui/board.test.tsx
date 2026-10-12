@@ -357,7 +357,7 @@ describe("Alt+Arrow (D7)", () => {
 	});
 });
 
-describe("K1a fix round", () => {
+describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 	const sortByPriority = async (m: CalMount) => {
 		m.host.menus.length = 0;
 		await click(m.root.querySelector('.cp-tasks [aria-label="View options"]'));

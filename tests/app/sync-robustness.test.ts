@@ -506,7 +506,7 @@ describe("series, failed link writes and list failures", () => {
 		});
 	});
 
-	describe("an answered create is paired against what was sent (verification of c5655c7)", () => {
+	describe("an answered create is paired against what was sent", () => {
 		/** "Buy milk" reaches TickTick, the link write fails (read-only), the store recovers without the link. */
 		async function failedLink(): Promise<SyncHarness & { listId: string; projectId: string; id: string; ttId: string }> {
 			const s = await syncHarness();

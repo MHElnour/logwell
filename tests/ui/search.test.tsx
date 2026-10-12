@@ -88,7 +88,7 @@ async function setup() {
 	return { m, alpha, beta, gamma };
 }
 
-describe("issue 16: Search note reads", () => {
+describe("#16: Search note reads", () => {
 	it("a habit check-in, a list rename and a title edit read no note", async () => {
 		const { m, alpha, gamma } = await setup();
 		const cat = await m.h.app.categories.create("Home");

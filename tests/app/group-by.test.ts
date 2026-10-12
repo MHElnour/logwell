@@ -56,7 +56,7 @@ describe("grouping in views", () => {
 	});
 
 	describe("group by section", () => {
-		it("is the K1b headings: No section first, then each section, empty ones included", async () => {
+		it("is the section headings: No section first, then each section, empty ones included", async () => {
 			const { h } = await seed();
 			const todo = await h.app.sections.create(INBOX_ID, "Todo");
 			await h.app.sections.create(INBOX_ID, "Later");
@@ -256,7 +256,7 @@ describe("grouping in views", () => {
 			expect(gs.map((g) => g.drop)).toEqual([INBOX_ID, work.id, home.id].map((categoryId) => ({ kind: "list", categoryId })));
 		});
 
-		it("names a list that is missing Inbox, like every other place (issue 27)", async () => {
+		it("#27: names a list that is missing Inbox, like every other place", async () => {
 			const h = await appHarness();
 			const gone = await h.app.categories.create("Gone");
 			await h.app.tasks.create({ title: "G", categoryId: gone.id, scheduled: date("2026-10-01") });

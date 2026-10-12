@@ -434,7 +434,7 @@ describe("the task index", () => {
 		return null;
 	}
 
-	describe("the task index (issue 41)", () => {
+	describe("#41: the task index", () => {
 		it("stays equal to a fresh build, and every view and count reads the same with it as without, over 300 commands", async () => {
 			const run = await fuzz(41, 300);
 			const ran = Object.fromEntries([...run.ran].sort());
@@ -708,7 +708,7 @@ describe("the task index", () => {
 		});
 	});
 
-	describe("the store's change feed (issue 41)", () => {
+	describe("#41: the store's change feed", () => {
 		it(`lists the changes of the last ${FEED_LIMIT} events, and nothing past them or across a reload`, async () => {
 			const { h } = await seededState(7, 40);
 			const store = h.app.store;
@@ -756,7 +756,7 @@ describe("buildList", () => {
 		{ filter: { ...emptyFilter(), date: "next7" }, text: "" },
 	];
 
-	describe("buildList (issue 41)", () => {
+	describe("#41: buildList", () => {
 		it("gives the same rows and Completed group with the index as without, for every view, grouping, sort, filter and held set", async () => {
 			const { h, lists, tagKeys, held } = await seededState();
 			const state = h.app.store.state;
@@ -823,7 +823,7 @@ describe("golden results", () => {
 
 	const digest = (value: unknown, rows: number) => `${createHash("sha256").update(serialize(value)).digest("hex").slice(0, 16)}:${rows}`;
 
-	describe("Tasks views match the golden results (issue 41)", () => {
+	describe("#41: Tasks views match the golden results", () => {
 		it("builds every view, grouping, sort, filter and held set as before", async () => {
 			const { h, lists, tagKeys, held } = await seededState();
 			const state = h.app.store.state;

@@ -85,7 +85,7 @@ describe("place", () => {
 		expect(h.app.store.state.tasks.get(b)!.sortKey).toBe(key);
 	});
 
-	it("G1: a priority in the patch is written with the position, in one undo entry", async () => {
+	it("a priority in the patch is written with the position, in one undo entry", async () => {
 		const { h, ids } = await setup();
 		const [a, b, c] = ids as [string, string, string];
 		const label = h.app.store.undoLabel;
@@ -105,7 +105,7 @@ describe("place", () => {
 		await expect(h.app.tasks.place(b, [a, b, c], { priority: 9 as never })).rejects.toMatchObject({ code: "InvalidValue" });
 	});
 
-	it("G1: the priority patch rejects invalid values, keeps urgent and important, and counts as a change alone", async () => {
+	it("the priority patch rejects invalid values, keeps urgent and important, and counts as a change alone", async () => {
 		const { h, ids } = await setup();
 		const [a, b, c] = ids as [string, string, string];
 		for (const bad of [5, -1, 1.5]) {

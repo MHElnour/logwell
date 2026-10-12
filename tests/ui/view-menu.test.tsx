@@ -86,7 +86,7 @@ describe("the view menu and the Completed group", () => {
 			expect(rowTitles(m)).toEqual(["Late", "Soon", "Urgent"]);
 		});
 
-		it("the sort applies to every view (PLAN #50)", async () => {
+		it("the sort applies to every view", async () => {
 			const m = await mount();
 			await m.h.app.tasks.create({ title: "A", priority: 0, scheduled: day("2026-10-01") });
 			await m.h.app.tasks.create({ title: "B", priority: 1, scheduled: day("2026-10-01") });

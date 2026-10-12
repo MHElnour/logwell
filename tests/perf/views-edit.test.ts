@@ -26,7 +26,7 @@ const CALENDAR_BEFORE_RATIO = 0.5;
 
 const dom = domCleanup();
 
-describe(`one edit with the calendar, the matrix or Search at ${TASKS} tasks (issue 41)`, () => {
+describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} tasks`, () => {
 	it("builds the calendar and the matrix after an edit from the index's candidates, with the same result", async () => {
 		const { h, lists } = await bigHarness();
 		const index = h.app.tasks.lists;

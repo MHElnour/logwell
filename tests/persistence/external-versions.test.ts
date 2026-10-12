@@ -122,7 +122,7 @@ describe("a v3 file", () => {
 		return descendant(base, strip, revision).replace(/"schemaVersion":\d+/u, '"schemaVersion":3');
 	}
 
-	describe("CpbaseStore: a v3 file arriving externally (M7 D1)", () => {
+	describe("CpbaseStore: a v3 file arriving externally (D1)", () => {
 		it("is migrated and announced, with no conflict when memory holds no recurrence", async () => {
 			const h = harness();
 			await h.store.open();

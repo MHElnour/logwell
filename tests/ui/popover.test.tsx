@@ -142,7 +142,7 @@ describe("the popover layer", () => {
 		return clip;
 	}
 
-	describe("issue #85: only the window limits a top-layer popover", () => {
+	describe("#85: only the window limits a top-layer popover", () => {
 		it("a short modal around the bar does not shrink the date popover", async () => {
 			fakePopoverApi();
 			fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 300 });
@@ -179,7 +179,7 @@ describe("the popover layer", () => {
 		});
 	});
 
-	describe("issue #85: the in-place fallback keeps its container's limits", () => {
+	describe("#85: the in-place fallback keeps its container's limits", () => {
 		it("without the Popover API a short modal still limits the date popover", async () => {
 			fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 420 });
 			const root = await mountForm(shortModal());
@@ -203,7 +203,7 @@ describe("the popover layer", () => {
 		});
 	});
 
-	describe("issue #85: the top layer", () => {
+	describe("#85: the top layer", () => {
 		it("shows the popover once in the top layer, keeps it there across renders and hides it on close", async () => {
 			const calls = fakePopoverApi();
 			fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900 });
@@ -281,7 +281,7 @@ describe("the popover layer", () => {
 		});
 	});
 
-	describe("issue #85: horizontal clamp", () => {
+	describe("#85: horizontal clamp", () => {
 		it("right-aligns to the anchor when it fits", () => {
 			expect(alignPopover({ anchorRight: 900, width: 336, viewportWidth: 1200 })).toBe(564);
 		});
@@ -296,7 +296,7 @@ describe("the popover layer", () => {
 		});
 	});
 
-	describe("issue #85: following the anchor", () => {
+	describe("#85: following the anchor", () => {
 		it("adds resize and capture-phase scroll listeners and removes them on unmount", async () => {
 			fakePopoverApi();
 			fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900 });
@@ -412,7 +412,7 @@ describe("the popover layer", () => {
 		});
 	});
 
-	describe("issue #85: the stylesheet", () => {
+	describe("#85: the stylesheet", () => {
 		it("resets the browser's popover styles and places a top-layer popover from the variables", async () => {
 			const css = (await import("node:fs")).readFileSync("styles.css", "utf8");
 			const rule = css.match(/\.checkpoint-view \.cp-pop\[popover\],\s*\.checkpoint-quick-add-modal \.cp-pop\[popover\]\s*\{([^}]*)\}/);

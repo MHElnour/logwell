@@ -14,7 +14,7 @@ function setup(permission: string, focused = false) {
 	return { api, notifier: new SystemNotifier(() => env), env };
 }
 
-describe("SystemNotifier (clean-up 4)", () => {
+describe("SystemNotifier", () => {
 	it("notify never asks for permission", () => {
 		const { api, notifier } = setup("default");
 		notifier.notify("a", "b");
@@ -69,7 +69,7 @@ describe("SystemNotifier (clean-up 4)", () => {
 	});
 });
 
-describe("appHasFocus (clean-up review 4)", () => {
+describe("appHasFocus", () => {
 	afterEach(() => vi.unstubAllGlobals());
 
 	it("asks the active document, so a focused popout window counts as in front", () => {

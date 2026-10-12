@@ -415,7 +415,7 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
-	it("issue 24: the Data section lists on open and after an action in it, not on every change", async () => {
+	it("#24: the Data section lists on open and after an action in it, not on every change", async () => {
 		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
 		try {
 			const { h, root } = await mount();
@@ -436,7 +436,7 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
-	it("issue 24: the Data section lists again when it becomes visible again", async () => {
+	it("#24: the Data section lists again when it becomes visible again", async () => {
 		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
 		try {
 			const { root } = await mount();
@@ -455,7 +455,7 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
-	it("issue 24: a status change or a reload while the Data section is open lists again, an ordinary edit does not", async () => {
+	it("#24: a status change or a reload while the Data section is open lists again, an ordinary edit does not", async () => {
 		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
 		const conflicts = vi.spyOn(CpbaseStore.prototype, "listConflicts");
 		try {

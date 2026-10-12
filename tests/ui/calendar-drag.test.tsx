@@ -541,7 +541,7 @@ describe("month view (D11)", () => {
 	});
 });
 
-describe("M4 fix round: off-grid and overlay drops", () => {
+describe("off-grid and overlay drops", () => {
 	it("a timed block released above the grid (header, toolbar, sticky rows) writes nothing", async () => {
 		const m = await mount();
 		await weekReady(m);
@@ -591,7 +591,7 @@ describe("M4 fix round: off-grid and overlay drops", () => {
 	}
 });
 
-describe("M4 fix round: scrolling, notices and styles", () => {
+describe("scrolling, notices and styles", () => {
 	it("the dragged element survives the re-renders a drag causes (ghost state, is-dragging)", async () => {
 		const m = await mount();
 		await weekReady(m);
@@ -667,7 +667,7 @@ describe("M4 fix round: scrolling, notices and styles", () => {
 	});
 });
 
-describe("K1a: ghost of a split block (D9, F6) and autoscroll (D8)", () => {
+describe("ghost of a split block (D9, F6) and autoscroll (D8)", () => {
 	async function nightShift() {
 		const m = await mount();
 		await seed(m);

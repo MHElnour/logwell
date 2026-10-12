@@ -9,7 +9,7 @@ const MARK = "/* == M5 focus == */";
 const END = "/* == end M5 focus == */";
 const section = css.slice(css.indexOf(MARK), css.indexOf(END) + END.length);
 
-describe("M5 focus stylesheet section", () => {
+describe("focus stylesheet section", () => {
 	it("outlines the gap buttons, the show-more button and the status-bar item on :focus-visible with variables", () => {
 		for (const sel of [
 			".checkpoint-view .cp-focus-gap button:focus-visible",

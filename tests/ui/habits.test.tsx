@@ -772,7 +772,7 @@ describe("Habits page", () => {
 		});
 	});
 
-	describe("review fixes", () => {
+	describe("pending writes and the first month (D8, F11)", () => {
 		it("D8: a second Enter or click on Add while the first write is pending is ignored, and the field clears only after success", async () => {
 			const { m, el, habits } = await page();
 			const real = m.h.app.habits.add.bind(m.h.app.habits);

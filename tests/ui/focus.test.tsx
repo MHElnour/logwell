@@ -90,7 +90,7 @@ describe("Focus page", () => {
 	});
 
 	describe("running a set", () => {
-		it("Start is a user gesture: it calls focusGesture once (clean-up 4, 5)", async () => {
+		it("Start is a user gesture: it calls focusGesture once", async () => {
 			const m = await mount();
 			const gesture = vi.spyOn(m.host, "focusGesture");
 			const page = await openFocus(m);
@@ -489,7 +489,7 @@ describe("Focus page", () => {
 			expect(spy).toHaveBeenLastCalledWith(expect.any(String), 0, false);
 		});
 
-		it("Include and Exclude show an Undo notice labelled as the store write (clean-up 2)", async () => {
+		it("Include and Exclude show an Undo notice labelled as the store write", async () => {
 			const m = await mount();
 			await m.h.app.focus.open("db");
 			await m.h.app.focus.start(cfg(1, 600), null);
@@ -709,7 +709,7 @@ describe("Focus page", () => {
 
 		type Notify = { notifyUndo(message: string, label: string): void };
 
-		it("Change task and Remove task show an Undo notice labelled as the store write (clean-up 2)", async () => {
+		it("Change task and Remove task show an Undo notice labelled as the store write", async () => {
 			const m = await mount();
 			await withTask(m);
 			const other = (await m.h.app.tasks.create({ title: "Other" })).task;

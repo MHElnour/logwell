@@ -76,7 +76,7 @@ function time<T>(fn: () => T): { ms: number; value: T } {
 	return { ms: performance.now() - start, value };
 }
 
-describe(`save serialization at ${TASKS} tasks (issue 36)`, () => {
+describe(`#36: save serialization at ${TASKS} tasks`, () => {
 	// Three orders of the task map's keys. A database read from its file has its keys in file order, which is
 	// sorted. New tasks are added at the end of the map. Only ids inserted in random order (the worst case, not
 	// what the app does on a normal open) make the sort do its full work.

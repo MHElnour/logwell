@@ -343,7 +343,7 @@ describe("views, export and import", () => {
 		});
 	});
 
-	describe("import: the preview is what gets applied (second review R4)", () => {
+	describe("import: the preview is what gets applied", () => {
 		/** A backup with task Z in Trash, deleted at 11:00. */
 		function backupWithTrashedZ(): string {
 			const z = makeTask("z1", { title: "Zed", modifiedAt: "2026-10-01T09:00:00.000Z" });

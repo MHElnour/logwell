@@ -694,7 +694,7 @@ describe("inline add bar in the app", () => {
 	});
 });
 
-describe("U1 review fixes", () => {
+describe("Clear, Enter and Escape in the add bar", () => {
 	it("Clear also dismisses typed date, deadline and duration chips (their text stays literal)", async () => {
 		const m = await mountForm();
 		await typeInto(input(m.root), "buy milk tomorrow");

@@ -22,8 +22,8 @@ function selectors(text: string): string[] {
 	return out;
 }
 
-describe("M3 calendar stylesheet section", () => {
-	it("is present once, intact, and followed only by the M4 matrix, M4 drag, K1a list drag, Release B windowed lists, K1a board, K1b sections, G1 group by, M5 focus, 0.3.0 tag tree, M6 habits, #4 dashboard block, Issue #6 TickTick sync and M7 recurrence blocks", () => {
+describe("calendar stylesheet section", () => {
+	it("is present once, intact, and followed only by the later sections", () => {
 		expect(css.split(MARK)).toHaveLength(2);
 		expect(css.split(END)).toHaveLength(2);
 		expect(css.indexOf(MARK)).toBeLessThan(css.indexOf(END));

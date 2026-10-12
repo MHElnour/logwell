@@ -12,7 +12,7 @@ vi.mock("../../src/persistence/schema", async (importOriginal) => ({
 
 const V3 = readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v3.cpbase"), "utf8");
 
-describe("CpbaseStore as the schema 2 reader (K1b D2)", () => {
+describe("CpbaseStore as the schema 2 reader (D2)", () => {
 	it("opens v3 text read-only and never writes it", async () => {
 		const h = harness(V3);
 		await h.store.open();

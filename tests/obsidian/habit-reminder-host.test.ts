@@ -437,7 +437,7 @@ describe("reminder host", () => {
 		return { port: { load: () => stored, save } satisfies ReminderStatePort, save };
 	}
 
-	describe("review fixes (deep review of the reminder host)", () => {
+	describe("notices across days, failing stores and database switches", () => {
 		it("a sticky notice of yesterday is hidden by the first check of the new day", async () => {
 			const { app, shown, host, tickAt } = await setup();
 			await app.habits.create(quantity());

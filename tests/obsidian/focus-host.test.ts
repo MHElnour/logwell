@@ -405,7 +405,7 @@ describe("focus host", () => {
 		});
 	});
 
-	describe("user gesture (clean-up 4, 5)", () => {
+	describe("user gesture", () => {
 		it("starting a set from a command or task unlocks the sound and asks for notification permission", async () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
@@ -467,7 +467,7 @@ describe("focus host", () => {
 			expect(h.ui.systemNotify).toHaveBeenCalledWith("Focus set done", "4 rounds · 2h focused.");
 		});
 
-		it("set done rounds a short time to whole seconds and counts one round in the singular (issue 18)", () => {
+		it("#18: set done rounds a short time to whole seconds and counts one round in the singular", () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
 			h.focus.bus.emit("set-done", { rounds: 1, focusedSec: 40.5 });

@@ -838,7 +838,7 @@ describe("finish (P5)", () => {
 		expect(sessions(s)[0]?.status).toBe("completed");
 	});
 
-	it("a one-round set finished under 60 s is dropped by D7, with its Undo (clean-up review 2)", async () => {
+	it("a one-round set finished under 60 s is dropped by D7, with its Undo", async () => {
 		const s = await setup();
 		const ids: string[] = [];
 		s.svc.bus.on("short-discarded", (e) => ids.push(e.sessionId));
@@ -857,7 +857,7 @@ describe("finish (P5)", () => {
 		expect(s.svc.timer()).toMatchObject({ phase: "focus", round: 4 });
 	}
 
-	it("the last round of a set with an earlier saved round is kept under 60 s: the set reads done, no pomo, focus time counts (clean-up review 2)", async () => {
+	it("the last round of a set with an earlier saved round is kept under 60 s: the set reads done, no pomo, focus time counts", async () => {
 		const s = await setup();
 		const ids: string[] = [];
 		s.svc.bus.on("short-discarded", (e) => ids.push(e.sessionId));
@@ -874,7 +874,7 @@ describe("finish (P5)", () => {
 		expect(o.totalSec).toBe(3 * 1500 + 20);
 	});
 
-	it("a short last Finish after a Split continuation is kept (clean-up review 7)", async () => {
+	it("a short last Finish after a Split continuation is kept", async () => {
 		const s = await setup();
 		const b = (await s.h.app.tasks.create({ title: "B" })).task;
 		await s.svc.start(cfg(1), null);
@@ -886,7 +886,7 @@ describe("finish (P5)", () => {
 		expect(s.svc.timer()).toBeNull();
 	});
 
-	it("a short last Finish after a recovery Resume is kept when an earlier round is saved (clean-up review 7)", async () => {
+	it("a short last Finish after a recovery Resume is kept when an earlier round is saved", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		await ticks(s, s.svc, 1500, 30);
@@ -1057,7 +1057,7 @@ describe("delete and remove task (P4)", () => {
 	});
 });
 
-describe("edits report whether they wrote (clean-up review 1)", () => {
+describe("edits report whether they wrote", () => {
 	it("assign resolves true once, false for the same task again, and Undo reverts it once", async () => {
 		const s = await setup();
 		const t = (await s.h.app.tasks.create({ title: "T" })).task;
@@ -1090,7 +1090,7 @@ describe("edits report whether they wrote (clean-up review 1)", () => {
 		expect(s.h.app.store.undoLabel).not.toBe("Edit focus record");
 	});
 
-	it("Undo of a gap edit restores the record byte for byte, without modifiedAt (clean-up review 7)", async () => {
+	it("Undo of a gap edit restores the record byte for byte, without modifiedAt", async () => {
 		const { s, rec } = await withGap();
 		const before = JSON.stringify(s.h.app.store.state.focusSessions.get(rec.id));
 		await s.svc.includeGap(rec.id, 0, true);
@@ -1102,7 +1102,7 @@ describe("edits report whether they wrote (clean-up review 1)", () => {
 	});
 });
 
-describe("modifiedAt of an edited record (clean-up 3)", () => {
+describe("modifiedAt of an edited record", () => {
 	async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
 		const s = await setup();
 		await s.svc.start(cfg(1), null);

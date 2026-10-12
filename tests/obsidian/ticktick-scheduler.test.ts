@@ -417,7 +417,7 @@ describe("when the sync runs", () => {
 			expect(s.stub.calls).toBe(2);
 		});
 
-		it("a thrown error reads in settings as the same failure reported by the sync would (issue 22)", async () => {
+		it("#22: a thrown error reads in settings as the same failure reported by the sync would", async () => {
 			const s = await setup({ minutes: 60 });
 			s.stub.results.push(new TickTickError("rate-limited", "TickTick: HTTP 429", { retryAfterSec: 30 }));
 			await s.scheduler.syncNow();

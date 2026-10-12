@@ -41,7 +41,7 @@ describe("sections", () => {
 
 	const taskRow = (raw: Raw, id: string) => raw.tasks.find((t) => t.id === id)!;
 
-	describe("section repairs on load (K1b D3)", () => {
+	describe("section repairs on load (D3)", () => {
 		it("a sectionId that names a missing section is cleared, with an issue", () => {
 			const r = ok(loadMutated((raw) => (taskRow(raw, INVOICE).sectionId = "no-such-section")));
 			expect(r.data.tasks.get(INVOICE)?.sectionId).toBeNull();
@@ -224,7 +224,7 @@ describe("sections", () => {
 			expect(removed.sections.has("new-sec")).toBe(false);
 		});
 
-		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already schema 3, so the e2e vault never migrates (§11.6 #62)", (path) => {
+		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already schema 3, so the e2e vault never migrates (§11.6)", (path) => {
 			const text = readFileSync(join(import.meta.dirname, "..", "..", path), "utf8");
 			const r = ok(loadText(text, NOW));
 			expect(r.migratedFrom).toBeNull();

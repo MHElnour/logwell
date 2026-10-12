@@ -84,7 +84,7 @@ describe("migration notice", () => {
 		expect(upgrades()).toHaveLength(0);
 	});
 
-	it("opening a v3 database (M7 D1) shows the upgrade notice once", async () => {
+	it("opening a v3 database (D1) shows the upgrade notice once", async () => {
 		const fake = fakeApp();
 		fake.files.set(PATH, readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v3.cpbase"), "utf8"));
 		const plugin = await loadPlugin(fake, PATH);
@@ -96,7 +96,7 @@ describe("migration notice", () => {
 		expect(upgrades()[0]).toContain("from schema 3 to 6");
 	});
 
-	it("opening a v2 database (K1b) shows the upgrade notice once", async () => {
+	it("opening a v2 database shows the upgrade notice once", async () => {
 		const fake = fakeApp();
 		fake.files.set(PATH, readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v2.cpbase"), "utf8"));
 		const plugin = await loadPlugin(fake, PATH);

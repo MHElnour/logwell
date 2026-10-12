@@ -172,7 +172,7 @@ describe(`performance at ${TOTAL} tasks`, () => {
 
 // The Habits page and the Today block at target scale (20 habits, 20,000 check-ins): one
 // HabitIndex per state, so a render is a few streak walks and one 50-row log, not a pass per row.
-describe("performance at target scale: 20 habits and 20,000 check-ins (M6 D18)", () => {
+describe("performance at target scale: 20 habits and 20,000 check-ins (D18)", () => {
 	const HABITS = 20;
 	const CHECKINS = 20000;
 	const DAYS = CHECKINS / HABITS;

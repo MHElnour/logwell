@@ -410,7 +410,7 @@ describe("note renames", () => {
 		});
 	});
 
-	describe("a failing rename-queue save never hangs a rename (final gate)", () => {
+	describe("a failing rename-queue save never hangs a rename", () => {
 		class ThrowingQueue extends MemoryRenameQueue {
 			override save(): void {
 				throw new Error("QuotaExceeded");

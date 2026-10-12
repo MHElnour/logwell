@@ -1178,7 +1178,7 @@ describe("subtask counts", () => {
 			?.querySelector(".cp-meta-subtasks")
 			?.textContent.replace(/\s/g, "");
 
-	describe("a task block's subtask counts (issue 75)", () => {
+	describe("#75: a task block's subtask counts", () => {
 		it("reads them from the task index in a draw, and the badge matches", async () => {
 			const { h, block } = await setup();
 			const parent = (await h.app.tasks.create({ title: "Parent", priority: 1 })).task;

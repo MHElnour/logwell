@@ -131,7 +131,7 @@ describe("SoundPlayer (D14)", () => {
 		expect(ctx.resumed).toBe(1);
 	});
 
-	it("unlock creates the context and resumes a suspended one before any sound plays (clean-up 5)", () => {
+	it("unlock creates the context and resumes a suspended one before any sound plays", () => {
 		const { ctx, tones, p } = player("chime", 60);
 		ctx.state = "suspended";
 		p.unlock();
@@ -142,7 +142,7 @@ describe("SoundPlayer (D14)", () => {
 		expect(ctx.created).toBe(1);
 	});
 
-	it("unlock resumes an interrupted context (iOS) but not a running or closed one (clean-up review 5)", () => {
+	it("unlock resumes an interrupted context (iOS) but not a running or closed one", () => {
 		for (const [state, resumed] of [["interrupted", 1], ["running", 0], ["closed", 0]] as const) {
 			const { ctx, p } = player("chime", 60);
 			ctx.state = state;

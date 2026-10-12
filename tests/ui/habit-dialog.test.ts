@@ -132,7 +132,7 @@ describe("the form", () => {
 	});
 });
 
-describe("review fixes (F6, F10, D7)", () => {
+describe("weekday label, reminder default and goal digits (F6, F10, D7)", () => {
 	it("F6: the weekday chips have their own Weekdays label, not the When segment's", () => {
 		const t = form();
 		const chips = t.q(".cp-habit-chips");

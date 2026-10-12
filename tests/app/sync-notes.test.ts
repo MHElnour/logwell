@@ -476,7 +476,7 @@ describe("checklists as tick boxes, both ways (SYNC-09)", () => {
 	});
 });
 
-describe("review findings: data safety of sync notes (SYNC-09)", () => {
+describe("data safety of sync notes (SYNC-09)", () => {
 	async function withNote(content: string) {
 		const s = await ready();
 		s.notesOn = true;

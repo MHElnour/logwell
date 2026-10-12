@@ -155,7 +155,7 @@ describe("Quick Add chips (C1, C2, C9)", () => {
 		}
 	});
 
-	it("QA-07 (M7 D8): a recurrence phrase is a repeat chip, out of the title; the task repeats", async () => {
+	it("QA-07 (D8): a recurrence phrase is a repeat chip, out of the title; the task repeats", async () => {
 		const m = await mountForm();
 		await typeInto(titleInput(m.root), "Water plants every monday");
 		expect(chips(m.root)[0]!.textContent).toContain("Repeat: every Mon");
@@ -669,7 +669,7 @@ describe("Keyboard (C3)", () => {
 	});
 });
 
-describe("Suggester binding (B4 of WP-B)", () => {
+describe("Suggester binding (B4)", () => {
 	it("a bound multi-word category applies after the input event, without being dropped", async () => {
 		const m = await mountForm();
 		const c = await m.h.app.categories.create("Deep work");
@@ -1722,7 +1722,7 @@ describe("All fields", () => {
 	const timeInput = (root: HTMLElement) => root.querySelector<HTMLInputElement>('.cp-quick-add-fields input[type="time"]')!;
 	const dateInput = (root: HTMLElement) => root.querySelector<HTMLInputElement>('.cp-quick-add-fields input[type="date"]')!;
 
-	describe("issue #85: All fields", () => {
+	describe("#85: All fields", () => {
 		it("#85: Time is disabled until there is a date, says so in its label, and describes why", async () => {
 			const root = await mountForm();
 			const time = timeInput(root);
@@ -1770,7 +1770,7 @@ describe("All fields", () => {
 		});
 	});
 
-	describe("issue #85: All fields stylesheet", () => {
+	describe("#85: All fields stylesheet", () => {
 		const css = readFileSync("styles.css", "utf8");
 
 		it("#85: the modal's field grid is three columns, two in a narrow window", () => {
