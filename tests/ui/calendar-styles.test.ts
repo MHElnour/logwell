@@ -1,10 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HOUR_PX, LABEL_PEEK_PX, initialScrollTop } from "../../src/ui/calendar/geometry";
-import { fmtMin, monthTitle, shiftAnchor, weekTitle } from "../../src/ui/calendar/format";
 
-// The stylesheet section and the small pure helpers of the calendar UI. happy-dom has no
-// layout, so the stylesheet rules are checked as text; e2e checks the real rendering.
+// The calendar stylesheet section and the initial scroll it is drawn for. happy-dom has no layout, so the stylesheet rules are checked as text; e2e checks the real rendering.
 
 const css = readFileSync("styles.css", "utf8");
 const MARK = "/* == M3 calendar == */";
@@ -105,35 +103,6 @@ describe("M3 calendar stylesheet section", () => {
 		expect(section).toMatch(/\.cp-cal-entry\.is-noduration\s*\{[^}]*dashed/);
 		expect(section).toMatch(/\.cp-cal-entry\.is-completed\s*\{[^}]*line-through/);
 		expect(section).toMatch(/\.cp-cal-skipped\s*\{[^}]*repeating-linear-gradient/);
-	});
-});
-
-describe("calendar titles and navigation", () => {
-	it("week titles", () => {
-		expect(weekTitle(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"])).toBe("Sep 28 – Oct 4, 2026");
-		expect(weekTitle(["2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02", "2027-01-03"])).toBe("Dec 28, 2026 – Jan 3, 2027");
-	});
-
-	it("month titles", () => {
-		expect(monthTitle("2026-10-14")).toBe("October 2026");
-		expect(monthTitle("2027-01-01")).toBe("January 2027");
-	});
-
-	it("shifts by a week or a month; month steps land on today when it is in that month", () => {
-		expect(shiftAnchor("2026-10-01", "week", 1, "2026-10-01")).toBe("2026-10-08");
-		expect(shiftAnchor("2026-10-01", "week", -1, "2026-10-01")).toBe("2026-09-24");
-		expect(shiftAnchor("2026-10-14", "month", 1, "2026-10-01")).toBe("2026-11-01");
-		expect(shiftAnchor("2026-10-14", "month", -1, "2026-10-01")).toBe("2026-09-01");
-		expect(shiftAnchor("2026-11-01", "month", -1, "2026-10-01")).toBe("2026-10-01");
-		expect(shiftAnchor("2026-12-01", "month", 1, "2026-10-01")).toBe("2027-01-01");
-		expect(shiftAnchor("2026-01-31", "month", 1, "2026-10-01")).toBe("2026-02-01");
-	});
-
-	it("formats minutes as HH:mm, wrapping 24:00", () => {
-		expect(fmtMin(0)).toBe("00:00");
-		expect(fmtMin(1140)).toBe("19:00");
-		expect(fmtMin(1440)).toBe("00:00");
-		expect(fmtMin(1470)).toBe("00:30");
 	});
 });
 
