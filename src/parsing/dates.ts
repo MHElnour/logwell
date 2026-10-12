@@ -2,7 +2,7 @@ import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
 import { LOCAL_FORMAT, addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
-import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, wordBoundaryBefore } from "./text";
+import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -307,8 +307,8 @@ const dayCertainOf = (c: chrono.ParsedComponents): boolean => c.isCertain("day")
 /** A weekday with no day of the month (`Friday`, `next friday`). */
 const weekdayOnly = (c: chrono.ParsedComponents): boolean => c.isCertain("weekday") && !c.isCertain("day");
 
-/** The words chrono's range merge joins two dates with (ENMergeDateRangeRefiner), each a possible split point. */
-const RANGE_JOIN_RE = /\s*(?:\b(?:to|until|till|through)\b|[-\u2013])\s*/giu;
+/** The words chrono's range merge joins two dates with, each a possible split point. */
+const RANGE_JOIN_RE = new RegExp(RANGE_JOIN_PATTERN, "giu");
 
 interface RangeSplit {
 	start: { text: string; outcome: DateOutcome };

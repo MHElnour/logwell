@@ -159,6 +159,17 @@ const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]>
 	["Gym daily Mon-Fri", "Gym Mon-Fri", ["recurrence applied daily", "scheduled suggestion Mon-Fri"]],
 	["Gym daily Mon to Fri", "Gym Mon to Fri", ["recurrence applied daily", "scheduled suggestion Mon to Fri"]],
 	["Shop every weekday from Monday to Friday", "Shop from Monday to Friday", ["recurrence applied every weekday", "scheduled suggestion Monday to Friday"]],
+	// The first weekday of the range is not one more repeat word: the repeat keeps its form (Tasks and Quick Add rule 40).
+	["Gym every day Mon-Fri", "Gym Mon-Fri", ["recurrence applied every day", "scheduled suggestion Mon-Fri"]],
+	["Gym every day Mon\u2013Fri", "Gym Mon\u2013Fri", ["recurrence applied every day", "scheduled suggestion Mon\u2013Fri"]],
+	["Gym every day Monday to Friday", "Gym Monday to Friday", ["recurrence applied every day", "scheduled suggestion Monday to Friday"]],
+	["Gym every day mon until fri", "Gym mon until fri", ["recurrence applied every day", "scheduled suggestion mon until fri"]],
+	["Gym every month Mon-Fri", "Gym Mon-Fri", ["recurrence applied every month", "scheduled suggestion Mon-Fri"]],
+	["Gym every weekday Mon-Fri", "Gym Mon-Fri", ["recurrence applied every weekday", "scheduled suggestion Mon-Fri"]],
+	["Gym every week mon-fri", "Gym mon-fri", ["recurrence applied every week", "scheduled suggestion mon-fri"]],
+	["Gym every week on mon-fri", "Gym on mon-fri", ["recurrence applied every week", "scheduled suggestion on mon-fri"]],
+	["Gym every week Mon through Fri", "Gym Mon through Fri", ["recurrence applied every week", "scheduled suggestion Mon through Fri"]],
+	["Gym every monday Mon-Fri", "Gym Mon-Fri", ["recurrence applied every monday", "scheduled suggestion Mon-Fri"]],
 ];
 
 const decide = (r: ParseResult, kind: "scheduled" | "repeatEnd", choose: (c: ParseResult["chips"][number]) => SpanDecision): SpanDecision => choose(r.chips.find((c) => c.kind === kind)!);
@@ -173,6 +184,36 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 			expect(r.fields.recurrenceEnd).toBeUndefined();
 			expect(r.blocking).toEqual([]);
 		});
+	});
+
+	it("a repeat's time that is a choice keeps its form before two weekdays", () => {
+		const r = parse("Gym every day at 7 Mon-Fri", zone);
+		expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`)).toEqual(["recurrence choice every day at 7", "scheduled suggestion Mon-Fri"]);
+		expect([r.fields.scheduled, r.blocking]).toEqual([undefined, []]);
+	});
+
+	it("a date range after a comma is not more repeat words: the repeat keeps its form", () => {
+		for (const [input, start, until] of [
+			["Pills every day, Oct 12 to Dec 1", "Oct 12", "to Dec 1"],
+			["Pills every day, 12 Oct - 1 Dec", "12 Oct", "- 1 Dec"],
+		] as const) {
+			const r = parse(input, zone);
+			expect([rule(r), day(r), end(r), r.blocking], input).toEqual(["daily", "2026-10-12", "2026-12-01", []]);
+			expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`), input).toEqual(["recurrence applied every day", `scheduled applied ${start}`, `repeatEnd applied ${until}`]);
+		}
+	});
+
+	it("a start with its own year whose hour is a choice: the end counts from that date, not today", () => {
+		for (const [input, until] of [
+			["Gym every day starting Sep 28 2026 at 5 to Oct 3", "2026-10-03"],
+			["Gym every day starting 2026-10-01 at 5 until Oct 5", "2026-10-05"],
+			["Gym every day starting Oct 1 2026 at 12 until Oct 5", "2026-10-05"],
+		] as const) {
+			const r = parse(input, zone);
+			expect(r.chips.find((c) => c.kind === "scheduled")?.status, input).toBe("choice");
+			expect(r.chips.find((c) => c.kind === "repeatEnd"), input).toMatchObject({ status: "applied", end: { kind: "date", date: until } });
+			expect([end(r), r.blocking], input).toEqual([until, []]);
+		}
 	});
 
 	it("two weekdays led by starting are still the start and the end", () => {
@@ -258,17 +299,28 @@ const LEAP_DAYS: ReadonlyArray<readonly [string, DateLocale, string | undefined]
 	["02/29 party", "en", "2032-02-29"],
 	["29/02 party", "en", "2032-02-29"],
 	["the 29th of February party", "en", "2032-02-29"],
-	["Feb 29 party", "en-GB", undefined],
-	["Feb 29 9am party", "en-GB", "2028-03-01T09:00"],
 	["29 Feb party", "en-GB", "2032-02-29"],
 	["02/29 party", "en-GB", "2032-02-29"],
 	["29/02 party", "en-GB", "2032-02-29"],
 	["the 29th of February party", "en-GB", "2032-02-29"],
 ];
 
+// Known defects (#88, #69), not the intended reading: in en-GB, a month name before a leap day reads no date or the
+// day after it. Pinned at what the parser gives today, without a repeat, so a change shows up here; a fix of those
+// issues updates these rows to the next Feb 29 (2032-02-29), as the en rows read. [input, the scheduled value]
+const LEAP_DAY_DEFECTS: ReadonlyArray<readonly [string, string | undefined]> = [
+	["Feb 29 party", undefined],
+	["Feb 29 9am party", "2028-03-01T09:00"],
+];
+
 describe("a leap day without a year or a repeat", () => {
 	it.each(LEAP_DAYS)("%s (%s) keeps its year", (input, locale, expected) => {
 		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale }));
 		expect(day(r)).toBe(expected);
+	});
+
+	it.each(LEAP_DAY_DEFECTS)("known defect (#88, #69): %s (en-GB) reads as before, not the next Feb 29", (input, current) => {
+		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale: "en-GB" }));
+		expect(day(r)).toBe(current);
 	});
 });

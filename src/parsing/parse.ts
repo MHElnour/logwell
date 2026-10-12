@@ -410,12 +410,19 @@ function pickedEndDraft(input: string, c: DateCandidate, ctx: ParseContext): Dra
 	return d;
 }
 
+/** The one day of a typed date whose alternatives differ only in the hour (`Sep 28 2026 at 5`); undefined otherwise. */
+function choiceDay(chips: readonly Chip[], zone: string): LocalDate | undefined {
+	const days = chips.find((c) => c.kind === "scheduled" && c.status === "choice")?.alternatives?.map((a) => (a.value === undefined ? null : dateSpecDate(a.value, zone)));
+	const first = days?.[0];
+	return first != null && days!.every((d) => d === first) ? first : undefined;
+}
+
 /**
- * Binds the end chips to the repeat once the start is known (the applied typed date, else `start`: a date picked by
- * hand, a preset or today): `for N <periods>` becomes the day before N periods from the start; an end that leaves the
- * series no date is invalid (repeatEndProblem, the services' check), against the typed repeat, else the one picked by
- * hand; an end waits while its repeat's time is a choice; the end of a repeat Quick Add cannot build is not supported
- * either.
+ * Binds the end chips to the repeat once the start is known (the applied typed date; under a typed repeat, the day of
+ * a typed date whose hour is a choice; else `start`: a date picked by hand, a preset or today): `for N <periods>`
+ * becomes the day before N periods from the start; an end that leaves the series no date is invalid
+ * (repeatEndProblem, the services' check), against the typed repeat, else the one picked by hand; an end waits while
+ * its repeat's time is a choice; the end of a repeat Quick Add cannot build is not supported either.
  */
 function bindEnds(
 	chips: Chip[],
@@ -428,7 +435,7 @@ function bindEnds(
 	const waiting = rule === undefined && repeats.some((c) => c.status === "choice");
 	const unsupported = repeats.length > 0 && repeats.every((c) => c.status === "unsupported");
 	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
-	const anchor = date === undefined ? env.start : dateSpecDate(date, env.zone);
+	const anchor = date === undefined ? (rule === undefined ? undefined : choiceDay(chips, env.zone)) ?? env.start : dateSpecDate(date, env.zone);
 	// Without a known rule (none typed, none picked), only the anchor is checked, and the service checks the rest.
 	const series = singleVersionRecurrence(anchor, rule ?? env.pickedRule ?? FROM_ANCHOR);
 	for (const c of chips) {

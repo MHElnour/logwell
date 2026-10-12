@@ -212,6 +212,12 @@ export const MONTH_PATTERN = alternation([...new Set([...MONTH_LONG, ...MONTH_SH
 /** What joins the items of a list: a comma (", and"), "and" or "&". Plain spaces are the caller's choice. */
 export const LIST_SEP_PATTERN = "(?:\\s*,\\s*(?:and\\s+)?|\\s+and\\s+|\\s*&\\s*)";
 
+/**
+ * What joins the two sides of a date range, as chrono's range merge does (ENMergeDateRangeRefiner), with the spaces
+ * around it: "-", an en dash, "to", "until", "till" or "through" ("Mon-Fri", "Oct 12 to Dec 1").
+ */
+export const RANGE_JOIN_PATTERN = "\\s*(?:\\b(?:to|until|till|through)\\b|[-\\u2013])\\s*";
+
 /** A day of the month written with its suffix: "1st", "15th", "22nd". */
 export const DAY_NUMBER_PATTERN = "\\d{1,2}(?:st|nd|rd|th)";
 

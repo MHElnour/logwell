@@ -9,6 +9,7 @@ import {
 	ORDINAL_PATTERN,
 	PLURAL_WEEKDAY_PATTERN,
 	BARE_REPEAT_PATTERN,
+	RANGE_JOIN_PATTERN,
 	DAY_PART_PATTERN,
 	PERIOD_UNIT_PATTERN,
 	UNIT_PATTERN,
@@ -157,13 +158,18 @@ export function findRepeatCounts(s: string, from: number, taken: Taken): RepeatC
 }
 
 const NOT_WORD_AFTER = "(?![\\p{L}\\p{N}])";
+// A weekday that starts a range of weekdays ("every day Mon-Fri", "every week Monday to Friday") is not one more day
+// of the repeat: the range is left to the date reader, a visible suggestion (Repeating tasks rule 19).
+const NOT_RANGE = `(?!${RANGE_JOIN_PATTERN}${WEEKDAY_PATTERN}${NOT_WORD_AFTER})`;
 const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
 // Joined by plain spaces, `sat` and `sun` continue a list only when nothing but more weekdays, a time and punctuation
 // follows ("every mon wed sat", not "every monday sun cream"); joined by a comma, "and" or "&", they always do.
 const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN})?[\\s\\p{P}]*$)`;
-const WEEKDAY_LIST =
-	`${WEEKDAY_PATTERN}(?:${LIST_SEP_PATTERN}${WEEKDAY_PATTERN}${NOT_WORD_AFTER}` +
-	`|\\s+${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}|\\s+${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}${LIST_ENDS_HERE})*`;
+// After its first weekday, a list takes no weekday that starts a range ("every monday Mon-Fri" is every Monday).
+const WEEKDAY_LIST_REST =
+	`(?:${LIST_SEP_PATTERN}${WEEKDAY_PATTERN}${NOT_WORD_AFTER}${NOT_RANGE}` +
+	`|\\s+${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}${NOT_RANGE}|\\s+${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}${NOT_RANGE}${LIST_ENDS_HERE})*`;
+const WEEKDAY_LIST = `${WEEKDAY_PATTERN}${WEEKDAY_LIST_REST}`;
 const PERIOD = "(?:weekday|weekend|week|month|year|day)";
 const OF_MONTH = "\\s+of\\s+(?:the|each|every)\\s+month";
 // "on the 15th", "on day 15", "on 15": the day of the month of a monthly repeat.
@@ -177,7 +183,8 @@ const EVERY_RE = new RegExp(
 		`|(?:(?:other\\s+)?month|\\d+\\s*months?)${MONTH_ON}` +
 		// "every year on May 5": the date after "on" is the start, read by the date reader.
 		`|(?:(?:other\\s+)?year|\\d+\\s*years?)(?:\\s+on(?:\\s+the)?(?=\\s+(?:${MONTH_PATTERN}|\\d)))?` +
-		`|(?:(?:other\\s+)?week|\\d+\\s*weeks?)\\s+(?:on\\s+)?${WEEKDAY_LIST}` +
+		// "every week Mon-Fri" is every week, with the range left to the date reader.
+		`|(?:(?:other\\s+)?week|\\d+\\s*weeks?)\\s+(?:on\\s+)?${WEEKDAY_PATTERN}${NOT_WORD_AFTER}${NOT_RANGE}${WEEKDAY_LIST_REST}` +
 		`|other\\s+(?:${PERIOD}${NOT_WORD_AFTER}|${WEEKDAY_LIST})` +
 		`|\\d+\\s*${PERIOD}s?` +
 		`|${WEEKDAY_LIST}` +
@@ -207,7 +214,15 @@ const REPEAT_WORD_RE = new RegExp(
 // More repeat words right after a form make it one Quick Add cannot build: joined ("every 2nd and 4th tuesday") or
 // a weekday, day or unit next to it ("every 3 days monday", "every 2nd day", "every month 15th").
 const JOINED_RE = new RegExp(LIST_SEP_PATTERN, "iyu");
-const MORE_AFTER_RE = new RegExp(`\\s+(?:${UNIT_PATTERN}|${WEEKDAY_FULL_PATTERN}|${DAY_NUMBER_PATTERN})${NOT_WORD_AFTER}`, "iyu");
+const MORE_AFTER_RE = new RegExp(`\\s+(?:${UNIT_PATTERN}|${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}${NOT_RANGE}|${DAY_NUMBER_PATTERN})${NOT_WORD_AFTER}`, "iyu");
+// The first side of a date range ("Mon-Fri", "Oct 12 to Dec 1", "12 Oct - 1 Dec") ends a run of repeat words: the
+// range is left to the date reader.
+const RANGE_DAY = `(?:${DAY_NUMBER_PATTERN}|\\d{1,2})`;
+const RANGE_START_RE = new RegExp(
+	`(?:${WEEKDAY_PATTERN}|${MONTH_PATTERN}(?:\\s+${RANGE_DAY})?|${RANGE_DAY}(?:\\s+(?:of\\s+)?${MONTH_PATTERN})?)${NOT_WORD_AFTER}` +
+		`${RANGE_JOIN_PATTERN}(?:${WEEKDAY_PATTERN}|${MONTH_PATTERN}|\\d)`,
+	"iyu",
+);
 const CONNECTORS: ReadonlySet<string> = new Set(["and", "&", ",", "of", "the", "each", "every", "on", "other"]);
 
 function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
@@ -232,6 +247,7 @@ function repeatWordsEnd(s: string, from: number): number {
 		else while (k < s.length && isWordChar(charAt(s, k))) k += charAt(s, k).length;
 		if (k === j) break;
 		const word = s.slice(j, k).toLowerCase();
+		if (sticky(RANGE_START_RE, s, j) !== null) break;
 		if (REPEAT_WORD_RE.test(word)) end = k;
 		else if (!(end === from ? first && word === "other" : CONNECTORS.has(word))) break;
 		first = false;
