@@ -101,7 +101,7 @@ describe("errors, single flight, undo and crashes", () => {
 			expect(linkedWhileSecondInFlight).toBe(true);
 		});
 
-		it("links pulled tasks and sections before any push: a throw mid-push does not import them twice (deep review #2)", async () => {
+		it("links pulled tasks and sections before any push: a throw mid-push does not import them twice", async () => {
 			const s = await oneTask();
 			const col = s.tt.addColumn(s.projectId, "Errands");
 			s.tt.add(s.projectId, { title: "Imported", columnId: col.id });
@@ -121,7 +121,7 @@ describe("errors, single flight, undo and crashes", () => {
 			expect(s.tt.live(s.projectId).filter((t) => t.title === "Goes up")).toHaveLength(1);
 		});
 
-		it("records a merged pull even when the push fails: a retry makes no second conflict copy (deep review #3)", async () => {
+		it("records a merged pull even when the push fails: a retry makes no second conflict copy", async () => {
 			const s = await oneTask();
 			await s.h.app.tasks.update(s.id, { title: "Call the bank (Logwell)" });
 			s.tt.edit(s.ttId, { title: "Phone the bank" });
@@ -243,7 +243,7 @@ describe("errors, single flight, undo and crashes", () => {
 // writes again. `lastPulledAt` advances whenever the links command writes anything else, and at least once an hour;
 // the next pull always asks for completions since the stored `lastPulledAt` (less the overlap), so none is missed.
 
-describe("a sync with nothing to do (issue #6)", () => {
+describe("a sync with nothing to do", () => {
 	it("runs no command and leaves the file as it is", async () => {
 		const s = await syncHarness();
 		const { listId } = await linkedList(s);
@@ -316,7 +316,7 @@ describe("series, failed link writes and list failures", () => {
 
 	const DAILY = "RRULE:FREQ=DAILY;INTERVAL=1";
 
-	describe("a repeating TickTick series is never deleted (third review #1)", () => {
+	describe("a repeating TickTick series is never deleted", () => {
 		it("made repeating in TickTick, then deleted in Logwell before the next sync: only the link goes", async () => {
 			const s = await oneTask();
 			s.tt.edit(s.ttId, { repeatFlag: DAILY });
@@ -356,7 +356,7 @@ describe("series, failed link writes and list failures", () => {
 		});
 	});
 
-	describe("a create whose link write failed (third review #2)", () => {
+	describe("a create whose link write failed", () => {
 		it("is linked even after its TickTick copy was completed, and completes in Logwell", async () => {
 			const s = await syncHarness();
 			const { listId, projectId } = await linkedList(s);
@@ -409,7 +409,7 @@ describe("series, failed link writes and list failures", () => {
 		});
 	});
 
-	describe("failures of every list are reported (third review #3)", () => {
+	describe("failures of every list are reported", () => {
 		it("a whole-push stop keeps the failures of lists that stopped before it", async () => {
 			const s = await syncHarness();
 			const work = await linkedList(s, "Work");
@@ -430,7 +430,7 @@ describe("series, failed link writes and list failures", () => {
 		});
 	});
 
-	describe("the open count follows TickTick's status (third review #4)", () => {
+	describe("the open count follows TickTick's status", () => {
 		it("a task completed in TickTick, reopened and moved in Logwell counts once", async () => {
 			const s = await syncHarness();
 			const work = await linkedList(s, "Work");
@@ -589,7 +589,7 @@ describe("stopping between requests", () => {
 
 	const creates = (calls: string[]) => calls.filter((c) => c.startsWith("createTask")).length;
 
-	describe("stopping a sync (issue #6)", () => {
+	describe("stopping a sync", () => {
 		it("mid-push: no request after the one in flight, whose answer is still linked", async () => {
 			const s = await syncHarness();
 			const { listId } = await linkedList(s);

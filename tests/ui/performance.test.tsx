@@ -115,7 +115,7 @@ async function bigState() {
 }
 
 describe(`performance at ${TOTAL} tasks`, () => {
-	it("review #18: rendering the Inbox scans the task map a constant number of times", async () => {
+	it("rendering the Inbox scans the task map a constant number of times", async () => {
 		const { state, tasks, host, ctx } = await bigState();
 		const container = document.createElement("div");
 		try {

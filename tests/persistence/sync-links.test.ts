@@ -127,7 +127,7 @@ describe("sync links", () => {
 		});
 	});
 
-	describe("orphaned syncLinks (kept, issue #6)", () => {
+	describe("orphaned syncLinks (kept)", () => {
 		// File sync can deliver a link before its task; dropping it would make the next sync import the task again.
 		it("keeps a task link whose task is neither live nor in the Trash, with no issue", () => {
 			const r = loadText(withLinks([link("task", "gone")]), NOW);
@@ -242,7 +242,7 @@ describe("sync link flags", () => {
 		return serializeDb({ ...db, syncLinks: new Map([["task:t1", l]]) });
 	}
 
-	describe("sync link flags (issue #6)", () => {
+	describe("sync link flags", () => {
 		it("omits false and the default mode, and reads them back unset, exactly as a link without them", () => {
 			const t = text(link({ pendingDelete: false, mode: "sync" }));
 			expect(t).not.toContain("pendingDelete");

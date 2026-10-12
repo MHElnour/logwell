@@ -130,7 +130,7 @@ describe("sync at the limits", () => {
 		return count;
 	}
 
-	describe("TickTick sync at the limits (issue #6)", () => {
+	describe("TickTick sync at the limits", () => {
 		it(`pulls and diffs ${LISTS} linked lists of ${PER_LIST} tasks with no change within budget`, async () => {
 			const { s, tt, sync } = await setup(LISTS * PER_LIST);
 			const tasks = s.h.app.store.state.tasks;
@@ -265,7 +265,7 @@ describe("field mapping", () => {
 		return times[Math.floor(times.length / 2)]!;
 	}
 
-	describe("TickTick mapping at 50,000 tasks (issue #6)", () => {
+	describe("TickTick mapping at 50,000 tasks", () => {
 		it("dateToTt maps every task within budget", () => {
 			let sink = 0;
 			const ms = timeIt(() => {

@@ -254,7 +254,7 @@ describe("the view menu and the Completed group", () => {
 			expect(toggle(m)!.textContent.trim()).toBe("Completed · 45");
 		});
 
-		describe("Show more starts again at 20 (#100)", () => {
+		describe("Show more starts again at 20", () => {
 			const done = async (m: CalMount, n: number, categoryId?: string) => {
 				for (let i = 0; i < n; i++) {
 					const t = await m.h.app.tasks.create({ title: `Done ${String(i).padStart(2, "0")}`, categoryId });

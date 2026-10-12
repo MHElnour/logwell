@@ -122,7 +122,7 @@ describe("New list form", () => {
 	});
 });
 
-describe("New list form: preselected color and inline errors (#118, #119)", () => {
+describe("New list form: preselected color and inline errors", () => {
 	it("preselects the given color; the Default swatch means no color", async () => {
 		const t = form("green");
 		expect(t.colors().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "false", "true", "false", "false", "false", "false"]);

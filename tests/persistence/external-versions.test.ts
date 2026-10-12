@@ -34,7 +34,7 @@ describe("a v2 file", () => {
 		h.store.commit(next, [{ c: "sections", id: section.id, v: section }]);
 	}
 
-	describe("CpbaseStore: a v2 file arriving externally (K1b #116)", () => {
+	describe("CpbaseStore: a v2 file arriving externally", () => {
 		it("is migrated and announced with the migrated event", async () => {
 			const h = harness();
 			await h.store.open();
@@ -188,7 +188,7 @@ describe("a v4 file", () => {
 		return text.replace(',\n"syncLinks":[]\n}\n', "\n}\n");
 	}
 
-	describe("CpbaseStore: a v4 file arriving externally (issue #6)", () => {
+	describe("CpbaseStore: a v4 file arriving externally", () => {
 		it("is migrated and announced, with no conflict when memory holds no link", async () => {
 			const h = harness();
 			await h.store.open();

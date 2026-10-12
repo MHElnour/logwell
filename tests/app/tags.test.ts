@@ -730,7 +730,7 @@ describe("tags (TAG-01..04)", () => {
 		expect(h.app.store.state.tasks.get(task.id)?.tagKeys).toEqual(["b"]);
 	});
 
-	it("review #9: deleting a tag also strips it from tasks in Trash", async () => {
+	it("deleting a tag also strips it from tasks in Trash", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("a");
 		await h.app.tags.create("b");
@@ -745,7 +745,7 @@ describe("tags (TAG-01..04)", () => {
 		expect(h.app.store.state.tasks.get(task.id)?.tagKeys).toEqual([]);
 	});
 
-	it("review #9: restore drops tag keys that no longer exist", async () => {
+	it("restore drops tag keys that no longer exist", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("b");
 		const { task } = await h.app.tasks.create({ title: "x", tagKeys: ["b"] });

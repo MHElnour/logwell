@@ -22,7 +22,7 @@ function fakeApp(initial: string | null) {
 	return { state, app: { vault } as never };
 }
 
-describe("VaultDbFile (review #1, #20)", () => {
+describe("VaultDbFile", () => {
 	it("writes inside vault.process when the current text is the expected one", async () => {
 		const { state, app } = fakeApp("old");
 		const result = await new VaultDbFile(app, () => "db.cpbase").write("new", (t) => t === "old");

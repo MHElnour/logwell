@@ -416,7 +416,7 @@ describe("the client", () => {
 		});
 	});
 
-	describe("request timeout (issue #6)", () => {
+	describe("request timeout", () => {
 		afterEach(() => vi.useRealTimers());
 
 		function stalled(timeoutMs?: number) {

@@ -72,7 +72,7 @@ describe("views, export and import", () => {
 			]);
 		});
 
-		it("#98: Today keeps a completed subtask under its parent only when the parent is in the view", async () => {
+		it("Today keeps a completed subtask under its parent only when the parent is in the view", async () => {
 			const h = await appHarness();
 			const T = h.app.tasks;
 			const inView = (await T.create({ title: "Shown parent", scheduled: { kind: "date", date: TODAY } })).task;
@@ -88,7 +88,7 @@ describe("views, export and import", () => {
 			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
 		});
 
-		it("#98: Upcoming does the same", async () => {
+		it("Upcoming does the same", async () => {
 			const h = await appHarness();
 			const T = h.app.tasks;
 			const inView = (await T.create({ title: "Shown parent", scheduled: { kind: "date", date: "2026-10-02" } })).task;
@@ -266,7 +266,7 @@ describe("views, export and import", () => {
 			expect(h.app.store.state.tasks.get(b.id)?.title).toBe("B backup newer");
 		});
 
-		it("EXP-03 / review #10: the merge preview lists every record that changes, including Trash moves", async () => {
+		it("EXP-03: the merge preview lists every record that changes, including Trash moves", async () => {
 			const h = await appHarness();
 			const t = (await h.app.tasks.create({ title: "T" })).task;
 			const u = (await h.app.tasks.create({ title: "U" })).task;
@@ -314,7 +314,7 @@ describe("views, export and import", () => {
 			expect(actual.sort()).toEqual(listed);
 		});
 
-		it("review #16: export is refused while the database is read-only", async () => {
+		it("export is refused while the database is read-only", async () => {
 			const h = await appHarness();
 			await h.app.tasks.create({ title: "A" });
 			await makeReadOnly(h);
@@ -403,7 +403,7 @@ describe("views, export and import", () => {
 		});
 	});
 
-	describe("import: TickTick sync links merge by ID (EXP-03, issue #6)", () => {
+	describe("import: TickTick sync links merge by ID (EXP-03)", () => {
 		const link = (kind: SyncLink["kind"], logwellId: string, ttId: string, modifiedAt: string): SyncLink => ({
 			kind,
 			logwellId,

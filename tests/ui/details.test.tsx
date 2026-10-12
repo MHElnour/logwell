@@ -212,7 +212,7 @@ describe("details pane", () => {
 		});
 	});
 
-	describe("details subtasks use the Quick Add parser (polish #95)", () => {
+	describe("details subtasks use the Quick Add parser", () => {
 		const typeInto = async (input: HTMLInputElement, value: string) => {
 			input.value = value;
 			input.dispatchEvent(new Event("input", { bubbles: true }));

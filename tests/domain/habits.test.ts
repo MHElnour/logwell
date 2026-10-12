@@ -421,7 +421,7 @@ describe("indexCheckins input", () => {
 
 // -- edge cases -----------------------------
 
-describe("review #1: a week-start edit never cuts a finished week (HAB-09, spec §21.1 item 5, D5)", () => {
+describe("a week-start edit never cuts a finished week (HAB-09, spec §21.1 item 5, D5)", () => {
 	// Today Wed Oct 7. Weekly count habit on MO weeks: Sep 21-27 met, Sep 28 - Oct 4 met (Mon 28 and Sun 4).
 	const today = "2026-10-07";
 	const h = habit("h", [ver("2026-09-01", { type: "count", target: 2, period: "week" }, { kind: "weekly" }, "MO")]);
@@ -460,7 +460,7 @@ describe("review #1: a week-start edit never cuts a finished week (HAB-09, spec 
 	});
 });
 
-describe("review #9: streaks across a week-start split", () => {
+describe("streaks across a week-start split", () => {
 	// MO weeks until Oct 4, SU weeks from Mon Oct 5: the SU week Oct 4-10 is cut short to Oct 5-10.
 	const h = habit("h", [
 		ver("2026-09-01", { type: "count", target: 2, period: "week" }, { kind: "weekly" }, "MO"),
@@ -479,7 +479,7 @@ describe("review #9: streaks across a week-start split", () => {
 	});
 });
 
-describe("review #5: a check-in of value 0 is not presence", () => {
+describe("a check-in of value 0 is not presence", () => {
 	it("is left out of the index", () => {
 		const zero = ci("h", "2026-10-06", 0);
 		const one = ci("h", "2026-10-06", 2);
@@ -507,7 +507,7 @@ describe("review #5: a check-in of value 0 is not presence", () => {
 	});
 });
 
-describe("review #6: a binary week target above 7 can never be met", () => {
+describe("a binary week target above 7 can never be met", () => {
 	it("is refused", () => {
 		const input: HabitInput = {
 			name: "Gym",
@@ -524,7 +524,7 @@ describe("review #6: a binary week target above 7 can never be met", () => {
 	});
 });
 
-describe("review #7: an unmet cut-short week reads the same in day status, month stats and streaks", () => {
+describe("an unmet cut-short week reads the same in day status, month stats and streaks", () => {
 	// "3 times a week", created on Saturday Oct 3: the creation week (MO) is Sat 3 and Sun 4.
 	const h = habit("h", [ver("2026-10-03", { target: 3, period: "week" }, { kind: "weekly" }, "MO")]);
 

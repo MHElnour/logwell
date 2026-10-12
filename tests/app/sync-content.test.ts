@@ -238,7 +238,7 @@ describe("not synced (SYNC-06)", () => {
 		expect(s.tt.live(s.projectId)).toHaveLength(1);
 	});
 
-	it("never deletes the TickTick copy of an excluded task while it is trashed or moved out (deep review #1)", async () => {
+	it("never deletes the TickTick copy of an excluded task while it is trashed or moved out", async () => {
 		const s = await oneTask();
 		const home = await s.h.app.categories.create("Home");
 		const other = await s.h.app.tasks.create({ title: "Pay rent", categoryId: s.listId });
@@ -265,7 +265,7 @@ describe("not synced (SYNC-06)", () => {
 		expect(s.tasks("Pay rent")).toHaveLength(1);
 	});
 
-	it("an excluded task purged in Logwell: a repeating TickTick copy only loses its link (second review #4)", async () => {
+	it("an excluded task purged in Logwell: a repeating TickTick copy only loses its link", async () => {
 		const s = await oneTask();
 		await s.h.app.recurrence.setRepeat(s.id, WEEKLY.rule);
 		s.tt.edit(s.ttId, { repeatFlag: "RRULE:FREQ=DAILY;INTERVAL=1" });
@@ -286,7 +286,7 @@ describe("not synced (SYNC-06)", () => {
 		expect(s.h.app.store.state.tasks.size).toBe(0);
 	});
 
-	it("an excluded task purged in Logwell: a plain TickTick copy is deleted there (second review #4)", async () => {
+	it("an excluded task purged in Logwell: a plain TickTick copy is deleted there", async () => {
 		const s = await oneTask();
 		await s.h.app.recurrence.setRepeat(s.id, WEEKLY.rule);
 		await s.sync.sync();

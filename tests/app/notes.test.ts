@@ -330,7 +330,7 @@ describe("note renames", () => {
 		});
 	});
 
-	describe("renames waiting behind a running drain are saved when the plugin closes (round 5, item 4)", () => {
+	describe("renames waiting behind a running drain are saved when the plugin closes", () => {
 		const chain: Rename[] = [
 			["A.md", "B.md", false],
 			["B.md", "C.md", false],
@@ -602,7 +602,7 @@ describe("description notes (NOTE-01..10)", () => {
 		expect(trashed.descriptionNote?.path).toBe("Archive/Notes/sub/b.md");
 	});
 
-	it("NOTE-06 / review #8: renames that arrive while read-only are replayed in order once writable", async () => {
+	it("NOTE-06: renames that arrive while read-only are replayed in order once writable", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "Plan", notePath: "Notes/Plan.md" });
 		await h.saveNow();
@@ -628,7 +628,7 @@ describe("description notes (NOTE-01..10)", () => {
 		expect(h.app.store.state).toBe(before);
 	});
 
-	it("review #17: no note is created while read-only or for a missing task", async () => {
+	it("no note is created while read-only or for a missing task", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "Plan" });
 		await expect(h.app.tasks.createDescriptionNote("missing")).rejects.toMatchObject({ code: "NotFound" });

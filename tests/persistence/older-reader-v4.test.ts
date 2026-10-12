@@ -23,7 +23,7 @@ function asV4(text: string): string {
 		.replace('"r-9a2b3c4d5e6f"],', '"r-9a2b3c4d5e6f","r-a0b1c2d3e4f5"],');
 }
 
-describe("CpbaseStore as the schema 4 reader (issue #6)", () => {
+describe("CpbaseStore as the schema 4 reader", () => {
 	it("opens v5 text read-only and never writes it", async () => {
 		const h = harness(V5);
 		await h.store.open();

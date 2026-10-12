@@ -147,7 +147,7 @@ describe("closing a session", () => {
 	});
 });
 
-describe("a conflict copy written while a session closes is announced (finding 3)", () => {
+describe("a conflict copy written while a session closes is announced", () => {
 	it("one notice offers 'Open conflict view', never Keep mine / Keep theirs", async () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);

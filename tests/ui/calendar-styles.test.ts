@@ -157,11 +157,11 @@ describe("all-day overflow and short blocks (stylesheet)", () => {
 	});
 });
 
-describe("status bar room (issue 4)", () => {
+describe("status bar room", () => {
 	// Outside the calendar section: Obsidian's fixed status bar overlaps the bottom right of every section.
 	const before = css.slice(0, css.indexOf(MARK)).replace(/\/\*[\s\S]*?\*\//g, "");
 
-	it("keeps the room inside each column, not on the body, so backgrounds reach the bottom edge (polish #94)", () => {
+	it("keeps the room inside each column, not on the body, so backgrounds reach the bottom edge", () => {
 		expect(before).not.toMatch(/\.checkpoint-view \.cp-body\s*\{[^}]*padding-bottom/);
 		expect(before).toMatch(/\.checkpoint-view \.cp-app\s*\{[^}]*--cp-status-bar-room:\s*calc\(/);
 		const all = css.replace(/\/\*[\s\S]*?\*\//g, "");

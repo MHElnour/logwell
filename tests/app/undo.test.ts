@@ -178,7 +178,7 @@ describe("a notice's Undo targets its own write", () => {
 // The sync calls `tx.finish()` inside its command to learn whether the pull wrote anything. That call must
 // have no side effects: the base state, later writes and the store's own commit are unchanged by it.
 
-describe("Tx.finish is pure (issue #6)", () => {
+describe("Tx.finish is pure", () => {
 	it("returns the same result twice and leaves the base untouched", async () => {
 		const h = await appHarness();
 		const base = h.app.store.state;

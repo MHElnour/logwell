@@ -99,7 +99,7 @@ describe("DataService.exportCsv", () => {
 		}
 	});
 
-	it("issue #6: TickTick sync links change no CSV file (they are sync bookkeeping, not content)", async () => {
+	it("TickTick sync links change no CSV file (they are sync bookkeeping, not content)", async () => {
 		const h = await populated();
 		const before = h.app.data.exportCsv();
 		const task = [...h.app.store.state.tasks.values()][0]!;

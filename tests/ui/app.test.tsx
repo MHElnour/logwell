@@ -364,7 +364,7 @@ describe("app UI (smoke)", () => {
 		expect([...h.app.store.state.tasks.values()].map((t) => t.tagKeys)).toEqual([["work"]]);
 	});
 
-	it("review #19: element IDs stay unique with details open in Tasks and Search", async () => {
+	it("element IDs stay unique with details open in Tasks and Search", async () => {
 		const { h, root } = await mount();
 		await h.app.tasks.create({ title: "Alpha", scheduled: { kind: "date", date: "2026-10-01" } });
 		await settleUi();
@@ -391,7 +391,7 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
-	it("review #11: backups are listed only while the Data section is visible", async () => {
+	it("backups are listed only while the Data section is visible", async () => {
 		const list = vi.spyOn(CpbaseStore.prototype, "listSnapshots");
 		try {
 			const { h, root } = await mount();
@@ -490,7 +490,7 @@ describe("app UI (smoke)", () => {
 		}
 	});
 
-	it("review #16: export is disabled with a reason while read-only", async () => {
+	it("export is disabled with a reason while read-only", async () => {
 		const { h, root } = await mount();
 		await makeReadOnly(h);
 		h.app.store.notifyStatus();

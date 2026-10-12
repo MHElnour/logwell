@@ -134,7 +134,7 @@ describe("subtasks (SUB-07, spec §7)", () => {
 	});
 });
 
-describe("a completed subtask and a parent that is not in the view (#98)", () => {
+describe("a completed subtask and a parent that is not in the view", () => {
 	const parentOpen = task("p", { status: "open", completedAt: null });
 	const sub = task("s", { parentId: "p" });
 	const byId = new Map([["p", parentOpen]]);

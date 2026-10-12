@@ -22,7 +22,7 @@ vi.mock("../../src/obsidian/notices", async (original) => {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("unloading while the database opens (issue #6)", () => {
+describe("unloading while the database opens", () => {
 	it("shows no error from the open the unload cut short", async () => {
 		const fake = fakeApp();
 		// Trash long expired: the open purges it, a write.

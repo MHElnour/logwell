@@ -220,7 +220,7 @@ describe("sections", () => {
 			expect(task(h, b.id).sectionId).toBe(s2.id);
 		});
 
-		it("a trashed task whose section is deleted through SectionService.delete is restored with sectionId null (#117)", async () => {
+		it("a trashed task whose section is deleted through SectionService.delete is restored with sectionId null", async () => {
 			const { h, list, s1 } = await setup();
 			const a = (await h.app.tasks.create({ title: "A", categoryId: list.id, sectionId: s1.id })).task;
 			const e = await h.app.tasks.delete(a.id);

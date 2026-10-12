@@ -52,7 +52,7 @@ async function loadPlugin() {
 }
 
 describe("plugin lifecycle", () => {
-	it("review #5: a registered quit handler flushes pending saves", async () => {
+	it("a registered quit handler flushes pending saves", async () => {
 		const { plugin, refs, registered } = await loadPlugin();
 		const quit = refs.find((r) => r.name === "quit");
 		expect(quit).toBeDefined();
@@ -126,7 +126,7 @@ describe("plugin lifecycle", () => {
 		expect(calls).toEqual([]);
 	});
 
-	it("review #4: the reminder's Undo runs the undo the host bound, and says so when there is nothing to undo", async () => {
+	it("the reminder's Undo runs the undo the host bound, and says so when there is nothing to undo", async () => {
 		const { plugin } = await loadPlugin();
 		const ui = (plugin.reminderHost as unknown as { ui: { notifyUndo(m: string, l: string, u: () => Promise<boolean>): void } }).ui;
 		shown.notices.length = 0;

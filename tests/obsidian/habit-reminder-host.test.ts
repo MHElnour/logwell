@@ -330,7 +330,7 @@ describe("reminder host", () => {
 			expect(shown.map((s) => s.message)).toEqual(["Time for Read · 0 of 30 min"]);
 		});
 
-		it("tick never throws: errors go to ui.error, an identical one once per attach and day (review #9)", async () => {
+		it("tick never throws: errors go to ui.error, an identical one once per attach and day", async () => {
 			const { app, ui, host, h, tickMinutes } = await setup();
 			await app.habits.create(quantity());
 			host.attach(r(app));
@@ -438,7 +438,7 @@ describe("reminder host", () => {
 	}
 
 	describe("review fixes (deep review of the reminder host)", () => {
-		it("#1: a sticky notice of yesterday is hidden by the first check of the new day", async () => {
+		it("a sticky notice of yesterday is hidden by the first check of the new day", async () => {
 			const { app, shown, host, tickAt } = await setup();
 			await app.habits.create(quantity());
 			await app.habits.create(binary({ reminder: { time: "23:00" } }));
@@ -451,7 +451,7 @@ describe("reminder host", () => {
 			expect(shown[0]!.hide).toHaveBeenCalledTimes(1);
 		});
 
-		it("#1: a notice of today stays when another of today fires", async () => {
+		it("a notice of today stays when another of today fires", async () => {
 			const { app, shown, host, tickAt } = await setup();
 			await app.habits.create(quantity());
 			await app.habits.create(binary({ reminder: { time: "20:05" } }));
@@ -462,7 +462,7 @@ describe("reminder host", () => {
 			expect(shown[0]!.hide).not.toHaveBeenCalled();
 		});
 
-		it("#1: Check in on a notice of yesterday, clicked after midnight before any check, writes nothing and hides it", async () => {
+		it("Check in on a notice of yesterday, clicked after midnight before any check, writes nothing and hides it", async () => {
 			const { app, ui, shown, host, tickAt, h } = await setup();
 			await app.habits.create(binary());
 			host.attach(r(app));
@@ -476,7 +476,7 @@ describe("reminder host", () => {
 			expect(ui.error).not.toHaveBeenCalled();
 		});
 
-		it("#1: Snooze on a notice of yesterday does nothing (no save, no fire)", async () => {
+		it("Snooze on a notice of yesterday does nothing (no save, no fire)", async () => {
 			const { app, shown, host, tickAt, h, state } = await setup();
 			await app.habits.create(quantity({ reminder: { time: "23:55" } }));
 			host.attach(r(app));
@@ -489,7 +489,7 @@ describe("reminder host", () => {
 			expect(shown[0]!.hide).toHaveBeenCalled();
 		});
 
-		it("#2: a store whose save throws fires a reminder once, not again on the next minutes", async () => {
+		it("a store whose save throws fires a reminder once, not again on the next minutes", async () => {
 			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 			// The stored state already knows the habit's time (armed on an earlier day), so 20:00 fires when it comes.
 			const stored = { v: 1, date: "2026-10-14", fired: {}, snoozedUntil: {}, times: {} as Record<string, string> };
@@ -518,7 +518,7 @@ describe("reminder host", () => {
 			expect(shown).toHaveLength(2);
 		});
 
-		it("#2: Snooze works with a store whose save throws", async () => {
+		it("Snooze works with a store whose save throws", async () => {
 			vi.spyOn(console, "warn").mockImplementation(() => undefined);
 			const { port } = failingSave();
 			const { app, shown, host, tickAt, tickMinutes } = await setup(undefined, port);
@@ -534,7 +534,7 @@ describe("reminder host", () => {
 			expect(shown).toHaveLength(2);
 		});
 
-		it("#2: Snooze works with a store that cannot be read", async () => {
+		it("Snooze works with a store that cannot be read", async () => {
 			const port: ReminderStatePort = {
 				load: () => {
 					throw new Error("storage gone");
@@ -555,7 +555,7 @@ describe("reminder host", () => {
 			expect(ui.error).toHaveBeenCalledTimes(1);
 		});
 
-		it("#2: a stored state of another date is reset on attach the same way a check does", async () => {
+		it("a stored state of another date is reset on attach the same way a check does", async () => {
 			const { app, shown, host, tickAt, state } = await setup();
 			const read = await app.habits.create(quantity());
 			state.save("db-1", { v: 1, date: "2026-10-13", fired: { [read.id]: true }, snoozedUntil: {}, times: { [read.id]: "20:00" } });
@@ -565,7 +565,7 @@ describe("reminder host", () => {
 			expect(parseReminderState(state.load("db-1"))).toMatchObject({ date: "2026-10-14", fired: { [read.id]: true } });
 		});
 
-		it("#4: the Undo acts on the database written to, and does nothing once the host moved on", async () => {
+		it("the Undo acts on the database written to, and does nothing once the host moved on", async () => {
 			const { app, ui, shown, host, tickAt } = await setup();
 			const med = await app.habits.create(binary());
 			host.attach(r(app));
@@ -586,7 +586,7 @@ describe("reminder host", () => {
 			expect(app.store.undoLabel).toBe(CHECKIN_LABEL);
 		});
 
-		it("#4: a check-in whose write finishes after a database switch shows no Undo", async () => {
+		it("a check-in whose write finishes after a database switch shows no Undo", async () => {
 			const { app, ui, shown, host, tickAt } = await setup();
 			await app.habits.create(binary());
 			host.attach(r(app));
@@ -603,7 +603,7 @@ describe("reminder host", () => {
 			expect(ui.error).not.toHaveBeenCalled();
 		});
 
-		it("#5: a dbId change between checks loads the other key's state, and saves go to the new key", async () => {
+		it("a dbId change between checks loads the other key's state, and saves go to the new key", async () => {
 			const { app, shown, host, tickAt, state } = await setup();
 			const read = await app.habits.create(quantity());
 			state.save("db-real", { v: 1, date: "2026-10-14", fired: { [read.id]: true }, snoozedUntil: {}, times: { [read.id]: "20:00" } });
@@ -620,7 +620,7 @@ describe("reminder host", () => {
 			expect(Object.keys(parseReminderState(state.load("unknown"))!.fired)).toHaveLength(0);
 		});
 
-		it("#10: the host uses the port of the attached app", async () => {
+		it("the host uses the port of the attached app", async () => {
 			const own = new MemoryReminderState();
 			const { app, host, tickAt } = await setup(undefined, own);
 			const read = await app.habits.create(quantity());
@@ -900,7 +900,7 @@ describe("reminder state in local storage", () => {
 			expect(f.store.get("logwell-habit-reminders-db-1")).toBe(newer);
 		});
 
-		it("a storage that cannot be read is reported with a warning; a failing save throws for the host to log once (review #2)", () => {
+		it("a storage that cannot be read is reported with a warning; a failing save throws for the host to log once", () => {
 			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 			const app = {
 				loadLocalStorage: () => {

@@ -109,7 +109,7 @@ describe("the tag tree", () => {
 		});
 	});
 
-	describe("tag tree: delete and expansion (review fixes 9-11)", () => {
+	describe("tag tree: delete and expansion", () => {
 		const menuOf = async (m: CalMount, label: string) => {
 			rowFor(m, label).dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 			await settle();

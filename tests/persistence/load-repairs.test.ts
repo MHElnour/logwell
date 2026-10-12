@@ -103,7 +103,7 @@ describe("sections", () => {
 			expect(r.data.sections.get(WEEK1)?.nameKey).toBe("week 1");
 		});
 
-		it("a section with a bad or missing name is dropped with an issue, its tasks are cleared, and the load succeeds (#114)", () => {
+		it("a section with a bad or missing name is dropped with an issue, its tasks are cleared, and the load succeeds", () => {
 			for (const bad of ["", 7, undefined]) {
 				const r = ok(
 					loadMutated((raw) => {
@@ -119,7 +119,7 @@ describe("sections", () => {
 			}
 		});
 
-		it("a section with a bad id, categoryId or sortKey is dropped with an issue (#114)", () => {
+		it("a section with a bad id, categoryId or sortKey is dropped with an issue", () => {
 			const cases: [string, unknown][] = [
 				["categoryId", 5],
 				["categoryId", ""],
@@ -145,7 +145,7 @@ describe("sections", () => {
 			expect(loadMutated((raw) => raw.sections.push({ ...raw.sections[0]! })).kind).toBe("failed");
 		});
 
-		it("a task whose sectionId is not a string or null gets null with an issue (#114)", () => {
+		it("a task whose sectionId is not a string or null gets null with an issue", () => {
 			const r = ok(loadMutated((raw) => (taskRow(raw, INVOICE).sectionId = 12)));
 			expect(r.data.tasks.get(INVOICE)?.sectionId).toBeNull();
 			expect(r.issues).toHaveLength(1);
@@ -165,7 +165,7 @@ describe("sections", () => {
 			expect(r.issues).toHaveLength(1);
 		});
 
-		it("nameKey is recomputed from the name on read; a stored key that differs records an issue (#115)", () => {
+		it("nameKey is recomputed from the name on read; a stored key that differs records an issue", () => {
 			const r = ok(loadMutated((raw) => (raw.sections.find((s) => s.id === WEEK1)!.nameKey = "stale")));
 			expect(r.data.sections.get(WEEK1)?.nameKey).toBe("week 1");
 			expect(r.issues).toHaveLength(1);

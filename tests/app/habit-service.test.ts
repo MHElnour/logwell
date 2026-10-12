@@ -347,7 +347,7 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 });
 
 describe("WP-A review fixes", () => {
-	it("#2: refuses a date that is not a real day and writes nothing", async () => {
+	it("refuses a date that is not a real day and writes nothing", async () => {
 		const { app } = await setup();
 		const r = await app.habits.create(input());
 		const m = await app.habits.create(binary());
@@ -361,7 +361,7 @@ describe("WP-A review fixes", () => {
 		expect(app.store.state).toBe(state);
 	});
 
-	it("#3: an edit that keeps the reminder time keeps the stored reminder object (a newer build's fields)", async () => {
+	it("an edit that keeps the reminder time keeps the stored reminder object (a newer build's fields)", async () => {
 		const { app, h } = await setup();
 		const a = await app.habits.create(input({ reminder: { time: "20:00" } }));
 		const newer = { ...a, reminder: { time: "20:00", sound: "chime" } as never };
@@ -374,7 +374,7 @@ describe("WP-A review fixes", () => {
 		expect(app.store.state.habits.get(a.id)!.reminder).toEqual({ time: "21:00" });
 	});
 
-	it("#5, #10: a value-0 check-in is not 'on'; toggling on adds one, toggling off removes both", async () => {
+	it("a value-0 check-in is not 'on'; toggling on adds one, toggling off removes both", async () => {
 		const { app, h } = await setup();
 		const m = await app.habits.create(binary());
 		const zero: Checkin = { id: "z-1", habitId: m.id, date: "2026-10-14", value: 0, note: null, createdAt: "2026-10-14T08:00:00.000Z", modifiedAt: "2026-10-14T08:00:00.000Z", deletedAt: null };
@@ -389,7 +389,7 @@ describe("WP-A review fixes", () => {
 		expect(app.store.state.checkins.get("z-1")?.deletedAt).toBe("2026-10-14T10:00:00.000Z");
 	});
 
-	it("#10: delete removes zero-value and deleted check-ins of the habit, and no other habit's", async () => {
+	it("delete removes zero-value and deleted check-ins of the habit, and no other habit's", async () => {
 		const { app, h } = await setup();
 		const w = await app.habits.create(count());
 		const other = await app.habits.create(count({ name: "Other" }));
@@ -416,7 +416,7 @@ describe("index cache (D18) and search (D13)", () => {
 		expect(app.habits.index()).not.toBe(first);
 	});
 
-	it("review #6: the index built inside toggle is the one of the committed state before the write", async () => {
+	it("the index built inside toggle is the one of the committed state before the write", async () => {
 		const { app } = await setup();
 		const med = await app.habits.create(binary());
 		const before = app.store.state.checkins;
@@ -434,7 +434,7 @@ describe("index cache (D18) and search (D13)", () => {
 		expect(app.habits.index().active(med.id)).toHaveLength(0);
 	});
 
-	it("review #6: an index taken after a check-in write in the same transaction is never cached", async () => {
+	it("an index taken after a check-in write in the same transaction is never cached", async () => {
 		const { app } = await setup();
 		const med = await app.habits.create(binary());
 		const service = app.habits as unknown as { txIndex(tx: Tx): HabitIndex; newCheckin(tx: Tx, id: string, date: string, value: number): Checkin };

@@ -404,7 +404,7 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("removed by an undo (deep review #4)", () => {
+	describe("removed by an undo", () => {
 		it("undoing the create of a synced task deletes its TickTick copy on the next sync", async () => {
 			const s = await withTasks(1);
 			const { task } = await s.h.app.tasks.create({ title: "Buy milk", categoryId: s.listId });
@@ -419,7 +419,7 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("order of the push (deep review #5)", () => {
+	describe("order of the push", () => {
 		it("deletes before it creates: a refused create does not block a deletion", async () => {
 			const s = await withTasks(1);
 			const ttId = s.ttIdOf("Errand 1");
@@ -433,7 +433,7 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("a list at TickTick's open-task limit (deep review #5)", () => {
+	describe("a list at TickTick's open-task limit", () => {
 		it("sends what frees room first: deletes, then completions, then the creates fit", async () => {
 			const s = await withTasks(99);
 			s.tt.openLimit = 99;
@@ -465,7 +465,7 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("a purge while a push is in flight (deep review #6)", () => {
+	describe("a purge while a push is in flight", () => {
 		it("keeps pendingDelete: the end of the sync does not overwrite the link of a task that is gone", async () => {
 			const s = await withTasks(2);
 			const ttId = s.ttIdOf("Errand 1");
@@ -1199,7 +1199,7 @@ describe("a list at TickTick's open-task limit", () => {
 		return Object.assign(s, { work, homeList, doneId });
 	}
 
-	describe("a full list stops only its own writes (second review #1)", () => {
+	describe("a full list stops only its own writes", () => {
 		it("a refused reopen in Work does not hold back a create in Home; the refusal is reported as the limit", async () => {
 			const s = await fullWork([]);
 			await s.h.app.tasks.reopen(s.doneId);
@@ -1224,7 +1224,7 @@ describe("a list at TickTick's open-task limit", () => {
 		});
 	});
 
-	describe("a create whose link cannot be written (second review #2)", () => {
+	describe("a create whose link cannot be written", () => {
 		it("is linked by the next sync, not imported or created again", async () => {
 			const s = await syncHarness();
 			const { listId, projectId } = await linkedList(s);
@@ -1249,7 +1249,7 @@ describe("a list at TickTick's open-task limit", () => {
 		});
 	});
 
-	describe("a pendingDelete marking that fails (second review #3)", () => {
+	describe("a pendingDelete marking that fails", () => {
 		it("is retried at the start of the next sync", async () => {
 			const s = await syncHarness();
 			const { listId, projectId } = await linkedList(s);

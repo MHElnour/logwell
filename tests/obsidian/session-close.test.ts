@@ -37,7 +37,7 @@ afterEach(() => vi.restoreAllMocks());
 
 type Emitter = { onStoreEvent(e: unknown): void };
 
-describe("item 1: edits that could not be kept", () => {
+describe("edits that could not be kept", () => {
 	it("a persistent notice names the database and the reason, and never says Retrying", async () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);
@@ -93,7 +93,7 @@ describe("item 1: edits that could not be kept", () => {
 	});
 });
 
-describe("item 2: a failing rename flush never skips closing the store", () => {
+describe("a failing rename flush never skips closing the store", () => {
 	it("a rename queue that throws on save: the store still closes, and the user is told", async () => {
 		const fake = setup();
 		// The database is newer than this plugin: it is read-only, so renames wait.
@@ -145,7 +145,7 @@ describe("item 2: a failing rename flush never skips closing the store", () => {
 	});
 });
 
-describe("item 3: 'Open conflict view' when the database file is missing", () => {
+describe("'Open conflict view' when the database file is missing", () => {
 	it("the plugin's current session still opens the Data view", async () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);

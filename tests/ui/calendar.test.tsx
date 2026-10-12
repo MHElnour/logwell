@@ -967,7 +967,7 @@ describe("calendar section", () => {
 		});
 	});
 
-	describe("all-day row limit (issue 1)", () => {
+	describe("all-day row limit", () => {
 		const allday = (root: HTMLElement) => cal(root).querySelector<HTMLElement>(".cp-cal-allday")!;
 		const dayCell = (root: HTMLElement, date = "2026-10-01") => cell(root, "allday-cell", date);
 		const names = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>(".cp-cal-entry")].map((b) => entryName(b).split(",")[0]);
@@ -1125,7 +1125,7 @@ describe("calendar section", () => {
 		});
 	});
 
-	describe("short timed blocks (issue 3)", () => {
+	describe("short timed blocks", () => {
 		async function block(m: CalMount, title: string, time: string, minutes?: number) {
 			await m.h.app.tasks.create({ title, scheduled: at("2026-10-02", time), ...(minutes === undefined ? {} : { plannedDurationMin: minutes }) });
 			await openCalendar(m);

@@ -337,7 +337,7 @@ describe("write, reload and recovery", () => {
 		return h.fs.files.get(`${BACKUP_ROOT}/db-1/journal.ndjson`) ?? "";
 	}
 
-	describe("review #1: saves are compare-and-swap", () => {
+	describe("saves are compare-and-swap", () => {
 		it("DbFile.write writes only when the current text is the expected one", async () => {
 			const fs = new MemoryFileGateway();
 			fs.files.set("a.cpbase", "old");
@@ -373,7 +373,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #2: a capped history is not a fork", () => {
+	describe("a capped history is not a fork", () => {
 		it("an idle device fast-forwards over more than 50 remote saves", async () => {
 			const h = harness();
 			await h.store.open();
@@ -430,7 +430,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #3: journal replay after a failed write", () => {
+	describe("journal replay after a failed write", () => {
 		it("replayJournal follows the last entry for a base", () => {
 			const base = load(emptyDbText());
 			const entries: JournalEntry[] = [
@@ -471,7 +471,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #4: commands during an external reload", () => {
+	describe("commands during an external reload", () => {
 		it("a command committed while the conflict copy is written is kept in the copy", async () => {
 			const h = harness();
 			await h.store.open();
@@ -494,7 +494,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #6: damage that arrives while the app is open", () => {
+	describe("damage that arrives while the app is open", () => {
 		it("offers the in-memory state as the recovery and Restore backup writes it", async () => {
 			const h = harness();
 			await h.store.open();
@@ -527,7 +527,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #7: repairs keep the original text", () => {
+	describe("repairs keep the original text", () => {
 		function repairableText(): string {
 			const data = load(emptyDbText());
 			return serializeDb(withTask(data, makeTask("t1", { categoryId: "missing" })).next);
@@ -557,7 +557,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #13: opening does not force a snapshot or reset the journal", () => {
+	describe("opening does not force a snapshot or reset the journal", () => {
 		it("reopening an unchanged database adds no hourly snapshot", async () => {
 			const h = harness();
 			await h.store.open();
@@ -585,7 +585,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #14: the store refuses commits after close", () => {
+	describe("the store refuses commits after close", () => {
 		it("throws instead of dropping the change", async () => {
 			const h = harness();
 			await h.store.open();
@@ -599,7 +599,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #15: CRLF header", () => {
+	describe("CRLF header", () => {
 		it("readHeader accepts a CRLF header line", () => {
 			const text = emptyDbText().replace(/\n/g, "\r\n");
 			expect(readHeader(text)?.revision).toBe("r-000000000000");
@@ -621,7 +621,7 @@ describe("write, reload and recovery", () => {
 		});
 	});
 
-	describe("review #20: no save retries against a deleted file", () => {
+	describe("no save retries against a deleted file", () => {
 		it("stops without an error notice and keeps the changes pending", async () => {
 			const h = harness();
 			await h.store.open();
@@ -1119,7 +1119,7 @@ describe("N3: close() keeps pending changes whenever the save left the store dir
 	});
 });
 
-describe("finding 4: only the revision just written is a self-write", () => {
+describe("only the revision just written is a self-write", () => {
 	async function threeSaves() {
 		const h = harness();
 		await h.store.open();
@@ -1174,7 +1174,7 @@ describe("finding 4: only the revision just written is a self-write", () => {
 	});
 });
 
-describe("finding 5: a newer-schema database becomes writable again when the file is valid again", () => {
+describe("a newer-schema database becomes writable again when the file is valid again", () => {
 	it("an external change back to a current-schema file reloads it and clears read-only", async () => {
 		const base = emptyDbText();
 		const h = harness(base.replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":99'));
@@ -1214,7 +1214,7 @@ describe("finding 5: a newer-schema database becomes writable again when the fil
 // Regression tests for the store: retries after a write that threw, close()
 // that never rejects, and recovery that reads as few snapshots as it can.
 
-describe("finding 1: a retry after a write that threw (header intact) is still our own write", () => {
+describe("a retry after a write that threw (header intact) is still our own write", () => {
 	it("stays writable and saves the retry", async () => {
 		const h = harness();
 		await h.store.open();
@@ -1264,7 +1264,7 @@ describe("finding 1: a retry after a write that threw (header intact) is still o
 	});
 });
 
-describe("finding 2: close() never rejects", () => {
+describe("close() never rejects", () => {
 	it("resolves and reports when the conflict copy cannot be written", async () => {
 		const h = harness();
 		await h.store.open();
@@ -1306,7 +1306,7 @@ describe("finding 2: close() never rejects", () => {
 	});
 });
 
-describe("finding 3: recoverLatest stops at the first usable snapshot", () => {
+describe("recoverLatest stops at the first usable snapshot", () => {
 	async function manySnapshots() {
 		const h = harness();
 		await h.store.open();
@@ -1371,7 +1371,7 @@ describe("close() with edits that cannot be kept", () => {
 		};
 	}
 
-	describe("close() with edits that cannot be kept (round 5, item 1)", () => {
+	describe("close() with edits that cannot be kept", () => {
 		it("emits edits-lost with the reason when the file cannot be written and neither can the conflict copy", async () => {
 			const h = harness();
 			await h.store.open();

@@ -122,7 +122,7 @@ describe("task checkbox", () => {
 	});
 });
 
-describe("task row tag pill (0.3.0 review fix 12)", () => {
+describe("task row tag pill", () => {
 	it("is wide enough for a two-level name, still ellipsized beyond that", () => {
 		const rule = block(".checkpoint-view .cp-meta-tags .cp-tag-pill {");
 		expect(Number(/max-width:\s*(\d+)px/.exec(rule)![1])).toBeGreaterThanOrEqual(220);

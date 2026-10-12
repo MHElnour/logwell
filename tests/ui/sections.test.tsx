@@ -348,7 +348,7 @@ describe('"Move to section…" anchor and timer (#120)', () => {
 	});
 });
 
-describe("keyboard reorder of sections (#121)", () => {
+describe("keyboard reorder of sections", () => {
 	const item = (host: U1Host, title: string) => menuItems(host).find((i) => i.title === title)!;
 
 	it("the list heading menu moves a section left or right, disabled at the ends", async () => {
@@ -387,7 +387,7 @@ describe("keyboard reorder of sections (#121)", () => {
 	});
 });
 
-describe("listbox structure (#122)", () => {
+describe("listbox structure", () => {
 	const buttonsOutsideOptions = (root: ParentNode) =>
 		[...root.querySelectorAll<HTMLElement>('[role="listbox"] button')].filter((b) => b.closest('[role="option"]') === null).map((b) => b.className || b.textContent);
 

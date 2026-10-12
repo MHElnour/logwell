@@ -242,7 +242,7 @@ describe("check-in repairs on load (D1)", () => {
 		expect(r.issues).toHaveLength(1);
 	});
 
-	it("review #4: keeps it deleted with a fixed instant when no time is readable", () => {
+	it("keeps it deleted with a fixed instant when no time is readable", () => {
 		const r = loaded(withRaw([], [{ ...checkin("c-1"), deletedAt: 5, modifiedAt: 5, createdAt: null }]));
 		expect(r.data.checkins.get("c-1")?.deletedAt).toBe("1970-01-01T00:00:00.000Z");
 	});

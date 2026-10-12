@@ -57,7 +57,7 @@ describe("the session and the sync", () => {
 		vi.restoreAllMocks();
 	});
 
-	describe("closing a session while a sync is in flight (issue #6)", () => {
+	describe("closing a session while a sync is in flight", () => {
 		const creates = (calls: string[]) => calls.filter((c) => c.startsWith("createTask")).length;
 
 		it("a database switch waits for the request in flight, sends no other, and links what TickTick answered", async () => {
@@ -135,7 +135,7 @@ describe("the session and the sync", () => {
 		});
 	});
 
-	describe("no sync in a session the plugin does not keep (issue #6)", () => {
+	describe("no sync in a session the plugin does not keep", () => {
 		async function plugin(fake: ReturnType<typeof fakeApp>) {
 			const { default: CheckpointPlugin } = await import("../../src/main");
 			const Ctor = CheckpointPlugin as unknown as new (a: unknown, m: unknown) => InstanceType<typeof CheckpointPlugin>;
@@ -218,7 +218,7 @@ describe("the Sync now command", () => {
 		vi.restoreAllMocks();
 	});
 
-	describe("Sync with TickTick now (issue #6)", () => {
+	describe("Sync with TickTick now", () => {
 		it("is registered with its name, a check callback and no hotkey", async () => {
 			const { plugin, cmd } = await setup();
 			unload = () => plugin.onunload();
