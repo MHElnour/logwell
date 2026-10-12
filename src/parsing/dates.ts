@@ -1,6 +1,6 @@
 import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
-import { LOCAL_FORMAT, addDays, dateSpecDate, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
+import { LOCAL_FORMAT, addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
 import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
@@ -96,10 +96,12 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 	return best;
 }
 
-/** The first real date with this month and day ("MM-DD") on or after `from`, within 8 years (the next Feb 29). */
-function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
-	const fromYear = Number(from.slice(0, 4));
-	for (let year = fromYear; year <= fromYear + 8; year++) {
+/**
+ * The first real date with this month and day ("MM-DD") on or after `from`, in `firstYear` or the 8 years after it
+ * (the next Feb 29). `firstYear` is `from`'s year unless given.
+ */
+function monthDayOnOrAfter(monthDay: string, from: LocalDate, firstYear = Number(from.slice(0, 4))): LocalDate | null {
+	for (let year = firstYear; year <= firstYear + 8; year++) {
 		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
 		if (isValidLocalDate(date) && date >= from) return date;
 	}
@@ -111,10 +113,11 @@ const ROLLED_YEAR = "logwell/rolledYear";
 
 /**
  * A month and day with no year that does not exist in the year chrono assumes (Feb 29 in 2027) moves to the first
- * later year where it exists, from today on (at most 8 years: the next Feb 29). chrono would drop it as an
- * impossible date. It runs first, and again right before chrono's filter of impossible dates: chrono's forward step
- * moves a past Feb 29 of a leap year (said from March on) into the next year, which has none. Today comes from
- * chrono's own zone-adjusted reference. The year it sets is certain to chrono and tagged ROLLED_YEAR: it was not typed.
+ * later year where it exists, from the year chrono assumes and from today on (at most 8 years: the next Feb 29).
+ * chrono would drop it as an impossible date. It runs first, and again right before chrono's filter of impossible
+ * dates: chrono's forward step moves a past Feb 29 of a leap year (said from March on) into the next year, which has
+ * none. Today comes from chrono's own zone-adjusted reference. The year it sets is certain to chrono and tagged
+ * ROLLED_YEAR: it was not typed.
  */
 const rollover: chrono.Refiner = {
 	refine(context, results) {
@@ -123,7 +126,7 @@ const rollover: chrono.Refiner = {
 		for (const r of results) {
 			const s = r.start;
 			if (!s.isCertain("month") || !s.isCertain("day") || s.isCertain("year") || s.isValidDate()) continue;
-			const date = monthDayOnOrAfter(`${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`, today);
+			const date = monthDayOnOrAfter(`${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`, today, s.get("year") ?? 0);
 			if (date !== null) s.assign("year", Number(date.slice(0, 4))).addTag(ROLLED_YEAR);
 		}
 		return results;
@@ -298,6 +301,8 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 	return { date, hourCertain, outcome };
 }
 
+/** A year that was typed, not assumed by chrono or chosen by `rollover`. */
+const hasTypedYear = (c: chrono.ParsedComponents): boolean => c.isCertain("year") && !c.tags().has(ROLLED_YEAR);
 const dayCertainOf = (c: chrono.ParsedComponents): boolean => c.isCertain("day") || c.isCertain("weekday");
 /** A weekday with no day of the month (`Friday`, `next friday`). */
 const weekdayOnly = (c: chrono.ParsedComponents): boolean => c.isCertain("weekday") && !c.isCertain("day");
@@ -341,15 +346,20 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.P
 		const start = readResult(first, clock);
 		const end = readResult(to, clock);
 		if (start === null || end === null) return null;
-		const typedYear = to.start.isCertain("year") && !to.start.tags().has(ROLLED_YEAR);
+		const typedYear = hasTypedYear(to.start);
 		const byWeek = weekdayOnly(to.start);
 		const keeps = typedYear || (byWeek && (SHIFT_WORD_RE.test(to.text) || THIS_WORD_RE.test(to.text)));
-		// The end for one start date; null when it cannot move.
+		// A start with its own year: a month and day end counts from the start, not from today.
+		const fromStart = !keeps && !byWeek && hasTypedYear(first.start);
+		// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
 		const endFrom = (from: LocalDate): DateOutcome | null => {
-			if (end.date >= from || keeps) return end.outcome;
+			if (keeps) return end.outcome;
 			let moved: LocalDate | null = end.date;
-			if (byWeek) while (moved < from) moved = addDays(moved, 7);
-			else moved = monthDayOnOrAfter(end.date.slice(5), from);
+			// A weekday: the first one on or after the start, in one step.
+			if (byWeek) {
+				if (end.date < from) moved = dateOf(dayNum(end.date) + 7 * Math.ceil((dayNum(from) - dayNum(end.date)) / 7));
+			} else if (fromStart || end.date < from) moved = monthDayOnOrAfter(end.date.slice(5), from);
+			if (moved === end.date) return end.outcome;
 			// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today.
 			return moved === null ? null : (readResult(to, clock, moved)?.outcome ?? null);
 		};
@@ -357,7 +367,9 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.P
 		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
 		const ends: DateOutcome[] = [];
 		for (const from of froms) {
-			const e = endFrom(from);
+			// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
+			// its reading, as with a start edited by hand (an end before the start is invalid).
+			const e = ends.length === 0 || byWeek || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
 			if (e === null) return null;
 			ends.push(e);
 		}

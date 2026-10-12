@@ -46,6 +46,8 @@ const SPLITS: ReadonlyArray<readonly [string, DateLocale, string, string, string
 	["Gym every day starting Oct 12 to Oct 1", "en", "daily", "Gym", "2026-10-12", "2027-10-01", "starting Oct 12", "to Oct 1"],
 	// A start with its own year keeps it; the end without one moves to the first such date on or after the start.
 	["Gym every day starting Oct 12 2027 to Dec 1", "en", "daily", "Gym", "2027-10-12", "2027-12-01", "starting Oct 12 2027", "to Dec 1"],
+	// A start with its own year in the past: the end counts from the start, not from today.
+	["Gym every day starting Sep 28 2026 to Oct 3", "en", "daily", "Gym", "2026-09-28", "2026-10-03", "starting Sep 28 2026", "to Oct 3"],
 	// A weekday end said on that weekday, after the start: the first one on or after the start, never a choice.
 	["Gym every day starting Monday until Wednesday", "en", "daily", "Gym", "2026-10-12", "2026-10-14", "starting Monday", "until Wednesday"],
 	["Rent every month on the 15th from Nov 15 to Mar 15", "en", "monthly:d15", "Rent", "2026-11-15", "2027-03-15", "from Nov 15", "to Mar 15"],
@@ -218,5 +220,55 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		expect([day(next), end(next), next.blocking, next.title]).toEqual(["2026-10-14", "2026-10-16", [], "Gym"]);
 		const today = reread("Today");
 		expect([day(today), end(today), today.blocking, today.title]).toEqual(["2026-10-07", "2026-10-09", [], "Gym"]);
+	});
+
+	it("a month and day end that fits the first choice keeps its reading for Next week: invalid, it blocks saving", () => {
+		const input = "Gym every day starting Wednesday until Oct 10";
+		const r = parse(input, zone);
+		expect(end(r)).toBe("2026-10-10");
+		const choose = (c: ParseResult["chips"][number]): SpanDecision => ({ span: c.span, text: c.text, kind: "date", value: c.alternatives!.find((a) => a.label === "Next week")!.value! });
+		const next = parseQuickAdd(input, makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), decisions: [decide(r, "scheduled", choose)] }));
+		expect(day(next)).toBe("2026-10-14");
+		const chip = next.chips.find((c) => c.kind === "repeatEnd");
+		expect(chip).toMatchObject({ status: "invalid", text: "until Oct 10", notice: "The repeat ends before its first date." });
+		expect(next.blocking).toEqual([chip!.id]);
+		expect(next.fields.recurrenceEnd).toBeUndefined();
+	});
+});
+
+describe("parse time of ranges under a repeat", () => {
+	it("reads ten ranges with a far-off start in 1,000 characters in reasonable time", () => {
+		const unit = "starting Oct 12 9999 until Friday and bring water and towels and snacks for the whole group please ";
+		const input = ("Gym every day " + unit.repeat(10)).slice(0, 1000);
+		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
+		const started = performance.now();
+		const r = parseQuickAdd(input, ctx);
+		expect(performance.now() - started).toBeLessThan(2000);
+		expect(r.chips.length).toBeGreaterThan(10);
+	});
+});
+
+// A month and day without a year that the assumed year lacks (Feb 29) keeps the year it was read as before repeat
+// ranges: inputs without a repeat never change. Tuesday 2028-02-29 21:00 in Tokyo, where today's Feb 29 is past for
+// chrono's forward step on any host clock. [input, locale, the scheduled value]
+const LEAP_DAYS: ReadonlyArray<readonly [string, DateLocale, string | undefined]> = [
+	["Feb 29 party", "en", "2032-02-29"],
+	["Feb 29 9am party", "en", "2032-02-29T09:00"],
+	["29 Feb party", "en", "2032-02-29"],
+	["02/29 party", "en", "2032-02-29"],
+	["29/02 party", "en", "2032-02-29"],
+	["the 29th of February party", "en", "2032-02-29"],
+	["Feb 29 party", "en-GB", undefined],
+	["Feb 29 9am party", "en-GB", "2028-03-01T09:00"],
+	["29 Feb party", "en-GB", "2032-02-29"],
+	["02/29 party", "en-GB", "2032-02-29"],
+	["29/02 party", "en-GB", "2032-02-29"],
+	["the 29th of February party", "en-GB", "2032-02-29"],
+];
+
+describe("a leap day without a year or a repeat", () => {
+	it.each(LEAP_DAYS)("%s (%s) keeps its year", (input, locale, expected) => {
+		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale }));
+		expect(day(r)).toBe(expected);
 	});
 });
