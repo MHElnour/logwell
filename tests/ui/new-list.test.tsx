@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { paletteColor, type TagColor } from "../../src/domain/types";
 import { buildNewListForm, NEW_LIST_ICON_LIMIT } from "../../src/obsidian/modals";
 import type { NewListOptions, NewListValues } from "../../src/ui/host";
-import { type CalMount, click, mountBoard, settle } from "./k1a-helpers";
+import { type CalMount, click, mountBoard, settle } from "./board-helpers";
 
 // The one-step "New list" dialog. The form is plain DOM (buildNewListForm), so it is tested
 // without Obsidian's Modal; the sidebar test drives the real call through a scripted host.

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import type { DateSpec } from "../../src/domain/types";
-import { type HabitMount, click, mountHabits, q, qa, seedMockup, settle, text } from "./m6-helpers";
-import { board, cardTitles, modeButton, press, sidebarItem } from "./k1a-helpers";
+import { type HabitMount, click, mountHabits, q, qa, seedMockup, settle, text } from "./habits-helpers";
+import { board, cardTitles, modeButton, press, sidebarItem } from "./board-helpers";
 
 // Habits in Today: the block above the list, the first board column, the fold
 // line, and where they do not show. The clock is Sunday 2026-10-04, 20:30 in Europe/Berlin (seedMockup).

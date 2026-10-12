@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { byLabel, cal, type CalMount, click, entries, mountCal, openCalendar, settle } from "./m3-helpers";
-import { mountHabits, openHabits, q, qa, rowOf, seedMockup } from "./m6-helpers";
+import { byLabel, cal, type CalMount, click, entries, mountCal, openCalendar, settle } from "./calendar-helpers";
+import { mountHabits, openHabits, q, qa, rowOf, seedMockup } from "./habits-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 import type { DateSpec } from "../../src/domain/types";
 import { LINGER_MS } from "../../src/ui/useLingering";
-import { card, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, titlesIn } from "./m4-helpers";
+import { card, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, titlesIn } from "./matrix-helpers";
 
 describe("section state written with an updater", () => {
 	// Section state is written with an updater, never by spreading the `ui` object a render captured: a

@@ -9,7 +9,7 @@ import type { UiHost } from "../../src/ui/host";
 import { SearchSection, initialSearchState } from "../../src/ui/SearchSection";
 import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
-import { input as habitInput } from "../ui/m6-helpers";
+import { input as habitInput } from "../ui/habits-helpers";
 
 // Search with "Also search description notes" on, 50,000 tasks of which 5,000 link a note. Commits that do not
 // change which tasks link which notes (a habit check-in here) read no note at all, and finding the linked notes

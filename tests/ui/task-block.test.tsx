@@ -13,7 +13,7 @@ import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { type AppHarness, appHarness } from "../app/harness";
 import { rule } from "../domain/recurrence-fixtures";
 import { makeTask } from "../persistence/fixtures";
-import { U1Host, settle } from "./u1-helpers";
+import { U1Host, settle } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // The dashboard block component. Rows are the app's TaskRow in block mode (no selection, no menu, no

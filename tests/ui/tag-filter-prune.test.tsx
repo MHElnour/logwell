@@ -6,7 +6,7 @@ import { serializeDb } from "../../src/persistence/serializer";
 import { AppRoot } from "../../src/ui/AppRoot";
 import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
-import { U1Host, settle } from "./u1-helpers";
+import { U1Host, settle } from "./app-helpers";
 
 // The Tasks section's filter drops a tag that is gone too (Lists, sections and tags rule 24). Nothing in the Tasks
 // section picks tags for its filter today, so the test starts it with one.

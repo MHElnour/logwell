@@ -4,13 +4,13 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AppRoot, type AppRootHandle } from "../../src/ui/AppRoot";
 import { SectionRelay } from "../../src/ui/sectionRelay";
 import { appHarness } from "../app/harness";
-import { settle, U1Host } from "./u1-helpers";
+import { settle, U1Host } from "./app-helpers";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
 import { initialTasksState, revealInTasks } from "../../src/ui/TasksSection";
 import { makeTask } from "../persistence/fixtures";
-import { type CalMount, click, mountCal, settle as settleCal } from "./m3-helpers";
-import { sidebarItem } from "./k1a-helpers";
+import { type CalMount, click, mountCal, settle as settleCal } from "./calendar-helpers";
+import { sidebarItem } from "./board-helpers";
 import { openViewMenu as openMenuAt, pickItem } from "./view-menu-helpers";
 
 describe("section relay", () => {

@@ -4,9 +4,9 @@ import type { DateSpec } from "../../src/domain/types";
 import { LABEL_PEEK_PX } from "../../src/ui/calendar/geometry";
 import { ICON } from "../../src/ui/icons";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
-import { byLabel, cal, type CalMount, cell, click, entries, entry, entryName, mountCal, openCalendar, press, settle, title, weekDates } from "./m3-helpers";
+import { byLabel, cal, type CalMount, cell, click, entries, entry, entryName, mountCal, openCalendar, press, settle, title, weekDates } from "./calendar-helpers";
 import { fmtMin, monthTitle, shiftAnchor, weekTitle } from "../../src/ui/calendar/format";
-import { q } from "./m7-helpers";
+import { q } from "./repeat-helpers";
 
 describe("calendar section", () => {
 	// The calendar section. Needs the real src/domain/calendar.ts.

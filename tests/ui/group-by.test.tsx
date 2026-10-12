@@ -7,8 +7,8 @@ import { type TaskSort, emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID, type Task } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, click, dragTo, modeButton, mountBoard, settle, sidebarItem } from "./k1a-helpers";
-import { U1Host } from "./u1-helpers";
+import { type CalMount, click, dragTo, modeButton, mountBoard, settle, sidebarItem } from "./board-helpers";
+import { U1Host } from "./app-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem } from "./view-menu-helpers";
 
 // The "Group by…" menu, the grouped list, and dragging a row to another group.

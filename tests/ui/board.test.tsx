@@ -20,7 +20,7 @@ import {
 	settle,
 	sidebarItem,
 	stubBoardRects,
-} from "./k1a-helpers";
+} from "./board-helpers";
 
 // The board view and its drag. Today is 2026-10-01 (Europe/Berlin).
 

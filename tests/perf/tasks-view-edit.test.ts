@@ -5,9 +5,9 @@ import { type TaskView, buildList, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import type { ID } from "../../src/domain/types";
 import { TasksSection, initialTasksState } from "../../src/ui/TasksSection";
-import { U1Host } from "../ui/u1-helpers";
+import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { CI_SLACK, LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, tally, taskId } from "./issue-41-fixture";
+import { CI_SLACK, LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, tally, taskId } from "./view-edit-fixture";
 
 // One task edit with the Tasks view open at 50,000 tasks (issue 41). The view rebuilds its list whenever the
 // task map changes; with the task index, `buildList` filters only the view's candidates. This test measures the work

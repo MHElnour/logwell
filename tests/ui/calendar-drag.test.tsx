@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DateSpec, Task } from "../../src/domain/types";
-import { type CalMount, byLabel, cal, cell, click, entries, entry, mountCal, openCalendar, press, settle } from "./m3-helpers";
+import { type CalMount, byLabel, cal, cell, click, entries, entry, mountCal, openCalendar, press, settle } from "./calendar-helpers";
 
 // Calendar drag and drop. happy-dom has no layout, so the day columns,
 // all-day cells and month cells get fake rectangles: column i is x 100 i to 100 i + 100, minute m of a

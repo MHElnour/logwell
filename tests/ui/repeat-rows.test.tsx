@@ -8,9 +8,9 @@ import {
 } from "../../src/app/RecurrenceService";
 import type { MenuSpec } from "../../src/ui/host";
 import { LINGER_MS } from "../../src/ui/useLingering";
-import { openBoard } from "./k1a-helpers";
-import { type M7Mount, FRIDAY, click, lastNotice, mountM7, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./m7-helpers";
-import { menuItem } from "./u1-helpers";
+import { openBoard } from "./board-helpers";
+import { type M7Mount, FRIDAY, click, lastNotice, mountM7, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
+import { menuItem } from "./app-helpers";
 
 // Repeating tasks in rows, cards and menus. The clock is Thursday
 // 2026-10-01 12:00 in Europe/Berlin; 2026-10-09 is the Friday.

@@ -16,7 +16,7 @@ import { type DateSpec, type ID, INBOX_ID, type Task } from "../../src/domain/ty
 import type { JournalOp } from "../../src/persistence/journal";
 import { collectionsOf, type DbData } from "../../src/persistence/schema";
 import { type AppHarness, appHarness } from "./harness";
-import { seededRandom, seededState } from "./issue-41-seed";
+import { seededRandom, seededState } from "./task-index-seed";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -746,7 +746,7 @@ describe("the task index", () => {
 describe("buildList", () => {
 	// Issue 41: the Tasks section builds a view's open rows and its Completed group with one `buildList`, reading only
 	// the view's candidates from the task index. On the seeded state it must give exactly what it gives without the index
-	// (every task read; pinned by `issue-41-views-golden.test.ts`), and leaving the Completed group out changes no row.
+	// (every task read; pinned by the golden results in this file), and leaving the Completed group out changes no row.
 
 	const SORTS: TaskSort[] = ["manual", "date", "priority"];
 	const FILTERS: { filter: TaskFilter; text: string }[] = [
@@ -796,10 +796,10 @@ describe("golden results", () => {
 	// Issue 41: the Tasks view's rows, Completed group and board, pinned to what they were before the views were
 	// rebuilt from one pass. For a seeded state, every view (Inbox, each list, Today, Upcoming, each tag, Completed,
 	// Trash) is built with every grouping, sort and a set of filters, with and without held (just completed) tasks,
-	// and each result is compared by hash with `tests/fixtures/issue-41-views.golden.json`.
+	// and each result is compared by hash with `tests/fixtures/task-views.golden.json`.
 	// CHECKPOINT_UPDATE_GOLDEN=1 rewrites the fixture; only do that on code whose output is known to be right.
 
-	const FIXTURE = new URL("../fixtures/issue-41-views.golden.json", import.meta.url);
+	const FIXTURE = new URL("../fixtures/task-views.golden.json", import.meta.url);
 	const UPDATE = Boolean(process.env.CHECKPOINT_UPDATE_GOLDEN);
 	const SORTS: TaskSort[] = ["manual", "date", "priority"];
 

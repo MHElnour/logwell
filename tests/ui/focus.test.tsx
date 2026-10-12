@@ -3,9 +3,9 @@ import { render } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
 import { useFocus } from "../../src/ui/hooks";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 import type { MenuSpec } from "../../src/ui/host";
-import { menuItem } from "./u1-helpers";
+import { menuItem } from "./app-helpers";
 import { makeReadOnly } from "../app/harness";
 import { stepFor } from "../../src/ui/focus/Controls";
 

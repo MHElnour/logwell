@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { INBOX_ID } from "../../src/domain/types";
 import type { MenuSpec } from "../../src/ui/host";
 import { mountApp } from "./quick-add.helpers";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 import { Modal } from "obsidian";
 import { pickListIcon } from "../../src/obsidian/modals";
 

@@ -3,7 +3,7 @@ import { vi } from "vitest";
 import { DEFAULT_SETTINGS, type CheckpointSettings } from "../../src/app/settings";
 import { AppRoot, type AppRootHandle } from "../../src/ui/AppRoot";
 import { type AppHarness, appHarness } from "../app/harness";
-import { U1Host, settle as realSettle } from "./u1-helpers";
+import { U1Host, settle as realSettle } from "./app-helpers";
 
 /** Lets pending promises and zero-delay timers run; also works while vitest's timers are faked. */
 export async function settle(): Promise<void> {

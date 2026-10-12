@@ -8,8 +8,8 @@ import { AppRoot } from "../../src/ui/AppRoot";
 import { LINGER_MS } from "../../src/ui/useLingering";
 import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { click, settle } from "./m3-helpers";
-import { U1Host } from "./u1-helpers";
+import { click, settle } from "./calendar-helpers";
+import { U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // The windowed-list checks that need the whole Tasks

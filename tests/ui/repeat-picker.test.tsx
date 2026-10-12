@@ -15,9 +15,9 @@ import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { type RepeatChoice, afterCompletionHint, draftOf, draftProblem, presetChoice, presetHint, presetOf, repeatLine, ruleOfDraft, ruleText, weekdaysFrom } from "../../src/ui/repeat";
 import { DEADLINE_CLEARED_TEXT, hasRepeatEditRequest, isPaneShown, notifyReanchored, onRepeatEditRequest, requestRepeatEdit } from "../../src/ui/repeatActions";
 import { appHarness } from "../app/harness";
-import { cal, cell, click, entries, entry, entryName, openCalendar } from "./m3-helpers";
-import { FRIDAY, type M7Mount, lastNotice, mountM7, openDetails, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./m7-helpers";
-import { menuItem } from "./u1-helpers";
+import { cal, cell, click, entries, entry, entryName, openCalendar } from "./calendar-helpers";
+import { FRIDAY, type M7Mount, lastNotice, mountM7, openDetails, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
+import { menuItem } from "./app-helpers";
 import { checkedOf, openViewMenu, pickItem } from "./view-menu-helpers";
 
 describe("the repeat picker", () => {

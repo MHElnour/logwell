@@ -8,9 +8,9 @@ import type { MenuItemSpec } from "../../src/ui/host";
 import { ICON } from "../../src/ui/icons";
 import { routeMatrixMove } from "../../src/ui/matrix/keys";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
-import { byLabel } from "./m3-helpers";
+import { byLabel } from "./calendar-helpers";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
-import { type CalMount, card, cardsIn, click, completedToggle, dragTo, groupLabels, matrix, mountMatrix, openMatrix, press, quadrantEl, quadrantOfCard, releaseAt, settle, stubQuadrantRects, titlesIn } from "./m4-helpers";
+import { type CalMount, card, cardsIn, click, completedToggle, dragTo, groupLabels, matrix, mountMatrix, openMatrix, press, quadrantEl, quadrantOfCard, releaseAt, settle, stubQuadrantRects, titlesIn } from "./matrix-helpers";
 import { QUADRANT_ORDER, quadrantFlags } from "../../src/domain/matrix";
 import { QUADRANT_INFO, QUADRANT_LIST, quadrantWords } from "../../src/ui/matrix/quadrants";
 

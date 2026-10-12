@@ -1,6 +1,6 @@
 import type { ButtonSpec } from "../../src/ui/host";
 import type { Task } from "../../src/domain/types";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 
 // Shared by the repeating-task UI tests: a mounted app whose host records the Undo notices (message and store label) and
 // answers the confirmations it is asked (host.choose), plus the way to a task row and the details pane.

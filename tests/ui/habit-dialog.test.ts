@@ -6,7 +6,7 @@ import { HabitModal, buildHabitForm } from "../../src/obsidian/habitDialog";
 import { habitDialogOptions } from "../../src/ui/habits/actions";
 import type { HabitDialogOptions } from "../../src/ui/host";
 import { appHarness } from "../app/harness";
-import { U1Host } from "./u1-helpers";
+import { U1Host } from "./app-helpers";
 
 // The New habit / Edit habit dialog (period coupling, rules and messages, prefill, Save, the Modal).
 // The form is plain DOM (buildHabitForm), so it is tested without Obsidian's Modal, as buildNewListForm is.

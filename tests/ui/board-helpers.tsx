@@ -1,5 +1,5 @@
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
-import { dragTo, press, releaseAt } from "./m4-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { dragTo, press, releaseAt } from "./matrix-helpers";
 
 export { click, dragTo, press, releaseAt, settle };
 export type { CalMount };

@@ -9,8 +9,8 @@ import { BLOCK_LANGUAGE, type BlockEnv, type BlockSession, DETACHED_DRAW_MS, NOT
 import { collectionsOf } from "../../src/persistence/schema";
 import { type AppHarness, appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
-import { settle } from "../ui/m3-helpers";
-import { U1Host } from "../ui/u1-helpers";
+import { settle } from "../ui/calendar-helpers";
+import { U1Host } from "../ui/app-helpers";
 
 /** The first argument of every Preact render a block made: a tree to draw, or null to unmount. */
 const drawn = vi.hoisted(() => ({ trees: [] as unknown[] }));

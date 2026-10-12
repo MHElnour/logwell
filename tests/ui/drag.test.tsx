@@ -7,8 +7,8 @@ import { emptyFilter, type TaskSort } from "../../src/domain/queries";
 import type { Task } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
 import { type AppHarness, appHarness } from "../app/harness";
-import { dragTo, press, releaseAt, settle } from "./m4-helpers";
-import { U1Host } from "./u1-helpers";
+import { dragTo, press, releaseAt, settle } from "./matrix-helpers";
+import { U1Host } from "./app-helpers";
 
 describe("pointer drag", () => {
 	// The shared pointer drag.

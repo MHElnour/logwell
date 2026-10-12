@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as views from "../../src/app/views";
 import * as format from "../../src/ui/format";
 import { useFocus } from "../../src/ui/hooks";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 import { syncLinkId } from "../../src/domain/types";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
-import { input as habitInput } from "./m6-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { input as habitInput } from "./habits-helpers";
 
 // Search's "Also search description notes" reads linked notes only while Search is shown: when the query or
 // the toggle changes, when the set of tasks with notes or their paths changes, when a linked note changes

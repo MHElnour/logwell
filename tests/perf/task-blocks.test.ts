@@ -9,7 +9,7 @@ import { BLOCK_LANGUAGE, type BlockEnv, REFRESH_MS, registerDashboardBlock } fro
 import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
-import { U1Host } from "../ui/u1-helpers";
+import { U1Host } from "../ui/app-helpers";
 
 // A note with 10 dashboard blocks over 50,000 tasks. One task change must wake only the blocks it can
 // affect: the others run no query and draw nothing. The tasks are spread over 10 lists, 5,000 each, and 20 of

@@ -8,8 +8,8 @@ import { cancelMoveToSection, moveToSection, taskMenu } from "../../src/ui/actio
 import { AddSectionField } from "../../src/ui/AddSectionField";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, board, cardTitles, click, columnEl, columnEls, columnTitles, dragTo, item, modeButton, mountBoard, openBoard, press, settle, sidebarItem, stubBoardRects } from "./k1a-helpers";
-import { U1Host } from "./u1-helpers";
+import { type CalMount, board, cardTitles, click, columnEl, columnEls, columnTitles, dragTo, item, modeButton, mountBoard, openBoard, press, settle, sidebarItem, stubBoardRects } from "./board-helpers";
+import { U1Host } from "./app-helpers";
 import { openViewMenu as openMenuAt, pickItem } from "./view-menu-helpers";
 
 // Sections in the list view and on the board.

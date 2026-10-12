@@ -7,8 +7,8 @@ import type { JournalOp } from "../../src/persistence/journal";
 import { CalendarSection, initialCalendarState } from "../../src/ui/CalendarSection";
 import { type AppHarness, appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
-import { settle } from "./m4-helpers";
-import { U1Host } from "./u1-helpers";
+import { settle } from "./matrix-helpers";
+import { U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 describe("windowing math", () => {

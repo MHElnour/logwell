@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { addDays } from "../../src/domain/time";
-import { menuItem, mountU1, settle } from "./u1-helpers";
+import { menuItem, mountU1, settle } from "./app-helpers";
 import { detailsDateText } from "../../src/ui/format";
 
 describe("details pane", () => {

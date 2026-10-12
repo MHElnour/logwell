@@ -7,7 +7,7 @@ import { AppRoot } from "../../src/ui/AppRoot";
 import { formatAgo } from "../../src/ui/format";
 import type { TickTickUi } from "../../src/ui/host";
 import { linkedList, type SyncHarness, syncHarness } from "../app/sync-harness";
-import { menuItem, settle, U1Host } from "./u1-helpers";
+import { menuItem, settle, U1Host } from "./app-helpers";
 import { TickTickError } from "../../src/app/ports";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "../../src/app/settings";
 import { isListSynced, notSyncedReason } from "../../src/app/syncMarks";

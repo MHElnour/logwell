@@ -1,6 +1,6 @@
 import type { Quadrant } from "../../src/domain/queries";
 import { QUADRANT_ORDER } from "../../src/domain/matrix";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 
 export { click, settle };
 export type { CalMount };

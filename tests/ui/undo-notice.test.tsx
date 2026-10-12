@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { INBOX_ID, type Task } from "../../src/domain/types";
 import { deleteTask, duplicateTask } from "../../src/ui/actions";
-import { type CalMount, dragTo, item, mountBoard, openBoard, settle, sidebarItem, stubBoardRects } from "./k1a-helpers";
+import { type CalMount, dragTo, item, mountBoard, openBoard, settle, sidebarItem, stubBoardRects } from "./board-helpers";
 import type { WriteResult } from "../../src/app/writes";
 import type { UiHost } from "../../src/ui/host";
 import { runWrite } from "../../src/ui/writeNotice";

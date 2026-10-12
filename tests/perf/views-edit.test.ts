@@ -11,9 +11,9 @@ import type { ID } from "../../src/domain/types";
 import type { DbData } from "../../src/persistence/schema";
 import { CalendarSection, initialCalendarState } from "../../src/ui/CalendarSection";
 import { SearchSection, initialSearchState } from "../../src/ui/SearchSection";
-import { U1Host } from "../ui/u1-helpers";
+import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, taskId } from "./issue-41-fixture";
+import { LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, taskId } from "./view-edit-fixture";
 
 // The calendar, the Eisenhower matrix and Search (issue 41). On every change the calendar places its dated tasks
 // (the index's 2,500) and shows the Unscheduled count (from the index's open tasks, with the default menu); the

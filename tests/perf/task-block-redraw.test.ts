@@ -7,8 +7,8 @@ import { BLOCK_LANGUAGE, type BlockEnv, REFRESH_MS, registerDashboardBlock } fro
 import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
-import { U1Host } from "../ui/u1-helpers";
-import { CI_SLACK, LISTS, LOG, TASKS, countBigPasses, median, tally, taskId } from "./issue-41-fixture";
+import { U1Host } from "../ui/app-helpers";
+import { CI_SLACK, LISTS, LOG, TASKS, countBigPasses, median, tally, taskId } from "./view-edit-fixture";
 
 // Issue 75: a task block's redraw makes no pass over every task of its own. The query is the only pass
 // (blockQuery.ts); the subtask counts of the shown parents come from the task index, also for a completed parent the

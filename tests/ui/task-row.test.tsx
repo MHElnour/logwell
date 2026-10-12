@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { TOGGLE_COMPLETE_EVENT } from "../../src/ui/TaskList";
 import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
-import { menuItem, mountU1, settle } from "./u1-helpers";
+import { menuItem, mountU1, settle } from "./app-helpers";
 import { render } from "preact";
 import { TaskCheckbox } from "../../src/ui/common";
 

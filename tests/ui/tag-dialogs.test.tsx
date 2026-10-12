@@ -8,8 +8,8 @@ import { EDIT_TAG_LABEL } from "../../src/app/CategoryService";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
 import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { appHarness } from "../app/harness";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
-import { menuItem } from "./u1-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { menuItem } from "./app-helpers";
 
 describe("the tag form", () => {
 	// The New tag / Edit tag form (Lists, sections and tags rule 23b). Plain DOM, tested without Obsidian's Modal: the name

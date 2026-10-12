@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, click, mountCal } from "./m3-helpers";
-import { q } from "./m7-helpers";
+import { type CalMount, click, mountCal } from "./calendar-helpers";
+import { q } from "./repeat-helpers";
 
 // The Data section's Export CSV button. The file writing is the host's (tests/app).
 

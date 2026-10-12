@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { emptyFilter, existingTagFilter } from "../../src/domain/queries";
 import type { Tag } from "../../src/domain/types";
-import { cal } from "./m3-helpers";
-import { type CalMount, click, matrix, mountMatrix, openMatrix, settle, titlesIn } from "./m4-helpers";
+import { cal } from "./calendar-helpers";
+import { type CalMount, click, matrix, mountMatrix, openMatrix, settle, titlesIn } from "./matrix-helpers";
 import { checkedOf, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 
 // A view filter never keeps a tag that is gone (Lists, sections and tags rule 24): after a rename or a delete the

@@ -2,7 +2,7 @@ import type { HabitInput } from "../../src/domain/habits";
 import type { Habit } from "../../src/domain/types";
 import type { HabitDialogOptions } from "../../src/ui/host";
 import type { AppHarness } from "../app/harness";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 
 // Shared by the habit UI tests: a mounted app whose host records the Undo notices (message and store label), the
 // dialogs it was asked to open and the reminder gestures, and the five habits of the mockup.
