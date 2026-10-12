@@ -71,12 +71,12 @@ describe("the block processor", () => {
 	// Preact runs effects after a frame through the window's timers. Faked timers that are dropped before that frame
 	// leave its queue stuck for every later test, and the frame itself counts as a timer of the block. A microtask
 	// runs the effects instead, whichever timers the test uses.
-	const ownFrame = options.requestAnimationFrame;
+	const ownFrame: unknown = Reflect.get(options, "requestAnimationFrame");
 	beforeAll(() => {
 		options.requestAnimationFrame = (flush) => void Promise.resolve().then(flush);
 	});
 	afterAll(() => {
-		options.requestAnimationFrame = ownFrame;
+		Reflect.set(options, "requestAnimationFrame", ownFrame);
 	});
 
 	beforeAll(() => {
