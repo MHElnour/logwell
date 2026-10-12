@@ -62,7 +62,7 @@ export interface DateCandidate {
 }
 
 /** What a lead word directly before a date makes of it: a deadline, a joined time, a repeat end or the start. */
-export type LeadKind = "deadline" | "time" | "end" | "schedule";
+type LeadKind = "deadline" | "time" | "end" | "schedule";
 
 interface Lead {
 	words: string;
@@ -76,7 +76,7 @@ interface Lead {
  * The span widens over the lead word; "time" joins only a date whose hour is certain. Without a repeat, `until`
  * makes a deadline (the parser turns the "end" into one) and the words marked `repeatOnly` lead nothing.
  */
-export const LEADS: readonly Lead[] = [
+const LEADS: readonly Lead[] = [
 	{ words: "by", kind: "deadline" },
 	{ words: "at", kind: "time" },
 	{ words: "until", kind: "end" },
@@ -103,7 +103,7 @@ interface LeadFound {
 }
 
 /** The lead word that ends right before `index` (over spaces), the longest when several fit; null when none does. */
-export function leadBefore(s: string, index: number): LeadFound | null {
+function leadBefore(s: string, index: number): LeadFound | null {
 	let best: LeadFound | null = null;
 	for (const lead of LEADS) {
 		let at = index;
@@ -265,8 +265,11 @@ function isWeakText(text: string): boolean {
 	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || BARE_DURATION_RE.test(t) || VAGUE_UNIT_RE.test(t);
 }
 
-/** Looks backwards over whitespace for the word `word` directly before `index`. */
-function wordBefore(s: string, index: number, word: string): number {
+/**
+ * Where the word `word` (lower case) directly before `index` starts, over at least one space, or -1: the one lookback
+ * for a lead word (leadBefore; tokens.ts for the "on" of "on mondays").
+ */
+export function wordBefore(s: string, index: number, word: string): number {
 	let j = index;
 	while (j > 0 && isSpaceChar(s.charAt(j - 1))) j--;
 	if (j === index) return -1;
@@ -454,27 +457,27 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock,
 		const start = readResult(first, clock);
 		const end = readResult(to, clock);
 		if (start === null || end === null) return null;
-			const by = rollKindOf(to.start, to.text);
-			// A start with its own year: a month and day end counts from the start, not from today.
-			const fromStart = by === "year" && hasTypedYear(first.start);
-			// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
-			const endFrom = (from: LocalDate): DateOutcome | null => {
-				if (by === null) return end.outcome;
-				const moved = fromStart ? monthDayOnOrAfter(end.date.slice(5), from) : rollEnd(end.date, from, by);
-				if (moved === null) return null;
-				// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today. An end
-				// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
-				const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
-				if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
-				return outcome.warning === undefined ? { status: "suggestion", date: outcome.date } : { status: "suggestion", date: outcome.date, warning: outcome.warning };
-			};
-			const o = start.outcome;
-			const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
-			const ends: DateOutcome[] = [];
-			for (const from of froms) {
-				// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
-				// its reading, as with a start edited by hand (an end before the start is invalid).
-				const e = ends.length === 0 || by === "week" || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
+		const by = rollKindOf(to.start, to.text);
+		// A start with its own year: a month and day end counts from the start, not from today.
+		const fromStart = by === "year" && hasTypedYear(first.start);
+		// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
+		const endFrom = (from: LocalDate): DateOutcome | null => {
+			if (by === null) return end.outcome;
+			const moved = fromStart ? monthDayOnOrAfter(end.date.slice(5), from) : rollEnd(end.date, from, by);
+			if (moved === null) return null;
+			// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today. An end
+			// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
+			const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
+			if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
+			return outcome.warning === undefined ? { status: "suggestion", date: outcome.date } : { status: "suggestion", date: outcome.date, warning: outcome.warning };
+		};
+		const o = start.outcome;
+		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
+		const ends: DateOutcome[] = [];
+		for (const from of froms) {
+			// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
+			// its reading, as with a start edited by hand (an end before the start is invalid).
+			const e = ends.length === 0 || by === "week" || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
 			if (e === null) return null;
 			ends.push(e);
 		}

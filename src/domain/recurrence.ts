@@ -736,7 +736,7 @@ export function repeatRuleProblem(rule: RepeatRule): string | null {
 }
 
 /** The most times a count end allows, like the largest interval. */
-export const MAX_END_COUNT = 999;
+const MAX_END_COUNT = 999;
 
 /**
  * Why an end cannot be stored, or null when it can: a count of 1 to 999 and a real date. With `series` (the series the

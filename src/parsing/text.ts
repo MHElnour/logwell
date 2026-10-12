@@ -97,7 +97,7 @@ export const MASK_CHAR = "\uFFFC";
 // regex source without groups that capture; match them case-insensitively on lower-case or `i` regexes.
 
 /** Every weekday word Quick Add reads, singular, plural and short ("mon", "tues", "thurs"), lower case. */
-export const WEEKDAY_WORDS: Readonly<Record<string, Weekday>> = {
+const WEEKDAY_WORDS: Readonly<Record<string, Weekday>> = {
 	monday: "MO",
 	mondays: "MO",
 	mon: "MO",

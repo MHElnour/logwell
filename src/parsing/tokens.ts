@@ -1,4 +1,5 @@
 import type { RepeatFreq } from "../domain/types";
+import { wordBefore } from "./dates";
 import { findDurations } from "./duration";
 import type { Span } from "./types";
 import {
@@ -125,7 +126,7 @@ export interface RepeatCount {
 	periods?: { n: number; freq: RepeatFreq };
 }
 
-export interface RepeatToken {
+interface RepeatToken {
 	span: Span;
 	/** A bare word ("daily", "mondays"): a repeat only at the end of the text, after title text (parse.ts decides). */
 	bare: boolean;
@@ -238,8 +239,6 @@ const NUMBERS_ONLY_RE = new RegExp(`^(?:\\d+|${NUMBER_WORD_PATTERN}|and|of|the|e
 // the run ("every other 2nd tuesday", "every day and every week"). Not "on": it leads a date ("every 3 hours on Monday").
 const GLUE: ReadonlySet<string> = new Set(["and", "&", ",", "of", "the", "each", "every", "other"]);
 const GLUE_LEAD: ReadonlySet<string> = new Set(["other", "every"]);
-// "on mondays", "on the last friday of the month": the "on" goes with the repeat.
-const ON_BEFORE_RE = /(?:^|[^\p{L}\p{N}_])(on\s+)$/iu;
 // Without "every", anywhere in the text: the Nth weekday, the day or the last day of each or every month, and the last
 // weekday or the last day of the month. Any other "… of the month" ("the 1st of the month") is title text.
 const OF_EACH_MONTH =
@@ -358,12 +357,6 @@ export function repeatCountAt(s: string, from: number): RepeatCount | null {
 	return { span: { start, end }, periods: { n: Number(m[3]), freq: unitFreq(m[4]!) ?? "weekly" } };
 }
 
-/** `start`, moved back over an "on" right before it. */
-function withOn(s: string, start: number): number {
-	const on = ON_BEFORE_RE.exec(s.slice(Math.max(0, start - 20), start));
-	return on === null ? start : start - on[1]!.length;
-}
-
 /**
  * Typed repeats: `every …` (a form Quick Add builds, or any other run of repeat words, unsupported), `each …` (taken,
  * never read), the Nth weekday, the day or the last day of each month anywhere, and the bare words, each with its
@@ -386,8 +379,9 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		const time = onDate ? null : sticky(EVERY_TIME_RE, s, end);
 		if (time !== null) end += time[0].length;
 		if (!free(found.index, end)) return;
-		// "on mondays", "on weekends", "on the last friday of the month"; not "on daily".
-		const start = bare && !/s$/iu.test(found[0]) ? found.index : withOn(s, found.index);
+		// "on mondays", "on weekends", "on the last friday of the month": the "on" goes with the repeat; not "on daily".
+		const on = bare && !/s$/iu.test(found[0]) ? -1 : wordBefore(s, found.index, "on");
+		const start = on === -1 ? found.index : on;
 		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate });
 	};
 

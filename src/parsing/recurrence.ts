@@ -70,7 +70,6 @@ function every(other: string | undefined, count: string | undefined): number | n
 	return other !== undefined ? 2 : count !== undefined ? interval(count) : 1;
 }
 
-const plain = (freq: RepeatRule["freq"], n: number): Body => plainRule(freq, n);
 const lastDay: Body = { freq: "monthly", interval: 1, weekdays: null, monthly: { kind: "lastDay" } };
 
 // The whole body is one day part ("every morning").
@@ -78,11 +77,11 @@ const REPEAT_DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
 
 /** The part after "every ", lower case, single spaces, without the time. */
 function parseBody(body: string): Body | null {
-	if (body === "day" || REPEAT_DAY_PART_RE.test(body)) return plain("daily", 1);
+	if (body === "day" || REPEAT_DAY_PART_RE.test(body)) return plainRule("daily");
 	if (body === "weekday" || body === "workday") return { freq: "weekly", interval: 1, weekdays: [...EVERY_WEEKDAY], monthly: null };
 	if (body === "weekend") return { freq: "weekly", interval: 1, weekdays: ["SA", "SU"], monthly: null };
-	if (body === "week") return plain("weekly", 1);
-	if (body === "quarter") return plain("monthly", 3);
+	if (body === "week") return plainRule("weekly");
+	if (body === "quarter") return plainRule("monthly", 3);
 	if (/^last day of (?:the |each |every )?month$/u.test(body)) return lastDay;
 
 	// "month", "other month", "3 months", each with an optional "on the 15th" or "on the last day".
@@ -107,7 +106,7 @@ function parseBody(body: string): Body | null {
 	if (year !== null) {
 		if (year[1] === undefined && year[2] === undefined && year[3] === "years") return null;
 		const n = every(year[1], year[2]);
-		return n === null ? null : plain("yearly", n);
+		return n === null ? null : plainRule("yearly", n);
 	}
 
 	// "week on mon, fri", "2 weeks on tue thu", "other week on monday", "2 weeks tuesday".
@@ -122,8 +121,8 @@ function parseBody(body: string): Body | null {
 	// "other day|week", "other <weekdays>" (every second week on those days).
 	const other = /^other\s+(.+)$/u.exec(body);
 	if (other !== null) {
-		if (other[1] === "day") return plain("daily", 2);
-		if (other[1] === "week") return plain("weekly", 2);
+		if (other[1] === "day") return plainRule("daily", 2);
+		if (other[1] === "week") return plainRule("weekly", 2);
 		const days = weekdayList(other[1]!);
 		return days === null ? null : { freq: "weekly", interval: 2, weekdays: days, monthly: null };
 	}
@@ -133,7 +132,7 @@ function parseBody(body: string): Body | null {
 	if (count !== null) {
 		const n = interval(count[1]!);
 		if (n === null) return null;
-		return plain(count[2]!.startsWith("day") ? "daily" : "weekly", n);
+		return plainRule(count[2]!.startsWith("day") ? "daily" : "weekly", n);
 	}
 
 	// "last friday", "first monday", "2nd tuesday", with an optional "of the/each/every month".
