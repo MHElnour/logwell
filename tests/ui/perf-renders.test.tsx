@@ -157,11 +157,14 @@ describe("rows follow everything they draw", () => {
 		mounted.push(m);
 		let weekStart = "MO";
 		(m.h.app as unknown as { settings: { weekStart: () => string } }).settings.weekStart = () => weekStart;
-		// Every second Monday, anchored on Sunday 2026-10-04 and without a week start of its own.
-		const rule = { freq: "weekly", interval: 2, weekdays: ["MO"], monthly: null, afterCompletion: false, time: null, tz: null };
+		// Every second week on Sunday and Monday, anchored on Sunday 2026-10-04 (a picked weekday, so the anchor stays) and
+		// without a week start of its own.
+		const rule = { freq: "weekly", interval: 2, weekdays: ["MO", "SU"], monthly: null, afterCompletion: false, time: null, tz: null };
 		const t = (await m.h.app.tasks.create({ title: "Biweekly", scheduled: { kind: "date", date: "2026-10-04" }, repeat: { rule } } as never)).task;
 		// The service stamps the setting on a new rule; drop it, so the setting decides the weeks (an older rule has none).
 		for (const v of m.h.app.store.state.tasks.get(t.id)!.recurrence!.versions) delete (v.rule as { weekStart?: string }).weekStart;
+		// Sunday Oct 4 and, in Monday weeks, Monday Oct 12 done.
+		await m.h.app.tasks.complete(t.id);
 		await m.h.app.tasks.complete(t.id);
 		await m.rerender();
 		await flush();
@@ -169,12 +172,12 @@ describe("rows follow everything they draw", () => {
 			const item = [...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((i) => i.textContent.includes("Upcoming"))!;
 			return item.querySelector(".cp-count")?.textContent ?? "0";
 		};
-		// Monday weeks: the next one is 2026-10-12, beyond the upcoming range.
+		// Monday weeks: the next one is Sunday 2026-10-18, beyond the upcoming range.
 		expect(upcoming()).toBe("0");
 		weekStart = "SU";
 		await m.rerender();
 		await flush();
-		// Sunday weeks: 2026-10-05 is in the week of the anchor.
+		// Sunday weeks: Monday 2026-10-05 is in the week of the anchor and still open.
 		expect(upcoming()).toBe("1");
 	});
 
@@ -213,7 +216,9 @@ describe("rows follow everything they draw", () => {
 		mounted.push(m);
 		let weekStart = "MO";
 		(m.h.app as unknown as { settings: { weekStart: () => string } }).settings.weekStart = () => weekStart;
-		const rule = { freq: "weekly", interval: 2, weekdays: ["MO"], monthly: null, afterCompletion: false, time: null, tz: null };
+		// Every second week on Sunday and Monday from Sunday 2026-10-04: once Sunday is done, the week start decides whether
+		// Monday Oct 5 or Oct 12 is next.
+		const rule = { freq: "weekly", interval: 2, weekdays: ["MO", "SU"], monthly: null, afterCompletion: false, time: null, tz: null };
 		const t = (await m.h.app.tasks.create({ title: "Biweekly", scheduled: { kind: "date", date: "2026-10-04" }, repeat: { rule } } as never)).task;
 		for (const v of m.h.app.store.state.tasks.get(t.id)!.recurrence!.versions) delete (v.rule as { weekStart?: string }).weekStart;
 		await m.h.app.tasks.complete(t.id);

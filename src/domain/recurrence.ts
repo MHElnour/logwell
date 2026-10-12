@@ -782,8 +782,24 @@ export function singleVersionRecurrence(anchor: LocalDate, rule: RepeatRule, end
 }
 
 /**
+ * The anchor of a new series from its start date (Repeating tasks rules 11 and 19): a weekly rule with picked weekdays
+ * starts on the first of them on or after `start`, so `every 2 weeks on Monday` made on a Wednesday first falls on the
+ * coming Monday, not the one two weeks after it; every other rule starts on `start`. Quick Add, setRepeat and the
+ * picker's checks all go through it.
+ */
+export function seriesAnchor(start: LocalDate, rule: RepeatRule): LocalDate {
+	if (rule.freq !== "weekly" || rule.weekdays === null || rule.weekdays.length === 0) return start;
+	const n = dayNum(start);
+	for (let d = n; d < n + 7; d++) {
+		const date = dateOf(d);
+		if (rule.weekdays.includes(weekdayOf(date))) return date;
+	}
+	return start;
+}
+
+/**
  * "Make repeating" (Quick Add and setRepeat share it). The anchor is the date of `scheduled` in the
- * display zone, else `fallback`. A timed spec gives the rule its wall time and zone when the rule has
+ * display zone, else `fallback`, moved to the first picked weekday by `seriesAnchor`. A timed spec gives the rule its wall time and zone when the rule has
  * none; the anchor is then the spec's own wall date, so the first occurrence is the scheduled moment.
  * The rule is normalized; validate it with repeatRuleProblem first.
  */
@@ -808,7 +824,7 @@ export function startRecurrence(
 		}
 	}
 	return {
-		recurrence: singleVersionRecurrence(anchor, r, end),
+		recurrence: singleVersionRecurrence(seriesAnchor(anchor, r), r, end),
 		timeFromSpec,
 	};
 }

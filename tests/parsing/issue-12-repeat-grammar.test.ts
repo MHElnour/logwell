@@ -412,7 +412,7 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
 		const rows: [string, string, string[]][] = [
 			["Call every 3 hours Oct 12", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|applied|Oct 12"]],
-			["Call every 3 hours Oct 12 to Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|applied|Oct 12", "repeatEnd|unsupported|to Dec 1"]],
+			["Call every 3 hours Oct 12 to Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Oct 12 to Dec 1"]],
 			["Call every 3 hours Mon-Fri", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Mon-Fri"]],
 			["Call every 3 hours until Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "repeatEnd|unsupported|until Dec 1"]],
 			["Taxes every May 5", "every May 5", ["recurrence|unsupported|every May 5"]],

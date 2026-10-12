@@ -243,9 +243,10 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		expect(r.fields.recurrenceEnd).toBeUndefined();
 	});
 
-	it("a Feb 29 end after a start with its own year is the next Feb 29 on or after the start", () => {
+	it("a Feb 29 end after a start with its own year is the next Feb 29 on or after the start: more than a year on, a suggestion", () => {
 		const r = parse("Gym every day starting Oct 12 2028 to Feb 29", zone);
-		expect([day(r), end(r), r.blocking]).toEqual(["2028-10-12", "2032-02-29", []]);
+		expect([day(r), end(r), r.blocking]).toEqual(["2028-10-12", undefined, []]);
+		expect(r.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "suggestion", notice: "Use as end date?", end: { kind: "date", date: "2032-02-29" } });
 	});
 
 	it("the end follows the chosen start: Next week ends on the Friday after it", () => {

@@ -54,13 +54,14 @@ const CASES: Case[] = [
 	{ in: "Gym every day for 10 days starting Oct 10", title: "Gym", rec: "daily", s: "2026-10-10", end: "2026-10-19" },
 	// elsewhere `for` stays a duration
 	{ in: "Gym every day for 45m", title: "Gym", rec: "daily" },
-	// an end before the start is refused: the chip is invalid and the text stays
+	// a yearless end before the typed start is the next such date after it, as in the range `starting Dec 10 to Dec 1`
 	{
 		in: "Pills every day until Dec 1 starting Dec 10",
-		title: "Pills until Dec 1",
+		title: "Pills",
 		rec: "daily",
 		s: "2026-12-10",
-		chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|until Dec 1|n=The repeat ends before its first date.", "applied|scheduled|starting Dec 10"],
+		end: "2027-12-01",
+		chips: ["applied|recurrence|every day|r=daily", "applied|repeatEnd|until Dec 1", "applied|scheduled|starting Dec 10"],
 	},
 	{ in: "Pills every day for 0 times", title: "Pills for 0 times", rec: "daily", chips: ["applied|recurrence|every day|r=daily", "invalid|repeatEnd|for 0 times|n=End after 1 to 999 times."] },
 ];

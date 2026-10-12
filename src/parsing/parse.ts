@@ -1,11 +1,11 @@
 import { DateTime } from "luxon";
-import { periodsAfter, repeatEndProblem, singleVersionRecurrence } from "../domain/recurrence";
+import { periodsAfter, repeatEndProblem, seriesAnchor, singleVersionRecurrence } from "../domain/recurrence";
 import type { LocalDate, RepeatFreq, RepeatRule, WeekStart } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
 import { addDays, dateSpecDate, sameDateSpec } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
-import { findDates, resolveDateSpec, todayOf, type DateCandidate, type DateOutcome } from "./dates";
+import { findDates, monthDayOnOrAfter, resolveDateSpec, rollsPastYear, todayOf, type DateCandidate, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
@@ -296,6 +296,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A repeat typed, or one picked by hand.
 	const typed = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d));
 	const repeats = typed || ctx.manual.has("recurrence");
+	// Only a repeat Quick Add built (applied, or a time to choose) makes a range its start and end; after an `every …` it
+	// cannot build the range stays the one suggestion it is without a repeat.
+	const built = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d) && (d.chip.status === "applied" || d.chip.status === "choice"));
 	// A count or a number of periods ends only a typed repeat that stays and comes before it; otherwise it is text.
 	const repeatEnds = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d)).map((d) => d.chip.span.end);
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
@@ -310,13 +313,18 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		const outcome = range.endByChoice[o.alternatives.findIndex((alt) => sameDateSpec(alt.value, chosen.value))];
 		return outcome === undefined ? range.end : { ...range.end, outcome };
 	};
-	const readings = dates.flatMap((c) => (c.range !== undefined && typed && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
+	// The ends typed as a month and day with no year: before the start they roll to the next such date (bindEnds).
+	const rolling = new Set<string>();
+	const readings = dates.flatMap((c) => (c.range !== undefined && built && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
 	for (const c of readings) {
 		if (repeats || !c.repeatOnly) {
 			// `until <date>` without a repeat is a deadline (decision 8). The end of a repeat picked by hand is not a
 			// typed value it replaces, so the hand-picked repeat does not turn it into a suggestion.
-			if (c.kind === "end" && repeats) drafts.push(typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx));
-			else if (c.kind === "end") drafts.push(dateDraft(input, "deadline", c.span, c.outcome));
+			if (c.kind === "end" && repeats) {
+				const end = typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx);
+				if (c.monthDay) rolling.add(end.chip.id);
+				drafts.push(end);
+			} else if (c.kind === "end") drafts.push(dateDraft(input, "deadline", c.span, c.outcome));
 			else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
 		} else {
 			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words.
@@ -339,9 +347,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	supersede(kept);
 
 	const chips = kept.map((d) => d.chip);
-	requireStartDate(chips, startsOnDate, readDates, input);
-	bindEnds(chips, periods, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
-	return finish(input, chips);
+	const openStarts = requireStartDate(chips, startsOnDate, readDates, input);
+	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
+	return finish(input, chips, openStarts);
 }
 
 /**
@@ -378,23 +386,29 @@ const FROM_ANCHOR: RepeatRule = { freq: "daily", interval: 1, weekdays: null, mo
  * "every year on <date>": the date read right after "on" is the start. It counts when applied or a choice to make, or
  * when a date picked by hand made it a "Replace date?" suggestion (`readDates`: the picked date is the start, and the
  * repeat applies). When none is read there (dismissed, weak or unreadable), the repeat is not supported: it would
- * otherwise start on today's month and day.
+ * otherwise start on today's month and day. Returns the ids of starts that are still a choice (`May 5 at 7`): they
+ * block saving until chosen, so the series is never anchored on today.
  */
-function requireStartDate(chips: Chip[], startsOnDate: ReadonlySet<string>, readDates: ReadonlySet<string>, input: string): void {
-	if (startsOnDate.size === 0) return;
+function requireStartDate(chips: Chip[], startsOnDate: ReadonlySet<string>, readDates: ReadonlySet<string>, input: string): string[] {
+	const open: string[] = [];
+	if (startsOnDate.size === 0) return open;
 	for (const c of chips) {
 		if (!startsOnDate.has(c.id) || c.status === "unsupported") continue;
 		let next = c.span.end;
 		while (next < input.length && /\s/u.test(input.charAt(next))) next++;
-		const read = chips.some(
+		const start = chips.find(
 			(d) => d.kind === "scheduled" && d.span.start === next && (d.status === "applied" || d.status === "choice" || (d.status === "suggestion" && readDates.has(d.id))),
 		);
-		if (read) continue;
+		if (start !== undefined) {
+			if (start.status === "choice") open.push(start.id);
+			continue;
+		}
 		c.status = "unsupported";
 		c.notice = NOTICE.recurrence;
 		delete c.rule;
 		delete c.alternatives;
 	}
+	return open;
 }
 
 /**
@@ -420,13 +434,16 @@ function choiceDay(chips: readonly Chip[], zone: string): LocalDate | undefined 
 /**
  * Binds the end chips to the repeat once the start is known (the applied typed date; under a typed repeat, the day of
  * a typed date whose hour is a choice; else `start`: a date picked by hand, a preset or today): `for N <periods>`
- * becomes the day before N periods from the start; an end that leaves the series no date is invalid
- * (repeatEndProblem, the services' check), against the typed repeat, else the one picked by hand; an end waits while
- * its repeat's time is a choice; the end of a repeat Quick Add cannot build is not supported either.
+ * becomes the day before N periods from the start; an end typed as a month and day with no year (`rolling`) that falls
+ * before the start is the next such date after it, a suggestion when that is more than a year on; an end that leaves
+ * the series no date is invalid (repeatEndProblem, the services' check), against the typed repeat, else the one picked
+ * by hand, from the anchor a new series gets (`seriesAnchor`); an end waits while its repeat's time is a choice; the
+ * end of a repeat Quick Add cannot build is not supported either.
  */
 function bindEnds(
 	chips: Chip[],
 	periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>,
+	rolling: ReadonlySet<string>,
 	env: { zone: string; start: LocalDate; weekStart: WeekStart; pickedRule?: RepeatRule },
 ): void {
 	if (!chips.some((c) => c.kind === "repeatEnd")) return;
@@ -437,11 +454,24 @@ function bindEnds(
 	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
 	const anchor = date === undefined ? (rule === undefined ? undefined : choiceDay(chips, env.zone)) ?? env.start : dateSpecDate(date, env.zone);
 	// Without a known rule (none typed, none picked), only the anchor is checked, and the service checks the rest.
-	const series = singleVersionRecurrence(anchor, rule ?? env.pickedRule ?? FROM_ANCHOR);
+	const effective = rule ?? env.pickedRule ?? FROM_ANCHOR;
+	const series = singleVersionRecurrence(seriesAnchor(anchor, effective), effective);
 	for (const c of chips) {
 		if (c.kind !== "repeatEnd") continue;
 		const p = periods.get(c.id);
 		if (p !== undefined) c.end = { kind: "date", date: addDays(periodsAfter(anchor, p.freq, p.n), -1) };
+		// After a typed start, a month and day end before it is the next such date (as in a typed range); an end more than a
+		// year past the start is a suggestion. A start picked by hand keeps the end as typed: before the start it is invalid.
+		if (c.status === "applied" && c.end?.kind === "date" && rolling.has(c.id) && date !== undefined) {
+			const moved = c.end.date < anchor ? monthDayOnOrAfter(c.end.date.slice(5), anchor) : c.end.date;
+			if (moved !== null) {
+				c.end = { kind: "date", date: moved };
+				if (rollsPastYear(anchor, moved)) {
+					c.status = "suggestion";
+					c.notice = NOTICE.useAsEndDate;
+				}
+			}
+		}
 		if (c.status !== "applied" && c.status !== "suggestion") continue;
 		if (unsupported) {
 			c.status = "unsupported";
@@ -547,7 +577,7 @@ function supersede(drafts: Draft[]): void {
 	}
 }
 
-function finish(input: string, chips: Chip[]): ParseResult {
+function finish(input: string, chips: Chip[], openStarts: readonly string[] = []): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let title = "";
 	let at = 0;
@@ -606,8 +636,9 @@ function finish(input: string, chips: Chip[]): ParseResult {
 		title: collapsed === "" ? input : collapsed,
 		titleFallback: collapsed === "" && appliedCount > 0,
 		fields,
-		// An unresolved list and an invalid repeat end block saving until fixed or dismissed.
-		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid")).map((c) => c.id),
+		// An unresolved list, an invalid repeat end and a yearly repeat's start whose hour is still a choice block saving
+		// until fixed, chosen or dismissed.
+		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid") || openStarts.includes(c.id)).map((c) => c.id),
 	};
 }
 

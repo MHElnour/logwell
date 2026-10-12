@@ -1,4 +1,4 @@
-import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
+import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, seriesAnchor, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
@@ -35,9 +35,9 @@ export function weekdaysFrom(weekStart: WeekStart): Weekday[] {
 	return [...WEEKDAYS.slice(first), ...WEEKDAYS.slice(0, first)];
 }
 
-/** A single-version series for `rule`, so the domain's descriptions (which read the anchor) can be used. */
+/** A single-version series for `rule` from `anchor` (moved to the first picked weekday, as a new series is), so the domain's descriptions and checks can be used. */
 export function recurrenceOf(choice: RepeatChoice, anchor: LocalDate): Recurrence {
-	return singleVersionRecurrence(anchor, choice.rule, choice.end);
+	return singleVersionRecurrence(seriesAnchor(anchor, choice.rule), choice.rule, choice.end);
 }
 
 /** The time of a timed rule is part of what it says: "every Mon at 17:00". */

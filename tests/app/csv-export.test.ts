@@ -144,9 +144,10 @@ describe("DataService.exportCsv", () => {
 		expect(col("scheduled")).toBe("");
 		expect(col("repeat")).toBe("every Mon, Fri");
 		const json = JSON.parse(col("repeatJson")) as { anchor: string; versions: { rule: { weekdays: string[] } }[] };
-		expect(json.anchor).toBe("2026-10-01");
+		// Made on Thu Oct 1 for Mondays and Fridays: the series starts on the first of them, Fri Oct 2 (seriesAnchor).
+		expect(json.anchor).toBe("2026-10-02");
 		expect(json.versions[0]!.rule.weekdays).toEqual(["MO", "FR"]);
-		// Anchor Thu Oct 1: done Oct 2 (Fri, auto-skipped none before it? Oct 2 is the first), then Mon Oct 5 skipped.
+		// Done Oct 2 (Fri, the first), then Mon Oct 5 skipped.
 		const records = h.app.store.state.occurrenceRecords.size;
 		expect(records).toBeGreaterThan(0);
 		expect(col("nextOccurrence")).toBe("2026-10-09");

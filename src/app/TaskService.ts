@@ -59,7 +59,8 @@ export interface TaskInput {
 	notePath?: string | null;
 	/**
 	 * Create the task repeating, in one write (Quick Add). The anchor is the date of `scheduled`, else
-	 * today; `scheduled` is then stored as null. Not with `deadline` or `parentId` (InvalidValue).
+	 * today (a weekly rule with picked weekdays: the first of them on or after it, `seriesAnchor`); `scheduled` is then
+	 * stored as null. Not with `deadline` or `parentId` (InvalidValue).
 	 */
 	repeat?: { rule: RepeatRule; end?: RepeatEnd } | null;
 }

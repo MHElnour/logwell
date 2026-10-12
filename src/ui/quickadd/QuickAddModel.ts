@@ -298,22 +298,26 @@ export class QuickAddModel {
 		this.update();
 	}
 
-	/** A chosen alternative or an edited date or time for a date chip. */
+	/** A chosen alternative or an edited date or time for a date chip. Opened by Enter on a blocking choice, the pick saves. */
 	setChipDate(chip: Chip, value: DateSpec): void {
+		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "date", value });
 		if (isManualField(chip.kind)) this.clearManual(chip.kind);
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
+		if (save) void this.submit();
 	}
 
 	/** The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual repeat. */
 	setChipRule(chip: Chip, rule: RepeatRule): void {
+		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "rule", rule });
 		this.clearManual("recurrence");
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
+		if (save) void this.submit();
 	}
 
 	/** The picker of an unresolved category chip. */

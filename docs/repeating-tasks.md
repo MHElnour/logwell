@@ -11,7 +11,7 @@ A repeating task, such as "Pay rent" every month, stays one task: each time you 
 
 Type `every …` in Quick Add, such as `Pay rent every month on the 1st #Home`, or use the picker: the **Repeat** row in the add bar's date popover, or the **Repeat** field under **All fields** in the **Quick add task** window or in the details pane.
 
-Pick **Never**, **Daily**, **Every weekday**, **Weekly**, **Monthly**, **Yearly** or **Custom…**. Weekly, Monthly and Yearly follow the task's date, which is also the first date (today if it has none). A yearly repeat on Feb 29 falls on Feb 28 in other years. Changing an existing repeat to Yearly keeps the month and day of the series' first date, which the picker shows. A task's time applies to every occurrence.
+Pick **Never**, **Daily**, **Every weekday**, **Weekly**, **Monthly**, **Yearly** or **Custom…**. Weekly, Monthly and Yearly follow the task's date, which is also the first date (today if it has none). A weekly repeat on picked weekdays starts on the first of those weekdays on or after that date, so "every 2 weeks on Monday" made on a Wednesday first falls on the coming Monday. A yearly repeat on Feb 29 falls on Feb 28 in other years. Changing an existing repeat to Yearly keeps the month and day of the series' first date, which the picker shows. A task's time applies to every occurrence.
 
 A subtask cannot repeat, but a repeating task can have subtasks: they come back unchecked each time. A repeating task has no deadline, so Logwell removes one and says so.
 
@@ -26,7 +26,7 @@ A subtask cannot repeat, but a repeating task can have subtasks: they come back 
 | `every other day`, `every other week`, `every other friday` | Every second day, week or Friday |
 | `every mon wed fri`, `every mon, wed and fri`, `every tuesday & thursday` | On those weekdays |
 | `every mon-fri`, `every monday to friday`, `every fri-mon` | On every weekday from the first to the last, round the week: Monday to Friday, or Friday, Saturday, Sunday and Monday |
-| `every week on mon, fri`, `every 2 weeks on tuesday`, `every week on mon-fri`, `weekly mon-fri`, `weekly on tue-thu` | On those weekdays, every week or every N weeks |
+| `every week on mon, fri`, `every 2 weeks on tuesday`, `every week Monday`, `every 2 weeks Mon-Fri`, `every week on mon-fri`, `weekly mon-fri`, `weekly on tue-thu` | On those weekdays, every week or every N weeks, with or without `on` |
 | `every 15th`, `every 1st of the month`, `every month on the 15th`, `every 3 months on day 5` | On that day of the month |
 | `every first monday`, `every last friday of the month`, `last friday of the month` | On that weekday of the month: first to fourth, or last |
 | `every last day of the month` | On the month's last day |

@@ -43,7 +43,8 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 	});
 
 	it("an invalid end blocks saving", () => {
-		const r = parse("Pills every day until Oct 1 starting Oct 3", zone);
+		// An end with its own year before the typed start (a yearless one would roll to the next Oct 1).
+		const r = parse("Pills every day until Oct 1 2027 starting Oct 3", zone);
 		const end = r.chips.find((c) => c.kind === "repeatEnd")!;
 		expect(end.status).toBe("invalid");
 		expect(r.blocking).toEqual([end.id]);

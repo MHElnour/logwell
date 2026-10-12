@@ -1,5 +1,6 @@
 import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
+import type { Component } from "chrono-node";
 import { LOCAL_FORMAT, addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
 import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
@@ -40,6 +41,8 @@ export interface DateCandidate {
 	textStart: number;
 	/** The lead word counts only when the input repeats (`ending`, `starting` …): without a repeat it is title text. */
 	repeatOnly: boolean;
+	/** A month and day with no typed year: as a repeat's end before the start it rolls to the next such date. */
+	monthDay: boolean;
 	outcome: DateOutcome;
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
@@ -97,7 +100,7 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 }
 
 /** The first real date with this month and day ("MM-DD") on or after `from`, in its year or the 8 years after it (the next Feb 29). */
-function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
+export function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null {
 	const firstYear = Number(from.slice(0, 4));
 	for (let year = firstYear; year <= firstYear + 8; year++) {
 		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
@@ -105,6 +108,29 @@ function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null 
 	}
 	return null;
 }
+
+/** A repeat's end that rolled to more than a year after its start is a suggestion, not applied (Repeating tasks rule 19). */
+export function rollsPastYear(from: LocalDate, to: LocalDate): boolean {
+	return dayNum(to) - dayNum(from) > 366;
+}
+
+// A two-digit number after a comma is never a year ("Jun 3, 25 people" is June 3 and "25 people"): the date ends
+// before the comma and its year is implied again, for `impliedYear` to set.
+const SHORT_YEAR_RE = /,\s*(\d{1,2})$/u;
+const KEPT_COMPONENTS: readonly Component[] = ["month", "day", "weekday", "hour", "minute", "second", "millisecond", "meridiem", "timezoneOffset"];
+const shortYear: chrono.Refiner = {
+	refine(context, results) {
+		for (const r of results) {
+			const m = SHORT_YEAR_RE.exec(r.text);
+			if (m === null || r.end != null || !r.start.isCertain("year") || (r.start.get("year") ?? 0) % 100 !== Number(m[1])) continue;
+			const known: Partial<Record<Component, number>> = {};
+			for (const k of KEPT_COMPONENTS) if (r.start.isCertain(k)) known[k] = r.start.get(k) ?? 0;
+			r.start = context.createParsingComponents(known);
+			r.text = r.text.slice(0, m.index);
+		}
+		return results;
+	},
+};
 
 /** The options the date readers get: chrono's, plus today's date on the parse clock, for `impliedYear`. */
 interface ReaderOption extends chrono.ParsingOption {
@@ -137,14 +163,14 @@ const impliedYear: chrono.Refiner = {
 };
 
 /**
- * chrono's casual English and en-GB readers with `impliedYear` right before the filter of impossible dates (the one
- * refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared instances stay
- * as they are.
+ * chrono's casual English and en-GB readers with `shortYear` and `impliedYear` right before the filter of impossible
+ * dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is. Clones: chrono's shared
+ * instances stay as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
-	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, impliedYear);
+	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
 	return reader;
 }
 
@@ -364,9 +390,12 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, ref: chrono.P
 			if (byWeek) {
 				if (end.date < from) moved = dateOf(dayNum(end.date) + 7 * Math.ceil((dayNum(from) - dayNum(end.date)) / 7));
 			} else if (fromStart || end.date < from) moved = monthDayOnOrAfter(end.date.slice(5), from);
-			if (moved === end.date) return end.outcome;
-			// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today.
-			return moved === null ? null : (readResult(to, clock, moved)?.outcome ?? null);
+				if (moved === null) return null;
+				// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today. An end
+				// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
+				const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
+				if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
+				return outcome.warning === undefined ? { status: "suggestion", date: outcome.date } : { status: "suggestion", date: outcome.date, warning: outcome.warning };
 		};
 		const o = start.outcome;
 		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
@@ -417,7 +446,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			kind = "deadline";
 		}
 		// chrono's text can end in spaces ("April 15, " before "for 3 times"); the span stops at the date.
-		const candidate: DateCandidate = { kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, outcome };
+			const monthDay = r.start.isCertain("month") && r.start.isCertain("day") && !hasTypedYear(r.start);
+		const candidate: DateCandidate = { kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, monthDay, outcome };
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start
 		// and end; the parser decides by where the repeat is.
@@ -427,8 +457,9 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		if (split !== null) {
 			candidate.range = {
 				led,
-				start: { kind: "scheduled", span: { start: from !== -1 ? from : spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, outcome: split.start.outcome },
-				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, outcome: split.end.outcome },
+				start: { kind: "scheduled", span: { start: from !== -1 ? from : spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, monthDay, outcome: split.start.outcome },
+					// The end already moved past the start.
+				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, monthDay: false, outcome: split.end.outcome },
 				...(split.endByChoice !== undefined ? { endByChoice: split.endByChoice } : {}),
 			};
 		}
