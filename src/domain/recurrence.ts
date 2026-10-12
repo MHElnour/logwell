@@ -615,27 +615,12 @@ export function explicitRule(r: RepeatRule, anchor: LocalDate): RepeatRule {
 }
 
 /**
- * The first Feb 29 on or after `from` in the years of a yearly series anchored on Feb 29 (`anchor`), every `years`
- * years. A leap year recurs within 400 steps (the anchor's year is one, and 400 years later the calendar repeats).
- */
-function nextLeapDay(anchor: LocalDate, years: number, from: LocalDate): LocalDate {
-	const mi = monthIndexOf(dayNum(anchor)).mi;
-	const fromDay = dayNum(from);
-	for (let n = 0; n <= 400; n++) {
-		const feb = mi + 12 * years * n;
-		if (daysInMonth(feb) === 29 && firstOfMonth(feb) + 28 >= fromDay) return dateOf(firstOfMonth(feb) + 28);
-	}
-	return from;
-}
-
-/**
  * The series of a copy ("Duplicate"): it starts at the source's current occurrence when that is today
  * or later, else at its first date on or after today (today in after-completion mode, or when the source
  * has no date left), so the copy is never overdue from day one. Only the rule in force then is kept
  * (later versions counted their periods from the source's anchor, so they would shift), with "the
  * anchor's weekday / day" spelled out; the end is kept (a passed end date becomes never); no history, not
- * ended, no `anchoredAt` or `countFrom`. A fixed yearly series anchored on Feb 29 starts on its next Feb 29
- * instead, since a yearly rule takes its month and day from the anchor.
+ * ended, no `anchoredAt` or `countFrom`.
  */
 export function restartedSeries(task: Task & { recurrence: Recurrence }, records: readonly OccurrenceRecord[], today: LocalDate, weekStart: WeekStart): Recurrence {
 	const rec = task.recurrence;
@@ -646,10 +631,8 @@ export function restartedSeries(task: Task & { recurrence: Recurrence }, records
 		const next = generate(compile(rec), dayNum(today), Infinity, weekStart).next();
 		if (next.done !== true) anchor = dateOf(next.value);
 	}
-	// A yearly series takes its month and day from the anchor: a Feb 29 one restarts on its next Feb 29, so the
-	// copy does not fall on Feb 28 for good.
-	const yearly = ruleAt(rec, anchor);
-	if (yearly.freq === "yearly" && !yearly.afterCompletion && rec.anchor.slice(5) === "02-29") anchor = nextLeapDay(rec.anchor, intervalOf(yearly), anchor);
+	// A yearly rule takes its month and day from the anchor: a copy of a Feb 29 series is anchored on its clamped
+	// date (Feb 28), so it falls on Feb 28 in leap years too (Repeating tasks rule 17).
 	const versions = [{ effectiveFrom: anchor, rule: explicitRule(ruleAt(rec, anchor), rec.anchor) }];
 	const end: RepeatEnd = rec.end.kind === "date" && rec.end.date < anchor ? { kind: "never" } : rec.end;
 	const { anchoredAt: _moved, countFrom: _counted, ...rest } = rec;

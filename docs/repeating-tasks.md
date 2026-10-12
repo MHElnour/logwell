@@ -79,4 +79,4 @@ Each completed occurrence adds a row to the Completed group of the task's views.
 
 ## Duplicate or delete a repeating task
 
-**Duplicate** makes a copy without history, starting on the current occurrence if that is not past, else the next date from today. A copy of a yearly repeat on Feb 29 starts on its next Feb 29. **Delete** moves the task and its history to the Trash; deleting it for good removes both. The [CSV export](export.md) lists every done or skipped occurrence.
+**Duplicate** makes a copy without history, starting on the current occurrence if that is not past, else the next date from today. A copy of a yearly repeat on Feb 29 repeats on Feb 28, so in leap years it is one day before the original. **Delete** moves the task and its history to the Trash; deleting it for good removes both. The [CSV export](export.md) lists every done or skipped occurrence.
