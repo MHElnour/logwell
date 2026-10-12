@@ -231,7 +231,7 @@ describe("a range joined by until or till", () => {
 	// Repeating tasks rule 19 (#12): a date range joined by `until` or `till` (`Oct 12 until Dec 1`, `tomorrow until 5pm`)
 	// is chrono's range, as for `to`: without a typed repeat it stays ONE visible suggestion and nothing is applied
 	// silently (no start, no end, no deadline from it). Under a typed repeat it is the repeat's start and end
-	// (issue-12-repeat-range.test.ts). A lone `until <date>` is a repeat end under a repeat and a deadline without one. A
+	// (repeat-range.test.ts). A lone `until <date>` is a repeat end under a repeat and a deadline without one. A
 	// typed end under a repeat picked by hand is checked against that repeat.
 	// Wednesday 2026-10-07 10:00 in each zone.
 

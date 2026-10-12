@@ -59,7 +59,7 @@ function loadRec(recurrence: unknown): { value: Recurrence | null; issues: strin
 
 const ruleOf = (r: { value: Recurrence | null }) => r.value?.versions[0]?.rule;
 
-describe("recurrence reader (M7 D2)", () => {
+describe("recurrence reader (D2)", () => {
 	it("a valid recurrence loads unchanged with no issue", () => {
 		const r = loadRec(rec());
 		expect(r.issues).toEqual([]);
@@ -307,7 +307,7 @@ function loadRecords(records: Obj[], tasks: Obj[] = [taskWith(rec())]) {
 	return load({ tasks, occurrenceRecords: records });
 }
 
-describe("occurrence record reader (M7 D2)", () => {
+describe("occurrence record reader (D2)", () => {
 	it("a valid record loads with the defaults filled in", () => {
 		const r = loadRecords([record(), record({ occurrenceDate: "2026-10-07", status: "skipped", auto: true, completedOn: undefined })]);
 		expect(r.issues).toEqual([]);

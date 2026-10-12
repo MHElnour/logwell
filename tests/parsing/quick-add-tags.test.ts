@@ -12,7 +12,7 @@ const parse = (input: string) => {
 };
 
 describe("Quick Add unique tag names", () => {
-	it("#6: @calls finds the tag under another parent and makes no new tag", () => {
+	it("@calls finds the tag under another parent and makes no new tag", () => {
 		const r = parse("Ring mum @Calls");
 		expect(r.chips).toHaveLength(1);
 		expect(r.chips[0]).toMatchObject({ kind: "tag", tagKey: "home/calls" });
@@ -20,11 +20,11 @@ describe("Quick Add unique tag names", () => {
 		expect(r.title).toBe("Ring mum");
 	});
 
-	it("#6: @work/calls makes no chip either", () => {
+	it("@work/calls makes no chip either", () => {
 		expect(parse("x @work/calls").chips).toEqual([]);
 	});
 
-	it("#6: two new tags of one name in one input: the second stays in the title", () => {
+	it("two new tags of one name in one input: the second stays in the title", () => {
 		const ctx = makeCtx();
 		const r = parseQuickAdd("Ring mum @home/calls @work/calls", { ...ctx, tags: [] });
 		expect(r.chips).toHaveLength(1);
@@ -35,7 +35,7 @@ describe("Quick Add unique tag names", () => {
 		expect(parseQuickAdd("x @home/calls y @home/calls", { ...ctx, tags: [] }).fields.newTags).toEqual(["home/calls"]);
 	});
 
-	it("#6: a new child's parent name is taken in the same input: another tag of that name stays in the title (#9)", () => {
+	it("a new child's parent name is taken in the same input: another tag of that name stays in the title (#9)", () => {
 		const ctx = makeCtx();
 		const r = parseQuickAdd("Ring mum @home/calls @work/home", { ...ctx, tags: [] });
 		expect(r.fields.newTags).toEqual(["home/calls"]);
@@ -44,7 +44,7 @@ describe("Quick Add unique tag names", () => {
 		expect(parseQuickAdd("Ring mum @home/calls @home", { ...ctx, tags: [] }).fields.newTags).toEqual(["home/calls", "home"]);
 	});
 
-	it("#6: a digits-only name is a tag once a tag of that name exists, like a parent made with its child (#9)", () => {
+	it("a digits-only name is a tag once a tag of that name exists, like a parent made with its child (#9)", () => {
 		const ctx = makeCtx();
 		const tags = [
 			{ key: "2024", displayName: "2024" },
@@ -57,11 +57,11 @@ describe("Quick Add unique tag names", () => {
 		expect(parseQuickAdd("File the forms @2024", { ...ctx, tags: [] }).title).toBe("File the forms @2024");
 	});
 
-	it("#6: a tag named like its parent makes no chip", () => {
+	it("a tag named like its parent makes no chip", () => {
 		expect(parse("x @Garden/garden").chips).toEqual([]);
 	});
 
-	it("#6: the existing tag still resolves, and a new unique name is still a new tag", () => {
+	it("the existing tag still resolves, and a new unique name is still a new tag", () => {
 		expect(parse("x @Home/Calls").chips[0]).toMatchObject({ kind: "tag", tagKey: "home/calls" });
 		expect(parse("x @home/garden").chips[0]).toMatchObject({ kind: "tag", tagKey: "home/garden", newTag: true });
 		expect(parse("x @home").chips[0]).toMatchObject({ kind: "tag", tagKey: "home", newTag: true });
@@ -178,24 +178,24 @@ describe("tag depth", () => {
 	};
 
 	describe("Quick Add tag depth", () => {
-		it("#23: @a/b still makes a new-tag chip", () => {
+		it("@a/b still makes a new-tag chip", () => {
 			const r = parse("x @a/b");
 			expect(r.chips[0]).toMatchObject({ kind: "tag", newTag: true, tagKey: "a/b" });
 			expect(r.fields.newTags).toEqual(["a/b"]);
 		});
 
-		it("#23: @a/b/c makes no chip, creates no tag and stays in the title", () => {
+		it("@a/b/c makes no chip, creates no tag and stays in the title", () => {
 			const r = parse("x @a/b/c");
 			expect(r.chips).toEqual([]);
 			expect(r.fields.newTags ?? []).toEqual([]);
 			expect(r.title).toBe("x @a/b/c");
 		});
 
-		it("#23: an empty segment counts: @a//b is not a new tag", () => {
+		it("an empty segment counts: @a//b is not a new tag", () => {
 			expect(parse("x @a//b").chips).toEqual([]);
 		});
 
-		it("#23: an existing deeper tag still resolves, with no newTag", () => {
+		it("an existing deeper tag still resolves, with no newTag", () => {
 			const r = parse("x @A/B/C", [{ key: "a/b/c", displayName: "A/B/C" }]);
 			expect(r.chips[0]).toMatchObject({ kind: "tag", tagKey: "a/b/c" });
 			expect(r.chips[0]?.newTag).toBeUndefined();

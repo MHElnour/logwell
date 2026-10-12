@@ -40,7 +40,7 @@ function loaded(text: string) {
 }
 
 describe("focus sessions in the file (D1)", () => {
-	it("adds no schema version of its own (v4 is M7's, v5 issue #6's, v6 #12's)", () => {
+	it("adds no schema version of its own", () => {
 		expect(CURRENT_SCHEMA_VERSION).toBe(6); // other features bumped it; focus sessions added none
 	});
 
@@ -201,7 +201,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(r.issues.length).toBe(2);
 	});
 
-	it("clean-up 3: modifiedAt round-trips byte for byte after finalizedAt; records without it stay without", () => {
+	it("modifiedAt round-trips byte for byte after finalizedAt; records without it stay without", () => {
 		const base = load(emptyDbText());
 		const withIt = session("f-1", { modifiedAt: "2026-10-02T09:00:00.000Z" });
 		const text = serializeDb({ ...base, focusSessions: new Map([["f-1", withIt], ["f-2", session("f-2")]]) });
@@ -215,7 +215,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(serializeDb(r.data)).toBe(text);
 	});
 
-	it("clean-up 3: an unreadable modifiedAt is dropped with an issue", () => {
+	it("an unreadable modifiedAt is dropped with an issue", () => {
 		const r = loaded(withRaw([{ ...session("f-1"), modifiedAt: 5 }]));
 		expect(r.data.focusSessions.get("f-1")!.modifiedAt).toBeUndefined();
 		expect(r.issues.length).toBe(1);

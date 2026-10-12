@@ -442,7 +442,7 @@ describe("A9 resolution", () => {
 });
 
 describe("A10 recurrence", () => {
-	it("M7: a form Quick Add builds becomes a rule and leaves the title (REC-07, D8)", () => {
+	it("a form Quick Add builds becomes a rule and leaves the title (REC-07, D8)", () => {
 		const r = parse("Gym every monday");
 		expect(r.chips[0]).toMatchObject({ kind: "recurrence", status: "applied", rule: { freq: "weekly", interval: 1, weekdays: ["MO"], monthly: null, afterCompletion: false, time: null, tz: null } });
 		expect(r.title).toBe("Gym");

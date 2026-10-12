@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { type CalMount, click, mountCal, settle } from "./m3-helpers";
+import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
 
 // Reading `scrollLeft` of the Quick Add input after every commit forces a synchronous layout of everything the
 // commit changed (350-475 ms at 50,000 tasks). The editor aligns the highlight layer only when its own content

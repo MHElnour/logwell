@@ -60,7 +60,7 @@ function loaded(text: string) {
 const lineOf = (text: string, id: string) => text.split("\n").find((l) => l.includes(`"id":"${id}"`))!;
 
 describe("habits and check-ins in the file (D1)", () => {
-	it("adds no schema version of its own (v4 is M7's, v5 issue #6's, v6 #12's), and the empty database is unchanged", () => {
+	it("adds no schema version of its own, and the empty database is unchanged", () => {
 		expect(CURRENT_SCHEMA_VERSION).toBe(6);
 		expect(emptyDbText()).toBe(
 			'{"format":"checkpoint-db","schemaVersion":6,"dbId":"db-1","revision":"r-000000000000","baseRevision":null,"history":[],"writtenBy":"d-other","writtenAt":"2026-10-01T08:00:00.000Z",\n' +
@@ -242,7 +242,7 @@ describe("check-in repairs on load (D1)", () => {
 		expect(r.issues).toHaveLength(1);
 	});
 
-	it("review #4: keeps it deleted with a fixed instant when no time is readable", () => {
+	it("keeps it deleted with a fixed instant when no time is readable", () => {
 		const r = loaded(withRaw([], [{ ...checkin("c-1"), deletedAt: 5, modifiedAt: 5, createdAt: null }]));
 		expect(r.data.checkins.get("c-1")?.deletedAt).toBe("1970-01-01T00:00:00.000Z");
 	});

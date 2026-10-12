@@ -26,7 +26,7 @@ function setup() {
 	return { fs, clock, backups: new BackupStore(fs, "root", clock) };
 }
 
-describe("BackupStore listing (review #11)", () => {
+describe("BackupStore listing", () => {
 	it("lists snapshots and conflicts from their names, without reading the files", async () => {
 		const { fs, clock, backups } = setup();
 		await backups.writeSnapshot("hourly", dbText("r-older", "2026-10-01T08:00:00.000Z"));

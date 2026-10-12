@@ -182,7 +182,7 @@ describe("setRepeat: editing a series (REC-06, B22)", () => {
 		]);
 	});
 
-	it("G1: an edit back to the previous rule on the same day leaves one version; A → B stays two", async () => {
+	it("an edit back to the previous rule on the same day leaves one version; A → B stays two", async () => {
 		const h = await setup();
 		const a = rule({ freq: "weekly" }); // Fridays (weekdays null)
 		const b = rule({ freq: "weekly", weekdays: ["MO", "FR"] });
@@ -928,7 +928,7 @@ describe("the repeating branches of TaskService", () => {
 		});
 	});
 
-	describe("deep-review fixes in TaskService", () => {
+	describe("TaskService and repeating tasks", () => {
 		it("M3: complete queued behind a setRepeat refuses instead of ending the series", async () => {
 			const h = await setup();
 			const t = (await h.app.tasks.create({ title: "Gym" })).task;

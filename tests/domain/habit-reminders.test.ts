@@ -134,8 +134,8 @@ describe("checkReminders (D10)", () => {
 	});
 });
 
-describe("review fixes (D10)", () => {
-	it("#8: a time set for the next minute fires when it is first seen at its own minute", () => {
+describe("edge minutes and zero values (D10)", () => {
+	it("a time set for the next minute fires when it is first seen at its own minute", () => {
 		// Set at 19:59:45 for 20:00; the host's first check after the save is at 20:00:05.
 		const r = checkReminders([read], idx(), seen(DAY, {}), at("20:00"));
 		expect(r.due).toEqual([read]);
@@ -143,13 +143,13 @@ describe("review fixes (D10)", () => {
 		expect(r.state.fired).toEqual({});
 	});
 
-	it("#8: a time first seen after its minute is armed, not fired", () => {
+	it("a time first seen after its minute is armed, not fired", () => {
 		const r = checkReminders([read], idx(), seen(DAY, {}), at("20:07"));
 		expect(r.due).toEqual([]);
 		expect(r.state.fired).toEqual({ r: true });
 	});
 
-	it("#5: a check-in of value 0 does not silence the reminder", () => {
+	it("a check-in of value 0 does not silence the reminder", () => {
 		const gym = habit("g", [ver("2026-09-01", { type: "quantity", target: 30, unit: "km", period: "week" }, { kind: "weekly" })], { reminder: { time: "18:00" } });
 		expect(checkReminders([gym], idx(ci("g", DAY, 0)), seen(DAY, { g: "18:00" }), at("18:00")).due).toEqual([gym]);
 		const med = habit("m", [ver("2026-09-01")], { reminder: { time: "18:00" } });

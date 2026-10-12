@@ -54,7 +54,7 @@ describe("schema fixtures (spec §17.3)", () => {
 	});
 });
 
-describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to v5, issue #6, then to v6, #12)", () => {
+describe("frozen v2 fixture (migrates to v3, D2, then to v4, D1, then to v5, then to v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v2.cpbase"), "utf8");
 
 	it("migrates with no issues; the output is the v2 text plus the version and empty sections and syncLinks collections", () => {
@@ -85,7 +85,7 @@ describe("frozen v2 fixture (migrates to v3, K1b D2, then to v4, M7 D1, then to 
 	});
 });
 
-describe("frozen v3 fixture (K1b sections)", () => {
+describe("frozen v3 fixture (sections)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v3.cpbase"), "utf8");
 
 	it("migrates to v6 with no issues; the output is the v3 text with the version changed and an empty syncLinks collection", () => {
@@ -115,7 +115,7 @@ describe("frozen v3 fixture (K1b sections)", () => {
 	});
 });
 
-describe("v2 to v3 migration (K1b D2)", () => {
+describe("v2 to v3 migration (D2)", () => {
 	const v2Text = readFileSync(join(FIXTURES, "schema-v2.cpbase"), "utf8");
 	const step = MIGRATIONS.find((m) => m.from === 2);
 
@@ -179,7 +179,7 @@ describe("v2 to v3 migration (K1b D2)", () => {
 	});
 });
 
-describe("v3 to v4 migration (M7 D1)", () => {
+describe("v3 to v4 migration (D1)", () => {
 	const v3Text = readFileSync(join(FIXTURES, "schema-v3.cpbase"), "utf8");
 	const step = MIGRATIONS.find((m) => m.from === 3);
 
@@ -232,7 +232,7 @@ describe("v3 to v4 migration (M7 D1)", () => {
 	});
 });
 
-describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6, and v6, #12)", () => {
+describe("frozen v4 fixture (migrates to v5, and v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v4.cpbase"), "utf8");
 	const GYM = "4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8";
 	const RENT = "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d";
@@ -293,7 +293,7 @@ describe("frozen v4 fixture (M7 recurrence; migrates to v5, issue #6, and v6, #1
 	});
 });
 
-describe("v4 to v5 migration (issue #6, SYNC-11)", () => {
+describe("v4 to v5 migration (SYNC-11)", () => {
 	const v4Text = readFileSync(join(FIXTURES, "schema-v4.cpbase"), "utf8");
 	const step = MIGRATIONS.find((m) => m.from === 4);
 
@@ -331,7 +331,7 @@ describe("v4 to v5 migration (issue #6, SYNC-11)", () => {
 	});
 });
 
-describe("frozen v5 fixture (issue #6, sync links; migrates to v6, #12)", () => {
+describe("frozen v5 fixture (sync links; migrates to v6, #12)", () => {
 	const text = readFileSync(join(FIXTURES, "schema-v5.cpbase"), "utf8");
 
 	it("migrates to v6 with no issues; the output is the v5 text with the version changed", () => {

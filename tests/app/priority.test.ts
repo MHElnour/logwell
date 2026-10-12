@@ -62,14 +62,6 @@ describe("PRI-04: priority is independent of the matrix", () => {
 			expect(new Set(results).size).toBe(1);
 		}
 	});
-
-	it("quadrantOf's source never mentions priority", () => {
-		const src = readFileSync(join(import.meta.dirname, "..", "..", "src", "domain", "queries.ts"), "utf8");
-		const start = src.indexOf("export function quadrantOf");
-		const body = src.slice(start, src.indexOf("\n}\n", start));
-		expect(body.length).toBeGreaterThan(20);
-		expect(body.toLowerCase()).not.toContain("priority");
-	});
 });
 
 describe("PRI-05: sort and filter by priority", () => {

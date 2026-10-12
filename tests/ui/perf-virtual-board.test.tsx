@@ -11,8 +11,8 @@ import type { UiHost } from "../../src/ui/host";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { settle } from "./m4-helpers";
-import { U1Host } from "./u1-helpers";
+import { settle } from "./matrix-helpers";
+import { U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // A board column with more than VIRTUAL_THRESHOLD

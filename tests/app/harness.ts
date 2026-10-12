@@ -107,6 +107,7 @@ export async function makeWritable(h: AppHarness, saved: string, revision = "r-r
 	h.app.store.notifyStatus();
 }
 
+// Each app gets its own copy, so a test that overrides one setting (weekStart) never changes another test's app.
 const SETTINGS = { zone: () => "Europe/Berlin", noteFolder: () => "Task notes", upcomingDays: () => 14, weekStart: () => "MO" as const, eveningTime: () => "20:00" };
 
 export interface AppHarnessOptions {
@@ -121,7 +122,7 @@ export async function appHarness(options: AppHarnessOptions = {}): Promise<AppHa
 	const h = storeHarness(options.initial, undefined, options.wrapFile);
 	await h.store.open();
 	const notes = new FakeNotes();
-	const app = new CheckpointApp(h.store, h.clock, sequentialIds("a"), SETTINGS, notes, options.renames);
+	const app = new CheckpointApp(h.store, h.clock, sequentialIds("a"), { ...SETTINGS }, notes, options.renames);
 	return { ...h, app, notes };
 }
 
@@ -134,7 +135,7 @@ export async function reopen(h: AppHarness, renames: RenameQueuePort): Promise<A
 	h.app.store.bus.clear();
 	const store = h.newStore();
 	await store.open();
-	const app = new CheckpointApp(store, h.clock, sequentialIds("b"), SETTINGS, h.notes, renames);
+	const app = new CheckpointApp(store, h.clock, sequentialIds("b"), h.app.settings, h.notes, renames);
 	await app.tasks.resumeRenames();
 	return { ...h, store, app };
 }

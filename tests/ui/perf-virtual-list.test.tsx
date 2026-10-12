@@ -10,8 +10,8 @@ import { TaskList } from "../../src/ui/TaskList";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { dragTo, press, releaseAt, settle } from "./m4-helpers";
-import { U1Host } from "./u1-helpers";
+import { dragTo, press, releaseAt, settle } from "./matrix-helpers";
+import { U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // A Tasks list above VIRTUAL_THRESHOLD rows draws

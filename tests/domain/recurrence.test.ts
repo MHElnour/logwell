@@ -6,7 +6,7 @@ import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-
 
 const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
 
-describe("occurrencesBetween (M7 D3, REC-01, decisions 1 and 2)", () => {
+describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 	it("daily: every day from the anchor, never before it", () => {
 		expect(occurrencesBetween(series("2026-10-01", rule()), "2026-09-28", "2026-10-04", "MO")).toEqual([
 			"2026-10-01",
@@ -584,7 +584,7 @@ describe("startRecurrence (make repeating: Quick Add and setRepeat)", () => {
 	});
 });
 
-describe("M7 deep-review fixes in the engine", () => {
+describe("engine limits, counts and catch-up", () => {
 	it("H1: an interval above 999 is refused, and a huge stored one never hangs", () => {
 		expect(repeatRuleProblem(rule({ interval: 999 }))).toBeNull();
 		expect(repeatRuleProblem(rule({ interval: 1000 }))).toBe("Repeat every 1 to 999.");

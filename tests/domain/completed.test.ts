@@ -80,7 +80,7 @@ describe("Today scope", () => {
 
 describe("Upcoming scope", () => {
 	const up: CompletedScope = { kind: "upcoming" };
-	it("holds dates from tomorrow to today + days (K1a D1)", () => {
+	it("holds dates from tomorrow to today + days (D1)", () => {
 		expect(inScope(task("a", { scheduled: day("2026-10-02") }), up)).toBe(true);
 		expect(inScope(task("b", { scheduled: day("2026-10-08") }), up)).toBe(true);
 		expect(inScope(task("c", { deadline: day("2026-10-04") }), up)).toBe(true);
@@ -134,7 +134,7 @@ describe("subtasks (SUB-07, spec §7)", () => {
 	});
 });
 
-describe("a completed subtask and a parent that is not in the view (#98)", () => {
+describe("a completed subtask and a parent that is not in the view", () => {
 	const parentOpen = task("p", { status: "open", completedAt: null });
 	const sub = task("s", { parentId: "p" });
 	const byId = new Map([["p", parentOpen]]);
@@ -147,7 +147,7 @@ describe("a completed subtask and a parent that is not in the view (#98)", () =>
 		expect(completedGroup(tasks, byId, { kind: "inbox" }, ctx, new Set(), new Set()).map((e) => e.task.id)).toEqual(["s"]);
 		expect(completedGroup(tasks, byId, { kind: "inbox" }, ctx, new Set(), new Set(["p"]))).toEqual([]);
 	});
-	it("takes the shown rows as a test of the parent as well as a set of IDs (issue 41)", () => {
+	it("#41: takes the shown rows as a test of the parent as well as a set of IDs", () => {
 		const asked: string[] = [];
 		const shown = (yes: boolean) => (t: Task) => (asked.push(t.id), yes);
 		expect(isKeptUnderParent(sub, byId, shown(true))).toBe(true);
@@ -159,7 +159,7 @@ describe("a completed subtask and a parent that is not in the view (#98)", () =>
 	});
 });
 
-describe("inViewScope: the open rows a view lists (issue 41)", () => {
+describe("#41: inViewScope: the open rows a view lists", () => {
 	const open = (patch: Partial<Task>) => task("o", { status: "open", completedAt: null, ...patch });
 	it("Today lists what is due by today; Upcoming what is dated in its range and not due by today", () => {
 		expect(inViewScope(open({ scheduled: day("2026-09-28") }), TODAY, ctx)).toBe(true);

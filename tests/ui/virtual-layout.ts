@@ -1,4 +1,4 @@
-import { settle } from "./u1-helpers";
+import { settle } from "./app-helpers";
 
 // A tiny block layout for happy-dom, which has none, for the windowed-list tests.
 // Every element stacks its children top to bottom; a rule gives the height of leaves (a row, a heading, a

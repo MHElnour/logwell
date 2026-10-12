@@ -171,7 +171,7 @@ describe("QuickAddSuggest open state", () => {
 		expect(suggest.isShowing()).toBe(false);
 	});
 
-	it("stays closed after a pick until the user edits the text (PLAN #126)", () => {
+	it("stays closed after a pick until the user edits the text", () => {
 		const bound: unknown[] = [];
 		const input = document.createElement("input");
 		input.value = "Read #Stu";

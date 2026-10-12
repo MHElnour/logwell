@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import type { MenuItemSpec, MenuSpec } from "../../src/ui/host";
-import { type CalMount, click, settle } from "./m3-helpers";
+import { type CalMount, click, settle } from "./calendar-helpers";
 
 // The ⋯ "View options" menu. The test host records each menu it is asked to show.
 

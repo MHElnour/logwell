@@ -7,8 +7,8 @@
 // it opens the section it needs, and `afterEach` closes modals, menus and Quick Add and puts the clock back.
 //
 // The steps are those of the specs that cover each scenario on its own: notes.e2e.ts (tasks, notes, subtasks),
-// quick-add.e2e.ts (Quick Add), m3-calendar.e2e.ts (complete and reschedule), m6-habits.e2e.ts (habits),
-// m5-focus.e2e.ts (focus recovery) and m4-matrix.e2e.ts (matrix drag), plus a recurring part (a weekly series completed
+// quick-add.e2e.ts (Quick Add), calendar.e2e.ts (complete and reschedule), habits.e2e.ts (habits),
+// focus.e2e.ts (focus recovery) and matrix.e2e.ts (matrix drag), plus a recurring part (a weekly series completed
 // three times, then edited, keeps its three done rows). Keep the mouse off the Obsidian window during the matrix drag.
 import { browser, expect } from "@wdio/globals";
 import {
@@ -88,7 +88,7 @@ async function openTaskDetails(id: string): Promise<WebdriverIO.Element> {
 	return section;
 }
 
-// -- calendar helpers (m3-calendar.e2e.ts) -----------------------------------------------------------------
+// -- calendar helpers (calendar.e2e.ts) -----------------------------------------------------------------
 
 async function entriesOf(taskId: string): Promise<number> {
 	return browser.execute((id) => {
@@ -126,7 +126,7 @@ async function setDetailsInput(label: string, value: string): Promise<void> {
 	if (!found) throw new Error(`no details input "${label}"`);
 }
 
-// -- matrix helpers (m4-matrix.e2e.ts) ---------------------------------------------------------------------
+// -- matrix helpers (matrix.e2e.ts) ---------------------------------------------------------------------
 
 async function quadrantOfCard(id: string): Promise<string> {
 	return browser.execute((taskId) => {
@@ -135,7 +135,7 @@ async function quadrantOfCard(id: string): Promise<string> {
 	}, id);
 }
 
-// -- focus helpers (m5-focus.e2e.ts) -----------------------------------------------------------------------
+// -- focus helpers (focus.e2e.ts) -----------------------------------------------------------------------
 
 async function visibleFocus(): Promise<WebdriverIO.Element> {
 	await browser.executeObsidian(async ({ plugins }) => {
@@ -189,7 +189,7 @@ async function stopFocus(): Promise<void> {
 	});
 }
 
-// -- habit helpers (m6-habits.e2e.ts) ----------------------------------------------------------------------
+// -- habit helpers (habits.e2e.ts) ----------------------------------------------------------------------
 
 const QUANTITY = { type: "quantity", target: 30, unit: "min", period: "day" } as const;
 
