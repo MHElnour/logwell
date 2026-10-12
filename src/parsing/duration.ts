@@ -1,5 +1,5 @@
 import { MAX_DURATION_MIN } from "../domain/tasks";
-import { isSpaceChar, LIST_SEP_PATTERN, wordBoundaryBefore } from "./text";
+import { isSpaceChar, LIST_SEP_PATTERN, scanFor } from "./text";
 
 // "for <duration>". Matched by hand-written sticky regexes
 // so a long input cannot cause catastrophic backtracking.
@@ -68,19 +68,17 @@ export function findDurations(
 	s: string,
 	taken: (start: number, end: number) => boolean,
 ): { start: number; end: number; minutes: number }[] {
-	const out: { start: number; end: number; minutes: number }[] = [];
-	const re = /for/giu;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(s)) !== null) {
-		const start = m.index;
-		if (!wordBoundaryBefore(s, start)) continue;
-		let i = start + 3;
-		if (!isSpaceChar(s.charAt(i))) continue;
-		while (i < s.length && isSpaceChar(s.charAt(i))) i++;
-		const d = matchDurationAt(s, i);
-		if (!d || taken(start, d.end)) continue;
-		out.push({ start, end: d.end, minutes: d.minutes });
-		re.lastIndex = d.end;
-	}
-	return out;
+	return scanFor(
+		s,
+		0,
+		(start) => {
+			let i = start + 3;
+			if (!isSpaceChar(s.charAt(i))) return null;
+			while (i < s.length && isSpaceChar(s.charAt(i))) i++;
+			const d = matchDurationAt(s, i);
+			return d ? { start, end: d.end, minutes: d.minutes } : null;
+		},
+		(found) => found,
+		taken,
+	);
 }

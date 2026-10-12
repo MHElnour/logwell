@@ -60,11 +60,12 @@ function every(other: string | undefined, count: string | undefined): number | n
 
 const plain = (freq: RepeatRule["freq"], n: number): Body => ({ freq, interval: n, weekdays: null, monthly: null });
 
-const DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
+// The whole body is one day part ("every morning").
+const REPEAT_DAY_PART_RE = new RegExp(`^${DAY_PART_PATTERN}$`, "u");
 
 /** The part after "every ", lower case, single spaces, without the time. */
 function parseBody(body: string): Body | null {
-	if (body === "day" || DAY_PART_RE.test(body)) return plain("daily", 1);
+	if (body === "day" || REPEAT_DAY_PART_RE.test(body)) return plain("daily", 1);
 	if (body === "weekday") return { freq: "weekly", interval: 1, weekdays: [...EVERY_WEEKDAY], monthly: null };
 	if (body === "weekend") return { freq: "weekly", interval: 1, weekdays: ["SA", "SU"], monthly: null };
 	if (body === "week") return plain("weekly", 1);

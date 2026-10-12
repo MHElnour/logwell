@@ -2,7 +2,7 @@ import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
 import { LOCAL_FORMAT, addDays, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
-import { isSpaceChar, MASK_CHAR, wordBoundaryBefore } from "./text";
+import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -17,7 +17,8 @@ const STOP_LIST = new Set(["may", "sun", "sat", "march", "second", "now"]);
 const BARE_DURATION_RE =
 	/^(?:at\s+)?\d+(?:\.\d+)?\s*(?:h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?|d|days?|w|wks?|weeks?)$/iu;
 const VAGUE_UNIT_RE = /^(?:the\s+)?(?:day|week|month|year)$/iu;
-const DAY_PART_RE = /\b(?:noon|midnight|morning|afternoon|evening|night|tonight)\b/iu;
+// A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
+const DATE_DAY_PART_RE = new RegExp(`\\b(?:noon|midnight|tonight|${DAY_PART_PATTERN})\\b`, "iu");
 const SHIFT_WORD_RE = /\b(?:next|last|past|previous|coming)\b/iu;
 // "0H:MM" with a leading-zero two-digit hour (01-09) is written 24-hour style and is certain.
 // No lookbehind (iOS): the character before is matched and ignored.
@@ -148,6 +149,13 @@ function isoDate(dt: DateTime): LocalDate | null {
 	return d !== null && isValidLocalDate(d) ? d : null;
 }
 
+/** Today's date on the parse clock (`zoneNow` is the reference time in the parse zone). The one reader of it. */
+export function todayOf(zoneNow: DateTime): LocalDate {
+	const today = isoDate(zoneNow);
+	if (today === null) throw new RangeError("Invalid reference date");
+	return today;
+}
+
 function isWeakText(text: string): boolean {
 	const t = text.trim();
 	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || BARE_DURATION_RE.test(t) || VAGUE_UNIT_RE.test(t);
@@ -168,9 +176,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
 	const parser = DATE_READERS[env.locale];
 	const results = parser.parse(masked, { instant: env.now, timezone: zoneNow.offset }, { forwardDate: true });
-	const today = isoDate(zoneNow);
+	const today = todayOf(zoneNow);
 	const nowLocal = zoneNow.toFormat(LOCAL_FORMAT);
-	if (today === null) throw new RangeError("Invalid reference date");
 	const todayWeekday = zoneNow.weekday % 7; // 0 = Sunday, chrono's numbering
 
 	const out: DateCandidate[] = [];
@@ -213,7 +220,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 
 		let outcome: DateOutcome | null = null;
 		const lowConfidence = r.end != null || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
-		const meridiemKnown = start.isCertain("meridiem") || DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
+		const meridiemKnown = start.isCertain("meridiem") || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
 		if (lowConfidence) {
 			const res = resolveDateSpec(mkValue(date));
 			if (!res) continue;

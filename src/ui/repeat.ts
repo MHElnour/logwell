@@ -1,4 +1,4 @@
-import { EVERY_WEEKDAY, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, weekdayOf } from "../domain/recurrence";
+import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
 import {
 	type LocalDate,
@@ -37,7 +37,7 @@ export function weekdaysFrom(weekStart: WeekStart): Weekday[] {
 
 /** A single-version series for `rule`, so the domain's descriptions (which read the anchor) can be used. */
 export function recurrenceOf(choice: RepeatChoice, anchor: LocalDate): Recurrence {
-	return { anchor, versions: [{ effectiveFrom: anchor, rule: choice.rule }], end: choice.end, endedAt: null };
+	return singleVersionRecurrence(anchor, choice.rule, choice.end);
 }
 
 /** The time of a timed rule is part of what it says: "every Mon at 17:00". */
@@ -244,7 +244,7 @@ export function afterCompletionHint(d: RepeatDraft, today: LocalDate): string {
 	const block = afterCompletionBlock(d);
 	if (block !== null) return block;
 	const n = Number(d.interval);
-	const k = Number.isInteger(n) && n >= 1 && n <= 999 ? n : 1;
+	const k = Number.isInteger(n) && n >= 1 && n <= MAX_INTERVAL ? n : 1;
 	const late = addDays(today, 5);
 	const yearly = d.freq === "yearly";
 	return `Done on ${shortDate(today)} → next ${shortDate(periodsAfter(today, d.freq, k), yearly)}. Done late on ${shortDate(late)} → next ${shortDate(periodsAfter(late, d.freq, k), yearly)}.`;

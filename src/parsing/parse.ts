@@ -1,11 +1,11 @@
 import { DateTime } from "luxon";
-import { periodsAfter, repeatEndProblem } from "../domain/recurrence";
+import { periodsAfter, repeatEndProblem, singleVersionRecurrence } from "../domain/recurrence";
 import type { LocalDate, RepeatFreq, RepeatRule, WeekStart } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
 import { addDays, dateSpecDate } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
-import { findDates, resolveDateSpec, type DateCandidate, type DateOutcome } from "./dates";
+import { findDates, resolveDateSpec, todayOf, type DateCandidate, type DateOutcome } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
@@ -137,8 +137,7 @@ function plainResult(input: string): ParseResult {
 export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const zoneNow = DateTime.fromJSDate(ctx.now, { zone: ctx.zone });
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${ctx.zone}`);
-	const today = zoneNow.toISODate();
-	if (today === null) throw new RangeError("Invalid reference date");
+	const today = todayOf(zoneNow);
 
 	const decisions = usableDecisions(input, ctx);
 	const taken: Span[] = [...decisions.literal, ...decisions.bound.map((d) => d.span)];
@@ -362,7 +361,6 @@ function endDraft(input: string, c: DateCandidate, zone: string): Draft {
 /** Any rule's first date is on or after its anchor; a daily rule's is the anchor itself. */
 const FROM_ANCHOR: RepeatRule = { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
 
-/** The first Feb 29 on or after `today`. */
 /**
  * "every year on <date>": the date read right after "on" is the start. It counts when applied or a choice to make, or
  * when a date picked by hand made it a "Replace date?" suggestion (`readDates`: the picked date is the start, and the
@@ -414,7 +412,7 @@ function bindEnds(chips: Chip[], periods: ReadonlyMap<string, { n: number; freq:
 	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
 	const anchor = date === undefined ? env.start : dateSpecDate(date, env.zone);
 	// A repeat picked by hand is not known here: only its anchor is checked, and the service checks the rest.
-	const series = { anchor, versions: [{ effectiveFrom: anchor, rule: rule ?? FROM_ANCHOR }] };
+	const series = singleVersionRecurrence(anchor, rule ?? FROM_ANCHOR);
 	for (const c of chips) {
 		if (c.kind !== "repeatEnd") continue;
 		const p = periods.get(c.id);

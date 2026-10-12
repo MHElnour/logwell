@@ -1,5 +1,6 @@
 import { pad2 } from "../domain/time";
 import { MONTH_LONG, MONTH_SHORT, type RepeatFreq, type Weekday } from "../domain/types";
+import type { Span } from "./types";
 
 // Small text helpers shared by the tokenizer and the cursor logic, and the parser's vocabulary. No regex
 // lookbehind anywhere in this layer (iOS): boundaries are checked by hand.
@@ -42,6 +43,34 @@ export function isTokenChar(ch: string): boolean {
 /** True at the start of the text or after a character that is not part of a word. */
 export function wordBoundaryBefore(s: string, index: number): boolean {
 	return index <= 0 || !isWordChar(charBefore(s, index));
+}
+
+/**
+ * Every `for` at a word start from `from` on that `read` turns into a result, left to right: `read(at)` gets the index
+ * of the `for` and returns what follows it (or null), `spanOf` gives the text it takes, and a result whose span is
+ * `taken` is skipped. The scan resumes after each kept result. The one scanner of "for <duration>" and "for N times".
+ */
+export function scanFor<T>(
+	s: string,
+	from: number,
+	read: (forAt: number) => T | null,
+	spanOf: (found: T) => Span,
+	taken: (start: number, end: number) => boolean,
+): T[] {
+	const out: T[] = [];
+	const re = /for/giu;
+	re.lastIndex = from;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(s)) !== null) {
+		if (!wordBoundaryBefore(s, m.index)) continue;
+		const found = read(m.index);
+		if (found === null) continue;
+		const span = spanOf(found);
+		if (taken(span.start, span.end)) continue;
+		out.push(found);
+		re.lastIndex = span.end;
+	}
+	return out;
 }
 
 /** `#` and `@` start a token only at the start of the text or after whitespace. */

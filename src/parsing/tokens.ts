@@ -20,6 +20,7 @@ import {
 	isSpaceChar,
 	isWordChar,
 	tokenRunEnd,
+	scanFor,
 	tokenStartAllowed,
 	wordBoundaryBefore,
 } from "./text";
@@ -138,24 +139,21 @@ export interface RepeatToken {
  * sunday"); the parser keeps one only after a repeat it keeps. A comma before it goes with it.
  */
 export function findRepeatCounts(s: string, from: number, taken: Taken): RepeatCount[] {
-	const out: RepeatCount[] = [];
-	const re = /for/giu;
-	re.lastIndex = from;
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(s)) !== null) {
-		if (!wordBoundaryBefore(s, m.index)) continue;
-		let at = m.index;
-		while (at > from && isSpaceChar(charAt(s, at - 1))) at--;
-		if (at > from && s[at - 1] === ",") {
-			at--;
+	return scanFor(
+		s,
+		from,
+		(forAt) => {
+			let at = forAt;
 			while (at > from && isSpaceChar(charAt(s, at - 1))) at--;
-		} else at = m.index;
-		const found = repeatCountAt(s, at);
-		if (found === null || taken(found.span.start, found.span.end)) continue;
-		out.push(found);
-		re.lastIndex = found.span.end;
-	}
-	return out;
+			if (at > from && s[at - 1] === ",") {
+				at--;
+				while (at > from && isSpaceChar(charAt(s, at - 1))) at--;
+			} else at = forAt;
+			return repeatCountAt(s, at);
+		},
+		(found) => found.span,
+		taken,
+	);
 }
 
 const NOT_WORD_AFTER = "(?![\\p{L}\\p{N}])";

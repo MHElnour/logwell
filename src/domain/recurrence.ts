@@ -776,6 +776,11 @@ export interface StartedRecurrence {
 	timeFromSpec: boolean;
 }
 
+/** A series with one version: `rule` from `anchor` on, ending as `end` says (never by default). */
+export function singleVersionRecurrence(anchor: LocalDate, rule: RepeatRule, end: RepeatEnd = { kind: "never" }): Recurrence {
+	return { anchor, versions: [{ effectiveFrom: anchor, rule }], end, endedAt: null };
+}
+
 /**
  * "Make repeating" (Quick Add and setRepeat share it). The anchor is the date of `scheduled` in the
  * display zone, else `fallback`. A timed spec gives the rule its wall time and zone when the rule has
@@ -803,7 +808,7 @@ export function startRecurrence(
 		}
 	}
 	return {
-		recurrence: { anchor, versions: [{ effectiveFrom: anchor, rule: r }], end: end ?? { kind: "never" }, endedAt: null },
+		recurrence: singleVersionRecurrence(anchor, r, end),
 		timeFromSpec,
 	};
 }
