@@ -141,8 +141,9 @@ function shortModal(): HTMLElement {
 	return clip;
 }
 
-describe("issue #85: only the window limits the popover", () => {
+describe("issue #85: only the window limits a top-layer popover", () => {
 	it("a short modal around the bar does not shrink the date popover", async () => {
+		fakePopoverApi();
 		fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 300 });
 		const root = await mountForm(shortModal());
 		dateTool(root).click();
@@ -160,6 +161,7 @@ describe("issue #85: only the window limits the popover", () => {
 		pop.className = "pop";
 		anchor.appendChild(pop);
 		clip.appendChild(anchor);
+		pop.setAttribute("popover", "manual");
 		applyPopoverFit(pop);
 		expect(prop(pop, "--cp-pop-max")).toBe(`${800 - 252 - 8 - 12}px`);
 	});
@@ -173,6 +175,30 @@ describe("issue #85: only the window limits the popover", () => {
 		dateTool(root).click();
 		await settle();
 		expect(prop(datePop(root)!, "--cp-pop-max")).toBe(`${870 - 152 - 8 - 12}px`);
+	});
+});
+
+describe("issue #85: the in-place fallback keeps its container's limits", () => {
+	it("without the Popover API a short modal still limits the date popover", async () => {
+		fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 420 });
+		const root = await mountForm(shortModal());
+		dateTool(root).click();
+		await settle();
+		expect(datePop(root)!.hasAttribute("popover")).toBe(false);
+		expect(prop(datePop(root)!, "--cp-pop-max")).toBe(`${420 - 152 - 8 - 12}px`);
+	});
+
+	it("applyPopoverFit on an in-place popover stops at an overflow:auto parent", () => {
+		fakeLayout({ barTop: 200, popHeight: 480, windowHeight: 800, clipBottom: 600 });
+		const clip = shortModal();
+		const anchor = document.createElement("div");
+		anchor.className = "anchor";
+		const pop = document.createElement("div");
+		pop.className = "pop";
+		anchor.appendChild(pop);
+		clip.appendChild(anchor);
+		applyPopoverFit(pop);
+		expect(prop(pop, "--cp-pop-max")).toBe(`${600 - 252 - 8 - 12}px`);
 	});
 });
 
@@ -311,6 +337,60 @@ describe("issue #85: following the anchor", () => {
 		dateTool(root).click();
 		await settle();
 		layout = { ...layout!, barTop: -200 };
+		document.body.dispatchEvent(new Event("scroll"));
+		await settle();
+		expect(datePop(root)).toBeNull();
+	});
+
+	it("a scroll that leaves the bar where it was does not re-fit the popover", async () => {
+		fakePopoverApi();
+		fakeLayout({ barTop: 100, popHeight: 300, windowHeight: 900 });
+		const root = await mountForm();
+		dateTool(root).click();
+		await settle();
+		const pop = datePop(root)!;
+		const remove = vi.spyOn(pop.style, "removeProperty");
+		document.body.dispatchEvent(new Event("scroll"));
+		expect(remove).not.toHaveBeenCalled();
+	});
+
+	it("a re-fit keeps the popover body's scroll position", async () => {
+		fakePopoverApi();
+		fakeLayout({ barTop: 100, popHeight: 300, windowHeight: 900 });
+		const root = await mountForm();
+		dateTool(root).click();
+		await settle();
+		const pop = datePop(root)!;
+		const body = pop.querySelector<HTMLElement>(".cp-pop-body")!;
+		// The browser clamps the body's scroll position while the max height is reset; emulate that.
+		let stored = 0;
+		Object.defineProperty(body, "scrollTop", {
+			configurable: true,
+			get: () => stored,
+			set: (v: number) => {
+				stored = v;
+			},
+		});
+		body.scrollTop = 120;
+		const remove = pop.style.removeProperty.bind(pop.style);
+		vi.spyOn(pop.style, "removeProperty").mockImplementation((name: string) => {
+			if (name === "--cp-pop-max") stored = 0;
+			return remove(name);
+		});
+		layout = { ...layout!, barTop: 150 };
+		document.body.dispatchEvent(new Event("scroll"));
+		expect(body.scrollTop).toBe(120);
+		expect(prop(pop, "--cp-pop-top")).toBe("210px");
+	});
+
+	it("closes the popover when its bar scrolls out of its scroller, even inside the window", async () => {
+		fakePopoverApi();
+		fakeLayout({ barTop: 100, popHeight: 300, windowHeight: 900, clipBottom: 300 });
+		const root = await mountForm(shortModal());
+		dateTool(root).click();
+		await settle();
+		expect(datePop(root)).not.toBeNull();
+		layout = { ...layout!, barTop: 320 };
 		document.body.dispatchEvent(new Event("scroll"));
 		await settle();
 		expect(datePop(root)).toBeNull();

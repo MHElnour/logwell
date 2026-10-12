@@ -808,9 +808,9 @@ describe("popover fit (short views, Quick Add modal, status bar)", () => {
 		expect(maxOf(datePop(m.root)!)).toBe(`${476 - 152 - 8 - 12}px`);
 	});
 
-	// Issue #85: the popover is placed in the window (top layer), so a clipping container such as the
-	// Quick Add modal no longer limits it; only the window and the status bar do.
-	it("is not limited by a clipping container, like the Quick Add modal (#85)", async () => {
+	// Without the Popover API (this environment) the popover stays in place, so a clipping container
+	// still limits it. In the top layer only the window does (#85, issue-85-popover-layer.test.tsx).
+	it("stops at the bottom of a clipping container, like the Quick Add modal", async () => {
 		fakeLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 420 });
 		const m = await mountForm();
 		const wrapper = document.createElement("div");
@@ -823,7 +823,7 @@ describe("popover fit (short views, Quick Add modal, status bar)", () => {
 		m.root.parentElement!.appendChild(wrapper);
 		wrapper.appendChild(m.root);
 		await click(dateTool(m.root));
-		expect(maxOf(datePop(m.root)!)).toBe(`${900 - 152 - 8 - 12}px`);
+		expect(maxOf(datePop(m.root)!)).toBe(`${420 - 152 - 8 - 12}px`);
 	});
 
 	it("flips above the bar when that has more room", async () => {
