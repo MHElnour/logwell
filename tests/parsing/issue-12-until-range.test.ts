@@ -4,12 +4,13 @@ import type { RepeatRule } from "../../src/domain/types";
 import { parseQuickAdd } from "../../src/parsing";
 import { DATE_READERS } from "../../src/parsing/dates";
 import type { DateLocale, ParseResult } from "../../src/parsing/types";
-import { BERLIN, NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
+import { BERLIN, NY, TOKYO, at, makeCtx } from "./helpers";
 
 // Repeating tasks rule 19 (#12): a date range joined by `until` or `till` (`Oct 12 until Dec 1`, `tomorrow until 5pm`)
-// is chrono's range, as for `to`: it stays ONE visible suggestion and nothing is applied silently (no start, no end,
-// no deadline from it) until #6's range-pairing rule. A lone `until <date>` is a repeat end under a repeat and a
-// deadline without one. A typed end under a repeat picked by hand is checked against that repeat.
+// is chrono's range, as for `to`: without a typed repeat it stays ONE visible suggestion and nothing is applied
+// silently (no start, no end, no deadline from it). Under a typed repeat it is the repeat's start and end
+// (issue-12-repeat-range.test.ts). A lone `until <date>` is a repeat end under a repeat and a deadline without one. A
+// typed end under a repeat picked by hand is checked against that repeat.
 // Wednesday 2026-10-07 10:00 in each zone.
 
 const ZONES = [NY, BERLIN, TOKYO] as const;
@@ -67,25 +68,6 @@ describe.each(ZONES)("a date range in %s", (zone) => {
 		expect(dates[0]?.text).toBe(text);
 	});
 
-	it("under a repeat the repeat applies and the date part stays a visible suggestion, text kept", () => {
-		for (const [input, text] of [
-			["Pills every day starting Oct 12 until Dec 1", "Oct 12 until Dec 1"],
-			["Pills every day starting Oct 12 till Dec 1", "Oct 12 till Dec 1"],
-			["Pills every day Oct 12 until Dec 1", "Oct 12 until Dec 1"],
-			["Standup every day starting Monday until Friday", "Monday until Friday"],
-		] as const) {
-			const r = parse(input, zone);
-			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe("daily");
-			noDateApplied(r);
-			expect(r.chips.find((c) => c.kind === "recurrence")?.status, input).toBe("applied");
-			const date = r.chips.find((c) => c.kind === "scheduled");
-			expect(date?.status, input).toBe("suggestion");
-			expect(date?.text.endsWith(text), input).toBe(true);
-			expect(r.title.endsWith(text), input).toBe(true);
-			expect(r.chips.some((c) => c.status === "invalid"), input).toBe(false);
-		}
-	});
-
 	it("a lone `until <date>` is a repeat end under a repeat and a deadline without one", () => {
 		const withRepeat = parse("Pills every day until Dec 1", zone);
 		expect(withRepeat.title).toBe("Pills");
@@ -95,14 +77,6 @@ describe.each(ZONES)("a date range in %s", (zone) => {
 		expect(alone.title).toBe("Gym");
 		expect(day(alone, "deadline")).toBe("2026-12-01");
 		expect(alone.fields.recurrenceEnd).toBeUndefined();
-	});
-
-	it("a yearly repeat on a date with an `until` range stays visible, never a silent value", () => {
-		const r = parse("Taxes every year on April 15 until Apr 16 2030", zone);
-		expect(r.title).toBe("Taxes every year on April 15 until Apr 16 2030");
-		expect(r.fields.recurrence).toBeUndefined();
-		noDateApplied(r);
-		expect(r.chips.some((c) => c.kind === "recurrence" && c.status === "unsupported")).toBe(true);
 	});
 });
 

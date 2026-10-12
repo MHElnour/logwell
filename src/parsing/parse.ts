@@ -278,7 +278,8 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// chrono reads the text with every taken span masked out.
 	const masked = maskSpans(input, taken);
 	const dates: DateCandidate[] = [];
-	for (const c of findDates(masked, { now: ctx.now, zone: ctx.zone, locale: ctx.locale, ...(ctx.eveningTime !== undefined ? { eveningTime: ctx.eveningTime } : {}) })) {
+	const dateEnv = { now: ctx.now, zone: ctx.zone, locale: ctx.locale, repeatRange: repeatTokens.length > 0, ...(ctx.eveningTime !== undefined ? { eveningTime: ctx.eveningTime } : {}) };
+	for (const c of findDates(masked, dateEnv)) {
 		if (!isTaken(c.span.start, c.span.end)) dates.push(c);
 	}
 
@@ -298,7 +299,11 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A count or a number of periods ends only a typed repeat that stays and comes before it; otherwise it is text.
 	const repeatEnds = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d)).map((d) => d.chip.span.end);
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
-	for (const c of dates) {
+	// A date range led by a start word (`starting Oct 12 to Dec 1`) or right after a typed repeat that stays is that
+	// repeat's start and end (Repeating tasks rule 19); a repeat picked by hand never splits one.
+	const afterRepeat = (at: number): boolean => repeatEnds.some((end) => end <= at && /^[\s,]*$/u.test(input.slice(end, at)));
+	const readings = dates.flatMap((c) => (c.range !== undefined && typed && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, c.range.end] : [c]));
+	for (const c of readings) {
 		if (repeats || !c.repeatOnly) {
 			// `until <date>` without a repeat is a deadline (decision 8). The end of a repeat picked by hand is not a
 			// typed value it replaces, so the hand-picked repeat does not turn it into a suggestion.
