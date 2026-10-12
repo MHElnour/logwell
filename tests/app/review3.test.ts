@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { serializeDb } from "../../src/persistence/serializer";
 import { settle } from "../helpers";
@@ -102,16 +100,5 @@ describe("Data section actions run on the command queue", () => {
 		await h.app.store.restoreRecovered();
 		expect(h.app.store.readOnlyState).toBeNull();
 		expect([...load(h.dbText()).tasks.values()].map((t) => t.title)).toEqual(["kept"]);
-	});
-
-	it("the UI never calls the mutating host methods directly", () => {
-		const dir = join(__dirname, "../../src/ui");
-		const offenders: string[] = [];
-		for (const f of readdirSync(dir)) {
-			if (!/\.tsx?$/.test(f)) continue;
-			const text = readFileSync(join(dir, f), "utf8");
-			if (/\.host\.(restoreSnapshot|restoreRecovered|keepMine|keepTheirs|replaceAll|commit|flush)\b/.test(text)) offenders.push(f);
-		}
-		expect(offenders).toEqual([]);
 	});
 });

@@ -48,3 +48,16 @@ describe("list wording", () => {
 		expect(found).toEqual([]);
 	});
 });
+
+describe("the UI and the store host", () => {
+	// The UI reaches the restore, conflict and write paths through the command queue, never through the store host.
+	it("the UI never calls the mutating host methods directly", () => {
+		const dir = join(ROOT, "ui");
+		const offenders: string[] = [];
+		for (const file of files(dir)) {
+			const text = readFileSync(file, "utf8");
+			if (/\.host\.(restoreSnapshot|restoreRecovered|keepMine|keepTheirs|replaceAll|commit|flush)\b/.test(text)) offenders.push(file.slice(dir.length + 1));
+		}
+		expect(offenders).toEqual([]);
+	});
+});
