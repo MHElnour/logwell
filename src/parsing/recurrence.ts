@@ -1,8 +1,8 @@
 import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, repeatRuleProblem } from "../domain/recurrence";
 import { collapseWhitespace } from "../domain/text";
 import { pad2 } from "../domain/time";
-import type { MonthlyOn, RepeatRule, Weekday } from "../domain/types";
-import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, dayNumber, readClock, weekdayWord } from "./text";
+import { WEEKDAYS, type MonthlyOn, type RepeatRule, type Weekday } from "../domain/types";
+import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, RANGE_TO_PATTERN, WEEKDAY_PATTERN, dayNumber, readClock, weekdayWord } from "./text";
 
 // Quick Add repeats. The tokenizer (tokens.ts) finds the span; this file turns its text into a RepeatRule.
 // Pure; no chrono, no clock.
@@ -35,14 +35,29 @@ interface Body {
 }
 
 const LIST_SPLIT_RE = new RegExp(`${LIST_SEP_PATTERN}|\\s+`, "u");
+// "mon-fri", "monday to friday": every weekday from the first to the last, round the week ("fri-mon").
+const WEEKDAY_RANGE_RE = new RegExp(`(${WEEKDAY_PATTERN})${RANGE_TO_PATTERN}(${WEEKDAY_PATTERN})`, "giu");
 
-/** "mon, wed and fri", "mon wed fri" → ["MO", "WE", "FR"]; null when a word is not a weekday. */
+/** "mon, wed and fri", "mon wed fri", "mon-fri" → ["MO", "WE", "FR"]; null when a word is not a weekday. */
 function weekdayList(text: string): Weekday[] | null {
 	const out: Weekday[] = [];
-	for (const word of text.split(LIST_SPLIT_RE)) {
+	const add = (day: Weekday): void => {
+		if (!out.includes(day)) out.push(day);
+	};
+	const rest = text.replace(WEEKDAY_RANGE_RE, (_, first: string, last: string) => {
+		const from = WEEKDAYS.indexOf(weekdayWord(first)!);
+		const to = WEEKDAYS.indexOf(weekdayWord(last)!);
+		for (let i = from; ; i = (i + 1) % WEEKDAYS.length) {
+			add(WEEKDAYS[i]!);
+			if (i === to) break;
+		}
+		return " ";
+	});
+	for (const word of rest.split(LIST_SPLIT_RE)) {
+		if (word.trim() === "") continue;
 		const day = weekdayWord(word.trim());
 		if (day === undefined) return null;
-		if (!out.includes(day)) out.push(day);
+		add(day);
 	}
 	return out.length === 0 ? null : out;
 }
@@ -146,6 +161,8 @@ function bodyOf(text: string): string {
 	if (text.startsWith("every ")) return text.slice("every ".length);
 	// "mondays and fridays", "the 2nd tuesday of the month", "on mondays": the "on" goes with the repeat.
 	const bare = text.replace(/^on (?:the )?|^the /u, "");
+	// "weekly on mon-fri" reads as "every week on mon-fri".
+	if (bare.startsWith("weekly on ")) return `week on ${bare.slice("weekly on ".length)}`;
 	return Object.hasOwn(BARE_REPEAT_WORDS, bare) ? BARE_REPEAT_WORDS[bare]! : bare;
 }
 

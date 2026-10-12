@@ -150,8 +150,9 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 	});
 });
 
-// Two bare weekdays joined as a range under a repeat name the days of the week, not a start and an end: they stay the
-// one visible suggestion they always were, unless `starting` or `beginning` leads them. [input, title, the chips]
+// Two bare weekdays joined as a range after a repeat form that is complete name the days of the week, not a start and
+// an end: they stay the one visible suggestion they always were, unless `starting` or `beginning` leads them (a range
+// right after `every`, `every week (on)` or `weekly on` is the repeat's weekday list instead). [input, title, the chips]
 const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]> = [
 	["Standup weekly Mon-Fri", "Standup Mon-Fri", ["recurrence applied weekly", "scheduled suggestion Mon-Fri"]],
 	["Standup every week from Monday to Friday", "Standup from Monday to Friday", ["recurrence applied every week", "scheduled suggestion Monday to Friday"]],
@@ -166,9 +167,6 @@ const WEEKDAY_PAIRS: ReadonlyArray<readonly [string, string, readonly string[]]>
 	["Gym every day mon until fri", "Gym mon until fri", ["recurrence applied every day", "scheduled suggestion mon until fri"]],
 	["Gym every month Mon-Fri", "Gym Mon-Fri", ["recurrence applied every month", "scheduled suggestion Mon-Fri"]],
 	["Gym every weekday Mon-Fri", "Gym Mon-Fri", ["recurrence applied every weekday", "scheduled suggestion Mon-Fri"]],
-	["Gym every week mon-fri", "Gym mon-fri", ["recurrence applied every week", "scheduled suggestion mon-fri"]],
-	["Gym every week on mon-fri", "Gym on mon-fri", ["recurrence applied every week", "scheduled suggestion on mon-fri"]],
-	["Gym every week Mon through Fri", "Gym Mon through Fri", ["recurrence applied every week", "scheduled suggestion Mon through Fri"]],
 	["Gym every monday Mon-Fri", "Gym Mon-Fri", ["recurrence applied every monday", "scheduled suggestion Mon-Fri"]],
 ];
 
