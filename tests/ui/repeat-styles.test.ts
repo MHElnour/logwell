@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// The recurrence stylesheet section. happy-dom has no layout, so the rules are checked as text; the visual pass
-// (dark and light, wide and narrow) is done in real Obsidian.
+// The repeat stylesheet section (marked "M7 recurrence" in styles.css). happy-dom has no layout, so the rules are
+// checked as text; the visual pass (dark and light, wide and narrow) is done in real Obsidian.
 
 const css = readFileSync("styles.css", "utf8");
 const MARK = "/* == M7 recurrence == */";
@@ -21,7 +21,7 @@ function selectors(text: string): string[] {
 	return out;
 }
 
-describe("M7 recurrence stylesheet section", () => {
+describe("the repeat stylesheet section", () => {
 	it("is present once, closed, and the last block of the file", () => {
 		expect(css.split(MARK)).toHaveLength(2);
 		expect(css.split(END)).toHaveLength(2);

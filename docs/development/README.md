@@ -8,6 +8,15 @@ Read them in this order:
 2. [`releasing.md`](releasing.md): the version scheme, the release notes rules and how a release is cut.
 3. [`performance.md`](performance.md): how limits are measured, the budgets, the procedure and the latest results.
 
+## Tests
+
+Tests are grouped by feature: one file per feature or part of one (for example `tests/parsing/phrase-table.test.ts`, `tests/parsing/repeat-ends.test.ts`, `tests/ui/repeat-picker.test.tsx`), not one file per issue. A bug fix starts with a failing test in its feature's file, named with the issue number: `it("#88: …")`.
+
+The unit suite runs a sample of the Quick Add repeat grammar grid (`tests/parsing/repeat-grammar-grid.ts`). The whole grid, every repeat form with every title, separator and follower in two zones (about 41,000 cases), runs on demand:
+
+- `npm run test:parser-grid` runs the whole grid against the working tree and exits 1 if a case fails.
+- `node scripts/parser-oracle.mjs --compare <ref>` also reads every grid input with the parser at `<ref>` (a branch, tag or commit, such as `main`) and lists the inputs that read differently. Run it before and after a parser change to see every reading the change moves.
+
 ## Where open work lives
 
 Open work is tracked as GitHub issues, not in a file in the repository.

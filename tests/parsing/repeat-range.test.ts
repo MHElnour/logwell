@@ -54,7 +54,7 @@ const SPLITS: ReadonlyArray<readonly [string, DateLocale, string, string, string
 ];
 
 describe.each(ZONES)("a date range under a typed repeat in %s", (zone) => {
-	it.each(SPLITS)("%s (%s) gives the repeat's start and end", (input, locale, repeat, title, start, until, startText, endText) => {
+	it.each(SPLITS)("#12: %s (%s) gives the repeat's start and end", (input, locale, repeat, title, start, until, startText, endText) => {
 		const r = parse(input, zone, locale);
 		expect(rule(r)).toBe(repeat);
 		expect(r.title).toBe(title);
@@ -66,7 +66,7 @@ describe.each(ZONES)("a date range under a typed repeat in %s", (zone) => {
 		expect(r.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "applied", text: endText });
 	});
 
-	it("reads the same start and end as the end typed before the start", () => {
+	it("#12: reads the same start and end as the end typed before the start", () => {
 		for (const [range, reversed] of [
 			["Gym every day starting Oct 12 until Dec 1", "Gym every day until Dec 1 starting Oct 12"],
 			["Gym every day starting Oct 12 until Oct 1", "Gym every day until Oct 1 starting Oct 12"],
@@ -77,7 +77,7 @@ describe.each(ZONES)("a date range under a typed repeat in %s", (zone) => {
 		}
 	});
 
-	it("an end with its own year before the start is invalid and blocks saving", () => {
+	it("#12: an end with its own year before the start is invalid and blocks saving", () => {
 		const r = parse("Gym every day starting Oct 12 2026 to Oct 1 2026", zone);
 		expect(day(r)).toBe("2026-10-12");
 		const chip = r.chips.find((c) => c.kind === "repeatEnd");
@@ -86,14 +86,14 @@ describe.each(ZONES)("a date range under a typed repeat in %s", (zone) => {
 		expect(r.fields.recurrenceEnd).toBeUndefined();
 	});
 
-	it("a start said on its weekday stays the today-or-next-week choice; the end counts from today", () => {
+	it("#12: a start said on its weekday stays the today-or-next-week choice; the end counts from today", () => {
 		const r = parse("Gym every day starting Wednesday until Friday", zone);
 		expect(r.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "choice", text: "starting Wednesday" });
 		expect(r.fields.scheduled).toBeUndefined();
 		expect(end(r)).toBe("2026-10-09");
 	});
 
-	it("a range that is not right after the repeat and has no start word stays one suggestion", () => {
+	it("#12: a range that is not right after the repeat and has no start word stays one suggestion", () => {
 		const r = parse("Gym every day with Ann Oct 12 to Dec 1", zone);
 		expect(rule(r)).toBe("daily");
 		expect(r.fields.scheduled).toBeUndefined();
@@ -127,7 +127,7 @@ const GUARDS: ReadonlyArray<readonly [string, DateLocale, string, readonly strin
 ];
 
 describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) => {
-	it.each(GUARDS)("%s (%s)", (input, locale, title, chips) => {
+	it.each(GUARDS)("#12: %s (%s)", (input, locale, title, chips) => {
 		const r = parse(input, zone, locale);
 		expect(r.title).toBe(title);
 		const dates = r.chips.filter((c) => c.kind === "scheduled" || c.kind === "deadline" || c.kind === "repeatEnd");
@@ -136,7 +136,7 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 		expect(r.fields.deadline).toBeUndefined();
 	});
 
-	it("a repeat picked by hand never splits a range: it stays one suggestion", () => {
+	it("#12: a repeat picked by hand never splits a range: it stays one suggestion", () => {
 		const daily = { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } as const;
 		const ctx = makeCtx({ zone, now: at(zone, "2026-10-07T10:00"), manual: ["recurrence"] });
 		const r = parseQuickAdd("Gym starting Oct 12 to Dec 1", { ...ctx, pickedRule: daily });
@@ -145,7 +145,7 @@ describe.each(ZONES)("inputs the range rule leaves as they are in %s", (zone) =>
 		expect(r.fields.recurrenceEnd).toBeUndefined();
 	});
 
-	it("the end typed before the start still gives both", () => {
+	it("#12: the end typed before the start still gives both", () => {
 		const r = parse("Gym every day until Dec 1 starting Oct 12", zone);
 		expect([rule(r), r.title, day(r), end(r)]).toEqual(["daily", "Gym", "2026-10-12", "2026-12-01"]);
 	});
@@ -174,7 +174,7 @@ const decide = (r: ParseResult, kind: "scheduled" | "repeatEnd", choose: (c: Par
 
 describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 	describe.each(["en", "en-GB"] as const)("%s", (locale) => {
-		it.each(WEEKDAY_PAIRS)("%s stays one suggestion", (input, title, chips) => {
+		it.each(WEEKDAY_PAIRS)("#12: %s stays one suggestion", (input, title, chips) => {
 			const r = parse(input, zone, locale);
 			expect(r.title).toBe(title);
 			expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`)).toEqual(chips);
@@ -184,13 +184,13 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		});
 	});
 
-	it("a repeat's time that is a choice keeps its form before two weekdays", () => {
+	it("#12: a repeat's time that is a choice keeps its form before two weekdays", () => {
 		const r = parse("Gym every day at 7 Mon-Fri", zone);
 		expect(r.chips.map((c) => `${c.kind} ${c.status} ${c.text}`)).toEqual(["recurrence choice every day at 7", "scheduled suggestion Mon-Fri"]);
 		expect([r.fields.scheduled, r.blocking]).toEqual([undefined, [r.chips[0]!.id]]);
 	});
 
-	it("a date range after a comma is not more repeat words: the repeat keeps its form", () => {
+	it("#12: a date range after a comma is not more repeat words: the repeat keeps its form", () => {
 		for (const [input, start, until] of [
 			["Pills every day, Oct 12 to Dec 1", "Oct 12", "to Dec 1"],
 			["Pills every day, 12 Oct - 1 Dec", "12 Oct", "- 1 Dec"],
@@ -201,7 +201,7 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		}
 	});
 
-	it("a start with its own year whose hour is a choice: the end counts from that date, not today", () => {
+	it("#12: a start with its own year whose hour is a choice: the end counts from that date, not today", () => {
 		for (const [input, until] of [
 			["Gym every day starting Sep 28 2026 at 5 to Oct 3", "2026-10-03"],
 			["Gym every day starting 2026-10-01 at 5 until Oct 5", "2026-10-05"],
@@ -214,12 +214,12 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		}
 	});
 
-	it("two weekdays led by starting are still the start and the end", () => {
+	it("#12: two weekdays led by starting are still the start and the end", () => {
 		const r = parse("Standup every day starting Monday until Friday", zone);
 		expect([rule(r), r.title, day(r), end(r), r.blocking]).toEqual(["daily", "Standup", "2026-10-12", "2026-10-16", []]);
 	});
 
-	it("an end with a past word keeps its reading: a suggestion before the start, invalid once used", () => {
+	it("#12: an end with a past word keeps its reading: a suggestion before the start, invalid once used", () => {
 		const input = "Gym every day starting Monday until last friday";
 		const r = parse(input, zone);
 		expect(day(r)).toBe("2026-10-12");
@@ -235,7 +235,7 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 	it.each([
 		["Gym every day starting Oct 20 until this friday", "until this friday"],
 		["Gym every day starting Oct 20 until tomorrow", "until tomorrow"],
-	])("%s: an end that names its own day before the start is invalid", (input, text) => {
+	])("#12: %s: an end that names its own day before the start is invalid", (input, text) => {
 		const r = parse(input, zone);
 		expect(day(r)).toBe("2026-10-20");
 		const chip = r.chips.find((c) => c.kind === "repeatEnd");
@@ -244,13 +244,13 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		expect(r.fields.recurrenceEnd).toBeUndefined();
 	});
 
-	it("a Feb 29 end after a start with its own year is the next Feb 29 on or after the start: more than a year on, a suggestion", () => {
+	it("#12: a Feb 29 end after a start with its own year is the next Feb 29 on or after the start: more than a year on, a suggestion", () => {
 		const r = parse("Gym every day starting Oct 12 2028 to Feb 29", zone);
 		expect([day(r), end(r), r.blocking]).toEqual(["2028-10-12", undefined, []]);
 		expect(r.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "suggestion", notice: "Use as end date?", end: { kind: "date", date: "2032-02-29" } });
 	});
 
-	it("the end follows the chosen start: Next week ends on the Friday after it", () => {
+	it("#12: the end follows the chosen start: Next week ends on the Friday after it", () => {
 		const input = "Gym every day starting Wednesday until Friday";
 		const r = parse(input, zone);
 		const choose = (label: string) => (c: ParseResult["chips"][number]): SpanDecision => ({ span: c.span, text: c.text, kind: "date", value: c.alternatives!.find((a) => a.label === label)!.value! });
@@ -262,7 +262,7 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 		expect([day(today), end(today), today.blocking, today.title]).toEqual(["2026-10-07", "2026-10-09", [], "Gym"]);
 	});
 
-	it("a month and day end that fits the first choice keeps its reading for Next week: invalid, it blocks saving", () => {
+	it("#12: a month and day end that fits the first choice keeps its reading for Next week: invalid, it blocks saving", () => {
 		const input = "Gym every day starting Wednesday until Oct 10";
 		const r = parse(input, zone);
 		expect(end(r)).toBe("2026-10-10");
@@ -277,7 +277,7 @@ describe.each(ZONES)("range sides under a repeat in %s", (zone) => {
 });
 
 describe("parse time of ranges under a repeat", () => {
-	it("reads ten ranges with a far-off start in 1,000 characters in reasonable time", () => {
+	it("#12: reads ten ranges with a far-off start in 1,000 characters in reasonable time", () => {
 		const unit = "starting Oct 12 9999 until Friday and bring water and towels and snacks for the whole group please ";
 		const input = ("Gym every day " + unit.repeat(10)).slice(0, 1000);
 		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
@@ -285,41 +285,5 @@ describe("parse time of ranges under a repeat", () => {
 		const r = parseQuickAdd(input, ctx);
 		expect(performance.now() - started).toBeLessThan(2000);
 		expect(r.chips.length).toBeGreaterThan(10);
-	});
-});
-
-// A month and day without a year, said on that very day: today (#88), whatever the hour. Tuesday 2028-02-29 21:00 in
-// Tokyo, late enough that chrono's own forward step would have moved it to the next leap day on any host clock.
-// [input, locale, the scheduled value]
-const LEAP_DAYS: ReadonlyArray<readonly [string, DateLocale, string | undefined]> = [
-	["Feb 29 party", "en", "2028-02-29"],
-	["Feb 29 9am party", "en", "2028-02-29T09:00"],
-	["29 Feb party", "en", "2028-02-29"],
-	["02/29 party", "en", "2028-02-29"],
-	["29/02 party", "en", "2028-02-29"],
-	["the 29th of February party", "en", "2028-02-29"],
-	["29 Feb party", "en-GB", "2028-02-29"],
-	["02/29 party", "en-GB", "2028-02-29"],
-	["29/02 party", "en-GB", "2028-02-29"],
-	["the 29th of February party", "en-GB", "2028-02-29"],
-];
-
-// Known defects (#69), not the intended reading: in en-GB, a month name before a leap day reads no date or the day
-// after it. Pinned at what the parser gives today, without a repeat, so a change shows up here; a fix of #69 updates
-// these rows to that day (2028-02-29), as the en rows read. [input, the scheduled value]
-const LEAP_DAY_DEFECTS: ReadonlyArray<readonly [string, string | undefined]> = [
-	["Feb 29 party", undefined],
-	["Feb 29 9am party", "2028-03-01T09:00"],
-];
-
-describe("a leap day without a year or a repeat", () => {
-	it.each(LEAP_DAYS)("%s (%s) is that day", (input, locale, expected) => {
-		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale }));
-		expect(day(r)).toBe(expected);
-	});
-
-	it.each(LEAP_DAY_DEFECTS)("known defect (#69): %s (en-GB) reads as before, not that day", (input, current) => {
-		const r = parseQuickAdd(input, makeCtx({ zone: TOKYO, now: at(TOKYO, "2028-02-29T21:00"), locale: "en-GB" }));
-		expect(day(r)).toBe(current);
 	});
 });

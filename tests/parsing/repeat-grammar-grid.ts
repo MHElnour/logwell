@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { expect } from "vitest";
 import { addDays } from "../../src/domain/time";
 import type { Weekday } from "../../src/domain/types";
 import { parseQuickAdd } from "../../src/parsing";
 import type { Chip, ParseResult } from "../../src/parsing/types";
 import { NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
+
+// The repeat grammar grid (#12), shared by the unit sample in `repeat-grammar.test.ts` and the on-demand run of the
+// whole grid (`npm run test:parser-grid`, `scripts/parser-oracle.mjs`).
 
 // Repeating tasks rule 19 and Tasks and Quick Add rule 40 (#12): where a typed repeat phrase ends and what may follow it.
 // A generated grid, titles × repeat forms × separators × followers, in two environments. The repeat chip's text is the
@@ -13,7 +16,7 @@ import { NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
 // or a list word (`,`, `and`, `&`) joins more repeat words to a form (`every 2nd and 4th tuesday`, `every monday & 2
 // others`). A bare repeat word counts only at the end, after title text; `last friday of the month` counts anywhere.
 
-interface Form {
+export interface Form {
 	text: string;
 	kind: "supported" | "bare" | "unsupported";
 	/** The rule of a kept form, as `ruleKey` spells it; `days`: the weekday list a bare full weekday right after it joins. */
@@ -38,7 +41,7 @@ interface Form {
 }
 
 const list = (text: string, days: Weekday[], interval = 1): Form => ({ text, kind: "supported", days, interval });
-const FORMS: Form[] = [
+export const FORMS: Form[] = [
 	{ text: "every day", kind: "supported", key: "daily" },
 	{ text: "every weekday", kind: "supported", key: "weekly:MO,TU,WE,TH,FR" },
 	{ text: "every weekend", kind: "supported", key: "weekly:SA,SU" },
@@ -99,15 +102,15 @@ const FORMS: Form[] = [
 	{ text: "weekly fri-mon", kind: "bare", days: ["FR", "SA", "SU", "MO"], interval: 1 },
 ];
 
-const TITLES = ["Gym", "Pay the bank", "Plan the May party", "Review for the team", ""];
-const SEPARATORS = ["", ",", " on", " from", " starting", " and"] as const;
-type FollowerKind = "none" | "date" | "leap" | "weekday" | "time" | "range" | "weekdayRange" | "end" | "periods" | "count" | "text" | "number";
-interface Follower {
+export const TITLES = ["Gym", "Pay the bank", "Plan the May party", "Review for the team", ""];
+export const SEPARATORS = ["", ",", " on", " from", " starting", " and"] as const;
+export type FollowerKind = "none" | "date" | "leap" | "weekday" | "time" | "range" | "weekdayRange" | "end" | "periods" | "count" | "text" | "number";
+export interface Follower {
 	text: string;
 	kind: FollowerKind;
 }
 
-interface Env {
+export interface Env {
 	name: string;
 	zone: string;
 	locale: "en" | "en-GB";
@@ -121,12 +124,12 @@ interface Env {
 }
 
 // Wednesday 2026-10-07 in New York, en; Tuesday 2028-02-29 in Tokyo, en-GB.
-const ENVS: Env[] = [
+export const ENVS: Env[] = [
 	{ name: "New York en 2026-10-07", zone: NY, locale: "en", now: "2026-10-07T10:00", today: "2026-10-07", date: "Oct 12", leap: "Feb 29", range: "Oct 12 to Dec 1", rangeEnd: "to Dec 1" },
 	{ name: "Tokyo en-GB 2028-02-29", zone: TOKYO, locale: "en-GB", now: "2028-02-29T21:00", today: "2028-02-29", date: "12 Oct", leap: "29 Feb", range: "12 Oct to 1 Dec", rangeEnd: "to 1 Dec" },
 ];
 
-const followers = (env: Env): Follower[] => [
+export const followers = (env: Env): Follower[] => [
 	{ text: "", kind: "none" },
 	{ text: env.date, kind: "date" },
 	{ text: env.leap, kind: "leap" },
@@ -141,9 +144,9 @@ const followers = (env: Env): Follower[] => [
 	{ text: "20 pages", kind: "number" },
 ];
 
-const inputOf = (title: string, form: string, sep: string, follower: string): string => `${title} ${form}${sep} ${follower}`.replace(/\s+/g, " ").trim();
-const dateOf = (c: Chip | undefined): string | undefined => (c?.date === undefined ? undefined : c.date.kind === "date" ? c.date.date : c.date.local.slice(0, 10));
-const chip = (r: ParseResult, kind: Chip["kind"], status?: Chip["status"]): Chip | undefined => r.chips.find((c) => c.kind === kind && (status === undefined || c.status === status));
+export const inputOf = (title: string, form: string, sep: string, follower: string): string => `${title} ${form}${sep} ${follower}`.replace(/\s+/g, " ").trim();
+export const dateOf = (c: Chip | undefined): string | undefined => (c?.date === undefined ? undefined : c.date.kind === "date" ? c.date.date : c.date.local.slice(0, 10));
+export const chip = (r: ParseResult, kind: Chip["kind"], status?: Chip["status"]): Chip | undefined => r.chips.find((c) => c.kind === kind && (status === undefined || c.status === status));
 const DATE_WORDS = /\b(?:Oct|Dec|Feb|until|for|with|Fri)\b/u;
 const WEEK: Weekday[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
@@ -155,7 +158,7 @@ const keyWith = (f: Form, day: Weekday | null): string => {
 	return `weekly${f.interval === 1 ? "" : `/${f.interval}`}:${WEEK.filter((d) => days.includes(d)).join(",")}`;
 };
 
-function check(env: Env, title: string, f: Form, sep: string, w: Follower): void {
+export function check(env: Env, title: string, f: Form, sep: string, w: Follower): void {
 	const input = inputOf(title, f.text, sep, w.text);
 	const r = parseQuickAdd(input, makeCtx({ zone: env.zone, locale: env.locale, now: at(env.zone, env.now) }));
 	const rec = chip(r, "recurrence");
@@ -338,136 +341,33 @@ function check(env: Env, title: string, f: Form, sep: string, w: Follower): void
 	}
 }
 
-describe("the repeat grammar: where a typed repeat ends and what may follow it (#12)", () => {
-	for (const env of ENVS) {
-		describe(env.name, () => {
-			it.each(FORMS.map((f) => [f.text, f] as const))("%s", (_text, f) => {
-				for (const title of TITLES) for (const sep of SEPARATORS) for (const w of followers(env)) check(env, title, f, sep, w);
-			});
-		});
+/** One grid case: an environment, a title, a form, a separator and a follower. */
+export interface GridCase {
+	env: Env;
+	title: string;
+	form: Form;
+	sep: string;
+	follower: Follower;
+	input: string;
+}
+
+/** Every case of the grid: environments × forms × titles × separators × followers. */
+export function* gridCases(): Generator<GridCase> {
+	for (const env of ENVS) for (const form of FORMS) for (const title of TITLES) for (const sep of SEPARATORS) for (const follower of followers(env)) {
+		yield { env, title, form, sep, follower, input: inputOf(title, form.text, sep, follower.text) };
 	}
+}
 
-	it.each(["en", "en-GB"] as const)("%s: a range of weekdays opening a list is every weekday from the first to the last", (locale) => {
-		const ctx = makeCtx({ zone: NY, locale, now: at(NY, "2026-10-07T10:00") });
-		const rows: [string, string, string][] = [
-			["Gym every mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every monday to friday", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every mon through fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every Mon\u2013Fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every tue-thu", "Gym", "weekly:TU,WE,TH"],
-			["Shop every fri-mon", "Shop", "weekly:MO,FR,SA,SU"],
-			["Gym every mon-fri at 7am", "Gym", "weekly:MO,TU,WE,TH,FR@07:00"],
-			["Gym every week on mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every week mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every 2 weeks on tue-thu", "Gym", "weekly/2:TU,WE,TH"],
-			["Gym every other mon-wed", "Gym", "weekly/2:MO,TU,WE"],
-			["Gym weekly on mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym weekly mon-fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym weekly tue-thu", "Gym", "weekly:TU,WE,TH"],
-			["Shop weekly fri-mon", "Shop", "weekly:MO,FR,SA,SU"],
-			["Gym weekly monday to friday", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym weekly mon through fri", "Gym", "weekly:MO,TU,WE,TH,FR"],
-			["Gym every mon-wed, fri", "Gym", "weekly:MO,TU,WE,FR"],
-		];
-		for (const [input, title, key] of rows) {
-			const r = parseQuickAdd(input, ctx);
-			expect(r.title, input).toBe(title);
-			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe(key);
-			expect(r.fields.scheduled, input).toBeUndefined();
-			expect(r.chips.map((c) => c.kind), input).toEqual(["recurrence"]);
-		}
-		// A time after the bare word is the repeat's, as after every form (`Stretch daily at 7am`).
-		for (const input of ["Gym weekly mon-fri at 7am", "Gym weekly on mon-fri at 7am"]) {
-			const r = parseQuickAdd(input, ctx);
-			expect(ruleKey(r.fields.recurrence!), input).toBe("weekly:MO,TU,WE,TH,FR@07:00");
-			expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`), input).toEqual([`recurrence|applied|${input.slice("Gym ".length)}`]);
-			expect(r.title, input).toBe("Gym");
-		}
-		// A range after a form that takes no list is not its days; `until` leads an end, not a range.
-		const third = parseQuickAdd("Gym every third Mon-Fri", ctx);
-		expect(third.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|unsupported|every third", "scheduled|suggestion|Mon-Fri"]);
-		const daily = parseQuickAdd("Gym every day Mon-Fri", ctx);
-		expect(daily.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day", "scheduled|suggestion|Mon-Fri"]);
-		expect(parseQuickAdd("Gym daily Mon-Fri", ctx).chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|daily", "scheduled|suggestion|Mon-Fri"]);
-		// A bare word counts only at the end, after title text (decision 4): `Weekly Mon-Fri review` keeps its title, and
-		// the weekdays of the dropped phrase are read on their own, the one suggestion a weekday range always is.
-		const review = parseQuickAdd("Weekly Mon-Fri review", ctx);
-		expect([review.title, review.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)]).toEqual(["Weekly Mon-Fri review", ["scheduled|suggestion|Mon-Fri"]]);
-		expect(review.fields.recurrence).toBeUndefined();
-		// Dates as the locale reads them (en-GB takes `Nov 30` for a year, #69).
-		const [nov30, dec1] = locale === "en" ? ["Nov 30", "Dec 1"] : ["30 Nov", "1 Dec"];
-		const until = parseQuickAdd(`Gym every Monday until ${nov30}`, ctx);
-		expect(until.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every Monday", `repeatEnd|applied|until ${nov30}`]);
-		const list = parseQuickAdd(`Gym every week on mon, fri until ${dec1}`, ctx);
-		expect(list.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every week on mon, fri", `repeatEnd|applied|until ${dec1}`]);
+/**
+ * The unit suite's sample of the grid: every form once, the environments, titles, separators and followers taken in
+ * turn so each of them appears too. The whole grid runs on demand: `npm run test:parser-grid`.
+ */
+export function gridSample(): GridCase[] {
+	return FORMS.map((form, i) => {
+		const env = ENVS[i % ENVS.length]!;
+		const title = TITLES[i % TITLES.length]!;
+		const sep = SEPARATORS[i % SEPARATORS.length]!;
+		const follower = followers(env)[(i * 5) % 12]!;
+		return { env, title, form, sep, follower, input: inputOf(title, form.text, sep, follower.text) };
 	});
-
-	it("a plain number after a list word is title text; more repeat words make a compound repeat", () => {
-		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
-		for (const [input, title, key] of [
-			// The comma stays in the title, as it does on every form today (#69 cleans stray punctuation).
-			["Read every day, 20 pages", "Read 20 pages", "daily"],
-			["Read every day and 20 pages", "Read and 20 pages", "daily"],
-			["Call every monday & 2 clients", "Call & 2 clients", "weekly:MO"],
-		] as const) {
-			const r = parseQuickAdd(input, ctx);
-			expect(r.title, input).toBe(title);
-			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe(key);
-			expect(r.fields.scheduled, input).toBeUndefined();
-		}
-		const seven = parseQuickAdd("Gym every day at 7 and 9", ctx);
-		expect(seven.chips.find((c) => c.kind === "recurrence")).toMatchObject({ status: "choice", text: "every day at 7" });
-		expect(seven.fields.scheduled).toBeUndefined();
-		for (const [input, text] of [
-			["Gym every monday & 2 others", "every monday & 2 others"],
-			["Gym every 2nd and 4th tuesday", "every 2nd and 4th tuesday"],
-			["Pay every 15th and 30th", "every 15th and 30th"],
-			["Gym every day, Monday", "every day, Monday"],
-		] as const) {
-			const r = parseQuickAdd(input, ctx);
-			expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`), input).toEqual([`recurrence|unsupported|${text}`]);
-			expect(r.title, input).toBe(input);
-		}
-	});
-
-	it("a date, a range or a lead word right after an unsupported `every …` is read: the phrase ends at its own words", () => {
-		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
-		const rows: [string, string, string[]][] = [
-			// Right after it, the date is the phrase's start as typed: offered, never applied (phrase table 5).
-			["Call every 3 hours Oct 12", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Oct 12"]],
-			["Call every 3 hours Oct 12 to Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Oct 12 to Dec 1"]],
-			["Call every 3 hours Mon-Fri", "every 3 hours", ["recurrence|unsupported|every 3 hours", "scheduled|suggestion|Mon-Fri"]],
-			["Call every 3 hours until Dec 1", "every 3 hours", ["recurrence|unsupported|every 3 hours", "repeatEnd|unsupported|until Dec 1"]],
-			["Taxes every May 5", "every May 5", ["recurrence|unsupported|every May 5"]],
-			["Taxes every May 5 and Dec 25", "every May 5", ["recurrence|unsupported|every May 5", "scheduled|suggestion|Dec 25"]],
-			["Gym every 2nd and 4th tuesday of every month", "every 2nd and 4th tuesday of every month", ["recurrence|unsupported|every 2nd and 4th tuesday of every month"]],
-			["Gym every 2nd, 4th tuesday", "every 2nd, 4th tuesday", ["recurrence|unsupported|every 2nd, 4th tuesday"]],
-		];
-		for (const [input, text, chips] of rows) {
-			const r = parseQuickAdd(input, ctx);
-			expect(r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`), input).toEqual(chips);
-			expect(r.title, input).toContain(text);
-		}
-	});
-
-	it("a form keeps its words before a bare weekday, a day number or a unit that is not joined to it", () => {
-		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
-		const rows: [string, string, string | undefined, string | undefined][] = [
-			["Gym every 3 days monday", "Gym", "daily/3", "2026-10-12"],
-			// Both the bare hour and a weekday said on that weekday are choices: nothing applies, the title keeps the text.
-			["Gym every monday at 7 wednesday", "Gym every monday at 7 wednesday", undefined, undefined],
-			["Gym every month 15th", "Gym 15th", "monthly", undefined],
-			["Read every day 20 pages", "Read 20 pages", "daily", undefined],
-			["Run every day first thing", "Run first thing", "daily", undefined],
-			["Gym every month day 15", "Gym day 15", "monthly", undefined],
-		];
-		for (const [input, title, key, date] of rows) {
-			const r = parseQuickAdd(input, ctx);
-			expect(r.title, input).toBe(title);
-			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe(key);
-			expect(dateOf(chip(r, "scheduled", "applied")), input).toBe(date);
-		}
-		// A bare hour in the repeat is a choice; the weekday after it is still a date (a choice too, said on a Wednesday).
-		expect(parseQuickAdd("Gym every monday at 7 wednesday", ctx).chips.map((c) => `${c.kind}|${c.status}`)).toEqual(["recurrence|choice", "scheduled|choice"]);
-	});
-});
+}
