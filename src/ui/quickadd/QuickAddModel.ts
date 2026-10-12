@@ -211,6 +211,17 @@ export class QuickAddModel {
 		this.focusTick++;
 	}
 
+	/**
+	 * A value picked by hand for `field`. The hand pick wins again over the typed chips of that field: an earlier "use
+	 * it" (accept) of one of them is forgotten, so the chip is a "Replace …?" suggestion again (a repeat end belongs to
+	 * the repeat).
+	 */
+	private pickManual(field: ManualFieldName): void {
+		this.manual.add(field);
+		const spans = this.result.chips.filter((c) => (c.kind === "repeatEnd" ? "recurrence" : c.kind) === field).map((c) => c.span);
+		this.decisions = this.decisions.filter((d) => d.kind !== "accept" || !spans.some((s) => s.start === d.span.start && s.end === d.span.end));
+	}
+
 	private clearManual(field: ManualFieldName): void {
 		if (field === "category" && this.parent !== undefined) return; // fixed by the parent task
 		this.manual.delete(field);
@@ -497,7 +508,7 @@ export class QuickAddModel {
 
 	setDate(date: string): void {
 		const before = this.dateInputs();
-		this.manual.add("scheduled");
+		this.pickManual("scheduled");
 		this.vals.date = date;
 		this.vals.time = date === "" ? "" : before.time;
 		if (date === "" && this.presetDate() === null) this.manual.delete("scheduled");
@@ -506,7 +517,7 @@ export class QuickAddModel {
 
 	setTime(time: string): void {
 		const before = this.dateInputs();
-		this.manual.add("scheduled");
+		this.pickManual("scheduled");
 		this.vals.date = before.date;
 		this.vals.time = time;
 		this.update();
@@ -515,7 +526,7 @@ export class QuickAddModel {
 	setDeadline(date: string): void {
 		this.vals.deadline = date;
 		if (date === "") this.manual.delete("deadline");
-		else this.manual.add("deadline");
+		else this.pickManual("deadline");
 		this.update();
 	}
 
@@ -529,7 +540,7 @@ export class QuickAddModel {
 			this.manual.delete("recurrence");
 			this.vals.repeat = null;
 		} else {
-			this.manual.add("recurrence");
+			this.pickManual("recurrence");
 			this.vals.repeat = choice;
 		}
 		this.update();
@@ -538,13 +549,13 @@ export class QuickAddModel {
 	setDuration(raw: string): void {
 		this.vals.duration = raw;
 		if (raw === "") this.manual.delete("duration");
-		else this.manual.add("duration");
+		else this.pickManual("duration");
 		this.update();
 	}
 
 	setCategory(id: ID): void {
 		if (this.parent !== undefined) return;
-		this.manual.add("category");
+		this.pickManual("category");
 		this.vals.categoryId = id;
 		this.update();
 	}
@@ -552,7 +563,7 @@ export class QuickAddModel {
 	setNote(path: string | null): void {
 		this.vals.notePath = path;
 		if (path === null) this.manual.delete("note");
-		else this.manual.add("note");
+		else this.pickManual("note");
 		this.update();
 	}
 
@@ -564,7 +575,7 @@ export class QuickAddModel {
 	 */
 	setPriority(priority: Priority): void {
 		if (!isPriority(priority)) throw new RangeError("Priority must be 0, 1, 2 or 3");
-		this.manual.add("priority");
+		this.pickManual("priority");
 		this.vals.priority = priority;
 		this.update();
 	}

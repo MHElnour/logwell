@@ -106,6 +106,30 @@ describe("Quick Add repeat end (#12)", () => {
 		expect([...h.app.store.state.tasks.values()][0]!.recurrence?.end).toEqual({ kind: "date", date: "2026-12-01" });
 	});
 
+	it("picking a repeat again after using a typed end forgets that use: the new pick's end wins", async () => {
+		const { m } = await model();
+		m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "count", count: 5 } });
+		m.setInput("Pills until Dec 1");
+		m.accept(m.result.chips.find((c) => c.kind === "repeatEnd")!);
+		expect(m.repeatValue()?.end).toEqual({ kind: "date", date: "2026-12-01" });
+		m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "count", count: 10 } });
+		expect(m.repeatValue()?.end).toEqual({ kind: "count", count: 10 });
+		expect(m.result.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "suggestion", notice: "Replace repeat end?" });
+	});
+
+	it("picking a date again after using a typed date makes it a suggestion again", async () => {
+		const { m } = await model();
+		m.setInput("Call tomorrow");
+		m.setDate("2026-10-20");
+		const chip = m.result.chips.find((c) => c.kind === "scheduled")!;
+		expect(chip.status).toBe("suggestion");
+		m.accept(chip);
+		expect(m.result.chips.find((c) => c.kind === "scheduled")?.status).toBe("applied");
+		m.setDate("2026-10-21");
+		expect(m.result.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "suggestion", notice: "Replace date?" });
+		expect(m.result.title).toBe("Call tomorrow");
+	});
+
 	it("a cleared date in a view with a preset counts from today, as the save does", async () => {
 		for (const [input, end] of [
 			["Stretch daily for 2 weeks", { kind: "date", date: "2026-10-20" }],

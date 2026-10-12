@@ -81,6 +81,42 @@ export function leadBefore(s: string, index: number): { start: number; kind: Lea
 	return best;
 }
 
+/**
+ * A month and day with no year that does not exist in the year chrono assumes (Feb 29 in 2027) moves to the first
+ * later year where it exists, from today on (at most 8 years: the next Feb 29). chrono would drop it as an
+ * impossible date. Today comes from chrono's own zone-adjusted reference.
+ */
+const rollover: chrono.Refiner = {
+	refine(context, results) {
+		const ref = context.createParsingComponents();
+		const today = `${ref.get("year") ?? 0}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
+		for (const r of results) {
+			const s = r.start;
+			if (!s.isCertain("month") || !s.isCertain("day") || s.isCertain("year") || s.isValidDate()) continue;
+			const implied = s.get("year") ?? 0;
+			const monthDay = `${pad2(s.get("month") ?? 0)}-${pad2(s.get("day") ?? 0)}`;
+			for (let year = implied; year <= implied + 8; year++) {
+				const date = `${year}-${monthDay}`;
+				if (isValidLocalDate(date) && date >= today) {
+					s.assign("year", year);
+					break;
+				}
+			}
+		}
+		return results;
+	},
+};
+
+/** chrono's casual English and en-GB readers, with the year rollover first. Clones: chrono's shared instances stay as they are. */
+function buildChrono(base: chrono.Chrono): chrono.Chrono {
+	const reader = base.clone();
+	reader.refiners.unshift(rollover);
+	return reader;
+}
+
+/** The one date reader per locale, built once at load. */
+export const DATE_READERS: Readonly<Record<DateLocale, chrono.Chrono>> = { en: buildChrono(chrono.en.casual), "en-GB": buildChrono(chrono.en.GB) };
+
 export interface DateEnv {
 	now: Date;
 	zone: string;
@@ -130,7 +166,7 @@ function wordBefore(s: string, index: number, word: string): number {
 export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const zoneNow = DateTime.fromJSDate(env.now, { zone: env.zone });
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
-	const parser = env.locale === "en-GB" ? chrono.en.GB : chrono.en.casual;
+	const parser = DATE_READERS[env.locale];
 	const results = parser.parse(masked, { instant: env.now, timezone: zoneNow.offset }, { forwardDate: true });
 	const today = isoDate(zoneNow);
 	const nowLocal = zoneNow.toFormat(LOCAL_FORMAT);
@@ -232,7 +268,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
 			kind = "deadline";
 		}
-		out.push({ kind, span: { start: spanStart, end: r.index + r.text.length }, textStart: r.index, repeatOnly, outcome });
+		// chrono's text can end in spaces ("April 15, " before "for 3 times"); the span stops at the date.
+		out.push({ kind, span: { start: spanStart, end: r.index + r.text.trimEnd().length }, textStart: r.index, repeatOnly, outcome });
 	}
 	return out;
 }

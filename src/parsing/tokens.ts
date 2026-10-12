@@ -130,24 +130,27 @@ export interface RepeatToken {
 	end: RepeatCount | null;
 	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
 	onDate: boolean;
-	/** "Feb 29" after "every year on": the start is the next Feb 29. */
-	leapDay: Span | null;
 }
 
-const NO_ON_DATE: Pick<RepeatToken, "onDate" | "leapDay"> = { onDate: false, leapDay: null };
-const LEAP_DAY_RE = /\s+((?:feb(?:ruary)?\.?\s+29(?:th)?|29(?:th)?\s+(?:of\s+)?feb(?:ruary)?))(?![\p{L}\p{N}])/iyu;
-
 /**
- * `for N <periods>` or `for N times` anywhere in the text: with a typed repeat it is the repeat's end, never part of
- * a date ("every day starting Friday for 2 weeks"). The parser asks only when a repeat is typed.
+ * `for N <periods>` or `for N times` from `from` on (the end of the first typed repeat): a repeat's end, never part
+ * of a date ("every day starting Friday for 2 weeks"). Before a repeat it is title text ("Plan meals for 7 days every
+ * sunday"); the parser keeps one only after a repeat it keeps. A comma before it goes with it.
  */
-export function findRepeatCounts(s: string, taken: Taken): RepeatCount[] {
+export function findRepeatCounts(s: string, from: number, taken: Taken): RepeatCount[] {
 	const out: RepeatCount[] = [];
 	const re = /for/giu;
+	re.lastIndex = from;
 	let m: RegExpExecArray | null;
 	while ((m = re.exec(s)) !== null) {
 		if (!wordBoundaryBefore(s, m.index)) continue;
-		const found = repeatCountAt(s, m.index);
+		let at = m.index;
+		while (at > from && isSpaceChar(charAt(s, at - 1))) at--;
+		if (at > from && s[at - 1] === ",") {
+			at--;
+			while (at > from && isSpaceChar(charAt(s, at - 1))) at--;
+		} else at = m.index;
+		const found = repeatCountAt(s, at);
 		if (found === null || taken(found.span.start, found.span.end)) continue;
 		out.push(found);
 		re.lastIndex = found.span.end;
@@ -175,7 +178,7 @@ const EVERY_RE = new RegExp(
 		`|${DAY_NUMBER_PATTERN}(?:${OF_MONTH})?` +
 		`|(?:(?:other\\s+)?month|\\d+\\s*months?)${MONTH_ON}` +
 		// "every year on May 5": the date after "on" is the start, read by the date reader.
-		`|(?:(?:other\\s+)?year|\\d+\\s*years?)(?:\\s+on(?=\\s+(?:${MONTH_PATTERN}|\\d)))?` +
+		`|(?:(?:other\\s+)?year|\\d+\\s*years?)(?:\\s+on(?:\\s+the)?(?=\\s+(?:${MONTH_PATTERN}|\\d)))?` +
 		`|(?:(?:other\\s+)?week|\\d+\\s*weeks?)\\s+(?:on\\s+)?${WEEKDAY_LIST}` +
 		`|other\\s+(?:${PERIOD}${NOT_WORD_AFTER}|${WEEKDAY_LIST})` +
 		`|\\d+\\s*${PERIOD}s?` +
@@ -274,10 +277,10 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 	const out: RepeatToken[] = [];
 	const free = (start: number, end: number): boolean =>
 		!taken(start, end) && !out.some((t) => (t.span.start < end && start < t.span.end) || (t.end !== null && t.end.span.start < end && start < t.end.span.end));
-	const push = (span: Span, bare: boolean, supported: boolean, on: Pick<RepeatToken, "onDate" | "leapDay"> = NO_ON_DATE): number => {
-		const found = on.onDate ? null : repeatCountAt(s, span.end);
+	const push = (span: Span, bare: boolean, supported: boolean, onDate = false): number => {
+		const found = onDate ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported, end, ...on });
+		out.push({ span, bare, supported, end, onDate });
 		return end === null ? span.end : end.span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {
@@ -307,15 +310,12 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 			end = repeatWordsEnd(s, body);
 			supported = false;
 			if (end === body) continue;
-		} else if (/\son$/iu.test(main[0])) {
-			// "every year on <date>": the date is the start. Feb 29 is read here (the date reader takes no Feb 29 in a
-			// year without one); parse.ts makes any other unreadable date unsupported.
+		} else if (/\son(?:\sthe)?$/iu.test(main[0])) {
+			// "every year on (the) <date>": the date reader reads the start; parse.ts makes the repeat unsupported when
+			// none is read there.
 			end = start + main[0].length;
 			if (!free(start, end)) continue;
-			const leap = sticky(LEAP_DAY_RE, s, end);
-			const leapDay = leap === null ? null : { start: end + leap[0].length - leap[1]!.length, end: end + leap[0].length };
-			push({ start, end }, false, true, { onDate: true, leapDay });
-			re.lastIndex = Math.max(re.lastIndex, leapDay?.end ?? end);
+			re.lastIndex = push({ start, end }, false, true, true);
 			continue;
 		} else {
 			// A form followed by more repeat words ("every 2nd and 4th tuesday", "every monday at 7 wednesday") is not

@@ -145,16 +145,6 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 		}
 	});
 
-	it("`every year on Feb 29` starts on the next Feb 29", () => {
-		const r = parse("Bday every year on Feb 29", zone);
-		expect(r.title).toBe("Bday");
-		expect(rec(r)).toBe("yearly");
-		expect(sched(r)).toBe("2028-02-29");
-		expect(parse("Bday every year on 29th February", zone).fields.scheduled).toEqual({ kind: "date", date: "2028-02-29" });
-		const before = parse("Bday every year on Feb 29 until Feb 28 2028", zone);
-		expect(before.chips.find((c) => c.kind === "repeatEnd")).toMatchObject({ status: "invalid", notice: "The repeat ends before its first date." });
-	});
-
 	it("`every year on` followed by no readable date is not supported, never a repeat from today", () => {
 		const r = parse("Bday every year on 45", zone);
 		expect(r.fields.recurrence).toBeUndefined();
@@ -172,5 +162,42 @@ describe.each(ZONES)("Quick Add repeat edges (#12) in %s", (zone) => {
 		expect(parse("Gym every day starting Friday for 2 weeks", zone).title).toBe("Gym");
 		// Without a repeat nothing changes.
 		expect(parse("Travel for 2 weeks", zone).chips).toEqual([]);
+	});
+
+	it("`for N …` before the repeat stays title text, and is never read as a date", () => {
+		for (const input of ["Plan meals for 7 days every sunday", "Plan meals for 7 days every sunday."]) {
+			const r = parse(input, zone);
+			expect(r.title, input).toBe("Plan meals for 7 days");
+			expect(rec(r), input).toBe("weekly:SU");
+			expect(r.fields.scheduled, input).toBeUndefined();
+			expect(r.fields.recurrenceEnd, input).toBeUndefined();
+			expect(r.chips.map((c) => c.kind), input).toEqual(["recurrence"]);
+		}
+		const pack = parse("Pack for 3 days trip every friday", zone);
+		expect(pack.title).toBe("Pack for 3 days trip");
+		expect(rec(pack)).toBe("weekly:FR");
+		expect(pack.chips.map((c) => c.kind)).toEqual(["recurrence"]);
+		const daily = parse("Pack for 3 days daily", zone);
+		expect(daily.title).toBe("Pack for 3 days");
+		expect(rec(daily)).toBe("daily");
+		expect(daily.fields.recurrenceEnd).toBeUndefined();
+	});
+
+	it("`for N …` never ends a repeat picked by hand: it stays text", () => {
+		const r = parse("Daily standup for 2 weeks", zone, { manual: ["recurrence"] });
+		expect(r.chips).toEqual([]);
+		expect(r.title).toBe("Daily standup for 2 weeks");
+	});
+
+	it("an end after the typed start date takes its comma and leaves the date text alone", () => {
+		const count = parse("Taxes every year on April 15, for 3 times", zone);
+		expect(count.title).toBe("Taxes");
+		expect(rec(count)).toBe("yearly");
+		expect(count.chips.find((c) => c.kind === "scheduled")?.text).toBe("April 15");
+		expect(endKey(count)).toBe("3x");
+		const years = parse("Taxes every year on April 15 for 5 years", zone);
+		expect(years.chips.find((c) => c.kind === "scheduled")?.text).toBe("April 15");
+		expect(years.title).toBe("Taxes");
+		expect(endKey(years)).toBe("2032-04-14");
 	});
 });

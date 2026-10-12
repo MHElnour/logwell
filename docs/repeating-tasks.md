@@ -29,7 +29,7 @@ A subtask cannot repeat, but a repeating task can have subtasks: they come back 
 | `every 15th`, `every 1st of the month`, `every month on the 15th`, `every 3 months on day 5` | On that day of the month |
 | `every first monday`, `every last friday of the month`, `last friday of the month` | On that weekday of the month: first to fourth, or last |
 | `every last day of the month` | On the month's last day |
-| `every year on May 5`, `every year on Feb 29` | Yearly, starting on that date (the next Feb 29 for Feb 29) |
+| `every year on May 5`, `every year on the 29th of February` | Yearly, starting on that date. A date with no year starts on its next one, so Feb 29 starts on the next leap day |
 
 At the end of the text, after the title, a single word also repeats: `daily`, `weekly`, `fortnightly`, `monthly`, `yearly`, `annually`, `weekdays`, `weekends`, or weekdays in the plural such as `mondays` or `mondays and fridays`. So `Stretch daily` repeats, but `Daily standup` keeps its title.
 
@@ -41,9 +41,9 @@ End the repeat in the same line:
 | --- | --- |
 | `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ends on Dec 1` | On that date, the last occurrence included |
 | `for 5 times`, `5 times` | After 5 times |
-| `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the task's first date: the date you type, pick or the view gives, else today |
+| `for 2 weeks`, `for 3 mondays`, `for 6 months` | After that many weeks, Mondays or months from the task's first date: the date you type, pick or the view gives, else today. Only after the repeat: `Plan meals for 7 days every sunday` keeps "for 7 days" in the title |
 
-An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. If you picked the repeat in the picker, a typed end ends it; when the picked repeat already has an end, the typed one is offered as a replacement.
+An end that leaves no occurrence, such as `every friday until Wednesday` typed on a Monday, is refused: its chip says so, the text stays in the title, and the task cannot be saved until you fix the end or remove its chip. A count goes up to 999 times. Without a repeat, `until Dec 1` is a deadline, `ending` and `starting` stay part of the title, and `for 30m` is always a duration. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text); when the picked repeat already has an end, the typed one is offered as a replacement.
 
 A repeat Quick Add cannot make yet, such as `every 3 hours` or `every 2nd and 4th tuesday`, stays in the title marked "Recurrence not supported yet", and is never read as a date. Counting from completion is set in the picker.
 

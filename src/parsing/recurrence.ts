@@ -89,7 +89,7 @@ function parseBody(body: string): Body | null {
 	}
 
 	// "year", "other year", "3 years"; a trailing "on" leads into the typed date ("every year on May 5").
-	const year = /^(?:(other)\s+|(\d+)\s*)?(years?)(?: on)?$/u.exec(body);
+	const year = /^(?:(other)\s+|(\d+)\s*)?(years?)(?: on(?: the)?)?$/u.exec(body);
 	if (year !== null) {
 		if (year[1] === undefined && year[2] === undefined && year[3] === "years") return null;
 		const n = every(year[1], year[2]);
