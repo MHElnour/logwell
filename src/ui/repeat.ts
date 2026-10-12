@@ -278,14 +278,20 @@ function endOfDraft(d: RepeatDraft): RepeatEnd {
 	return NEVER_END;
 }
 
-/** Why the draft cannot be saved (the domain's message for the rule, or for the end in a series from `anchor`), or null. */
-export function draftProblem(d: RepeatDraft, anchor: LocalDate, weekStart: WeekStart = "MO"): string | null {
+/**
+ * Why the draft cannot be saved (the domain's message for the rule, or for the end in a series from `anchor`), or null.
+ * `kept`, the end the value being edited already stores, passes unchanged, as the services let it (a count above 999
+ * from an older file is not refused by the picker it was opened in).
+ */
+export function draftProblem(d: RepeatDraft, anchor: LocalDate, weekStart: WeekStart = "MO", kept?: RepeatEnd): string | null {
 	const rule = ruleOfDraft(d);
 	const problem = repeatRuleProblem(rule);
 	if (problem !== null) return problem;
 	// An empty date field asks for a date; every other end check is the domain's.
 	if (d.endKind === "date" && !isValidLocalDate(d.endDate)) return "Pick an end date.";
-	return repeatEndProblem(endOfDraft(d), recurrenceOf({ rule: normalizeRepeatRule(rule), end: NEVER_END }, anchor), weekStart);
+	const end = endOfDraft(d);
+	if (end.kind === "count" && kept?.kind === "count" && kept.count === end.count) return null;
+	return repeatEndProblem(end, recurrenceOf({ rule: normalizeRepeatRule(rule), end: NEVER_END }, anchor), weekStart);
 }
 
 /** The value of a valid draft, in its stored form. */

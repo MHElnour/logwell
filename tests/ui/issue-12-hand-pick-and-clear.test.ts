@@ -42,7 +42,8 @@ describe("a hand-picked date over a typed yearly start (#12)", () => {
 		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
 		const task = [...h.app.store.state.tasks.values()][0]!;
 		expect(task.recurrence).toMatchObject({ anchor: "2026-11-01", versions: [{ rule: { freq: "yearly" } }] });
-		expect(task.title).toBe("Birthday");
+		// The typed start stays an offer, so its text stays in the title (Tasks and Quick Add rule 23).
+		expect(task.title).toBe("Birthday May 5 at 7");
 	});
 });
 
@@ -96,7 +97,7 @@ describe("choosing a typed repeat's hour (#12)", () => {
 		expect(m.result.blocking).toEqual([]);
 		expect(await m.submit()).toBe("saved");
 		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
-		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toBeUndefined();
+		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toBeNull();
 		m.setInput("Gym every monday at 9");
 		m.activate(m.result.chips.find((c) => c.id === chip.id)!);
 		m.setChipRule(m.result.chips[0]!, chip.alternatives![1]!.rule!);

@@ -145,7 +145,7 @@ export function RepeatCustom(props: PickerEnv & { value: RepeatChoice | null; on
 		rootRef.current?.querySelector<HTMLElement>(".cp-repeat-num")?.focus();
 	}, []);
 
-	const problem = draftProblem(draft, anchor, props.weekStart);
+	const problem = draftProblem(draft, anchor, props.weekStart, props.value?.end);
 	const block = afterCompletionBlock(draft);
 	const summary = problem ?? capitalize(repeatLine(choiceOfDraft(draft), anchor, today, true, props.seriesAnchor));
 

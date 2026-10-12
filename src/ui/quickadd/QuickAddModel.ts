@@ -272,15 +272,14 @@ export class QuickAddModel {
 
 	/**
 	 * The date popover's Clear: removes the manual date, time, deadline, duration and repeat, and keeps
-	 * the text of any applied typed date, deadline, duration or repeat chip literal (like x on the chip).
+	 * the text of any applied typed date, deadline, duration or repeat chip literal (like x on the chip). A repeat end
+	 * goes with its repeat whatever its status (invalid, waiting), so it never comes back as a deadline on its own.
 	 * Focus stays where it is.
 	 */
 	clearDateFields(): void {
 		for (const chip of this.result.chips) {
-			if (chip.status !== "applied") continue;
-			if (chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence" || chip.kind === "repeatEnd") {
-				this.decide({ span: chip.span, text: chip.text, kind: "literal" });
-			}
+			const dated = chip.kind === "scheduled" || chip.kind === "deadline" || chip.kind === "duration" || chip.kind === "recurrence";
+			if (chip.kind === "repeatEnd" || (dated && chip.status === "applied")) this.decide({ span: chip.span, text: chip.text, kind: "literal" });
 		}
 		for (const field of ["scheduled", "deadline", "duration", "recurrence"] as const) this.clearManual(field);
 		this.update();
@@ -309,15 +308,16 @@ export class QuickAddModel {
 		if (save) void this.submit();
 	}
 
-	/** The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual repeat. */
+	/**
+	 * The chosen reading of a typed repeat's bare hour ("09:00" or "21:00"): like a chosen date, it replaces a manual
+	 * repeat. A repeat's choice never blocks saving, so the pick never saves by itself.
+	 */
 	setChipRule(chip: Chip, rule: RepeatRule): void {
-		const save = this.saveAfterPick && this.openChipId === chip.id;
 		this.decide({ span: chip.span, text: chip.text, kind: "rule", rule });
 		this.clearManual("recurrence");
 		this.closePanel();
 		this.requestFocus({ kind: "chip", id: chip.id });
 		this.update();
-		if (save) void this.submit();
 	}
 
 	/** The picker of an unresolved category chip. */
