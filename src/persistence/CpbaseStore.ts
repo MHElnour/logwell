@@ -730,6 +730,9 @@ export class CpbaseStore {
 		this.disk = diskStateOf(text);
 		this.attempted.clear();
 		this.unsavedCopy = null;
+		// Our version is kept as the conflict copy, so the loaded one is this
+		// device's base from now on: the next open does not report ours as lost.
+		if (!fastForward) this.deps.local.setLastWritten(incoming.meta.dbId, incoming.meta.revision);
 		if (this.readOnly !== null) {
 			this.readOnly = null;
 			this.emit({ type: "writable" });
