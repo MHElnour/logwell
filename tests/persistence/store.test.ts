@@ -1472,3 +1472,87 @@ describe("a torn journal line", () => {
 		expect([...s2.data.tasks.keys()].sort()).toEqual(["t1", "t2", "t3", "t4", "t5"]);
 	});
 });
+
+describe("edits waiting to be saved when the file turns unreadable", () => {
+	function conflictPathOf(events: StoreEvent[]): string {
+		const e = events.find((x) => x.type === "conflict");
+		if (e?.type !== "conflict") throw new Error("no conflict event");
+		return e.path;
+	}
+
+	it("#101: a damaged file repaired to the other side is a conflict, and Keep mine brings the edit back", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState?.reason).toBe("damaged");
+
+		// The merge is resolved to the other side, a descendant of the saved revision.
+		h.fs.files.set(DB_PATH, descendant(good, (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState).toBeNull();
+		expect(h.store.data.tasks.has("theirs")).toBe(true);
+		const path = conflictPathOf(h.events);
+		expect(h.fs.files.get(path)).toContain('"id":"pending"');
+		// One copy holds the edit; the damaged text is the other.
+		expect((await h.store.listConflicts()).filter((c) => h.fs.files.get(c.path)?.includes('"id":"pending"'))).toHaveLength(1);
+
+		await h.store.keepMine(path);
+		expect([...load(h.dbText()).tasks.keys()].sort()).toEqual(["pending", "saved"]);
+	});
+
+	it("#101: a newer-schema file while an edit waits, then a valid file, is a conflict", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		const newer = descendant(good, (d) => d, "r-newer").replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":99');
+		h.fs.files.set(DB_PATH, newer);
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState?.reason).toBe("newer-schema");
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+
+		h.fs.files.set(DB_PATH, descendant(good, (d) => withTask(d, makeTask("back")).next, "r-back"));
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState).toBeNull();
+		expect(h.store.data.tasks.has("back")).toBe(true);
+		expect(h.fs.files.get(conflictPathOf(h.events))).toContain('"id":"pending"');
+	});
+
+	it("#101: closing while the file is damaged points at the copy that holds the edit", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		await h.store.close();
+		const kept = h.events.find((e) => e.type === "pending-saved-as-conflict");
+		if (kept?.type !== "pending-saved-as-conflict") throw new Error("the copy was not announced");
+		expect(h.fs.files.get(kept.path)).toContain('"id":"pending"');
+	});
+
+	it("#101: Restore backup writes the edit, so a later valid file is no conflict", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		await h.store.restoreRecovered();
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+		expect([...h.store.data.tasks.keys()].sort()).toEqual(["pending", "saved", "theirs"]);
+	});
+});
