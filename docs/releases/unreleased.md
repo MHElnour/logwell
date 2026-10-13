@@ -49,6 +49,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#124) Fixed changing the date of a repeating task after **Stop repeating** saying it now repeats from that date while it stayed completed and did not repeat. A repeat that has ended now keeps its date and the notice says to reopen the task first.
 - (#107) Fixed a drag in Today or Upcoming changing the order of tasks you did not drag in their own list: a task with no date between two dragged ones could end up on the other side. Now only the task you drag moves, in every view.
 - (#100) Fixed dates with a time being saved in the computer's own digits when its language writes numbers differently, such as Arabic, Persian or Bengali. Quick Add showed a false daylight saving warning and the database no longer opened. Dates, times and habit reminders now always use 0 to 9, and a database that already holds such a date opens again with those dates repaired.
 - (#88) Typing today's date in Quick Add, such as `Pay Oct 7` on Oct 7, now means today at any time of day, not the same day next year, and weekdays, relative words and dates no longer depend on the computer's time zone. `in 1 hour` counts from the task's own clock even while the computer's clock is skipping an hour for daylight saving.
