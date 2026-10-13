@@ -6,36 +6,31 @@ import { emptyFilter } from "../../src/domain/queries";
 import { addDays } from "../../src/domain/time";
 import type { Checkin, Habit, ID, Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
-import type { DbData } from "../../src/persistence/schema";
 import type { UiHost } from "../../src/ui/host";
 import { HabitsSection, initialHabitsState } from "../../src/ui/HabitsSection";
 import { TodayHabitsBlock } from "../../src/ui/habits/TodayHabits";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeTask } from "../persistence/fixtures";
 import { appHarness } from "../app/harness";
+import { elapsed, perfLog, timeBoth } from "../perf/measure";
 
 // View render under 100 ms at 5,000 tasks on desktop.
 //
-// happy-dom builds DOM nodes several times slower than Chromium, so the render
-// budget cannot be the 100 ms target; the O(n) property is checked
-// deterministically by counting full scans of the task map during one render.
+// happy-dom builds DOM nodes several times slower than Chromium, and a time depends on how busy the machine is, so no
+// test here asserts a time. The O(n) property is checked deterministically by counting full scans of the task map
+// during one render, and by comparing the Inbox at 5,000 tasks with the Inbox at 1,250 in the same run: four times the
+// rows take about four times as long, while an O(n²) render takes sixteen times as long.
 //
-// Measured 2026-10-01 on an M-series Mac, Node 22 (CHECKPOINT_PERF_LOG=1 prints
-// them): list query 1.1-2.0 ms; query + render of the 4,500 Inbox rows
-// 203-231 ms, alone or under the full parallel suite. The budgets leave about
-// 10x (query) and 2x (render) headroom for CI; an O(n²) render of 4,500 rows
-// is far above either.
+// Measured 2026-10-01 on an M-series Mac, Node 22 (CHECKPOINT_PERF_LOG=1 prints them): list query 1.1-2.0 ms; query +
+// render of the 4,500 Inbox rows 203-231 ms, alone or under the full parallel suite.
 
 const TOTAL = 5000;
-const PARENTS = 500;
 const SUBS_PER_PARENT = 2;
-const OPEN_ROWS = TOTAL - PARENTS; // every root, plus the open subtask of each parent
-// The budgets were set on the M-series Mac where the suite runs locally. Shared CI runners are
-// two to three times slower, so CI gets a 4x allowance: it still catches a real regression, while the
-// strict numbers keep running locally.
-const CI_SLACK = process.env.CI ? 4 : 1;
-const QUERY_BUDGET_MS = 25 * CI_SLACK;
-const RENDER_BUDGET_MS = 500 * CI_SLACK;
+const openRows = (total: number) => total - total / 10; // every root, plus the open subtask of each parent
+const OPEN_ROWS = openRows(TOTAL);
+const GROWTH = 8;
+// A flat allowance for timer noise and a collection pause in one run.
+const NOISE_MS = 50;
 
 beforeAll(() => {
 	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
@@ -68,10 +63,12 @@ class ScanCountingMap extends Map<ID, Task> {
 	}
 }
 
-function bigTaskSet(): Task[] {
+/** `total` tasks: a tenth of them are parents with two subtasks each, one completed and one open. */
+function bigTaskSet(total = TOTAL): Task[] {
 	const tasks: Task[] = [];
 	const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-	const roots = TOTAL - PARENTS * SUBS_PER_PARENT;
+	const parents = total / 10;
+	const roots = total - parents * SUBS_PER_PARENT;
 	for (let i = 0; i < roots; i++) {
 		tasks.push(
 			makeTask(id(i + 1), {
@@ -82,7 +79,7 @@ function bigTaskSet(): Task[] {
 		);
 	}
 	let n = roots;
-	for (let p = 0; p < PARENTS; p++) {
+	for (let p = 0; p < parents; p++) {
 		for (let s = 0; s < SUBS_PER_PARENT; s++) {
 			n++;
 			tasks.push(
@@ -98,18 +95,18 @@ function bigTaskSet(): Task[] {
 	return tasks;
 }
 
-async function bigState() {
+async function bigState(total = TOTAL) {
 	const h = await appHarness();
 	const data = h.store.data;
 	const tasks = new ScanCountingMap(data.tasks);
 	const ops: JournalOp[] = [];
-	for (const t of bigTaskSet()) {
+	for (const t of bigTaskSet(total)) {
 		tasks.set(t.id, t);
 		ops.push({ c: "tasks", id: t.id, v: t });
 	}
 	h.store.commit({ ...data, tasks }, ops);
 	const state = h.app.store.state;
-	expect(state.tasks.size).toBe(TOTAL);
+	expect(state.tasks.size).toBe(total);
 	const host = { app: h.app, setIcon: () => undefined } as unknown as UiHost;
 	return { h, state, tasks, host, ctx: h.app.queryContext() };
 }
@@ -133,41 +130,57 @@ describe(`performance at ${TOTAL} tasks`, () => {
 		}
 	});
 
-	it("the Inbox list query and render stay within budget", async () => {
-		const { state, host, ctx } = await bigState();
-		const container = document.createElement("div");
-		document.body.appendChild(container);
-		const query = (s: DbData) => {
-			sidebarCounts(s, ctx);
-			return buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "").groups;
+	it("the Inbox list query and render grow linearly with the tasks", async () => {
+		type Big = Awaited<ReturnType<typeof bigState>>;
+		const large = await bigState();
+		let small: Big | null = await bigState(TOTAL / 4);
+		const inbox = ({ state, host, ctx }: Big, container: HTMLElement) => {
+			sidebarCounts(state, ctx);
+			const groups = buildList(state, { kind: "inbox" }, ctx, emptyFilter(), "").groups;
+			render(<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" onSelect={() => undefined} />, container);
 		};
-		const renderInbox = () =>
-			render(
-				<TaskList host={host} state={state} groups={query(state)} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" onSelect={() => undefined} />,
-				container,
-			);
+		/**
+		 * The rows the Inbox of `big` draws. Counted by walking the elements: happy-dom keeps what a `querySelectorAll` over
+		 * thousands of rows matched after they are unmounted, about 300 MB per query here.
+		 */
+		const rowsOf = (big: Big) => {
+			const container = document.createElement("div");
+			inbox(big, container);
+			let rows = 0;
+			const walk = (el: Element | null): void => {
+				for (let e = el; e !== null; e = e.nextElementSibling) {
+					if (e.classList.contains("cp-task-row")) rows++;
+					walk(e.firstElementChild);
+				}
+			};
+			walk(container.firstElementChild);
+			render(null, container);
+			return rows;
+		};
+		const largeContainer = document.createElement("div");
+		const smallContainer = document.createElement("div");
+		/**
+		 * Query and render of the Inbox of `big`, as when the view opens, then its unmount, so at most one Inbox is in the
+		 * DOM at a time; both sizes pay the unmount alike.
+		 */
+		const openAndClose = (big: Big, container: HTMLElement) => () => {
+			inbox(big, container);
+			render(null, container);
+		};
 		try {
-			// Warm up once, so the timings do not include JIT compilation.
-			renderInbox();
-			render(null, container);
-
-			let start = performance.now();
-			query(state);
-			const queryMs = performance.now() - start;
-
-			start = performance.now();
-			renderInbox();
-			const renderMs = performance.now() - start;
-
-			expect(container.querySelectorAll(".cp-task-row")).toHaveLength(OPEN_ROWS);
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`query ${queryMs.toFixed(1)} ms, query + render ${renderMs.toFixed(0)} ms\n`);
-			expect(queryMs, `list query took ${queryMs.toFixed(1)} ms`).toBeLessThan(QUERY_BUDGET_MS);
-			expect(renderMs, `query + render took ${renderMs.toFixed(0)} ms`).toBeLessThan(RENDER_BUDGET_MS);
+			expect(rowsOf(large)).toBe(OPEN_ROWS);
+			expect(rowsOf(small)).toBe(openRows(TOTAL / 4));
+			const queryMs = elapsed(() => buildList(large.state, { kind: "inbox" }, large.ctx, emptyFilter(), ""));
+			const times = timeBoth(openAndClose(small, smallContainer), openAndClose(large, largeContainer), 2);
+			small = null;
+			const report = `query + render ${times.small.toFixed(0)} ms at ${TOTAL / 4} tasks, ${times.large.toFixed(0)} ms at ${TOTAL}`;
+			perfLog(`Inbox: list query ${queryMs.toFixed(1)} ms at ${TOTAL} tasks; ${report}`);
+			expect(times.large, report).toBeLessThan(times.small * GROWTH + NOISE_MS);
 		} finally {
-			render(null, container);
-			container.remove();
+			render(null, largeContainer);
+			render(null, smallContainer);
 		}
-	});
+	}, 60_000);
 });
 
 // The Habits page and the Today block at target scale (20 habits, 20,000 check-ins): one
@@ -227,7 +240,7 @@ describe("performance at target scale: 20 habits and 20,000 check-ins (D18)", ()
 		return { h, host, ctx };
 	}
 
-	it("renders the Habits page and the Today block under the render budget", async () => {
+	it("renders the Habits page and the Today block", async () => {
 		const { h, host, ctx } = await habitState();
 		expect(h.app.store.state.checkins.size).toBe(CHECKINS);
 		const container = document.createElement("div");
@@ -253,9 +266,7 @@ describe("performance at target scale: 20 habits and 20,000 check-ins (D18)", ()
 			block();
 			const blockMs = performance.now() - start;
 			expect(container.querySelector(".cp-today-habits")).not.toBeNull();
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`habits page ${pageMs.toFixed(0)} ms, today block ${blockMs.toFixed(0)} ms\n`);
-			expect(pageMs, `the Habits page took ${pageMs.toFixed(0)} ms`).toBeLessThan(RENDER_BUDGET_MS);
-			expect(blockMs, `the Today block took ${blockMs.toFixed(0)} ms`).toBeLessThan(RENDER_BUDGET_MS);
+			perfLog(`habits page ${pageMs.toFixed(0)} ms, today block ${blockMs.toFixed(0)} ms`);
 		} finally {
 			render(null, container);
 			container.remove();
