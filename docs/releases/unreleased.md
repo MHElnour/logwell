@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#109) Fixed a subtask you moved to another synced list in TickTick being moved back to its old list by the next sync, and no longer a subtask on either side. It now stays in the list you moved it to, as a top-level task, in Logwell and in TickTick.
 - (#108) Fixed a TickTick sync dropping everything changed in TickTick on a task, such as a new title and priority, when one of the changes could not apply in Logwell, like a column of the list you had just moved the task out of. The sync then sent the old values back to TickTick. Each change now applies on its own, and only the one Logwell cannot take is skipped.
 - (#129) Fixed **Move up** on the first list doing nothing visible while adding an Undo step and putting the list before Inbox in the list pickers. Inbox now stays first everywhere and has no **Move up** or **Move down**, the ends of the list are off, each move is one visible step, and lists that share a place after Import backup with Merge by ID can be moved instead of showing an error.
 - (#104) Fixed two sections with the same name in a list making every open take a backup and save the database again, and two devices rewriting each other's file over and over. The duplicate is now named in a notice and the file is left as it is. A reload after a change from another device that does repair records now says so. **Merge by ID** no longer adds a backup's section next to one of the same name: its tasks go to the section you have.
