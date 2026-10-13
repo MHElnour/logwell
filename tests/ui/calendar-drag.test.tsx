@@ -98,6 +98,21 @@ const FRI = 4;
 const SAT = 5;
 
 describe("week: move a timed block (D11)", () => {
+	it("#132: a task that starts repeating during the drag is not moved", async () => {
+		const m = await mount();
+		await weekReady(m);
+		const id = task(m, "Standup").id;
+		const update = vi.spyOn(m.h.app.tasks, "update");
+		const block = entry(cal(m.root), "Standup", ".cp-cal-daycol");
+		await drag(block, { x: colX(THU), y: y(19 * 60 + 10) }, { x: colX(FRI), y: y(19 * 60 + 10) + 60 }, { release: false });
+		await m.h.app.recurrence.setRepeat(id, { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null });
+		const series = task(m, "Standup");
+		up(block, { x: colX(FRI), y: y(19 * 60 + 10) + 60 });
+		await settle();
+		expect(update).not.toHaveBeenCalled();
+		expect(task(m, "Standup")).toBe(series);
+	});
+
 	it("moves to another day and slot, keeps the duration, one update and one undo entry", async () => {
 		const m = await mount();
 		await weekReady(m);
@@ -280,6 +295,20 @@ describe("week: resize (D12)", () => {
 		expect(after.scheduled).toEqual(at("2026-10-01", "19:00"));
 		expect(undoNotice).toHaveBeenCalledWith('Changed the length of "Standup".', "Edit task", expect.any(Number));
 		expect(details(m)).toBeNull();
+	});
+
+	it("#132: a drop reads the task as it is at the drop, not as it was when the drag began", async () => {
+		const m = await mount();
+		await weekReady(m);
+		const id = task(m, "Standup").id;
+		const h = handle(entry(cal(m.root), "Standup", ".cp-cal-daycol"))!;
+		await drag(h, { x: colX(THU), y: y(19 * 60 + 45) - 2 }, { x: colX(THU), y: y(19 * 60 + 45) }, { release: false });
+		// A sync makes it an hour long while its edge is dragged back to 19:45.
+		await m.h.app.tasks.update(id, { plannedDurationMin: 60 });
+		await settle();
+		up(h, { x: colX(THU), y: y(19 * 60 + 45) });
+		await settle();
+		expect(task(m, "Standup").plannedDurationMin).toBe(45);
 	});
 
 	it("shows the ghost with the new range while resizing", async () => {
