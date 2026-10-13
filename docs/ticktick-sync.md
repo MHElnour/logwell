@@ -64,6 +64,7 @@ Turn on **Create notes from TickTick descriptions**. A synced task with a TickTi
 - Your edits to the note go up about 5 seconds later, without the frontmatter. Links go up as their text; embeds stay in Obsidian.
 - A change in TickTick changes only the lines it touched. Your links, embeds and layout stay.
 - A checklist comes down as tick boxes, such as `- [ ] Buy groceries`, which you can move anywhere in the note. Ticking, adding or removing one changes TickTick too.
+- A line deleted on one side and left alone on the other stays deleted, even when both sides made the same change next to it.
 - If both sides changed the same lines, your lines come first, then a line `From TickTick:` and TickTick's version. Delete the one you don't want.
 
 Sync writes only the notes it created, and never deletes or renames them. If you delete or unlink one, sync stops writing it and makes no other. A note you link yourself is never read, changed or sent.

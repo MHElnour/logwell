@@ -85,6 +85,15 @@ describe("mergeLines (D30)", () => {
 		expect(mergeLines(L("A"), L("A|B|x|D"), L("A|B|y|D"))).toEqual(["A", "B", "x", MERGE_MARKER, "y", "D"]);
 	});
 
+	it("#133: a line one side deleted next to a change both made stays deleted", () => {
+		expect(mergeText("P\nQ\nR", "P\nQ2", "P\nQ2\nR")).toBe("P\nQ2");
+		expect(mergeText("P\nQ\nR", "P\nQ2\nR", "P\nQ2")).toBe("P\nQ2");
+		// A line the longer side wrote stays; only the base line the other side deleted goes.
+		expect(mergeLines(L("P|Q|R"), L("P|Q2"), L("P|Q2|X|R"))).toEqual(L("P|Q2|X"));
+		// The same before the shared lines.
+		expect(mergeLines(L("P|Q|R"), L("Q2|R"), L("P|Q2|R"))).toEqual(L("Q2|R"));
+	});
+
 	it("merging again over any earlier merge whose base was not saved gives the same text", () => {
 		const cases: [string, string, string][] = [
 			["A\nB\nC\nD\nE", "A\nB1\nC\nD1\nE", "A\nB2\nC\nD2\nE"],
