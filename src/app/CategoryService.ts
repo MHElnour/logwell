@@ -15,6 +15,7 @@ import {
 	tagDisplayPath,
 	tagDisplaySegments,
 	tagLeaf,
+	tagNameClashMessage,
 	tagPath,
 } from "../domain/tags";
 import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
@@ -342,7 +343,8 @@ export class TagService {
 
 	/**
 	 * Removes the tag and its key from every task, including tasks in Trash, in one write. Its child tags move to the
-	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). `tasks` counts
+	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). A child whose
+	 * name is already a top-level tag (two tags of one name from an older file) refuses the delete, as a rename would. `tasks` counts
 	 * the live tasks changed; `moves` lists the children moved; `wrote` is false when there was nothing to remove (the
 	 * tag was already gone and unused).
 	 */
@@ -352,8 +354,14 @@ export class TagService {
 			const keyMoves = new Map<string, string | null>([[key, null]]);
 			const moves: TagMove[] = [];
 			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
+			const tags = tx.map("tags");
+			// The tag each top-level key goes to; a child never lands on another tag (two tags are never merged).
+			const holders = new Map<string, string>();
 			for (const t of children.sort((a, b) => (a.key < b.key ? -1 : 1))) {
 				const to = tagLeaf(t.key);
+				const holder = to !== key && tags.has(to) ? to : holders.get(to);
+				if (holder !== undefined) throw new DomainError("InvalidTag", tagNameClashMessage(tags, holder));
+				holders.set(to, t.key);
 				keyMoves.set(t.key, to);
 				moves.push({ from: t.key, to });
 			}
