@@ -33,10 +33,9 @@ import { type BoardColumn, dayTitle, toCards } from "../domain/board";
 import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
-import { compareSortKeys } from "../domain/sortKey";
 import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
-import { compareTasksBySortKey, isDated, isOpen, isUnscheduled } from "../domain/tasks";
+import { compareTasksBySortKey, isDated, isOpen, isUnscheduled, listsInSidebarOrder } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
@@ -283,13 +282,6 @@ const PRIORITY_GROUPS: { priority: Priority; label: string }[] = [
 	{ priority: 0, label: "None" },
 ];
 
-/** The lists in sidebar order: Inbox first, then the others by their sort key. */
-function listsInSidebarOrder(state: DbData): Category[] {
-	const all = [...state.categories.values()].filter((c) => c.id !== INBOX_ID).sort((a, b) => compareSortKeys(a.sortKey, b.sortKey));
-	const inbox = state.categories.get(INBOX_ID);
-	return inbox === undefined ? all : [inbox, ...all];
-}
-
 /** Rows of `view` where `keepTask` decides which completed tasks show among the open ones, grouped as `groupBy` says. */
 function viewGroups(
 	state: DbData,
@@ -404,7 +396,7 @@ function viewGroups(
 		}
 		case "list": {
 			const buckets = bucketize(rows(), (t) => t.categoryId);
-			const known = listsInSidebarOrder(state);
+			const known = listsInSidebarOrder(state.categories.values());
 			const seen = new Set(known.map((c) => c.id));
 			// A list that is missing (not expected after repair) still shows its tasks, last.
 			const lists = [

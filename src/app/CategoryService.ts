@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
-import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
+import { keyAfter, rekeyOrder } from "../domain/sortKey";
 import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
@@ -18,7 +18,15 @@ import {
 	tagNameClashMessage,
 	tagPath,
 } from "../domain/tags";
-import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
+import {
+	assertUniqueCategoryName,
+	categoryNameKey,
+	compareCategories,
+	listsInSidebarOrder,
+	requireCategoryName,
+	requireColor,
+	requireIconName,
+} from "../domain/tasks";
 import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { AppStore } from "./store";
 import type { TaskIndex } from "./taskIndex";
@@ -26,10 +34,6 @@ import type { Tx } from "./tx";
 import type { WriteResult } from "./writes";
 
 // Categories (lists) and tags.
-
-function sortedCategories(categories: Iterable<Category>): Category[] {
-	return [...categories].sort((a, b) => compareSortKeys(a.sortKey, b.sortKey));
-}
 
 export class CategoryService {
 	constructor(
@@ -39,8 +43,9 @@ export class CategoryService {
 		private readonly lists: TaskIndex,
 	) {}
 
+	/** The lists in sidebar order, Inbox first. */
 	list(): Category[] {
-		return sortedCategories(this.store.state.categories.values());
+		return listsInSidebarOrder(this.store.state.categories.values());
 	}
 
 	/** Explicit creation from list management only. */
@@ -115,18 +120,20 @@ export class CategoryService {
 		});
 	}
 
-	/** Moves a category one place up or down in the sidebar. */
+	/**
+	 * Moves a list one place up or down among the lists after the Inbox, which stays first. The Inbox does not move,
+	 * and neither does a list at either end: nothing is written. Lists that share a key get new ascending ones.
+	 */
 	move(id: ID, direction: -1 | 1): Promise<void> {
 		return this.store.run("Reorder categories", (tx) => {
-			const list = sortedCategories(tx.all("categories"));
-			const i = list.findIndex((c) => c.id === id);
-			const current = list[i];
-			if (current === undefined) return;
+			const order = listsInSidebarOrder(tx.all("categories")).filter((c) => c.id !== INBOX_ID);
+			const i = order.findIndex((c) => c.id === id);
 			const target = i + direction;
-			if (target < 0 || target >= list.length) return;
-			const lo = direction < 0 ? (list[target - 1]?.sortKey ?? null) : (list[target]?.sortKey ?? null);
-			const hi = direction < 0 ? (list[target]?.sortKey ?? null) : (list[target + 1]?.sortKey ?? null);
-			tx.put("categories", { ...current, sortKey: keyBetween(lo, hi), modifiedAt: tx.now });
+			if (i < 0 || target < 0 || target >= order.length) return;
+			[order[i], order[target]] = [order[target]!, order[i]!];
+			for (const [c, sortKey] of rekeyOrder(order, target, [], compareCategories)) {
+				if (sortKey !== c.sortKey) tx.put("categories", { ...c, sortKey, modifiedAt: tx.now });
+			}
 		});
 	}
 
