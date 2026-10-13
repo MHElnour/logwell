@@ -183,6 +183,43 @@ describe("note renames", () => {
 			storage.set("checkpoint-pending-renames-db-3", JSON.stringify([{ oldPath: "A.md" }, 5, { oldPath: "X", newPath: "Y", isFolder: true }]));
 			expect(q.load("db-3")).toEqual([{ oldPath: "X", newPath: "Y", isFolder: true }]);
 		});
+
+		it("#137: renames an earlier build saved under the old key move to the logwell- key, versioned", () => {
+			const storage = new Map<string, string>();
+			const app = {
+				loadLocalStorage: (k: string): unknown => (storage.has(k) ? JSON.parse(storage.get(k)!) : null),
+				saveLocalStorage: (k: string, v: unknown) => (v === null ? storage.delete(k) : storage.set(k, JSON.stringify(v))),
+			} as unknown as App;
+			const rename = { oldPath: "A.md", newPath: "B.md", isFolder: false };
+			storage.set("checkpoint-pending-renames-db-1", JSON.stringify([rename]));
+			const q = new LocalStorageRenameQueue(app);
+			expect(q.load("db-1")).toEqual([rename]);
+			expect([...storage.keys()]).toEqual(["logwell-pending-renames-db-1"]);
+			expect(JSON.parse(storage.get("logwell-pending-renames-db-1")!)).toEqual({ v: 1, renames: [rename] });
+			expect(new LocalStorageRenameQueue(app).load("db-1")).toEqual([rename]);
+			q.save("db-1", []);
+			expect(storage.size).toBe(0);
+		});
+
+		it("#137: a stored value it cannot read is ignored and kept, and reading never throws", () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			const storage = new Map<string, unknown>([
+				["logwell-pending-renames-db-1", "{not json"],
+				["logwell-pending-renames-db-2", { v: 2, renames: [] }],
+				["checkpoint-pending-renames-db-3", [5, "x"]],
+			]);
+			const app = {
+				loadLocalStorage: (k: string): unknown => {
+					if (k.endsWith("db-4")) throw new Error("denied");
+					return storage.get(k) ?? null;
+				},
+				saveLocalStorage: (k: string, v: unknown) => void (v === null ? storage.delete(k) : storage.set(k, v)),
+			} as unknown as App;
+			const q = new LocalStorageRenameQueue(app);
+			for (const db of ["db-1", "db-2", "db-3", "db-4"]) expect(q.load(db)).toEqual([]);
+			expect(storage.size).toBe(3);
+			warn.mockRestore();
+		});
 	});
 
 	// Writes of the rename queue are throttled: rewriting the whole queue for every queued and

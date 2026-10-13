@@ -170,7 +170,7 @@ describe("the sidebar's + uses the dialog", () => {
 		expect(create).toHaveBeenCalledWith("Study", "book-open", "purple");
 		expect(listNamed(m, "Study")).toMatchObject({ icon: "book-open", color: "purple" });
 		expect(m.root.querySelector(".cp-sidebar")!.textContent).toContain("Study");
-		expect(await m.h.app.store.undo()).toBe("Create category");
+		expect(await m.h.app.store.undo()).toBe("Create list");
 		expect(listNamed(m, "Study")).toBeUndefined();
 	});
 

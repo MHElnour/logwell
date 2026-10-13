@@ -142,15 +142,19 @@ export class Pusher {
 				return true;
 			} catch (err) {
 				if (!(err instanceof PushStop) || STOPS_ALL.has(err.failure.kind)) throw err;
-				// A read never meets the limit; only a write to a full list is reported as it.
-				const full = !err.read && err.failure.kind === "server" && (open.get(pull.listId) ?? 0) >= TICKTICK_FREE_OPEN_MAX;
+				// A read never meets the limit; only a write to a full list is reported as it. TickTick answers a write past
+				// its free plan's limit with a plain server error, and Logwell cannot see the plan: the notice says the limit
+				// is the likely cause, not the only one, and keeps TickTick's reason.
+				const openNow = open.get(pull.listId) ?? 0;
+				const full = !err.read && err.failure.kind === "server" && openNow >= TICKTICK_FREE_OPEN_MAX;
+				const reason = err.failure.message.replace(/^TickTick: /u, "");
 				stopped.set(
 					pull.listId,
 					full
 						? {
 								...err.failure,
 								kind: "list-limit",
-								message: `TickTick: "${pull.name}" has ${TICKTICK_FREE_OPEN_MAX} open tasks, the limit of TickTick's free plan.`,
+								message: `TickTick: "${pull.name}" refused the change (${reason}). It has ${openNow} open tasks, and TickTick's free plan allows ${TICKTICK_FREE_OPEN_MAX} per list, so that limit is the likely cause; on a paid plan it is a TickTick error.`,
 							}
 						: err.failure,
 				);

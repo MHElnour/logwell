@@ -138,7 +138,7 @@ describe("first sync", () => {
 			const r = await s.sync.applyFirstSync(list.id, p.id);
 			expect(r.content).toEqual({ wrote: true, label: TICKTICK_SYNC_LABEL });
 			// The newest undo entry is still the user's own (creating the list); nothing of the sync is on the stack.
-			expect(s.h.app.store.undoLabel).toBe("Create category");
+			expect(s.h.app.store.undoLabel).toBe("Create list");
 		});
 
 		it("refuses a note project, a linked list and a project linked to another list (SYNC-02)", async () => {
@@ -574,6 +574,15 @@ describe("deletions", () => {
 			expect(calls.indexOf("batchTasks")).toBeLessThan(firstCreate);
 			expect(calls.filter((c) => c === "createTask")).toHaveLength(3);
 			expect(s.tt.live(s.projectId).filter((t) => (t.status ?? 0) === 0)).toHaveLength(99);
+		});
+
+		it("#137: a server error on a list at 99 open tasks names the free plan as the likely cause, with TickTick's reason", async () => {
+			const s = await withTasks(99);
+			s.tt.openLimit = 99;
+			await s.h.app.tasks.create({ title: "New 1", categoryId: s.listId });
+			const r = await s.sync.sync();
+			expect(r.error?.kind).toBe("list-limit");
+			expect(r.error?.message).toMatch(/refused the change \(.+\)\. It has 99 open tasks, and TickTick's free plan allows 99 per list, so that limit is the likely cause; on a paid plan it is a TickTick error\.$/u);
 		});
 
 		it("a refused create leaves the frees already sent", async () => {

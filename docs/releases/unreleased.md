@@ -51,6 +51,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#137) Fixed a few words: Undo of a list change now says "list" instead of "category" (for example "Undone: Delete list"), the import preview lists sections as "Sections", and the notice for a TickTick list at 99 open tasks names the free plan's limit as the likely cause, since Logwell cannot see your plan.
 - (#135) Fixed board cards leaving out the **Not synced** mark and the focused time that the same task shows in a list. A card now shows both, and updates them as soon as they change.
 - (#134) Fixed some failures showing nothing: creating a database, the hourly Trash cleanup, saving the new path of a moved database, a description note preview that cannot be read and a focus timer that cannot be saved on this device now each say what failed. A failed backup no longer says the database could not be saved.
 - (#122) Fixed a task appearing twice in Logwell and twice in TickTick when the database turned read-only, or Obsidian closed, right after TickTick sync sent the new task. This device now remembers such a task until its link is saved, so the next sync links it to its TickTick copy instead of sending it again.

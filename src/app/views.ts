@@ -110,7 +110,7 @@ export function viewPreset(view: TaskView, ctx: QueryContext): { addCategoryId: 
 	return {
 		addCategoryId: view.kind === "category" ? view.id : INBOX_ID,
 		addDate: view.kind === "today" ? ctx.today : null,
-		// Every tag view presets its tag, a parent's too (Lists, sections and tags rule 26).
+		// Every tag view presets its tag, a parent's too: adding a task from a tag's view gives it that tag.
 		addTagKeys: view.kind === "tag" ? [view.key] : [],
 	};
 }
@@ -195,7 +195,8 @@ interface Prepared {
 	shown: ((task: Task) => boolean) | null;
 	/**
 	 * The completed tasks shown among the open rows: held ones, and subtasks whose open parent's row is shown
-	 * (App shell and views rule 21). The rows themselves still apply the view's Completed scope to them.
+	 * (a completed subtask of an open parent stays under the parent's row). The rows themselves still apply the view's
+	 * Completed scope to them.
 	 */
 	keep: (task: Task) => boolean;
 	/** The tasks completed a moment ago, still shown for their check animation. */

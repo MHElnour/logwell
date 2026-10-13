@@ -50,7 +50,7 @@ export interface DateCandidate {
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
-	 * it. The parser uses it only next to a typed repeat it keeps (Repeating tasks rule 19).
+	 * it. The parser uses it only next to a typed repeat it keeps: start and end words count only after a repeat.
 	 */
 	range?: {
 		led: boolean;
@@ -72,7 +72,8 @@ interface Lead {
 }
 
 /**
- * The lead words before a date (Tasks and Quick Add rule 28, Repeating tasks rule 19), lower case, single spaces.
+ * The lead words before a date (`by` for a deadline, `at` joining a time, and a repeat's start and end words), lower
+ * case, single spaces.
  * The span widens over the lead word; "time" joins only a date whose hour is certain. Without a repeat, `until`
  * makes a deadline (the parser turns the "end" into one) and the words marked `repeatOnly` lead nothing.
  */
@@ -124,7 +125,7 @@ function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null 
 	return null;
 }
 
-/** A repeat's end that rolled to more than a year after its start is a suggestion, not applied (Repeating tasks rule 19). */
+/** A repeat's end that rolled to more than a year after its start is a suggestion ("Use as end date?"), not applied. */
 export function rollsPastYear(from: LocalDate, to: LocalDate): boolean {
 	return dayNum(to) - dayNum(from) > 366;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DELETE_LIST_LABEL } from "../../src/app/CategoryService";
 import { mergeCollections } from "../../src/app/DataService";
 import { buildBoard, buildList } from "../../src/app/views";
 import { isDomainError } from "../../src/domain/errors";
@@ -342,7 +343,7 @@ describe("sections", () => {
 			expect(withIcon).toMatchObject({ icon: "book", color: "blue" });
 			const none = await h.app.categories.create("Three", null, null);
 			expect(none.color).toBeNull();
-			expect(h.app.store.undoLabel).toBe("Create category");
+			expect(h.app.store.undoLabel).toBe("Create list");
 			await h.app.store.undo();
 			expect(h.app.store.state.categories.has(none.id)).toBe(false);
 			await rejects(h.app.categories.create("Bad", null, "mauve" as never), "InvalidValue");
@@ -372,6 +373,17 @@ describe("categories (CAT-01..07)", () => {
 		await h.app.categories.update(cat.id, { name: "Learning" });
 		expect(h.app.store.state.tasks.get(task.id)?.categoryId).toBe(cat.id);
 		expect(h.app.store.state.categories.get(cat.id)?.name).toBe("Learning");
+	});
+
+	it("#137: the list commands' Undo labels say list, and the sidebar's Undo notice binds to the delete's", async () => {
+		const h = await appHarness();
+		const cat = await h.app.categories.create("Study");
+		expect(h.app.store.undoLabel).toBe("Create list");
+		await h.app.categories.setColor(cat.id, cat.color === "purple" ? "green" : "purple");
+		expect(h.app.store.undoLabel).toBe("Change list color");
+		await h.app.categories.delete(cat.id);
+		expect(h.app.store.undoLabel).toBe(DELETE_LIST_LABEL);
+		expect(DELETE_LIST_LABEL).toBe("Delete list");
 	});
 
 	it("CAT-06 / B14: delete moves the tasks to Inbox; undo restores the category and memberships", async () => {
@@ -447,7 +459,7 @@ describe("categories (CAT-01..07)", () => {
 		// One Move down is one visible step.
 		await h.app.categories.move(a.id, 1);
 		expect(names()).toEqual(["Inbox", "B", "A"]);
-		expect(h.app.store.undoLabel).toBe("Reorder categories");
+		expect(h.app.store.undoLabel).toBe("Reorder lists");
 		// The pickers' order is the sidebar's, Inbox first, even when the Inbox's own key sorts after a list.
 		await h.app.store.run("Seed", (tx) => tx.put("categories", { ...tx.get("categories", INBOX_ID)!, sortKey: "zz" }), { undoable: false });
 		expect(names()).toEqual(["Inbox", "B", "A"]);

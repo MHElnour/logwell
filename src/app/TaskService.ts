@@ -292,7 +292,7 @@ export class TaskService {
 			const end = input.repeat.end === undefined ? undefined : requireRepeatEnd(input.repeat.end);
 			const zone = this.settings.zone();
 			recurrence = startRecurrence(scheduled, rule, end, todayIn(zone, this.store.clock), zone, this.settings.weekStart()).recurrence;
-			// An end before the first date would let the hourly sweep end the task just created (Repeating tasks rule 19).
+			// An end before the first date would let the hourly sweep end the task just created: an end that leaves no date is refused.
 			requireEndInSeries(recurrence.end, recurrence, this.settings.weekStart());
 			scheduled = null;
 		}

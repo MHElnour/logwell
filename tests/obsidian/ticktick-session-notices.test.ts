@@ -116,7 +116,7 @@ describe("failure notices (screen 10)", () => {
 		cleanup = () => plugin.onunload();
 		await vi.waitFor(() => expect(mocks.actionNotice).toHaveBeenCalled());
 		const [message, actions] = mocks.actionNotice.mock.calls[0] as [string, { label: string; run: () => void }[]];
-		expect(message).toContain("limit of TickTick's free plan");
+		expect(message).toContain("TickTick's free plan allows 99 per list");
 		expect(actions.map((a) => a.label)).toEqual(["Sync now"]);
 		const syncNow = vi.spyOn(plugin.session!.tickTick, "syncNow");
 		actions[0]!.run();
