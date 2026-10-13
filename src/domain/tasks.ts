@@ -1,6 +1,6 @@
 import { DomainError } from "./errors";
 import { compareSortKeys } from "./sortKey";
-import { type Category, type ID, type Recurrence, TAG_COLORS, type Task } from "./types";
+import { type Category, type ID, INBOX_ID, type Recurrence, TAG_COLORS, type Task } from "./types";
 
 // Pure task and category rules.
 
@@ -19,6 +19,23 @@ export function requireTitle(raw: string): string {
 
 export function categoryNameKey(name: string): string {
 	return name.normalize("NFC").trim().toLowerCase();
+}
+
+/** The order of the lists after the Inbox: by sort key, then by ID (lists can share a key after a merge import). */
+export function compareCategories(a: Category, b: Category): number {
+	return compareSortKeys(a.sortKey, b.sortKey) || compareSortKeys(a.id, b.id);
+}
+
+/** The lists in sidebar order, the order every list picker shows: Inbox first, then the others by `compareCategories`. */
+export function listsInSidebarOrder(categories: Iterable<Category>): Category[] {
+	let inbox: Category | undefined;
+	const rest: Category[] = [];
+	for (const c of categories) {
+		if (c.id === INBOX_ID) inbox = c;
+		else rest.push(c);
+	}
+	rest.sort(compareCategories);
+	return inbox === undefined ? rest : [inbox, ...rest];
 }
 
 /** A Lucide icon name (lists, habits). */

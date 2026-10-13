@@ -72,6 +72,8 @@ export type StoreEvent =
 	| { type: "edits-lost"; message: string }
 	| { type: "lost-revision"; revision: string; path: string | null }
 	| { type: "repaired"; issues: string[] }
+	/** Problems found on open and left as they are (nothing is written for them). */
+	| { type: "noticed"; notes: string[] }
 	| { type: "migrated"; from: number; to: number }
 	| { type: "saved"; revision: string }
 	| { type: "save-error"; message: string };
@@ -89,7 +91,7 @@ export interface StoreDeps {
 }
 
 export type LoadResult =
-	| { kind: "ok"; data: DbData; issues: string[]; migratedFrom: number | null }
+	| { kind: "ok"; data: DbData; issues: string[]; notes: string[]; migratedFrom: number | null }
 	| { kind: "newer"; version: number; data: DbData | null }
 	| { kind: "failed"; failure: LoadFailure; detail: string };
 
@@ -116,11 +118,11 @@ export function loadText(text: string, now: string, migrations: readonly Migrati
 			}
 			case "current": {
 				const v = validateDb(parsed.raw, now);
-				return { kind: "ok", data: v.data, issues: v.issues, migratedFrom: null };
+				return { kind: "ok", data: v.data, issues: v.issues, notes: v.notes, migratedFrom: null };
 			}
 			case "migrate": {
 				const v = validateDb(runMigrations(parsed.raw, plan.steps), now);
-				return { kind: "ok", data: v.data, issues: v.issues, migratedFrom: plan.from };
+				return { kind: "ok", data: v.data, issues: v.issues, notes: v.notes, migratedFrom: plan.from };
 			}
 		}
 	} catch (err) {
@@ -199,6 +201,12 @@ export class CpbaseStore {
 	 * deliberate rollback. Cleared on success and on an external reload.
 	 */
 	private readonly attempted = new Set<string>();
+	/**
+	 * The header of the newest write attempt that threw. It may have landed and
+	 * been synced, so the retry continues from it and keeps it in history.
+	 * Cleared with `attempted`.
+	 */
+	private thrownMeta: DbMeta | null = null;
 	private lastSnapshotAt: number | null = null;
 	private closed = false;
 	/**
@@ -208,6 +216,8 @@ export class CpbaseStore {
 	 * Restore backup writes them.
 	 */
 	private unsavedCopy: string | null = null;
+	/** The conflict copy a final save kept pending edits in, and the commit count it holds. */
+	private keptPending: { path: string; commits: number } | null = null;
 
 	constructor(private readonly deps: StoreDeps) {}
 
@@ -299,6 +309,7 @@ export class CpbaseStore {
 					this.needsFullWrite = true;
 					this.emit({ type: "repaired", issues: result.issues });
 				}
+				if (result.notes.length > 0) this.emit({ type: "noticed", notes: result.notes });
 				await this.checkLostRevision();
 				if (this.needsFullWrite) await this.saveNow();
 				// The session-start snapshot is not forced: it is skipped when unchanged.
@@ -499,6 +510,16 @@ export class CpbaseStore {
 		return this.enqueue(() => this.saveNow());
 	}
 
+	/**
+	 * The last save before the app quits: like close(), edits that cannot be
+	 * written are kept as a conflict copy, since no retry may run. The store stays
+	 * open (a quit can be cancelled). Never rejects.
+	 */
+	flushBeforeQuit(): Promise<void> {
+		this.clearTimers();
+		return this.enqueue(() => this.saveOrKeepPending());
+	}
+
 	private nextMeta(prev: DbMeta): DbMeta {
 		return {
 			...prev,
@@ -534,7 +555,7 @@ export class CpbaseStore {
 		this.pendingOps = [];
 		this.needsFullWrite = false;
 
-		const prev = this.current.meta;
+		const prev = this.thrownMeta ?? this.current.meta;
 		const meta = this.nextMeta(prev);
 		const content = serializeDb({ ...this.current, meta }, this.cache);
 		let journalOk = true;
@@ -559,6 +580,7 @@ export class CpbaseStore {
 			result = await this.deps.file.write(content, (text) => this.isOnDisk(text));
 		} catch (err) {
 			requeue();
+			this.thrownMeta = meta;
 			this.emit({ type: "save-error", message: err instanceof Error ? err.message : String(err) });
 			this.scheduleRetry();
 			return;
@@ -589,6 +611,7 @@ export class CpbaseStore {
 		}
 		this.casFailures = 0;
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.current = { ...this.current, meta };
 		this.disk = { revision: meta.revision };
 		if (snapshotFirst && journalOk) this.journalStale = false;
@@ -729,6 +752,7 @@ export class CpbaseStore {
 		this.replaceData(incoming);
 		this.disk = diskStateOf(text);
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.unsavedCopy = null;
 		// Our version is kept as the conflict copy, so the loaded one is this
 		// device's base from now on: the next open does not report ours as lost.
@@ -737,12 +761,18 @@ export class CpbaseStore {
 			this.readOnly = null;
 			this.emit({ type: "writable" });
 		}
-		this.emit({ type: "loaded", cause: "external" });
+		// The conflict copy is announced before anything that redraws the views, and
+		// a repaired file is saved even when a handler of the reload throws.
 		if (conflictPath !== null) this.emit({ type: "conflict", path: conflictPath });
 		if (result.migratedFrom !== null) this.emit({ type: "migrated", from: result.migratedFrom, to: CURRENT_SCHEMA_VERSION });
-		if (this.needsFullWrite) {
-			await this.backupBeforeRewrite(result, text);
-			await this.saveNow();
+		if (result.issues.length > 0) this.emit({ type: "repaired", issues: result.issues });
+		try {
+			this.emit({ type: "loaded", cause: "external" });
+		} finally {
+			if (this.needsFullWrite) {
+				await this.backupBeforeRewrite(result, text);
+				await this.saveNow();
+			}
 		}
 	}
 
@@ -895,32 +925,41 @@ export class CpbaseStore {
 	async close(): Promise<void> {
 		this.closed = true;
 		this.clearTimers();
-		await this.enqueue(async () => {
+		await this.enqueue(() => this.saveOrKeepPending());
+	}
+
+	/** Saves what is pending; what cannot be saved is kept as a conflict copy. Never rejects. */
+	private async saveOrKeepPending(): Promise<void> {
+		try {
+			await this.saveNow();
+		} catch (err) {
+			// For example the conflict copy of a concurrent external change could not be written.
+			this.emit({ type: "save-error", message: `Saving failed: ${err instanceof Error ? err.message : String(err)}` });
+		}
+		// Changes are still pending: the file was deleted (a save never recreates
+		// a missing file) or could not be written. Keep them as a conflict copy
+		// rather than dropping them when the session ends. This does not depend on
+		// what the file holds now: a sync tool may have recreated it right after
+		// the failed save.
+		if (this.unsavedCopy !== null) {
+			// Edits kept when the file turned unreadable never reached a file: say where they are.
+			this.emit({ type: "pending-saved-as-conflict", path: this.unsavedCopy });
+		} else if (this.current !== null && this.isDirty && this.backups !== null) {
+			// A copy kept by an earlier final save that holds every commit is not written twice.
+			if (this.keptPending?.commits === this.commits) {
+				this.emit({ type: "pending-saved-as-conflict", path: this.keptPending.path });
+				return;
+			}
 			try {
-				await this.saveNow();
+				const path = await this.writeConflictCopy();
+				this.keptPending = { path, commits: this.commits };
+				this.emit({ type: "pending-saved-as-conflict", path });
 			} catch (err) {
-				// For example the conflict copy of a concurrent external change could not be written.
-				this.emit({ type: "save-error", message: `Saving failed: ${err instanceof Error ? err.message : String(err)}` });
+				// This must never reject: a session switch and the quit wait for it.
+				// Say plainly that the edits are gone instead. Not a save error: no
+				// further attempt follows.
+				this.emit({ type: "edits-lost", message: err instanceof Error ? err.message : String(err) });
 			}
-			// Changes are still pending: the file was deleted (a save never recreates
-			// a missing file) or could not be written. Keep them as a conflict copy
-			// rather than dropping them when the session ends. This does not depend on
-			// what the file holds now: a sync tool may have recreated it right after
-			// the failed save.
-			if (this.unsavedCopy !== null) {
-				// Edits kept when the file turned unreadable never reached a file: say where they are.
-				this.emit({ type: "pending-saved-as-conflict", path: this.unsavedCopy });
-			} else if (this.current !== null && this.isDirty && this.backups !== null) {
-				try {
-					const path = await this.writeConflictCopy();
-					this.emit({ type: "pending-saved-as-conflict", path });
-				} catch (err) {
-					// close() must never reject: a session switch waits for it. Say
-					// plainly that the edits are gone instead. Not a save error: a closed
-					// store makes no further attempt.
-					this.emit({ type: "edits-lost", message: err instanceof Error ? err.message : String(err) });
-				}
-			}
-		});
+		}
 	}
 }

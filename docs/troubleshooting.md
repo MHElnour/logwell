@@ -35,8 +35,14 @@ A notice says "The database changed outside Obsidian while this device had other
 Related notices:
 
 - "Changes this device saved earlier are missing from the database file. They were restored as a conflict copy." **Open conflict view** leads to the copy. A version already kept as a conflict copy when the other version was loaded is not reported again, whether you chose **Keep theirs** or have not chosen yet.
-- "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy."
+- "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy." This also covers the last save when Obsidian quits.
 - "A sync conflict copy of a Logwell database appeared: …" A sync tool made its own copy of the file. Logwell does not read or merge it. The active database is the one you use.
+
+## A notice says some records were repaired or need your attention
+
+"Some database records were repaired: …" means Logwell fixed records it could not use as they were, such as a task in a list that no longer exists. It takes a **Before repair** snapshot first and saves the repaired file once.
+
+"Some database records need your attention: …" names something Logwell leaves as it is, such as two sections with the same name in one list. Nothing is written for it; the notice shows each time the database opens until you rename or delete one of them.
 
 ## Restore a backup
 

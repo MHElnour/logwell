@@ -82,6 +82,28 @@ describe("details pane", () => {
 			expect(d.querySelector(".cp-subtasks-count")?.textContent).toBe("1 / 1");
 		});
 
+		it("#106: a tag typed in Add tag for one task is not carried to the next selected task", async () => {
+			const { h, root } = await mount();
+			await h.app.tasks.create({ title: "Alpha" });
+			const { task: bravo } = await h.app.tasks.create({ title: "Bravo" });
+			const d = await openTask(root, "Alpha");
+			d.querySelector<HTMLButtonElement>(".cp-add-tag")!.click();
+			await settle();
+			const typed = d.querySelector<HTMLInputElement>(".cp-tag-input input")!;
+			typed.value = "errand";
+			typed.dispatchEvent(new Event("input", { bubbles: true }));
+			await settle();
+			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Bravo"))!.click();
+			await settle();
+			const pane = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
+			expect(pane.querySelector<HTMLInputElement>(".cp-details-title")!.value).toBe("Bravo");
+			const input = pane.querySelector<HTMLInputElement>(".cp-tag-input input")!;
+			expect(input.value).toBe("");
+			input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+			await settle();
+			expect(h.app.store.state.tasks.get(bravo.id)!.tagKeys).toEqual([]);
+		});
+
 		it("note card: none, linked (file name, open button), missing", async () => {
 			const { h, host, root } = await mount();
 			h.notes.files.set("Notes/Plan.md", "body");

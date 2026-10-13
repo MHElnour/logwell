@@ -16,7 +16,7 @@ Logwell keeps your tasks in one database file in your vault. This page explains 
 
 ## How Logwell saves
 
-Logwell saves a moment after you stop editing, and at the latest a couple of seconds later. It also saves when the window loses focus or is hidden, and when Obsidian quits. If a save fails, see [Troubleshooting](troubleshooting.md#a-notice-says-the-database-could-not-be-saved).
+Logwell saves a moment after you stop editing, and at the latest a couple of seconds later. It also saves when the window loses focus or is hidden, and when Obsidian quits. If the last save before Obsidian quits or a database closes fails, your changes are kept as a conflict copy. If a save fails, see [Troubleshooting](troubleshooting.md#a-notice-says-the-database-could-not-be-saved).
 
 To take back a change, see [Undo](tasks.md#undo).
 
@@ -78,7 +78,7 @@ The file is named `logwell-backup-YYYY-MM-DD.json`, with " (2)" and so on if tha
 1. Choose **Import backup** and pick a Logwell backup file from your vault.
 2. Read the preview: the file's schema version, how many records of each kind it holds, and how many records a merge would add, overwrite and remove. Open **Records a merge would change** to see them.
 3. Choose one:
-   - **Merge by ID** adds records you do not have. When a record exists on both sides, the newer one wins. A task you purged from the Trash can come back from an older backup.
+   - **Merge by ID** adds records you do not have. When a record exists on both sides, the newer one wins. A task you purged from the Trash can come back from an older backup. A section from the backup is not added when the same list here already has a section of that name (for example one you deleted and created again); its tasks go to the section here.
    - **Replace all** replaces every record with the file's.
    - **Cancel** changes nothing.
 
