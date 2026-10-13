@@ -503,6 +503,32 @@ describe("deletions", () => {
 		});
 	});
 
+	describe("a TickTick list that no longer exists", () => {
+		it("#111: its linked list is skipped with a failure naming it, its tasks and links stay, and the other lists keep syncing", async () => {
+			const s = await withTasks(2);
+			const home = await linkedList(s, "Home");
+			await s.h.app.tasks.create({ title: "Water plants", categoryId: home.listId });
+			await s.sync.sync();
+			s.tick();
+			const ofWork = () => [...s.h.app.store.state.syncLinks.values()].filter((l) => l.logwellId === s.listId || l.ttProjectId === s.projectId);
+			const before = ofWork();
+			s.tt.projects.delete(s.projectId);
+			// A new task in the other list, and a task moved from it into the list whose TickTick list is gone.
+			await s.h.app.tasks.create({ title: "Buy soil", categoryId: home.listId });
+			await s.h.app.tasks.update(s.task("Water plants").id, { categoryId: s.listId });
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(false);
+			expect(r.failures).toEqual([{ listId: s.listId, listName: "Work", kind: "list-gone", message: 'The TickTick list linked to "Work" no longer exists.', retryAfterSec: null }]);
+			expect(s.tt.live(home.projectId).map((t) => t.title).sort()).toEqual(["Buy soil", "Water plants"]);
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+			expect(ofWork()).toEqual(before);
+			// Unlinked, it no longer stops the sync.
+			await s.sync.unlinkList(s.listId);
+			expect((await s.sync.sync()).ok).toBe(true);
+		});
+	});
+
 	describe("order of the push", () => {
 		it("deletes before it creates: a refused create does not block a deletion", async () => {
 			const s = await withTasks(1);

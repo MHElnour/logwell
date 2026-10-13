@@ -108,8 +108,11 @@ const NO_SECTION_HASH = EMPTY_HASHES.section!;
 const OPEN_HASH = EMPTY_HASHES.status!;
 const EMPTY_TAGS = tagsHash([]);
 
-/** `list-limit`: TickTick refused a write to a list at its free plan's open-task limit. */
-export type SyncFailureKind = TickTickErrorKind | "list-limit";
+/**
+ * `list-limit`: TickTick refused a write to a list at its free plan's open-task limit. `list-gone`: the TickTick list a
+ * list is linked to no longer exists (HTTP 404 for its data); that list is skipped and the others sync.
+ */
+export type SyncFailureKind = TickTickErrorKind | "list-limit" | "list-gone";
 
 /** Why a sync stopped: the list it was working on and the reason. */
 export interface SyncFailure {
@@ -809,7 +812,8 @@ export class SyncService {
 		const stateAtStart = this.store.state;
 		const lists = this.linkedLists(this.store.state);
 
-		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written.
+		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written, except one
+		// that no longer exists (HTTP 404), which stops its list only.
 		const pulls: ListPull[] = [];
 		const seen = new Map<string, TtTask>();
 		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
@@ -819,6 +823,9 @@ export class SyncService {
 		 * first completed read even past PULL_REQUESTS_MAX, so a list is never skipped; only splits stop there.
 		 */
 		const spent = { requests: 0 };
+		/** The projects of linked lists whose TickTick list no longer exists, and their failures. */
+		const held = new Set<string>();
+		const gone: SyncFailure[] = [];
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
@@ -841,7 +848,11 @@ export class SyncService {
 				// The open tasks are read first and win: a task reopened after its completion is open.
 				for (const t of data.tasks) seen.set(t.id, t);
 			} catch (err) {
-				return failed(failureOf(err, l));
+				if (!isNotFound(err)) return failed(failureOf(err, l));
+				// A TickTick list that no longer exists stops its list only: nothing of it is pulled or pushed, and its
+				// tasks and links stay as they are until the list is unlinked.
+				held.add(projectId);
+				gone.push({ listId: l.listId, listName: l.name, kind: "list-gone", message: `The TickTick list linked to "${l.name}" no longer exists.`, retryAfterSec: null });
 			}
 		}
 		const listOfProject = new Map(pulls.map((p) => [p.projectId, p]));
@@ -849,7 +860,7 @@ export class SyncService {
 		// in TickTick too, their copies went with them: only the links go.
 		const leavingLinks = new Map<string, Map<string, ID>>();
 		for (const link of this.store.state.syncLinks.values()) {
-			if (link.kind !== "task" || link.mode === "localOnly" || link.ttProjectId === null || listOfProject.has(link.ttProjectId)) continue;
+			if (link.kind !== "task" || link.mode === "localOnly" || link.ttProjectId === null || listOfProject.has(link.ttProjectId) || held.has(link.ttProjectId)) continue;
 			const group = leavingLinks.get(link.ttProjectId) ?? new Map<string, ID>();
 			group.set(link.ttId, syncLinkId("task", link.logwellId));
 			leavingLinks.set(link.ttProjectId, group);
@@ -978,13 +989,13 @@ export class SyncService {
 		if (this.stopped) return failed(stoppedFailure());
 
 		// 3. The content command: everything pulled, one write.
-		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, waiting, listOfProject, remoteTags.known), {
+		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, waiting, listOfProject, held, remoteTags.known), {
 			undoable: false,
 		});
 		const result: SyncResult = {
-			ok: true,
-			error: null,
-			failures: [],
+			ok: gone.length === 0,
+			error: gone[0] ?? null,
+			failures: gone,
 			content: { wrote: plan.wrote, label: TICKTICK_SYNC_LABEL },
 			pulled: plan.written,
 			pushed: 0,
@@ -1045,6 +1056,8 @@ export class SyncService {
 		missing: ReadonlySet<string>,
 		waiting: ReadonlySet<ID>,
 		listOfProject: Map<string, ListPull>,
+		/** The projects of linked lists whose TickTick list no longer exists: their tasks wait. */
+		held: ReadonlySet<string>,
 		remoteTags: ReadonlyMap<string, TtTag> | null,
 	): PullPlan {
 		const zone = this.settings.zone();
@@ -1254,7 +1267,10 @@ export class SyncService {
 				plan.exclude.add(id);
 				continue;
 			}
-			if (!listOfProject.has(this.projectOfList(tx, t.categoryId) ?? "")) {
+			const project = this.projectOfList(tx, t.categoryId) ?? "";
+			// Moved to a list whose TickTick list no longer exists: it waits with that list's tasks.
+			if (held.has(project)) continue;
+			if (!listOfProject.has(project)) {
 				// Moved to a list that is not linked: it leaves TickTick.
 				leave(link, id);
 				continue;
@@ -1264,7 +1280,7 @@ export class SyncService {
 				// Only a task TickTick confirmed gone; one not looked up yet waits for the next sync. One that left a
 				// deleted list is judged with the tasks of the linked list it is in now.
 				if (missing.has(link.ttId)) {
-					const listId = home.leaving === true ? listOfProject.get(this.projectOfList(tx, t.categoryId)!)!.listId : home.listId;
+					const listId = home.leaving === true ? listOfProject.get(project)!.listId : home.listId;
 					const group = missingByList.get(listId) ?? [];
 					group.push(t);
 					missingByList.set(listId, group);
