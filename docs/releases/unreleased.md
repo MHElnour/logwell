@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#133) Fixed a description note synced with TickTick bringing back a line you had deleted on one side when both sides made the same change next to it. The line now stays deleted on both sides.
 - (#132) Fixed a calendar drop working from the task as it was when the drag began: a change that came in during the drag, such as a new duration from TickTick sync, could be overwritten, and a task that had started repeating meanwhile was moved. A drop now uses the task as it is when you let go, and a task that now repeats does not move.
 - (#106) Fixed the details pane keeping the Custom repeat editor open, filled in with the previous task's rule, after you selected another task; **Done** then gave that rule to the new task. Selecting another task now closes the repeat picker and empties the Add tag box.
 - (#130) Fixed text typed in Quick Add while the previous task was still being saved being wiped when the save finished. It now stays in the field for the next task.
