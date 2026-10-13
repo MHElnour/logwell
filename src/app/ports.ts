@@ -137,6 +137,25 @@ export interface ReminderStatePort {
 export class MemoryReminderState extends MemoryJsonPort<ReminderState> implements ReminderStatePort {}
 
 /**
+ * Tasks the TickTick sync created in TickTick but has not linked yet, by list and then by Logwell task: TickTick's id
+ * and the field hashes sent, or null when the answer was lost.
+ */
+export interface TickTickPending {
+	v: 1;
+	lists: Record<string, Record<string, { ttId: string; base: Record<string, string> } | null>>;
+}
+
+/** `TickTickPending`, device-local and per database, so a restart does not lose it. `load` returns whatever is stored. */
+export interface TickTickPendingPort {
+	load(dbId: string): unknown;
+	/** null clears the entry. May throw; the sync then keeps it in memory. */
+	save(dbId: string, pending: TickTickPending | null): void;
+}
+
+/** The default: kept for the lifetime of the plugin only. */
+export class MemoryTickTickPending extends MemoryJsonPort<TickTickPending> implements TickTickPendingPort {}
+
+/**
  * The TickTick API token. Kept in the host's secret storage, never in the database or
  * `data.json`. An empty token reads as none.
  */

@@ -140,7 +140,7 @@ A sync pulls every linked list, then writes everything pulled as one command tha
 
 The engine writes tasks through the `*In(tx, ...)` methods of `TaskService` and `SectionService`, so a pulled change obeys the same rules as an edit by hand. The pull command writes no links. A separate links command then links what the pull settled, before any push, so a failed push or a reload does not import them again.
 
-Description notes run next (`src/app/syncNotes.ts`), then the push sends what differs, list by list. Last, `writeLinks` saves what TickTick confirmed, as its own command, even after a failed push. The timings and behavior rules are in the TickTick sync section of the spec.
+Description notes run next (`src/app/syncNotes.ts`), then the push sends what differs, list by list. Last, `writeLinks` saves what TickTick confirmed, as its own command, even after a failed push. A task TickTick created whose link could not be written (the database turned read-only), or whose create answer was lost, waits in the engine's `pendingCreates`, kept on this device per database through `TickTickPendingPort` (`LocalStorageTickTickPending` in `src/obsidian/tickTickPorts.ts`); the pull links it by TickTick's id or title, and it is forgotten only after the links command of step 3 has committed. The timings and behavior rules are in the TickTick sync section of the spec.
 
 ## UI structure
 

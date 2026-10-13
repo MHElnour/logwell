@@ -382,6 +382,71 @@ describe("series, failed link writes and list failures", () => {
 			expect(s.h.app.store.state.tasks.get(task.id)?.status).toBe("completed");
 		});
 
+		it("#122: is linked after Obsidian restarts: this device remembers it, and neither side gets a second copy", async () => {
+			const s = await syncHarness();
+			const { listId, projectId } = await linkedList(s);
+			const { task } = await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
+			await s.h.saveNow();
+			const saved = s.h.dbText();
+			const create = s.tt.createTask.bind(s.tt);
+			s.tt.createTask = async (input: TtTaskCreate) => {
+				const made = await create(input);
+				await makeReadOnly(s.h);
+				return made;
+			};
+			await expect(s.sync.sync()).rejects.toThrow();
+			s.tt.createTask = create;
+			await makeWritable(s.h, saved);
+			const copy = s.tt.findByTitle("Buy milk")!;
+			s.tick();
+			expect((await s.restart().sync()).ok).toBe(true);
+			expect(s.tt.count("createTask")).toBe(1);
+			expect(s.tt.live(projectId)).toHaveLength(1);
+			expect(s.tasks("Buy milk")).toHaveLength(1);
+			expect(s.link("task", task.id)?.ttId).toBe(copy.id);
+			// Linked, it is forgotten: a later restart sends nothing again.
+			s.tick();
+			expect((await s.restart().sync()).ok).toBe(true);
+			expect(s.tt.count("createTask")).toBe(1);
+			expect(s.tasks("Buy milk")).toHaveLength(1);
+		});
+
+		it("#122: is kept when the command that would link it fails, and linked by the next sync", async () => {
+			const s = await syncHarness();
+			const { listId, projectId } = await linkedList(s);
+			const { task } = await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
+			await s.h.saveNow();
+			const saved = s.h.dbText();
+			const create = s.tt.createTask.bind(s.tt);
+			s.tt.createTask = async (input: TtTaskCreate) => {
+				const made = await create(input);
+				await makeReadOnly(s.h);
+				return made;
+			};
+			await expect(s.sync.sync()).rejects.toThrow();
+			s.tt.createTask = create;
+			await makeWritable(s.h, saved);
+			const copy = s.tt.findByTitle("Buy milk")!;
+			s.tick();
+			// The pull pairs the copy, then the database turns read-only before its link is written.
+			const store = s.h.app.store;
+			const run = store.run.bind(store);
+			store.run = (async (label: string, fn: never, options?: never) => {
+				const out: unknown = await run(label, fn, options);
+				if (label === TICKTICK_SYNC_LABEL) await makeReadOnly(s.h);
+				return out;
+			}) as typeof store.run;
+			await expect(s.sync.sync()).rejects.toThrow();
+			store.run = run;
+			await makeWritable(s.h, saved, "r-repaired0002");
+			s.tick();
+			expect((await s.sync.sync()).ok).toBe(true);
+			expect(s.tt.count("createTask")).toBe(1);
+			expect(s.tt.live(projectId)).toHaveLength(1);
+			expect(s.tasks("Buy milk")).toHaveLength(1);
+			expect(s.link("task", task.id)?.ttId).toBe(copy.id);
+		});
+
 		it("is linked even when the copy fell out of the completed window: one lookup by its id", async () => {
 			const s = await syncHarness();
 			const { listId } = await linkedList(s);
