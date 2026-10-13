@@ -1,5 +1,6 @@
-import { DateTime } from "luxon";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { DateTime, Settings } from "luxon";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { resetTimeCaches } from "../../src/domain/time";
 import { parseQuickAdd } from "../../src/parsing";
 import type { DateLocale, ParseResult } from "../../src/parsing/types";
 import { BERLIN, NY, TOKYO, at, chipLines, dateSpecOf, makeCtx } from "./helpers";
@@ -177,6 +178,33 @@ describe("relative times on a computer in a DST gap", () => {
 			expect(parse("Call Oct 12", "2026-03-08T02:30").fields.scheduled).toEqual({ kind: "date", date: "2026-10-12" });
 			expect(local(parse("Call in 1 hour", "2026-06-10T10:00"))).toBe("2026-06-10T11:00");
 		});
+	});
+});
+
+describe("a device whose language writes other digits", () => {
+	// Arabic (Egypt) writes numbers with its own digits by default; Quick Add's dates and its clock keep 0 to 9.
+
+	const original = Settings.defaultLocale;
+	afterEach(() => {
+		Settings.defaultLocale = original;
+		resetTimeCaches();
+	});
+	const parseOn = (input: string, now: string): ParseResult => {
+		Settings.defaultLocale = "ar-EG";
+		resetTimeCaches();
+		return parseQuickAdd(input, makeCtx({ zone: NY, now: at(NY, now) }));
+	};
+
+	it("#100: a time is read with the digits 0 to 9 and no daylight saving warning", () => {
+		const r = parseOn("Call mom tomorrow at 5pm", "2026-10-01T06:00");
+		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-10-02T17:00", tz: NY });
+		expect(chipLines(r)).toEqual(["applied|scheduled|tomorrow at 5pm"]);
+	});
+
+	it("#100: \"at 5\" offers the next 05:00 and 17:00 on the parse clock", () => {
+		const r = parseOn("Call at 5", "2026-10-01T06:00");
+		const values = r.chips[0]?.alternatives?.map((a) => (a.value?.kind === "datetime" ? a.value.local : ""));
+		expect(values).toEqual(["2026-10-02T05:00", "2026-10-01T17:00"]);
 	});
 });
 

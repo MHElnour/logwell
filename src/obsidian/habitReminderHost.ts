@@ -12,7 +12,7 @@ import {
 } from "../domain/habitReminders";
 import { type HabitIndex, versionAt } from "../domain/habits";
 import type { Clock } from "../domain/ports";
-import { instantFromNow } from "../domain/time";
+import { formatLatin, instantFromNow } from "../domain/time";
 import type { Habit, ID, LocalDate } from "../domain/types";
 import { progressText } from "../ui/habits/format";
 import type { NoticeAction } from "./notices";
@@ -169,7 +169,7 @@ export class HabitReminderHost {
 		const at = this.clock.now();
 		const dt = DateTime.fromJSDate(at, { zone: app.settings.zone() });
 		const date = dt.toISODate() ?? "";
-		const time = dt.toFormat("HH:mm");
+		const time = formatLatin(dt, "HH:mm");
 		return { date, time, minute: `${date} ${time}`, instant: at.toISOString() };
 	}
 
