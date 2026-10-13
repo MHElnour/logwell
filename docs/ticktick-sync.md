@@ -45,6 +45,8 @@ Tip: change synced tasks in one place, such as TickTick. Both sides stay editabl
 
 Choose **Unlink from TickTick** in the list's menu, or **Unlink** in settings. Every task stays on both sides.
 
+Deleting a linked list unlinks it too, and its TickTick list can be linked again. Its tasks move to the Inbox, so the next sync moves them to the Inbox's TickTick list when the Inbox is linked, and deletes them in TickTick when it is not. Undo of the delete links the list again.
+
 ## What syncs
 
 Title, list, section, subtask parent, priority, open or completed, tags and one date sync both ways. Urgent, important, **Duration (min)** and order stay in Logwell. Reminders and attachments stay in TickTick.

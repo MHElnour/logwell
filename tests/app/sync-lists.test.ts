@@ -419,6 +419,90 @@ describe("deletions", () => {
 		});
 	});
 
+	describe("a deleted linked list", () => {
+		it("#110: deleting a linked list unlinks it; its tasks, now in an Inbox that does not sync, are deleted in TickTick", async () => {
+			const s = await withTasks(1);
+			const id = s.ids[0]!;
+			const section = await s.h.app.sections.create(s.listId, "Calls");
+			await s.h.app.tasks.update(id, { sectionId: section.id });
+			await s.sync.sync();
+			s.tick();
+			const ttId = s.ttIdOf("Errand 1");
+			expect(s.link("section", section.id)).toBeDefined();
+			await s.h.app.categories.delete(s.listId);
+			expect([...s.h.app.store.state.syncLinks.values()].filter((l) => l.kind !== "task")).toEqual([]);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
+			expect(s.tt.live(s.projectId)).toHaveLength(0);
+			expect(s.task("Errand 1")).toMatchObject({ id, categoryId: INBOX_ID });
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+			// The TickTick list is free for another list.
+			const other = await s.h.app.categories.create("Errands");
+			expect((await s.sync.applyFirstSync(other.id, s.projectId)).ok).toBe(true);
+		});
+
+		it("#110: the tasks of a deleted linked list move in TickTick to a linked Inbox, once", async () => {
+			const s = await syncHarness();
+			const inbox = s.tt.addInbox();
+			await s.sync.applyFirstSync(INBOX_ID, "inbox");
+			const { listId, projectId } = await linkedList(s);
+			await s.h.app.tasks.create({ title: "Errand 1", categoryId: listId });
+			await s.sync.sync();
+			s.tick();
+			const ttId = s.ttIdOf("Errand 1");
+			s.tt.edit(ttId, { priority: 5 });
+			await s.h.app.categories.delete(listId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.get(ttId)?.projectId).toBe(inbox.id);
+			expect(s.tt.live(projectId)).toHaveLength(0);
+			expect(s.link("task", s.task("Errand 1").id)).toMatchObject({ ttId, ttProjectId: "inbox" });
+			// TickTick's edit since the last sync came in; nothing was created twice.
+			expect(s.task("Errand 1").priority).toBe(1);
+			s.tick();
+			await s.sync.sync();
+			expect(s.tt.live(inbox.id).map((t) => t.title)).toEqual(["Errand 1"]);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+		});
+
+		it("#110: when the deleted list's TickTick list is gone too, only the links of its tasks go", async () => {
+			const s = await withTasks(1);
+			await s.h.app.categories.delete(s.listId);
+			s.tt.projects.delete(s.projectId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+		});
+
+		it("#110: undoing the delete links the list again, and nothing changes in TickTick", async () => {
+			const s = await withTasks(1);
+			const before = s.link("list", s.listId);
+			await s.h.app.categories.delete(s.listId);
+			await s.h.app.store.undo();
+			expect(s.link("list", s.listId)).toEqual(before);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tt.live(s.projectId).map((t) => t.title)).toEqual(["Errand 1"]);
+		});
+
+		it("#110: a list link left by a list deleted with an earlier version goes at the next sync, and its tasks follow", async () => {
+			const s = await withTasks(1);
+			const ttId = s.ttIdOf("Errand 1");
+			// The delete as an earlier version wrote it: the tasks move to the Inbox, the links stay.
+			await s.h.app.store.run("seed", (tx) => {
+				for (const t of tx.all("tasks")) tx.put("tasks", { ...t, categoryId: INBOX_ID });
+				tx.remove("categories", s.listId);
+			});
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+		});
+	});
+
 	describe("order of the push", () => {
 		it("deletes before it creates: a refused create does not block a deletion", async () => {
 			const s = await withTasks(1);

@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#110) Fixed deleting a list synced with TickTick leaving it linked: its tasks never synced again from the Inbox, their TickTick copies stayed where they were, and its TickTick list could not be linked to another list. Deleting a synced list now unlinks it, and its tasks follow the Inbox: the next sync moves them to the Inbox's TickTick list when the Inbox syncs, and deletes them in TickTick when it does not. A list deleted this way with an earlier version is unlinked at the next sync.
 - (#119) Fixed a task deleted in TickTick taking all its Logwell subtasks to the Trash with it, including ones still in TickTick and ones you had just added, and the next sync then deleting those subtasks in TickTick. Only the tasks gone from TickTick go to the Trash now; the other subtasks stay as top-level tasks, on both sides.
 - (#109) Fixed a subtask you moved to another synced list in TickTick being moved back to its old list by the next sync, and no longer a subtask on either side. It now stays in the list you moved it to, as a top-level task, in Logwell and in TickTick.
 - (#108) Fixed a TickTick sync dropping everything changed in TickTick on a task, such as a new title and priority, when one of the changes could not apply in Logwell, like a column of the list you had just moved the task out of. The sync then sent the old values back to TickTick. Each change now applies on its own, and only the one Logwell cannot take is skipped.
