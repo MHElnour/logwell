@@ -27,8 +27,6 @@ import { Pusher } from "./syncPush";
 export class SyncService {
 	/** The running `sync()`, for single flight. */
 	private running: Promise<SyncResult> | null = null;
-	/** A trigger that came while a sync ran: exactly one more run after it. */
-	private rerun = false;
 	/** Every sync, first sync, confirmation and unlink runs after the one before. */
 	private tail: Promise<unknown> = Promise.resolve();
 	/** The API, refusing every request once `stop` was called. */
@@ -37,7 +35,7 @@ export class SyncService {
 	private readonly inbox: InboxAliasApi;
 	/** Runs started by `serial` and not finished. */
 	private inFlight = 0;
-	/** Set by `stop`: a queued rerun is dropped and none is queued again. */
+	/** Set by `stop`: every request is refused from then on. */
 	private stopped = false;
 	/** TickTick ids a lookup found gone, kept for the next sync while their tasks stay missing and undecided. */
 	private goneInTickTick = new Set<string>();
@@ -78,14 +76,11 @@ export class SyncService {
 
 	/**
 	 * Syncs every linked list ("Sync now" and background pulls alike; neither is undoable). A call while a sync runs
-	 * returns the running sync and queues exactly one more run after it.
+	 * returns the running sync. The one queue of triggers is the scheduler's (`TickTickScheduler`), which runs a
+	 * trigger that came during a sync once after it.
 	 */
 	sync(): Promise<SyncResult> {
-		if (this.running !== null) {
-			if (!this.stopped) this.rerun = true;
-			return this.running;
-		}
-		return this.start();
+		return this.running ?? this.start();
 	}
 
 	/**
@@ -104,19 +99,18 @@ export class SyncService {
 	/**
 	 * The session is closing. No further request is sent: each fails as a network error before it goes out, so at most
 	 * the one already in flight completes, and what TickTick answered is still linked. A sync stopped before it wrote
-	 * its pull writes nothing. The rerun queued by a trigger during a sync is dropped, and no new one is queued.
+	 * its pull writes nothing.
 	 */
 	stop(): void {
 		this.stopped = true;
-		this.rerun = false;
 	}
 
-	/** Resolves when no sync runs and none is queued. */
+	/** Resolves when no sync, first sync, confirmation or unlink runs or waits. */
 	async idle(): Promise<void> {
 		for (;;) {
 			const current = this.running ?? this.tail;
 			await current.catch(() => undefined);
-			if (this.running === null && !this.rerun && current === this.tail) return;
+			if (this.running === null && current === this.tail) return;
 		}
 	}
 
@@ -302,9 +296,6 @@ export class SyncService {
 		this.running = run;
 		const settle = (): void => {
 			if (this.running === run) this.running = null;
-			const again = this.rerun;
-			this.rerun = false;
-			if (again) void this.start().catch(() => undefined);
 		};
 		run.then(settle, settle);
 		return run;
@@ -352,7 +343,7 @@ export class SyncService {
 	/**
 	 * Adds the tasks of `projectId` completed in `[fromMs, toMs]` (whole seconds) to `found`, by id. TickTick answers
 	 * at most TICKTICK_COMPLETED_MAX per read, so a full answer may be cut: its window is read again in two halves
-	 * (TickTick sync rule 23). Only full reads count against `budget`; a split adds its two reads to `spent.requests`
+	 * until each holds fewer than that, within the splits a list may make. Only full reads count against `budget`; a split adds its two reads to `spent.requests`
 	 * before making them, and is not made past PULL_REQUESTS_MAX (the caller counts the first read). True when an
 	 * answer stayed cut (a full window too short to split, no splits left, or no requests left): `found` then holds
 	 * what was read, and may lack completions.
@@ -390,7 +381,7 @@ export class SyncService {
 		// that no longer exists (HTTP 404), which stops its list only.
 		const pulls: ListPull[] = [];
 		const seen = new Map<string, TtTask>();
-		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
+		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (200 or more within about two seconds, or no splits or requests left). */
 		let anyCut = false;
 		/**
 		 * Requests made by the pull so far: project data and completed reads. Every list gets its project data and its
@@ -455,8 +446,8 @@ export class SyncService {
 
 		// 2. Linked tasks expected open but not seen: one lookup each. Completed or won't do there is completed here;
 		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX in all, and none past
-		// PULL_REQUESTS_MAX requests; the rest wait for the next sync and are never offered for Trash (TickTick sync
-		// rule 10).
+		// PULL_REQUESTS_MAX requests; the rest wait for the next sync and are never offered for Trash, so a task goes
+		// to Trash only once every task of its list was looked up.
 		/** TickTick ids confirmed gone: looked up this sync or an earlier one. */
 		const missing = new Set<string>();
 		/** Lists with linked tasks left for the next sync (beyond the lookups of this one). */
@@ -465,7 +456,7 @@ export class SyncService {
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
 		// A cut answer may hide a completion of a task an earlier sync found gone (it came back and was completed in
-		// the burst): no earlier verdict is kept or used (TickTick sync rule 23).
+		// the burst): no earlier verdict is kept or used while any window was cut.
 		if (anyCut) this.goneInTickTick.clear();
 		{
 			const state = this.store.state;
@@ -550,7 +541,7 @@ export class SyncService {
 		}
 		// A cut completed answer may lack completions, which would read as gone: no Trash verdict this sync, in any list.
 		// Everything else is applied and the window moves on; a hidden completion is found by a lookup at a later sync,
-		// and the verdicts come back once the window no longer covers the cut (TickTick sync rule 23).
+		// and the verdicts come back once the window no longer covers the cut: a sync whose windows were all read in full.
 		if (anyCut) missing.clear();
 
 		// A tag name Logwell does not know, on a task the pull reads: TickTick's tags are read once, for its label

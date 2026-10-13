@@ -64,7 +64,7 @@ flowchart TD
   L --> M[rowMemo.ts skips unchanged rows]
 ```
 
-The `CommandQueue` (`src/app/events.ts`) runs one command at a time, in order. A read-only store refuses the command with `DomainError("ReadOnly")`. The command reads and writes through a `Tx` (`src/app/tx.ts`), a copy-on-write view of the state. `Tx.finish` keeps only records whose value differs (Data and safety rule 3).
+The `CommandQueue` (`src/app/events.ts`) runs one command at a time, in order. A read-only store refuses the command with `DomainError("ReadOnly")`. The command reads and writes through a `Tx` (`src/app/tx.ts`), a copy-on-write view of the state. `Tx.finish` keeps only records that are not the same object as before the command: it compares by identity, not by value, so a command that puts a fresh copy of an unchanged record writes it. A command that wants to write nothing for a no-change edit returns before `tx.put` (Data and safety rule 3).
 
 Records are immutable: a change is a fresh object, and only the collections a command touched get a fresh map. Views and the serializer rely on that identity. `CpbaseStore.commit` swaps the state in memory at once and schedules the save, so views never wait for the file.
 
@@ -134,7 +134,7 @@ flowchart TD
   J --> K["6. syncLinkBook.ts LinkBook.writeLinks in store.run"]
 ```
 
-The scheduler listens to `changed` and arms a delayed push only for edits that touch a linked list; the sync's own labels (`SYNC_OWN_LABELS`) never trigger one. How runs queue is TickTick sync rule 18.
+The scheduler listens to `changed` and arms a delayed push only for edits that touch a linked list; the sync's own labels (`SYNC_OWN_LABELS`) never trigger one. The scheduler is the one queue of triggers: `SyncService.sync` called during a run returns that run and queues nothing. How runs queue is TickTick sync rule 18.
 
 A sync pulls every linked list, then writes everything pulled as one command that is not undoable. A linked list whose TickTick list answers 404 is skipped with a `list-gone` failure (the session's notice offers Unlink); its tasks and links stay as they are, and the other lists sync. Deleting a list (`CategoryService.delete`) removes its list link and its sections' links in the same command, and its tasks keep their links; the sync then also reads the project those task links name, for those tasks only, so they leave it like tasks moved out of a linked list (moved to the Inbox's project, or deleted in TickTick). Each field compares as a hash from `src/domain/ticktick/mapping.ts` against the base stored in the `syncLinks` collection, so the engine knows which side changed.
 

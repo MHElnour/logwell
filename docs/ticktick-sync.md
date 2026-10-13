@@ -25,7 +25,7 @@ The official API has one limitation: it has no "everything that changed" request
 - After a large burst of completions, Logwell splits the time range into smaller pieces until each answer is complete.
 - When a burst cannot be split, such as hundreds of tasks completed in the same second, Logwell looks up the remaining tasks one by one over the next few syncs.
 - A task missing from TickTick is looked up before anything happens to it. Only tasks Logwell checked and could not find in any linked list are offered for the Trash, so nothing goes to the Trash on a guess.
-- Each sync keeps within TickTick's request limit.
+- The reading part of each sync keeps within a fixed number of requests; what is left waits for the next sync. Sending your changes has no such cap: they go in batches where TickTick allows it, and if TickTick answers "too many requests", the sync stops and no background sync starts before the time TickTick asks for.
 
 In practice, a very large change, or sync turned off for a long time, catches up over a few syncs instead of one.
 
@@ -93,7 +93,7 @@ Changes to different fields both apply. A TickTick change Logwell cannot take, s
 ## Limits
 
 - A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused, and so is deleting a list whose open tasks would take a synced Inbox past it. TickTick can still bring tasks in.
-- TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
+- TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error. Logwell cannot see your plan, so when TickTick refuses a change to a list with 99 or more open tasks, the notice names that limit as the likely cause and gives TickTick's reason.
 - After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs, a few dozen per sync beyond the first 200, and tasks deleted in TickTick wait until about five minutes after that burst.
 
 ## Fix a sync error
@@ -104,7 +104,7 @@ A failure stops the sync with a notice that names the list. Nothing retries in a
 | --- | --- |
 | "TickTick: too many requests. Sync will try again at the next pull." | Wait. |
 | "…the API token was refused… Replace it in Settings > Logwell." | Choose **Open settings** and choose another token. |
-| "…has 99 open tasks, the limit of TickTick's free plan." | Complete or move tasks in TickTick, then choose **Sync now**. |
+| "…refused the change (…). It has 99 open tasks, and TickTick's free plan allows 99 per list…" | On the free plan, complete or move tasks in TickTick, then choose **Sync now**. On a paid plan, choose **Sync now** a little later. |
 | "The TickTick list linked to "Work" no longer exists." | The list was deleted in TickTick. Choose **Unlink**, then link the list again if you want it synced. The other lists keep syncing, and nothing in this list changes until you unlink it. |
 | "…no answer… (network error)." | Check your connection. |
 

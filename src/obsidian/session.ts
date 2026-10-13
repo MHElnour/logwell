@@ -320,7 +320,9 @@ export class DbSession {
 	private onStoreEvent(e: StoreEvent): void {
 		switch (e.type) {
 			case "loaded":
-				if (e.cause !== "open") this.app.store.notifyReloaded();
+				// A replacement (import, restore, Keep mine, Restore backup) runs through the app store, which announces
+				// it once itself; only a change from outside the file is announced here.
+				if (e.cause === "external") this.app.store.notifyReloaded();
 				break;
 			case "read-only":
 				this.app.store.notifyStatus();
