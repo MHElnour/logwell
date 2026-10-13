@@ -70,7 +70,7 @@ A task can link one note in your vault for its long description. The note stays 
 - **Create description note** makes an empty note named after the task in the **Description note folder** ("Task notes" unless you change it) and opens it. The folder is created when needed. A taken name gets a number, such as "Pay rent (2)".
 - The details pane shows the note and updates as you edit it. **Open note** opens it in a tab; hold Alt for a split.
 - **Change** links another note and **Unlink** removes the link.
-- When you rename or move the note in Obsidian, the link follows.
+- When you rename or move the note in Obsidian, the link follows, also in a database you are switching away from at that moment.
 - When the note is gone, the pane says "Description note not found" with **Relink** and **Unlink**. If one note has the same name, **Relink to** offers it.
 - Several tasks can link one note. The pane lists the others under "Also linked from".
 

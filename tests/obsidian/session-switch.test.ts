@@ -163,6 +163,45 @@ describe("a change to the database file while it opens", () => {
 	});
 });
 
+describe("a note renamed during a database switch", () => {
+	it("#113: is followed by the database being closed, as well as by the one opening", async () => {
+		const fake = setup();
+		const note = { path: "Notes/X.md", linkedAt: "2026-10-01T09:00:00.000Z" };
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => withTask(d, makeTask("a1", { descriptionNote: note })).next, "r-a00000000001"));
+		fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("b1", { descriptionNote: note })).next, "r-b00000000001"));
+		const plugin = await loadPlugin(fake, A);
+		// The note's folder is renamed while the switch waits for A's sync request (the test stub's
+		// files all count as folders, so a folder rename is the one these tests can send).
+		const settle = vi.spyOn(plugin.session!, "settleSync").mockImplementation(async () => {
+			fake.fire("rename", fileOf("Archive"), "Notes");
+			await new Promise((r) => setTimeout(r, 10));
+		});
+		await plugin.setActiveDatabase(B);
+		expect(settle).toHaveBeenCalled();
+		const notePaths = (text: string | undefined) => [...load(text ?? "").tasks.values()].map((t) => t.descriptionNote?.path);
+		expect(notePaths(fake.files.get(A))).toEqual(["Archive/X.md"]);
+		expect([...plugin.session!.app.store.state.tasks.values()].map((t) => t.descriptionNote?.path)).toEqual(["Archive/X.md"]);
+		expect(notices.errors).toEqual([]);
+	});
+
+	it("#113: one that reaches the closing database after its file closed is applied when it opens again", async () => {
+		const fake = setup();
+		const note = { path: "Notes/X.md", linkedAt: "2026-10-01T09:00:00.000Z" };
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => withTask(d, makeTask("a1", { descriptionNote: note })).next, "r-a00000000001"));
+		const plugin = await loadPlugin(fake, A);
+		const store = plugin.session!.store;
+		const close = store.close.bind(store);
+		vi.spyOn(store, "close").mockImplementation(async () => {
+			await close();
+			fake.fire("rename", fileOf("Archive"), "Notes");
+		});
+		await plugin.setActiveDatabase(B);
+		await plugin.setActiveDatabase(A);
+		expect([...plugin.session!.app.store.state.tasks.values()].map((t) => t.descriptionNote?.path)).toEqual(["Archive/X.md"]);
+		expect(notices.errors).toEqual([]);
+	});
+});
+
 describe("closing a session", () => {
 	it("flushes held-back renames before the store closes", async () => {
 		const fake = setup();
