@@ -49,8 +49,9 @@ export function TaskDetails(props: {
 	const [showInfo, setShowInfo] = useState(false);
 	const [showFields, setShowFields] = useState(false);
 	const [addingTag, setAddingTag] = useState(false);
-	// "Edit repeat…" in a row menu opens this pane's Repeat picker (repeatActions.requestRepeatEdit).
-	const [repeatRequest, setRepeatRequest] = useState(0);
+	// "Edit repeat…" in a row menu opens this pane's Repeat picker (repeatActions.requestRepeatEdit), for the task it
+	// names only: another task's Repeat field starts closed.
+	const [repeatRequest, setRepeatRequest] = useState({ id: props.taskId, n: 0 });
 	// Bumped when the date field refuses to clear a repeating task's schedule, or a date write is refused, so the
 	// field shows the stored date again.
 	const [scheduleResets, setScheduleResets] = useState(0);
@@ -61,9 +62,11 @@ export function TaskDetails(props: {
 		const open = (id: ID): boolean => {
 			if (id !== props.taskId || !visible()) return false;
 			setShowFields(true);
-			setRepeatRequest((n) => n + 1);
+			setRepeatRequest((r) => ({ id, n: r.n + 1 }));
 			return true;
 		};
+		// A request spent on an earlier task does not open the picker when that task is selected again.
+		setRepeatRequest((r) => (r.id === props.taskId ? r : { id: props.taskId, n: 0 }));
 		if (hasRepeatEditRequest(props.taskId, visible())) open(props.taskId);
 		return onRepeatEditRequest(open);
 	}, [props.taskId]);
@@ -203,6 +206,8 @@ export function TaskDetails(props: {
 				{/* A subtask does not repeat. */}
 				{task.parentId === null && (
 					<RepeatField
+						// Per task, like the title: a Custom draft built for one task is never Done on another.
+						key={task.id}
 						value={repeatChoice}
 						anchor={repeatAnchor}
 						today={ctx.today}
@@ -210,7 +215,7 @@ export function TaskDetails(props: {
 						setIcon={(el, icon) => host.setIcon(el, icon)}
 						explicitPresets
 						seriesAnchor={rec?.anchor}
-						openRequest={repeatRequest}
+						openRequest={repeatRequest.id === task.id ? repeatRequest.n : 0}
 						onChange={(choice) => {
 							// The picker hands back what it was given when nothing changed: that is no edit (no version, no notice).
 							if (sameChoice(choice, repeatChoice)) return;
@@ -299,6 +304,7 @@ export function TaskDetails(props: {
 				</div>
 				{addingTag && (
 					<TagInput
+						key={task.id}
 						app={host.app}
 						value={task.tagKeys}
 						hideChips={true}
