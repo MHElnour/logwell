@@ -422,8 +422,54 @@ describe("categories (CAT-01..07)", () => {
 		const b = await h.app.categories.create("B");
 		await h.app.categories.move(b.id, -1);
 		expect(h.app.categories.list().map((c) => c.name)).toEqual(["Inbox", "B", "A"]);
-		await h.app.categories.move(b.id, -1);
-		expect(h.app.categories.list().map((c) => c.name)).toEqual(["B", "Inbox", "A"]);
+		await h.app.categories.move(b.id, 1);
+		expect(h.app.categories.list().map((c) => c.name)).toEqual(["Inbox", "A", "B"]);
 		expect(a.id).toBeDefined();
+	});
+
+	it("#129: Move up and Move down skip the Inbox, which stays first; at the ends they write nothing and add no Undo entry", async () => {
+		const h = await appHarness();
+		const a = await h.app.categories.create("A");
+		const b = await h.app.categories.create("B");
+		const names = () => h.app.categories.list().map((c) => c.name);
+		const unchanged = async (move: () => Promise<void>) => {
+			const state = h.app.store.state;
+			const label = h.app.store.undoLabel;
+			await move();
+			expect(h.app.store.state).toBe(state);
+			expect(h.app.store.undoLabel).toBe(label);
+		};
+		await unchanged(() => h.app.categories.move(a.id, -1));
+		await unchanged(() => h.app.categories.move(b.id, 1));
+		await unchanged(() => h.app.categories.move(INBOX_ID, 1));
+		await unchanged(() => h.app.categories.move(INBOX_ID, -1));
+		expect(names()).toEqual(["Inbox", "A", "B"]);
+		// One Move down is one visible step.
+		await h.app.categories.move(a.id, 1);
+		expect(names()).toEqual(["Inbox", "B", "A"]);
+		expect(h.app.store.undoLabel).toBe("Reorder categories");
+		// The pickers' order is the sidebar's, Inbox first, even when the Inbox's own key sorts after a list.
+		await h.app.store.run("Seed", (tx) => tx.put("categories", { ...tx.get("categories", INBOX_ID)!, sortKey: "zz" }), { undoable: false });
+		expect(names()).toEqual(["Inbox", "B", "A"]);
+	});
+
+	it("#129: lists that share a position (after a merge import) can still be moved, and get distinct positions", async () => {
+		const h = await appHarness();
+		const ids: string[] = [];
+		for (const name of ["A", "B", "C"]) ids.push((await h.app.categories.create(name)).id);
+		await h.app.store.run(
+			"Seed",
+			(tx) => {
+				for (const id of ids) tx.put("categories", { ...tx.get("categories", id)!, sortKey: "V" });
+			},
+			{ undoable: false },
+		);
+		const names = () => h.app.categories.list().map((c) => c.name);
+		const before = names().slice(1);
+		await h.app.categories.move(h.app.categories.list()[2]!.id, -1);
+		expect(names().slice(1)).toEqual([before[1], before[0], before[2]]);
+		const keys = h.app.categories.list().slice(1).map((c) => c.sortKey);
+		expect(new Set(keys).size).toBe(3);
+		expect([...keys].sort()).toEqual(keys);
 	});
 });
