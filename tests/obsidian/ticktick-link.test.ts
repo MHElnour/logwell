@@ -267,7 +267,9 @@ describe("linking and unlinking", () => {
 				return chosen;
 			};
 			await linkListFlow(t.deps, list.id);
-			expect(t.errors).toHaveLength(1);
+			// Told as a failed sync is (#136), once.
+			expect(t.errors).toEqual([]);
+			expect(t.notices).toHaveLength(1);
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 

@@ -342,8 +342,8 @@ describe("series, failed link writes and list failures", () => {
 			const s = await oneTask();
 			s.tt.edit(s.ttId, { repeatFlag: DAILY });
 			const link = s.link("task", s.id)!;
-			const engine = s.sync as unknown as { applyPull: (...args: unknown[]) => { deletes: SyncLink[] } };
-			const plan = engine.applyPull.bind(s.sync);
+			const engine = (s.sync as unknown as { puller: { applyPull: (...args: unknown[]) => { deletes: SyncLink[] } } }).puller;
+			const plan = engine.applyPull.bind(engine);
 			engine.applyPull = (...args: unknown[]) => {
 				const p = plan(...args);
 				p.deletes.push(link);
