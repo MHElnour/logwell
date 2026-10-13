@@ -35,7 +35,7 @@ The Overdue column takes no drops, and a subtask stays with its parent. Press Es
 
 ## Reorder cards and columns
 
-Drag a card up or down within its column. This works when the sort is **Sort: default**. The order is shared by every view: moving a task up in Today also moves it up in its list. See [Views](views.md) for sorting.
+Drag a card up or down within its column. This works when the sort is **Sort: default**. The order is shared by every view: moving a task up in Today also moves it up in its list. Only the card you drag moves: every other task keeps its place in every view. See [Views](views.md) for sorting.
 
 In a list, drag a section column's header to move the section. "No section" stays first.
 
