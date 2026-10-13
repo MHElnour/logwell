@@ -1,7 +1,7 @@
 import { DomainError, isDomainError } from "../domain/errors";
 import { compareSortKeys, keyBetween } from "../domain/sortKey";
 import { TagNames, normalizeTagKey, tagDisplayPath, tagNamesOf, tagPath } from "../domain/tags";
-import { categoryNameKey, requireTitle } from "../domain/tasks";
+import { categoryNameKey, requireTitle, subtasksOf } from "../domain/tasks";
 import {
 	type SyncFields,
 	dateFromTt,
@@ -577,12 +577,8 @@ export class SyncService {
 		return this.serial(async () => {
 			let wrote = false;
 			await this.store.run(TICKTICK_TRASH_LABEL, (tx) => {
-				for (const id of taskIds) {
-					const t = tx.get("tasks", id);
-					if (t === undefined || t.categoryId !== listId) continue;
-					this.tasks.deleteIn(tx, id);
-					wrote = true;
-				}
+				const gone = taskIds.filter((id) => tx.get("tasks", id)?.categoryId === listId);
+				wrote = this.trashGoneIn(tx, new Set(gone)) > 0;
 			});
 			await this.store.run(
 				TICKTICK_LINKS_LABEL,
@@ -1253,17 +1249,32 @@ export class SyncService {
 				plan.needsConfirmation.push({ listId, reason: emptied ? "emptied" : "many", tasks: group.map((t) => ({ id: t.id, title: t.title })) });
 				continue;
 			}
-			for (const t of group) {
-				if (tx.get("tasks", t.id) !== undefined) {
-					this.tasks.deleteIn(tx, t.id);
-					plan.written++;
-				}
-				plan.removeLinks.add(syncLinkId("task", t.id));
-			}
+			plan.written += this.trashGoneIn(tx, new Set(group.map((t) => t.id)));
+			for (const t of group) plan.removeLinks.add(syncLinkId("task", t.id));
 		}
 		// `finish` is pure: whether this command writes anything, for the result and its Undo notice.
 		plan.wrote = tx.finish().ops.length > 0;
 		return plan;
+	}
+
+	/**
+	 * Moves tasks gone from TickTick to Trash, each with its subtasks that are gone too. A subtask that is not gone
+	 * (alive in TickTick, or never sent) stays, as a top-level task: in Trash it would be deleted in TickTick by the next
+	 * sync. Returns the tasks written.
+	 */
+	private trashGoneIn(tx: Tx, gone: ReadonlySet<ID>): number {
+		let written = 0;
+		for (const id of gone) {
+			if (tx.get("tasks", id) === undefined) continue;
+			for (const sub of subtasksOf(tx.all("tasks"), id)) {
+				if (gone.has(sub.id)) continue;
+				this.tasks.setParentIn(tx, sub.id, null);
+				written++;
+			}
+			this.tasks.deleteIn(tx, id);
+			written++;
+		}
+		return written;
 	}
 
 	/** An unlinked, open Logwell task of the list whose create may have reached TickTick, by title. */
