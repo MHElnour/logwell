@@ -32,7 +32,6 @@ const LUXON_ALLOWED = [
 ];
 const NEW_DATE_ALLOWED = [
 	"src/domain/time.ts",
-	"src/app/SyncService.ts",
 	"src/domain/focus.ts",
 	"src/domain/ports.ts",
 ];

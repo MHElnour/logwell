@@ -157,6 +157,26 @@ describe("subtasks (SUB-01..07, AS-09)", () => {
 		expect(moved.parentId).toBe(parent.id);
 	});
 
+	it("#136: the delete prompts' counts (subtasks, a list's tasks) follow completions, moves and undo", async () => {
+		const { h, parent, a, b } = await parentWithTwo();
+		await h.app.tasks.complete(a.id);
+		expect(h.app.tasks.subtaskCount(parent.id)).toBe(2);
+		const other = (await h.app.tasks.create({ title: "Other" })).task;
+		await h.app.tasks.setParent(other.id, parent.id);
+		expect(h.app.tasks.subtaskCount(parent.id)).toBe(3);
+		await h.app.store.undo();
+		expect(h.app.tasks.subtaskCount(parent.id)).toBe(2);
+		await h.app.tasks.delete(b.id);
+		expect(h.app.tasks.subtaskCount(parent.id)).toBe(1);
+		expect(h.app.tasks.subtaskCount(other.id)).toBe(0);
+		const list = await h.app.categories.create("Study");
+		expect(h.app.categories.taskCount(list.id)).toBe(0);
+		await h.app.tasks.update(parent.id, { categoryId: list.id });
+		// The parent and its remaining subtask moved together; completed tasks count too.
+		expect(h.app.categories.taskCount(list.id)).toBe(2);
+		expect(h.app.categories.taskCount(INBOX_ID)).toBe(1);
+	});
+
 	it("SUB-06: deleting a parent trashes its subtasks; restore brings them back together", async () => {
 		const { h, parent, a, b } = await parentWithTwo();
 		expect(h.app.tasks.subtaskCount(parent.id)).toBe(2);
@@ -229,7 +249,7 @@ describe("trash and undo (TASK-05)", () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "A" });
 		await h.app.tasks.update(task.id, { title: "B" });
-		await h.app.tasks.rewriteNotePaths("x", "y", false);
+		await h.app.noteRenames.rewriteNotePaths("x", "y", false);
 		await h.app.tasks.update(task.id, { urgent: true });
 		await h.app.store.undo();
 		expect(h.app.store.state.tasks.get(task.id)?.urgent).toBe(false);

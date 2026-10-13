@@ -1,12 +1,10 @@
 // @vitest-environment happy-dom
-import { render } from "preact";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
-import { AppRoot } from "../../src/ui/AppRoot";
 import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
-import { U1Host, settle } from "./app-helpers";
+import { mountApp, settle } from "./app-helpers";
 
 // The Tasks section's filter drops a tag that is gone too (Lists, sections and tags rule 24). Nothing in the Tasks
 // section picks tags for its filter today, so the test starts it with one.
@@ -32,25 +30,11 @@ function file(): string {
 	return serializeDb({ ...data, tags, tasks });
 }
 
-let root: HTMLElement | null = null;
-afterEach(() => {
-	if (root !== null) render(null, root);
-	root?.remove();
-	root = null;
-});
-
 describe("Tasks section filter", () => {
 	it("drops a deleted tag, so the list shows its tasks again", async () => {
-		(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-			this.replaceChildren();
-		};
 		const h = await appHarness({ initial: file() });
-		const host = new U1Host(h);
-		root = document.createElement("div");
-		document.body.appendChild(root);
-		render(<AppRoot host={host} initialSection={null} handle={() => undefined} />, root);
-		await settle();
-		const titles = () => [...root!.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((e) => e.textContent.trim()).sort();
+		const { root } = await mountApp({}, { harness: h });
+		const titles = () => [...root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((e) => e.textContent.trim()).sort();
 		expect(titles()).toEqual(["Ring mum"]);
 		await h.app.tags.delete("calls");
 		await settle();

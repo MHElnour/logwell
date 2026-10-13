@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { LocalStorageRenameQueue } from "../../src/obsidian/renameQueue";
 import { collectionsOf, CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 import { MemoryRenameQueue, type NoteRename, type RenameQueuePort, type RenameTimers } from "../../src/app/ports";
-import { TaskService } from "../../src/app/TaskService";
-import { sequentialIds, settle } from "../helpers";
+import { NoteRenameTracker } from "../../src/app/noteRenames";
+import { settle } from "../helpers";
 import { DB_PATH, descendant, emptyDbText, makeTask, withTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness, makeReadOnly, makeWritable, reopen, waitFor } from "./harness";
 import { readHeader } from "../../src/persistence/serializer";
@@ -60,7 +60,7 @@ describe("note renames", () => {
 				const h = await appHarness();
 				const id = await linkedTask(h, chain.link);
 				// The second event arrives before the first rewrite has committed.
-				const [first, second] = chain.renames.map(([o, n, f]) => h.app.tasks.rewriteNotePaths(o, n, f));
+				const [first, second] = chain.renames.map(([o, n, f]) => h.app.noteRenames.rewriteNotePaths(o, n, f));
 				expect([await first, await second]).toEqual([1, 1]);
 				expect(pathOf(h, id)).toBe(chain.final);
 			});
@@ -71,7 +71,7 @@ describe("note renames", () => {
 				await h.saveNow();
 				const saved = h.dbText();
 				await makeReadOnly(h);
-				const counts = await Promise.all(chain.renames.map(([o, n, f]) => h.app.tasks.rewriteNotePaths(o, n, f)));
+				const counts = await Promise.all(chain.renames.map(([o, n, f]) => h.app.noteRenames.rewriteNotePaths(o, n, f)));
 				expect(counts).toEqual([0, 0]);
 				await makeWritable(h, saved);
 				await waitFor(() => pathOf(h, id) === chain.final);
@@ -88,9 +88,9 @@ describe("note renames", () => {
 			const gate = new Promise<void>((r) => (release = r));
 			h.store.replaceAll = () => gate;
 			const blocker = h.app.store.replaceAll(collectionsOf(h.store.data), null);
-			const first = h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
+			const first = h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
 			await makeReadOnly(h);
-			const second = h.app.tasks.rewriteNotePaths("B.md", "Folder/B.md", false);
+			const second = h.app.noteRenames.rewriteNotePaths("B.md", "Folder/B.md", false);
 			release();
 			await blocker;
 			expect([await first, await second]).toEqual([0, 0]);
@@ -109,7 +109,7 @@ describe("note renames", () => {
 			const renames = new MemoryRenameQueue();
 			const h = await appHarness({ initial: newer, renames });
 			expect(h.app.store.readOnlyState?.reason).toBe("newer-schema");
-			expect(await h.app.tasks.rewriteNotePaths("A.md", "B.md", false)).toBe(0);
+			expect(await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false)).toBe(0);
 			expect(renames.load("db-1")).toEqual([{ oldPath: "A.md", newPath: "B.md", isFolder: false }]);
 
 			// The plugin update: the same database now loads (modelled by a supported file).
@@ -132,12 +132,12 @@ describe("note renames", () => {
 			const done = descendant(supported, (d) => withTask(d, { ...linked, descriptionNote: { path: "C.md", linkedAt: linked.createdAt } }).next, "r-done00000001");
 			const h = await appHarness({ initial: done, renames });
 			const before = h.app.store.state;
-			await h.app.tasks.resumeRenames();
+			await h.app.noteRenames.resumeRenames();
 			await settle();
 			expect(h.app.store.state).toBe(before);
 			expect(renames.load("db-1")).toEqual([]);
 			// Resuming twice changes nothing either.
-			await h.app.tasks.resumeRenames();
+			await h.app.noteRenames.resumeRenames();
 			expect(pathOf(h, "t1")).toBe("C.md");
 		});
 
@@ -148,7 +148,7 @@ describe("note renames", () => {
 			const errors: unknown[] = [];
 			h.app.store.bus.onListenerError = (err) => errors.push(err);
 			vi.spyOn(h.app.store, "run").mockRejectedValueOnce(new Error("disk error"));
-			await h.app.tasks.resumeRenames();
+			await h.app.noteRenames.resumeRenames();
 			expect(errors).toHaveLength(1);
 			const message = (errors[0] as Error).message;
 			expect(message).toContain("A.md");
@@ -161,7 +161,7 @@ describe("note renames", () => {
 			const renames = new MemoryRenameQueue();
 			renames.save("db-other", [{ oldPath: "A.md", newPath: "X.md", isFolder: false }]);
 			const h = await appHarness({ initial: supported, renames });
-			await h.app.tasks.resumeRenames();
+			await h.app.noteRenames.resumeRenames();
 			expect(pathOf(h, "t1")).toBe("A.md");
 			expect(renames.load("db-other")).toHaveLength(1);
 		});
@@ -201,7 +201,7 @@ describe("note renames", () => {
 	}
 
 	const burst = (h: AppHarness, n: number): Promise<number>[] =>
-		Array.from({ length: n }, (_, i) => h.app.tasks.rewriteNotePaths(`Projects/Big/note ${i}.md`, `Archive/Big/note ${i}.md`, false));
+		Array.from({ length: n }, (_, i) => h.app.noteRenames.rewriteNotePaths(`Projects/Big/note ${i}.md`, `Archive/Big/note ${i}.md`, false));
 
 	/** Timers the test fires by hand, so the throttle window is deterministic. */
 	class ManualTimers implements RenameTimers {
@@ -227,9 +227,9 @@ describe("note renames", () => {
 		}
 	}
 
-	/** A rename service over the harness's store that uses the given queue and timers. */
-	function serviceWith(h: AppHarness, queue: CountingQueue, timers: RenameTimers): TaskService {
-		return new TaskService(h.app.store, sequentialIds("n"), h.app.settings, h.notes, queue, timers);
+	/** A rename tracker over the harness's store that uses the given queue and timers. */
+	function serviceWith(h: AppHarness, queue: CountingQueue, timers: RenameTimers): NoteRenameTracker {
+		return new NoteRenameTracker(h.app.store, queue, timers);
 	}
 
 	/** What one entry costs when serialized, with slack. A linear total stays within a small multiple of n entries. */
@@ -253,7 +253,7 @@ describe("note renames", () => {
 			const q = new CountingQueue();
 			const h = await appHarness({ renames: q });
 			const id = await linkedTask(h, "A.md");
-			expect(await h.app.tasks.rewriteNotePaths("A.md", "B.md", false)).toBe(1);
+			expect(await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false)).toBe(1);
 			expect(pathOf(h, id)).toBe("B.md");
 			expect(q.writes).toBe(0);
 		});
@@ -319,9 +319,9 @@ describe("note renames", () => {
 			await h.saveNow();
 			const saved = h.dbText();
 			await makeReadOnly(h);
-			void h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
-			void h.app.tasks.rewriteNotePaths("B.md", "C.md", false);
-			void h.app.tasks.rewriteNotePaths("C.md", "Folder/C.md", false);
+			void h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
+			void h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false);
+			void h.app.noteRenames.rewriteNotePaths("C.md", "Folder/C.md", false);
 			await waitFor(() => q.load("db-1").length === 3);
 			await makeWritable(h, saved);
 			await waitFor(() => pathOf(h, id) === "Folder/C.md");
@@ -334,9 +334,9 @@ describe("note renames", () => {
 			const id = await linkedTask(h, "A.md");
 			await h.saveNow();
 			await makeReadOnly(h);
-			void h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
-			void h.app.tasks.rewriteNotePaths("B.md", "C.md", false);
-			void h.app.tasks.rewriteNotePaths("C.md", "D.md", false);
+			void h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
+			void h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false);
+			void h.app.noteRenames.rewriteNotePaths("C.md", "D.md", false);
 			await waitFor(() => q.load("db-1").length === 3);
 			// The file is repaired and the plugin reloads.
 			h.fs.files.set(DB_PATH, h.dbText().replace(/^<<<<<<< HEAD\n/, ""));
@@ -363,7 +363,7 @@ describe("note renames", () => {
 			const gate = new Promise<void>((r) => (release = r));
 			h.store.replaceAll = () => gate;
 			const blocker = h.app.store.replaceAll(collectionsOf(h.store.data), null);
-			const results = chain.map(([o, n, f]) => h.app.tasks.rewriteNotePaths(o, n, f));
+			const results = chain.map(([o, n, f]) => h.app.noteRenames.rewriteNotePaths(o, n, f));
 			await settle();
 			return { h, id, saved, release, blocker, results };
 		}
@@ -372,7 +372,7 @@ describe("note renames", () => {
 			const q = new CountingQueue();
 			const { h, release, blocker, results } = await burstInProgress(q);
 			expect(q.writes).toBe(0); // writable: nothing has been stored so far
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			expect(q.load("db-1")).toEqual(chain.map(([oldPath, newPath, isFolder]) => ({ oldPath, newPath, isFolder })));
 			release();
 			await blocker;
@@ -382,7 +382,7 @@ describe("note renames", () => {
 		it("a plugin unload at that moment loses nothing: reopening replays them once, in order", async () => {
 			const q = new CountingQueue();
 			const { h, id, saved, release, blocker } = await burstInProgress(q);
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			// The plugin unloads here: only what is in local storage and the file survives.
 			const stored = q.load("db-1");
 			const survivingQueue = new MemoryRenameQueue();
@@ -392,21 +392,21 @@ describe("note renames", () => {
 
 			const h2 = await appHarness({ initial: saved, renames: survivingQueue });
 			expect(pathOf(h2, id)).toBe("A.md");
-			await h2.app.tasks.resumeRenames();
+			await h2.app.noteRenames.resumeRenames();
 			expect(pathOf(h2, id)).toBe("Folder/C.md");
 			expect(survivingQueue.load("db-1")).toEqual([]);
 			// Replaying a rename that was in fact already applied changes nothing.
 			survivingQueue.save("db-1", stored);
-			await h2.app.tasks.resumeRenames();
+			await h2.app.noteRenames.resumeRenames();
 			expect(pathOf(h2, id)).toBe("Folder/C.md");
 		});
 
 		it("never writes under the placeholder id", async () => {
 			const q = new CountingQueue();
 			const h = await appHarness({ initial: "garbage, not a database\n", renames: q });
-			void h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
+			void h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
 			await settle();
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			expect(q.writes).toBe(0);
 		});
 
@@ -414,14 +414,14 @@ describe("note renames", () => {
 			const q = new CountingQueue();
 			q.save("db-1", [{ oldPath: "X.md", newPath: "Y.md", isFolder: false }]);
 			const h = await appHarness({ renames: q });
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			expect(q.load("db-1")).toEqual([{ oldPath: "X.md", newPath: "Y.md", isFolder: false }]);
 		});
 
 		it("with nothing waiting and nothing stored, a flush writes nothing", async () => {
 			const q = new CountingQueue();
 			const h = await appHarness({ renames: q });
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			expect(q.writes).toBe(0);
 		});
 	});
@@ -437,7 +437,7 @@ describe("note renames", () => {
 			const h = await appHarness({ renames: new ThrowingQueue() });
 			await makeReadOnly(h);
 			const result = await Promise.race([
-				h.app.tasks.rewriteNotePaths("A.md", "B.md", false),
+				h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false),
 				new Promise<string>((r) => setTimeout(() => r("hung"), 1000)),
 			]);
 			expect(result).toBe(0);
@@ -483,9 +483,9 @@ describe("renames while a database is damaged", () => {
 		it("are not written to storage under the placeholder id", async () => {
 			const q = new RecordingQueue();
 			const h = await damagedUnknown(q);
-			expect(await h.app.tasks.rewriteNotePaths("A.md", "B.md", false)).toBe(0);
-			await h.app.tasks.rewriteNotePaths("B.md", "C.md", false);
-			h.app.tasks.flushRenames();
+			expect(await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false)).toBe(0);
+			await h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false);
+			h.app.noteRenames.flushRenames();
 			await settle();
 			expect(q.saves).toEqual([]);
 			expect(q.entries.size).toBe(0);
@@ -496,7 +496,7 @@ describe("renames while a database is damaged", () => {
 			// An earlier session saved A -> B for the real database.
 			q.entries.set("db-real", [AB]);
 			const h = await damagedUnknown(q);
-			await h.app.tasks.rewriteNotePaths("B.md", "C.md", false); // waits: read-only
+			await h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false); // waits: read-only
 			expect(q.saves).toEqual([]);
 
 			await makeWritable(h, realDb);
@@ -510,7 +510,7 @@ describe("renames while a database is damaged", () => {
 		it("without saved renames, the in-memory ones are applied to the real database", async () => {
 			const q = new RecordingQueue();
 			const h = await damagedUnknown(q);
-			await h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
+			await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
 			await makeWritable(h, realDb);
 			await waitFor(() => pathOf(h) === "B.md");
 			expect(q.saves.map((s) => s.id)).not.toContain("unknown");
@@ -519,8 +519,8 @@ describe("renames while a database is damaged", () => {
 		it("are saved under the real id when that database loads but cannot take them yet", async () => {
 			const q = new RecordingQueue();
 			const h = await damagedUnknown(q);
-			await h.app.tasks.rewriteNotePaths("A.md", "B.md", false);
-			await h.app.tasks.rewriteNotePaths("B.md", "C.md", false);
+			await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
+			await h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false);
 
 			// The file is repaired, but with a newer schema: loaded, still read-only.
 			h.fs.files.set(DB_PATH, realDb.replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":7'));
@@ -530,7 +530,7 @@ describe("renames while a database is damaged", () => {
 			h.app.store.notifyReloaded();
 			await settle();
 
-			h.app.tasks.flushRenames();
+			h.app.noteRenames.flushRenames();
 			expect(q.saves.map((s) => s.id)).not.toContain("unknown");
 			expect(q.entries.get("db-real")).toEqual([AB, BC]);
 		});
@@ -539,10 +539,10 @@ describe("renames while a database is damaged", () => {
 			const q = new RecordingQueue();
 			q.entries.set("db-real", [AB]);
 			const h = await damagedUnknown(q);
-			await h.app.tasks.resumeRenames(); // id still unknown: nothing is loaded
+			await h.app.noteRenames.resumeRenames(); // id still unknown: nothing is loaded
 			await makeWritable(h, realDb);
 			await waitFor(() => pathOf(h) === "B.md");
-			await h.app.tasks.resumeRenames();
+			await h.app.noteRenames.resumeRenames();
 			h.app.store.notifyReloaded();
 			await settle();
 			expect(pathOf(h)).toBe("B.md");
@@ -561,8 +561,8 @@ describe("renames while a database is damaged", () => {
 			await h2.store.handleExternalChange();
 			expect(h2.store.readOnlyState?.reason).toBe("damaged");
 			expect(h2.store.data.meta.dbId).toBe("db-known");
-			await h2.app.tasks.rewriteNotePaths("A.md", "B.md", false);
-			h2.app.tasks.flushRenames();
+			await h2.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
+			h2.app.noteRenames.flushRenames();
 			expect(q.entries.get("db-known")).toEqual([AB]);
 		});
 	});
@@ -599,9 +599,9 @@ describe("description notes (NOTE-01..10)", () => {
 		const { task } = await h.app.tasks.create({ title: "Plan", notePath: "Plan.md" });
 		await h.app.tasks.update(task.id, { title: "Renamed" });
 		expect(h.app.store.state.tasks.get(task.id)?.descriptionNote?.path).toBe("Plan.md");
-		expect(await h.app.tasks.rewriteNotePaths("Plan.md", "Plan v2.md", false)).toBe(1);
+		expect(await h.app.noteRenames.rewriteNotePaths("Plan.md", "Plan v2.md", false)).toBe(1);
 		// Idempotent: the duplicate event of a folder rename is harmless.
-		expect(await h.app.tasks.rewriteNotePaths("Plan.md", "Plan v2.md", false)).toBe(0);
+		expect(await h.app.noteRenames.rewriteNotePaths("Plan.md", "Plan v2.md", false)).toBe(0);
 		const t = h.app.store.state.tasks.get(task.id)!;
 		expect(t.id).toBe(task.id);
 		expect(t.descriptionNote?.path).toBe("Plan v2.md");
@@ -612,7 +612,7 @@ describe("description notes (NOTE-01..10)", () => {
 		const a = (await h.app.tasks.create({ title: "A", notePath: "Notes/a.md" })).task;
 		const b = (await h.app.tasks.create({ title: "B", notePath: "Notes/sub/b.md" })).task;
 		await h.app.tasks.delete(b.id);
-		await h.app.tasks.rewriteNotePaths("Notes", "Archive/Notes", true);
+		await h.app.noteRenames.rewriteNotePaths("Notes", "Archive/Notes", true);
 		expect(h.app.store.state.tasks.get(a.id)?.descriptionNote?.path).toBe("Archive/Notes/a.md");
 		const trashed = [...h.app.store.state.trash.values()][0]!.tasks[0]!;
 		expect(trashed.descriptionNote?.path).toBe("Archive/Notes/sub/b.md");
@@ -625,8 +625,8 @@ describe("description notes (NOTE-01..10)", () => {
 		const saved = h.dbText();
 		await makeReadOnly(h);
 		// A file rename, then a rename of its folder. Neither event comes again.
-		expect(await h.app.tasks.rewriteNotePaths("Notes/Plan.md", "Notes/Plan v2.md", false)).toBe(0);
-		expect(await h.app.tasks.rewriteNotePaths("Notes", "Archive", true)).toBe(0);
+		expect(await h.app.noteRenames.rewriteNotePaths("Notes/Plan.md", "Notes/Plan v2.md", false)).toBe(0);
+		expect(await h.app.noteRenames.rewriteNotePaths("Notes", "Archive", true)).toBe(0);
 		expect(h.app.store.state.tasks.get(task.id)?.descriptionNote?.path).toBe("Notes/Plan.md");
 
 		// The file is repaired outside Obsidian (another revision of the same database).

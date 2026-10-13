@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryTickTickDevice, MemoryTickTickSecret, TickTickError } from "../../src/app/ports";
-import { type PendingTrash, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
+import { type PendingTrash, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL } from "../../src/app/syncModel";
 import type { Category, SyncLink } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TickTickError } from "../../src/app/ports";
-import { TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
+import { TICKTICK_SYNC_LABEL } from "../../src/app/syncModel";
 import { type SyncLink, syncLinkId } from "../../src/domain/types";
 import { rule } from "../domain/recurrence-fixtures";
 import { makeReadOnly, makeWritable } from "./harness";
@@ -405,8 +405,8 @@ describe("the TickTick copy after a delete, purge or move in Logwell", () => {
 		const s = await oneSyncedTask();
 		s.tt.edit(s.ttId, { repeatFlag: DAILY });
 		const link = s.link("task", s.id)!;
-		const engine = s.sync as unknown as { applyPull: (...args: unknown[]) => { deletes: SyncLink[] } };
-		const plan = engine.applyPull.bind(s.sync);
+		const engine = (s.sync as unknown as { puller: { applyPull: (...args: unknown[]) => { deletes: SyncLink[] } } }).puller;
+		const plan = engine.applyPull.bind(engine);
 		engine.applyPull = (...args: unknown[]) => {
 			const p = plan(...args);
 			p.deletes.push(link);
@@ -646,6 +646,18 @@ describe("stopping between requests", () => {
 		const linked = ["One", "Two", "Three"].filter((t) => s.link("task", s.task(t).id) !== undefined);
 		expect(linked).toHaveLength(1);
 		expect(s.tt.findByTitle(linked[0]!)?.id).toBe(s.ttIdOf(linked[0]!));
+	});
+
+	it("#136: a sync stopped by the closing session says so as its own kind, not as a network error", async () => {
+		const s = await syncHarness();
+		const { projectId } = await linkedList(s);
+		s.tt.add(projectId, { title: "From TickTick" });
+		s.tt.onCall = (m) => {
+			if (m === "listCompleted") s.sync.stop();
+		};
+		const r = await s.sync.sync();
+		expect(r.ok).toBe(false);
+		expect(r.error).toMatchObject({ kind: "stopped", message: "TickTick: sync stopped because the database is closing." });
 	});
 
 	it("mid-pull: nothing pulled is written", async () => {

@@ -8,6 +8,7 @@ import type { ListEntry } from "../../src/domain/queries";
 import { FEED_LIMIT } from "../../src/app/store";
 import type { JournalOp } from "../../src/persistence/journal";
 import { collectionsOf } from "../../src/persistence/schema";
+import { mountNode, unmountAll } from "./app-helpers";
 
 describe("the hold in the app", () => {
 	// The hold on a just-completed row. Fake timers drive the 450 ms; the task is completed and reopened through the
@@ -32,13 +33,11 @@ describe("the hold in the app", () => {
 		h = await appHarness();
 		a = (await h.app.tasks.create({ title: "Pay rent" })).task.id;
 		vi.useFakeTimers();
-		host = document.createElement("div");
-		document.body.append(host);
+		host = mountNode(null);
 		held = new Set();
 	});
 	afterEach(() => {
-		render(null, host);
-		host.remove();
+		unmountAll();
 		vi.useRealTimers();
 	});
 
@@ -151,14 +150,12 @@ describe("the hold in a task block", () => {
 
 	beforeEach(() => {
 		vi.useFakeTimers();
-		host = document.createElement("div");
-		document.body.append(host);
+		host = mountNode(null);
 		held = new Set();
 		win = window;
 	});
 	afterEach(() => {
-		render(null, host);
-		host.remove();
+		unmountAll();
 		vi.useRealTimers();
 	});
 
@@ -321,13 +318,11 @@ describe("the hold reads the change feed", () => {
 		a = (await h.app.tasks.create({ title: "Pay rent" })).task.id;
 		b = (await h.app.tasks.create({ title: "Buy milk" })).task.id;
 		vi.useFakeTimers();
-		host = document.createElement("div");
-		document.body.append(host);
+		host = mountNode(null);
 		held = new Set();
 	});
 	afterEach(() => {
-		render(null, host);
-		host.remove();
+		unmountAll();
 		vi.useRealTimers();
 	});
 

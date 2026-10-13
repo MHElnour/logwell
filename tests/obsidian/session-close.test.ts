@@ -168,8 +168,8 @@ describe("a failing rename flush never skips closing the store", () => {
 		fake.files.set(A, emptyDbText("db-a", "r-aaaaaaaaaaaa").replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":7'));
 		const plugin = await loadPlugin(fake, A);
 		const session = plugin.session!;
-		await session.app.tasks.rewriteNotePaths("X.md", "Y.md", false); // saved at once; the cooldown starts
-		void session.app.tasks.rewriteNotePaths("Y.md", "Z.md", false); // held back by the cooldown
+		await session.app.noteRenames.rewriteNotePaths("X.md", "Y.md", false); // saved at once; the cooldown starts
+		void session.app.noteRenames.rewriteNotePaths("Y.md", "Z.md", false); // held back by the cooldown
 		await new Promise((r) => setTimeout(r, 0));
 		fake.app.saveLocalStorage = (k: string) => {
 			if (k.startsWith("checkpoint-pending-renames")) throw new Error("quota exceeded");
@@ -186,7 +186,7 @@ describe("a failing rename flush never skips closing the store", () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);
 		const session = plugin.session!;
-		vi.spyOn(session.app.tasks, "flushRenames").mockImplementation(() => {
+		vi.spyOn(session.app.noteRenames, "flushRenames").mockImplementation(() => {
 			throw new Error("boom");
 		});
 		const close = vi.spyOn(session.store, "close");
@@ -205,7 +205,7 @@ describe("a failing rename flush never skips closing the store", () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);
 		const session = plugin.session!;
-		vi.spyOn(session.app.tasks, "flushRenames").mockImplementation(() => {
+		vi.spyOn(session.app.noteRenames, "flushRenames").mockImplementation(() => {
 			throw new Error("boom");
 		});
 		vi.spyOn(session.store, "close").mockRejectedValue(new Error("EACCES"));

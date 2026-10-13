@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type PendingTrash, TICKTICK_TRASH_LABEL } from "../../src/app/SyncService";
+import { type PendingTrash, TICKTICK_TRASH_LABEL } from "../../src/app/syncModel";
 import { TickTickError } from "../../src/app/ports";
 import type { LinkOption } from "../../src/app/tickTickLink";
 import { syncLinkId } from "../../src/domain/types";
@@ -111,6 +111,19 @@ describe("linking and unlinking", () => {
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 			expect(s.tt.projects.size).toBe(0);
 			expect(t.notices).toEqual([]);
+		});
+
+		it("#136: TickTick failing to answer for the preview is told like a failed sync, naming the list, and links nothing", async () => {
+			const { s, list } = await setup();
+			const project = s.tt.addProject("Work");
+			const t = flowDeps(s);
+			t.deps.pick = async (d) => optionFor(d, project.id);
+			s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+			await linkListFlow(t.deps, list.id);
+			expect(t.previews).toHaveLength(0);
+			expect(t.errors).toEqual([]);
+			expect(t.notices).toEqual(['TickTick sync stopped in "Work": server error (HTTP 500)']);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 
 		it("dismissing the preview changes nothing", async () => {
@@ -254,7 +267,9 @@ describe("linking and unlinking", () => {
 				return chosen;
 			};
 			await linkListFlow(t.deps, list.id);
-			expect(t.errors).toHaveLength(1);
+			// Told as a failed sync is (#136), once.
+			expect(t.errors).toEqual([]);
+			expect(t.notices).toHaveLength(1);
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 

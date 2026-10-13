@@ -1,6 +1,7 @@
 import type { TickTickApi } from "../app/ports";
-import type { FirstSyncPlan, PendingTrash, SyncResult, SyncService } from "../app/SyncService";
-import { TICKTICK_TRASH_LABEL } from "../app/SyncService";
+import type { SyncService } from "../app/SyncService";
+import type { FirstSyncPlan, PendingTrash, SyncResult } from "../app/syncModel";
+import { TICKTICK_TRASH_LABEL } from "../app/syncModel";
 import { type LinkOption, type LinkTarget, assertLinkable, countPushable, defaultOption, loadLinkOptions } from "../app/tickTickLink";
 import type { TaskIndex } from "../app/taskIndex";
 import { isListSynced } from "../app/syncMarks";
@@ -54,6 +55,11 @@ export async function linkListFlow(deps: LinkFlowDeps, listId: ID): Promise<void
 			});
 			if (chosen === null) return;
 			const plan = await planOf(deps, listId, chosen.target);
+			// TickTick could not be read for the preview: said like a failed sync, and nothing is linked.
+			if ("failures" in plan) {
+				for (const f of plan.failures) deps.notify(failureText(f));
+				return;
+			}
 			const answer = await deps.preview({ listName: list.name, projectName: chosen.target.name, plan });
 			if (answer === "back") continue;
 			if (answer === null) return;
@@ -87,7 +93,7 @@ async function createProject(deps: LinkFlowDeps, listId: ID, name: string): Prom
 }
 
 /** A new project has nothing to bring; an existing one is read (and a note list or a full list is refused there). */
-async function planOf(deps: LinkFlowDeps, listId: ID, target: LinkTarget): Promise<Pick<FirstSyncPlan, "toLogwell" | "toTickTick">> {
+async function planOf(deps: LinkFlowDeps, listId: ID, target: LinkTarget): Promise<Pick<FirstSyncPlan, "toLogwell" | "toTickTick"> | SyncResult> {
 	if (target.kind === "create") return { toLogwell: 0, toTickTick: countPushable(deps.state(), deps.index, listId) };
 	return deps.sync.planFirstSync(listId, target.projectId);
 }

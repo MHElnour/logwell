@@ -37,7 +37,7 @@ flowchart TD
 
 `CheckpointApp` (`src/app/App.ts`) is the composition root of the app layer: one `AppStore` and every service, plus `queryContext()`, the context every view reads. A view whose file is not the active database shows **Make active** instead of the app.
 
-Closing a session stops the TickTick sync, lets a focus write finish, applies the note renames still queued and closes the store, which saves what is pending. A note rename during a switch reaches both the database being closed (`closingSession` in `src/main.ts`; once its store has closed the rename waits in its rename queue) and, once it is open, the new one. When Obsidian quits, the plugin's quit task saves the open session and any session a switch is closing or opening with `CpbaseStore.flushBeforeQuit`; like `close`, it keeps what cannot be written as a conflict copy. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there. Once the plugin is unloaded no open runs, not even one queued before or a switch still closing the old database, and a session whose open fails is closed, so no session outlives the plugin or stays open unused.
+Closing a session stops the TickTick sync, lets a focus write finish, saves the note renames still queued (`NoteRenameTracker` in `src/app/noteRenames.ts`, reached as `app.noteRenames`, follows each note rename into the tasks' note paths) and closes the store, which saves what is pending. A note rename during a switch reaches both the database being closed (`closingSession` in `src/main.ts`; once its store has closed the rename waits in its rename queue) and, once it is open, the new one. When Obsidian quits, the plugin's quit task saves the open session and any session a switch is closing or opening with `CpbaseStore.flushBeforeQuit`; like `close`, it keeps what cannot be written as a conflict copy. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there. Once the plugin is unloaded no open runs, not even one queued before or a switch still closing the old database, and a session whose open fails is closed, so no session outlives the plugin or stays open unused.
 
 ## A change
 
@@ -118,7 +118,7 @@ The store has two read-only states (`ReadOnlyState`): "damaged", in which `recov
 
 ## The TickTick sync cycle
 
-The session builds one `SyncService` (`src/app/SyncService.ts`) and one `TickTickScheduler` (`src/obsidian/tickTickScheduler.ts`). The scheduler decides when to sync; the engine decides what to change on each side.
+The session builds one `SyncService` (`src/app/SyncService.ts`) and one `TickTickScheduler` (`src/obsidian/tickTickScheduler.ts`). The scheduler decides when to sync; the engine decides what to change on each side. `SyncService` runs one sync at a time and reads TickTick; its steps are in their own files: `PullApplier` (`src/app/syncPull.ts`) writes the pull, `Pusher` (`src/app/syncPush.ts`) sends Logwell's changes and `LinkBook` (`src/app/syncLinkBook.ts`) keeps the links, the `pendingDelete` marks and the creates waiting to be linked. What they share (labels, results and failures, the pull plan, link drafts, field hashes, TickTick's tags) is in `src/app/syncModel.ts`.
 
 ```mermaid
 flowchart TD
@@ -126,12 +126,12 @@ flowchart TD
   B --> C[SyncService.runSync]
   C --> D["1. pull: InboxAliasApi in tickTickInbox.ts"]
   D --> E["tickTickHttp.ts TickTickHttp over requestUrl"]
-  D --> F["2. applyPull in store.run, not undoable"]
+  D --> F["2. syncPull.ts PullApplier.applyPull in store.run, not undoable"]
   F --> G["ticktick/mapping.ts fieldHashes and TaskService *In(tx) methods"]
   F --> H["3. links of what the pull settled, own store.run"]
   H --> I["4. syncNotes.ts SyncNotes.run"]
-  I --> J["5. push through InboxAliasApi"]
-  J --> K["6. writeLinks in store.run"]
+  I --> J["5. syncPush.ts Pusher.push through InboxAliasApi"]
+  J --> K["6. syncLinkBook.ts LinkBook.writeLinks in store.run"]
 ```
 
 The scheduler listens to `changed` and arms a delayed push only for edits that touch a linked list; the sync's own labels (`SYNC_OWN_LABELS`) never trigger one. How runs queue is TickTick sync rule 18.
@@ -140,7 +140,7 @@ A sync pulls every linked list, then writes everything pulled as one command tha
 
 The engine writes tasks through the `*In(tx, ...)` methods of `TaskService` and `SectionService`, so a pulled change obeys the same rules as an edit by hand. The pull command writes no links. A separate links command then links what the pull settled, before any push, so a failed push or a reload does not import them again.
 
-Description notes run next (`src/app/syncNotes.ts`), then the push sends what differs, list by list. Last, `writeLinks` saves what TickTick confirmed, as its own command, even after a failed push. A task TickTick created whose link could not be written (the database turned read-only), or whose create answer was lost, waits in the engine's `pendingCreates`, kept on this device per database through `TickTickPendingPort` (`LocalStorageTickTickPending` in `src/obsidian/tickTickPorts.ts`); the pull links it by TickTick's id or title, and it is forgotten only after the links command of step 3 has committed. The timings and behavior rules are in the TickTick sync section of the spec.
+Description notes run next (`src/app/syncNotes.ts`), then the push sends what differs, list by list. Last, `LinkBook.writeLinks` saves what TickTick confirmed, as its own command, even after a failed push. A task TickTick created whose link could not be written (the database turned read-only), or whose create answer was lost, waits in `LinkBook.creates`, kept on this device per database through `TickTickPendingPort` (`LocalStorageTickTickPending` in `src/obsidian/tickTickPorts.ts`); the pull links it by TickTick's id or title, and it is forgotten only after the links command of step 3 has committed. The timings and behavior rules are in the TickTick sync section of the spec.
 
 ## UI structure
 
@@ -161,7 +161,8 @@ Description notes run next (`src/app/syncNotes.ts`), then the push sends what di
 All but e2e run in `npm test`.
 
 - Unit and integration (`tests/domain`, `tests/parsing`, `tests/persistence`, `tests/app`, `tests/obsidian`, `tests/ui`): pure rules, the parser, the store, the services on a real store, the host classes over a fake vault and the components in a simulated DOM.
-- Harnesses: `harness()` in `tests/persistence/fixtures.ts`, `appHarness()` in `tests/app/harness.ts`, `U1Host` in `tests/ui/app-helpers.tsx`, and `tests/app/sync-harness.ts` over a fake TickTick.
+- Harnesses: `harness()` in `tests/persistence/fixtures.ts`, `appHarness()` in `tests/app/harness.ts`, the UI test kit in `tests/ui/app-helpers.tsx`, and `tests/app/sync-harness.ts` over a fake TickTick.
+- The UI test kit (`tests/ui/app-helpers.tsx`) is the one setup every `tests/ui` suite uses: the fake host `U1Host` (subclass it for extras), `mountApp(settings?, { harness, host })` for the whole app, `mountNode()` for one component, `mountQuickForm()` and `quickModel()` for Quick Add, the event helpers (`click`, `typeInto` and `fill`, `pressKey` and `keydown`, `pointer`, `dragTo`, `contextMenu`), `settle()` (also under fake timers), the DOM readers (`q`, `text`, `sidebarItem`, `tasksEl`, the tag tree rows), the accessibility checks (`strayAriaLabels`, `expectLabelsResolve`) and the store helpers (`taskOf`, `seedTasks`, `recordNotices`, `undoDepth`). What it mounts is unmounted after each test. `tests/ui/dom-setup.ts` (a vitest setup file) adds Obsidian's element methods (`empty`, `createEl`, `createDiv`, ...) for the `tests/ui` files. Feature parts stay in `calendar-helpers.tsx`, `matrix-helpers.tsx`, `board-helpers.tsx`, `habits-helpers.tsx`, `repeat-helpers.tsx`, `view-menu-helpers.ts` and `virtual-layout.ts`.
 - Schema fixtures: `tests/fixtures/schema-v*.cpbase` are frozen sample files that the migration tests load; a schema change adds one and never edits an old one.
 - Perf (`tests/perf`, plus `tests/ui/performance.test.tsx` and `tests/ui/perf-*.test.tsx`): pass and query counts at large counts through the real code, times compared within one run (never against a fixed number of milliseconds), and render-pass counts that guard row memoization and windowing.
 - Limits: `e2e/limits/` measures open, save and render times in real Obsidian, one size step at a time. It runs locally and outside `npm run e2e`; see [performance.md](performance.md). `tests/limits/limits.test.ts` checks its generator and CSV helpers.
@@ -189,7 +190,7 @@ npm run e2e         # builds first; local only
 | A rail section | `SectionId` in `src/ui/host.ts`, `SECTIONS` in `src/ui/AppRoot.tsx`, a `<Name>Section.tsx` (mockup first) |
 | A Quick Add token | `src/parsing/tokens.ts`, `parse.ts`, `src/ui/quickadd/QuickAddModel.ts` |
 | A task block filter | `src/parsing/blockQuery.ts`, `compileBlockQuery` in `src/domain/blockQuery.ts`, `src/app/blockView.ts` |
-| A synced field | `src/domain/ticktick/mapping.ts`, `src/app/SyncService.ts` |
+| A synced field | `src/domain/ticktick/mapping.ts`, `src/app/syncPull.ts` (pull), `src/app/syncPush.ts` (push) |
 | Device-local state | a port in `src/app/ports.ts`, a local storage class in `src/obsidian/`, wired in `src/obsidian/session.ts` |
 
 ## Glossary

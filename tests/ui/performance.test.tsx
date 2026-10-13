@@ -1,18 +1,18 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildList, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { addDays } from "../../src/domain/time";
 import type { Checkin, Habit, ID, Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
-import type { UiHost } from "../../src/ui/host";
 import { HabitsSection, initialHabitsState } from "../../src/ui/HabitsSection";
 import { TodayHabitsBlock } from "../../src/ui/habits/TodayHabits";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeTask } from "../persistence/fixtures";
 import { appHarness } from "../app/harness";
 import { elapsed, perfLog, timeBoth } from "../perf/measure";
+import { U1Host } from "./app-helpers";
 
 // View render under 100 ms at 5,000 tasks on desktop.
 //
@@ -31,12 +31,6 @@ const OPEN_ROWS = openRows(TOTAL);
 const GROWTH = 8;
 // A flat allowance for timer noise and a collection pause in one run.
 const NOISE_MS = 50;
-
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
 
 /** A task map that counts full scans, to tell O(n) from O(n²) without timing. */
 class ScanCountingMap extends Map<ID, Task> {
@@ -107,7 +101,7 @@ async function bigState(total = TOTAL) {
 	h.store.commit({ ...data, tasks }, ops);
 	const state = h.app.store.state;
 	expect(state.tasks.size).toBe(total);
-	const host = { app: h.app, setIcon: () => undefined } as unknown as UiHost;
+	const host = new U1Host(h);
 	return { h, state, tasks, host, ctx: h.app.queryContext() };
 }
 
@@ -231,12 +225,7 @@ describe("performance at target scale: 20 habits and 20,000 check-ins (D18)", ()
 			ops.push({ c: "checkins", id: checkin.id, v: checkin });
 		}
 		h.store.commit({ ...data, habits, checkins }, ops);
-		const host = {
-			app: h.app,
-			setIcon: () => undefined,
-			settings: () => ({ eveningTime: "20:00" }),
-			openSection: () => undefined,
-		} as unknown as UiHost;
+		const host = new U1Host(h);
 		return { h, host, ctx };
 	}
 

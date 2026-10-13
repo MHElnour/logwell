@@ -2,7 +2,7 @@ import { EventBus } from "../app/events";
 import { type TickTickDevicePort, TickTickError, type TickTickSecretPort } from "../app/ports";
 import { TICKTICK_PULL_RANGE } from "../app/settings";
 import type { AppEvents, AppStore } from "../app/store";
-import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/SyncService";
+import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/syncModel";
 import { hasLinkedList, isListSynced } from "../app/syncMarks";
 import type { Change } from "../app/tx";
 

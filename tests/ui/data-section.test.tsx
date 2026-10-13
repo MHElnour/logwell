@@ -1,26 +1,16 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, click, mountCal } from "./calendar-helpers";
-import { q } from "./repeat-helpers";
+import { type AppMount, click, mountApp, q } from "./app-helpers";
 
 // The Data section's Export CSV button. The file writing is the host's (tests/app).
 
-const mounted: CalMount[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
-async function mount() {
-	const m = await mountCal();
-	mounted.push(m);
-	return m;
-}
-const button = (m: CalMount, text: string) =>
+const button = (m: AppMount, text: string) =>
 	[...m.root.querySelectorAll<HTMLButtonElement>(".cp-data button")].find((b) => b.textContent?.trim() === text)!;
 
 describe("Export CSV", () => {
 	it("sits next to Export backup, with the help text, and calls host.exportCsv once per click", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		const calls: string[] = [];
 		m.host.exportCsv = async () => void calls.push("csv");
 		m.host.exportBackup = async () => void calls.push("backup");
@@ -36,7 +26,7 @@ describe("Export CSV", () => {
 	});
 
 	it("shows an error from the export and stays usable", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		m.host.exportCsv = async () => {
 			throw new Error("Could not write the export.");
 		};
@@ -47,7 +37,7 @@ describe("Export CSV", () => {
 	});
 
 	it("is disabled with a reason while the database is read-only, like Export backup", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await makeReadOnly(m.h);
 		m.h.app.store.notifyStatus();
 		await click(m.root.querySelector('.cp-rail [aria-label="Data"]'));

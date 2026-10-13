@@ -1,29 +1,15 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
-import type { DateSpec } from "../../src/domain/types";
-import { type HabitMount, click, mountHabits, q, qa, seedMockup, settle, text } from "./habits-helpers";
-import { board, cardTitles, modeButton, press, sidebarItem } from "./board-helpers";
+import { describe, expect, it } from "vitest";
+import { click, day, pressKey, q, qa, settle, sidebarItem, text, undoDepth } from "./app-helpers";
+import { board, cardTitles, modeButton } from "./board-helpers";
+import { type HabitMount, mountHabits, seedMockup } from "./habits-helpers";
 
 // Habits in Today: the block above the list, the first board column, the fold
 // line, and where they do not show. The clock is Sunday 2026-10-04, 20:30 in Europe/Berlin (seedMockup).
 
-const mounted: HabitMount[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
-
-async function mount(): Promise<HabitMount> {
-	const m = await mountHabits();
-	mounted.push(m);
-	return m;
-}
-
-const day = (date: string): DateSpec => ({ kind: "date", date });
-const undoDepth = (m: HabitMount) => (m.h.app.store as unknown as { undoStack: unknown[] }).undoStack.length;
-
 /** Seeded habits and two tasks due today, with the Today view open. */
 async function today() {
-	const m = await mount();
+	const m = await mountHabits();
 	const habits = await seedMockup(m.h);
 	await m.h.app.tasks.create({ title: "Lunch", scheduled: day("2026-10-04") });
 	await m.h.app.tasks.create({ title: "Report", scheduled: day("2026-10-04") });
@@ -112,7 +98,7 @@ describe("the Habits block in the Today list (List mode)", () => {
 	});
 
 	it("shows nothing without a habit, or when every habit is archived", async () => {
-		const m = await mount();
+		const m = await mountHabits();
 		await click(sidebarItem(m.root, "Today"));
 		expect(block(m)).toBeNull();
 		await click(modeButton(m.root, "Board"));
@@ -223,7 +209,7 @@ describe("the Habits column in the Today board (Board mode)", () => {
 		const lunch = [...board(m.root).querySelectorAll<HTMLElement>(".cp-board-item")].find((i) => i.textContent?.includes("Lunch"))!;
 		lunch.focus();
 		const before = undoDepth(m);
-		await press(lunch, "ArrowLeft", { altKey: true });
+		await pressKey(lunch, "ArrowLeft", { altKey: true });
 		expect(undoDepth(m)).toBe(before);
 		expect(cardTitles(m.root, "today")).toContain("Lunch");
 		expect(col.textContent).not.toContain("Lunch");

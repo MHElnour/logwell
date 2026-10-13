@@ -25,12 +25,15 @@ import {
 import { RecurrenceService } from "./RecurrenceService";
 import { AppStore, type StateHost } from "./store";
 import { SectionService } from "./SectionService";
+import { NoteRenameTracker } from "./noteRenames";
 import { TaskService } from "./TaskService";
 
 /** The app-layer composition root: one store and its services. */
 export class CheckpointApp {
 	readonly store: AppStore;
 	readonly tasks: TaskService;
+	/** Note renames followed into the tasks' note paths, saved on this device while they wait. */
+	readonly noteRenames: NoteRenameTracker;
 	/** Repeating tasks and their occurrences. */
 	readonly recurrence: RecurrenceService;
 	readonly categories: CategoryService;
@@ -66,7 +69,8 @@ export class CheckpointApp {
 	) {
 		this.store = new AppStore(host, clock);
 		this.recurrence = new RecurrenceService(this.store, settings, clock);
-		this.tasks = new TaskService(this.store, ids, settings, notes, renames, undefined, this.recurrence);
+		this.tasks = new TaskService(this.store, ids, settings, notes, this.recurrence);
+		this.noteRenames = new NoteRenameTracker(this.store, renames);
 		this.categories = new CategoryService(this.store, ids, this.tasks.lists);
 		this.sections = new SectionService(this.store, ids);
 		this.tags = new TagService(this.store);

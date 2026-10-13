@@ -2,7 +2,8 @@ import { Notice, normalizePath } from "obsidian";
 import { CheckpointApp } from "../app/App";
 import type { OpenResult } from "../app/FocusService";
 import type { TickTickApi } from "../app/ports";
-import { type SyncFailure, SyncService } from "../app/SyncService";
+import { SyncService } from "../app/SyncService";
+import { type SyncFailure } from "../app/syncModel";
 import { displayZone } from "../app/settings";
 import { isDomainError } from "../domain/errors";
 import { randomId, systemClock } from "../domain/ports";
@@ -208,7 +209,7 @@ export class DbSession {
 	async open(): Promise<void> {
 		await this.store.open();
 		this.focusOpened = await this.app.focus.open();
-		await this.app.tasks.resumeRenames();
+		await this.app.noteRenames.resumeRenames();
 		await this.app.tasks.purgeExpired();
 		await this.app.recurrence.endExhaustedSeries();
 	}
@@ -302,7 +303,7 @@ export class DbSession {
 			// Renames held back by the rename queue go out first. A failure here
 			// (local storage full or unavailable) must never keep the store open.
 			try {
-				this.app.tasks.flushRenames();
+				this.app.noteRenames.flushRenames();
 			} catch (err) {
 				actionNotice(
 					`Could not save the queued note renames for ${this.dbPath}: ${err instanceof Error ? err.message : String(err)} Links to notes renamed just now may need to be relinked.`,
