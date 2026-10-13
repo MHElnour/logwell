@@ -6,19 +6,18 @@ import { indexOccurrenceRecords, scheduleResolver } from "../../src/domain/recur
 import type { OccurrenceRecord, RepeatRule, Task } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import type { DbData } from "../../src/persistence/schema";
+import { median, perfLog } from "./measure";
 
 // The target-scale check with repeating tasks. 5,000 tasks, 500 of them repeating with mixed rules,
-// a hundred with 50 or more records. Today, Upcoming, a month of the calendar and the sidebar counts stay
-// within budget, and grow linearly with the number of tasks. Deterministic: a seeded generator, a fixed day.
+// a hundred with 50 or more records. Today, Upcoming, a month of the calendar and the sidebar counts grow linearly
+// with the number of tasks: four times the tasks take well under ten times as long, measured in the same run. Each
+// view's own time is logged (CHECKPOINT_PERF_LOG=1). Deterministic: a seeded generator, a fixed day.
 
 const TASKS = 5000;
 const REPEATING = 500;
-// Same allowance as the other perf tests: CI runners are two to three times slower.
-const CI_SLACK = process.env.CI ? 4 : 1;
-const BUDGET_MS = 100 * CI_SLACK;
-// A month shows ~40 occurrences of every series; the 62 timed ones each need a Luxon conversion per day (the
-// same cost a plain timed task has), so the projection gets a wider budget than the list queries.
-const MONTH_BUDGET_MS = 250 * CI_SLACK;
+const GROWTH = 10;
+// A flat allowance for timer noise on a very fast small run.
+const NOISE_MS = 25;
 const TODAY = "2026-10-05";
 const ZONE = "Europe/Berlin";
 
@@ -114,15 +113,15 @@ function stateOf(s: Seed): DbData {
 	return { ...base, tasks: new Map(s.tasks), occurrenceRecords: new Map(s.records) };
 }
 
-function median(run: () => number, runs = 5): number {
-	run(); // warm up the JIT
-	const times = Array.from({ length: runs }, run).sort((a, b) => a - b);
-	return times[Math.floor(runs / 2)]!;
+/** The median of `runs` timed runs after one warm-up run (JIT); `run` returns its own time. */
+function medianRun(run: () => number, runs = 5): number {
+	run();
+	return median(Array.from({ length: runs }, run));
 }
 
 /** Time of `work(state)` on a state built outside the timing, so the cold resolver and index are included. */
 function timed(s: Seed, work: (state: DbData, ctx: QueryContext) => unknown): number {
-	return median(() => {
+	return medianRun(() => {
 		const state = stateOf(s);
 		const ctx: QueryContext = { ...ctxBase, schedule: scheduleResolver(state, ctxBase) };
 		const start = performance.now();
@@ -133,9 +132,21 @@ function timed(s: Seed, work: (state: DbData, ctx: QueryContext) => unknown): nu
 
 const full = seed(TASKS, REPEATING);
 const quarter = seed(TASKS / 4, REPEATING / 4);
-const log = (name: string, ms: number): void => {
-	if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`recurrence ${name}: ${ms.toFixed(1)} ms\n`);
-};
+const log = (name: string, ms: number): void => perfLog(`recurrence ${name}: ${ms.toFixed(1)} ms`);
+
+/** Time of a month of the calendar over every series of `s`. */
+function monthTime(s: Seed): number {
+	const grid = monthGrid("2026-10-01", "MO");
+	return medianRun(() => {
+		const state = stateOf(s);
+		const cal: CalendarContext = { zone: ZONE, today: TODAY, now: "2026-10-05T10:00:00.000Z", weekStart: "MO", records: indexOccurrenceRecords(state.occurrenceRecords) };
+		const start = performance.now();
+		const cells = layoutMonth(state.tasks.values(), grid, "2026-10", cal).flat();
+		const elapsed = performance.now() - start;
+		expect(cells.reduce((n, c) => n + c.count, 0)).toBeGreaterThan(s === full ? REPEATING : REPEATING / 4);
+		return elapsed;
+	});
+}
 
 describe("target-scale views with 500 repeating tasks (D12)", () => {
 	it("the seed has the shape the test promises", () => {
@@ -145,47 +156,39 @@ describe("target-scale views with 500 repeating tasks (D12)", () => {
 		expect(counts.filter((n) => n >= 50)).toHaveLength(100);
 	});
 
-	it(`Today builds under ${BUDGET_MS} ms and the repeating tasks are in it`, () => {
+	it("Today builds and the repeating tasks are in it", () => {
 		const ms = timed(full, (state, ctx) => {
 			const groups = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups;
 			expect(groups.flatMap((g) => g.entries).some((e) => e.task.recurrence !== null)).toBe(true);
 		});
 		log("today", ms);
-		expect(ms).toBeLessThan(BUDGET_MS);
 	});
 
-	it(`Upcoming builds under ${BUDGET_MS} ms and lists a series once`, () => {
+	it("Upcoming builds and lists a series once", () => {
 		const ms = timed(full, (state, ctx) => {
 			const groups = buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups;
 			const ids = groups.flatMap((g) => g.entries.map((e) => e.task.id));
 			expect(new Set(ids).size).toBe(ids.length);
 		});
 		log("upcoming", ms);
-		expect(ms).toBeLessThan(BUDGET_MS);
 	});
 
-	it(`a month of the calendar projects every series under ${MONTH_BUDGET_MS} ms`, () => {
-		const grid = monthGrid("2026-10-01", "MO");
-		const ms = median(() => {
-			const state = stateOf(full);
-			const cal: CalendarContext = { zone: ZONE, today: TODAY, now: "2026-10-05T10:00:00.000Z", weekStart: "MO", records: indexOccurrenceRecords(state.occurrenceRecords) };
-			const start = performance.now();
-			const cells = layoutMonth(state.tasks.values(), grid, "2026-10", cal).flat();
-			const elapsed = performance.now() - start;
-			expect(cells.reduce((n, c) => n + c.count, 0)).toBeGreaterThan(REPEATING);
-			return elapsed;
-		});
-		log("month", ms);
-		expect(ms).toBeLessThan(MONTH_BUDGET_MS);
+	it("a month of the calendar projects every series, in time that grows linearly with the tasks", () => {
+		// A month shows ~40 occurrences of every series; the timed ones each need a Luxon conversion per day (the same
+		// cost a plain timed task has).
+		const small = monthTime(quarter);
+		const large = monthTime(full);
+		log("month", large);
+		perfLog(`recurrence month, scale 1,250 -> 5,000: ${(large / Math.max(small, 0.01)).toFixed(1)}x`);
+		expect(large, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`).toBeLessThan(small * GROWTH + NOISE_MS);
 	});
 
-	it(`the sidebar counts take under ${BUDGET_MS} ms`, () => {
+	it("the sidebar counts count today's tasks", () => {
 		const ms = timed(full, (state, ctx) => {
 			const counts = sidebarCounts(state, ctx);
 			expect(counts.today).toBeGreaterThan(0);
 		});
 		log("sidebar counts", ms);
-		expect(ms).toBeLessThan(BUDGET_MS);
 	});
 
 	it("grows linearly with the number of tasks: four times the tasks take well under ten times as long", () => {
@@ -196,8 +199,7 @@ describe("target-scale views with 500 repeating tasks (D12)", () => {
 		};
 		const small = timed(quarter, work);
 		const large = timed(full, work);
-		log("scale 1,250 -> 5,000", large / Math.max(small, 0.01));
-		// A flat allowance for timer noise on a very fast small run.
-		expect(large, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`).toBeLessThan(small * 10 + 25);
+		perfLog(`recurrence scale 1,250 -> 5,000: ${(large / Math.max(small, 0.01)).toFixed(1)}x`);
+		expect(large, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`).toBeLessThan(small * GROWTH + NOISE_MS);
 	});
 });

@@ -1,5 +1,5 @@
 import { isValidTagKey } from "../domain/tags";
-import { isInstant, isValidDateSpec, isValidLocalDate, isValidZone } from "../domain/time";
+import { isInstant, isValidDateSpec, isValidLocalDate, isValidZone, latinDigits } from "../domain/time";
 import { isClockTime } from "../domain/habits";
 import type {
 	Category,
@@ -217,10 +217,24 @@ function readTag(o: Obj, key: string, issues: string[]): Tag {
 	};
 }
 
+/**
+ * A timed date written with another script's digits, as 0 to 9 with an issue: a device set to Arabic or Persian
+ * stored them (#100). Anything else, and a date still not valid with 0 to 9, is returned as it is for the checks.
+ */
+function latinDateSpec(spec: unknown, what: string, title: string, issues: string[]): unknown {
+	if (!isRecord(spec) || spec.kind !== "datetime" || typeof spec.local !== "string") return spec;
+	const local = latinDigits(spec.local);
+	if (local === spec.local) return spec;
+	const fixed = { ...spec, local };
+	if (!isValidDateSpec(fixed)) return spec;
+	issues.push(`Task "${title}" had its ${what} written with other digits; it now uses 0 to 9.`);
+	return fixed;
+}
+
 function readTask(collection: CollectionName, o: Obj, key: string, issues: string[]): Task {
 	const r: RecordReader = new RecordReader(collection, key, o);
-	const scheduled = o.scheduled ?? null;
-	let deadline = o.deadline ?? null;
+	const scheduled = latinDateSpec(o.scheduled, "date", String(o.title), issues) ?? null;
+	let deadline = latinDateSpec(o.deadline, "deadline", String(o.title), issues) ?? null;
 	if (scheduled !== null && !isValidDateSpec(scheduled)) r.fail(`"scheduled" is not a valid date`);
 	if (deadline !== null && !isValidDateSpec(deadline)) r.fail(`"deadline" is not a valid date`);
 	const recurrence = readRecurrence(o.recurrence ?? null, String(o.title), issues);

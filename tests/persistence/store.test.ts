@@ -1434,3 +1434,41 @@ describe("close() with edits that cannot be kept", () => {
 		});
 	});
 });
+
+describe("a torn journal line", () => {
+	const JOURNAL = `${BACKUP_ROOT}/db-1/journal.ndjson`;
+
+	it("#102: later entries stay readable and the next snapshot still resets the journal", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("t1"));
+		await h.saveNow();
+		// The app quits in the middle of an append: the last line has no end.
+		const journal = h.fs.files.get(JOURNAL) ?? "";
+		h.fs.files.set(JOURNAL, journal.slice(0, journal.length - 20));
+		const s = h.newStore();
+		await s.open();
+		h.addTask(makeTask("t2"), s);
+		await h.saveNow(s);
+		h.addTask(makeTask("t3"), s);
+		await h.saveNow(s);
+		const backups = new BackupStore(h.fs, dbBackupRoot(BACKUP_ROOT, "db-1"), h.clock);
+		const ids = (await backups.readJournal()).flatMap((e) => e.ops.map((op) => op.id));
+		expect(ids).toEqual(["t2", "t3"]);
+
+		// The hourly snapshot covers every entry, so the journal is cleared.
+		h.clock.advance(SNAPSHOT_INTERVAL_MS);
+		h.addTask(makeTask("t4"), s);
+		await h.saveNow(s);
+		expect(h.fs.files.get(JOURNAL)).toBe("");
+
+		// Damage after one more save recovers it from the snapshot and the journal.
+		h.addTask(makeTask("t5"), s);
+		await h.saveNow(s);
+		h.fs.files.set(DB_PATH, h.dbText().slice(0, 100));
+		const s2 = h.newStore();
+		await s2.open();
+		expect(s2.readOnlyState?.reason).toBe("damaged");
+		expect([...s2.data.tasks.keys()].sort()).toEqual(["t1", "t2", "t3", "t4", "t5"]);
+	});
+});

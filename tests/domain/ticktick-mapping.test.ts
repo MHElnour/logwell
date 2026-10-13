@@ -1,3 +1,4 @@
+import { Settings } from "luxon";
 import { describe, expect, it } from "vitest";
 import {
 	dateFromTt,
@@ -163,6 +164,19 @@ describe("dateToTt (push)", () => {
 		// Sao Paulo skipped 00:00 on 2018-11-04 (clocks went from 00:00 to 01:00).
 		const sent = dateToTt(date("2018-11-04"), "America/Sao_Paulo");
 		expect(dateFromTt({ ...sent, timeZone: "America/Sao_Paulo" }, "UTC")).toEqual(date("2018-11-04"));
+	});
+});
+
+describe("dates on a device whose language writes other digits", () => {
+	it("#100: a timed date goes up and comes down with the digits 0 to 9", () => {
+		const before = Settings.defaultLocale;
+		Settings.defaultLocale = "ar-EG";
+		try {
+			expect(dateToTt(timed("2026-10-21T07:45", "Europe/Moscow"), "UTC").dueDate).toBe("2026-10-21T07:45:00+0300");
+			expect(dateFromTt({ dueDate: "2026-10-22T04:15:00.000+0000", isAllDay: false, timeZone: "Europe/Moscow" }, "UTC")).toEqual(timed("2026-10-22T07:15", "Europe/Moscow"));
+		} finally {
+			Settings.defaultLocale = before;
+		}
 	});
 });
 

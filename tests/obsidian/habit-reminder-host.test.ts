@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Settings } from "luxon";
 import { Plugin } from "obsidian";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import { CheckpointApp } from "../../src/app/App";
@@ -126,6 +127,22 @@ describe("reminder host", () => {
 			expect(shown[0]!.timeout).toBe(0);
 			expect(ui.systemNotify).toHaveBeenCalledTimes(1);
 			expect(ui.systemNotify).toHaveBeenCalledWith("Time for Read", "0 of 30 min");
+		});
+
+		it("#100: fires at its minute, not before, on a device whose language writes other digits", async () => {
+			const before = Settings.defaultLocale;
+			Settings.defaultLocale = "ar-EG";
+			try {
+				const { app, shown, host, tickAt } = await setup();
+				await app.habits.create(quantity());
+				host.attach(r(app));
+				tickAt(BEFORE);
+				expect(shown).toHaveLength(0);
+				tickAt(AT_20);
+				expect(shown.map((s) => s.message)).toEqual(["Time for Read · 0 of 30 min"]);
+			} finally {
+				Settings.defaultLocale = before;
+			}
 		});
 
 		it("does not fire again that day, and fires again on a new day", async () => {

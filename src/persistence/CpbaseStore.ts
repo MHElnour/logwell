@@ -607,10 +607,12 @@ export class CpbaseStore {
 				if (newest === undefined || newest.revision !== revision) {
 					await backups.writeSnapshot("hourly", content);
 					// The journal is truncated at a snapshot, but only when the
-					// snapshot covers its newest entry. An entry whose write
+					// snapshot covers its newest readable entry: that entry's revision
+					// is the snapshot's or one of its ancestors. An entry whose write
 					// never reached the file survives until then.
-					const journal = await backups.readJournal();
-					if (journal.length > 0 && journal[journal.length - 1]?.rev === revision) await backups.resetJournal();
+					const header = readHeader(content);
+					const last = (await backups.readJournal()).at(-1);
+					if (header !== null && last !== undefined && lineageRelation(header, last.rev, []) === "descendant") await backups.resetJournal();
 				}
 				this.lastSnapshotAt = now.getTime();
 			}
