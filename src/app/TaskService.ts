@@ -34,6 +34,7 @@ import { storableDbId } from "../persistence/schema";
 import { TRASH_RETENTION_DAYS } from "./settings";
 import { TagService } from "./CategoryService";
 import { TaskIndex } from "./taskIndex";
+import { markGoneTaskLink } from "./tickTickLink";
 import type { AppStore } from "./store";
 import type { Tx } from "./tx";
 
@@ -203,12 +204,7 @@ function removeRecordsOf(tx: Tx, tasks: readonly Task[]): void {
  * sync deletes the TickTick copy. Written in the purge's own command; the sync removes the link.
  */
 function markPurgedLinks(tx: Tx, tasks: readonly Task[]): void {
-	for (const t of tasks) {
-		if (tx.get("tasks", t.id) !== undefined) continue;
-		const link = tx.get("syncLinks", syncLinkId("task", t.id));
-		if (link === undefined || link.pendingDelete === true) continue;
-		tx.put("syncLinks", { ...link, pendingDelete: true, modifiedAt: tx.now });
-	}
+	for (const t of tasks) markGoneTaskLink(tx, t.id);
 }
 
 /** What a purge does to the tasks it removes for good: their occurrence records go, a TickTick link is marked for deletion. */
