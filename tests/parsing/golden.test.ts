@@ -17,7 +17,7 @@ import { BERLIN, NY, TOKYO, at, chipLines, dateSpecOf, makeCtx, ruleKey } from "
 const weeklyMondayAt = (time: string): RepeatRule => ({ freq: "weekly", interval: 1, weekdays: ["MO"], monthly: null, afterCompletion: false, time, tz: NY });
 
 type ZoneKey = "ny" | "berlin" | "tokyo";
-const ZONES: Record<ZoneKey, { zone: string; now: string }> = {
+const CLOCKS: Record<ZoneKey, { zone: string; now: string }> = {
 	ny: { zone: NY, now: "2026-10-01T06:00" },
 	berlin: { zone: BERLIN, now: "2026-10-01T12:00" },
 	tokyo: { zone: TOKYO, now: "2026-10-02T05:00" },
@@ -75,7 +75,9 @@ const CASES: Golden[] = [
 	{ in: "Stand by", title: "Stand by" },
 	{ in: "Sunday brunch", title: "brunch", s: "2026-10-04", chips: ["applied|scheduled|Sunday"] },
 	{ in: "Gym 1h", title: "Gym 1h", chips: [`suggestion|scheduled|1h|d=2026-10-01T07:00|n=${U}`] },
+	{ in: "Gym 45m", title: "Gym 45m", chips: [`suggestion|scheduled|45m|d=2026-10-01T06:45|n=${U}`] },
 	{ in: "Pay rent next month", title: "Pay rent next month", chips: [`suggestion|scheduled|next month|d=2026-11-01|n=${U}`] },
+	{ in: "Pay rent next year", title: "Pay rent next year", chips: [`suggestion|scheduled|next year|d=2027-10-01|n=${U}`] },
 	{ in: "Taxes in a month", title: "Taxes in a month", chips: [`suggestion|scheduled|in a month|d=2026-11-01|n=${U}`] },
 	{ in: "Sort this evening", title: "Sort this evening", chips: [`suggestion|scheduled|this evening|d=2026-10-01|n=${U}`] },
 	{ in: "Finish by the end of the day", title: "Finish by the end of the day", chips: [`suggestion|scheduled|the day|d=2026-10-02|n=${U}`] },
@@ -106,8 +108,8 @@ const CASES: Golden[] = [
 	{ in: "Call next fri", title: "Call", s: "2026-10-09", chips: ["applied|scheduled|next fri"] },
 	{ in: "Standup this monday", title: "Standup", s: "2026-10-05", chips: ["applied|scheduled|this monday"] },
 	{ in: "Meet wed", title: "Meet", s: "2026-10-07", chips: ["applied|scheduled|wed"] },
-	{ in: "Meet thursday", title: "Meet thursday", chips: ["choice|scheduled|thursday|a=Today/Next week"] },
-	{ in: "Meet this thursday", title: "Meet this thursday", chips: ["choice|scheduled|this thursday|a=Today/Next week"] },
+	{ in: "Meet thursday", title: "Meet thursday", chips: ["choice|scheduled|thursday|a=Today=2026-10-01/Next week=2026-10-08"] },
+	{ in: "Meet this thursday", title: "Meet this thursday", chips: ["choice|scheduled|this thursday|a=Today=2026-10-01/Next week=2026-10-08"] },
 	{ in: "Meet next thursday", title: "Meet", s: "2026-10-08", chips: ["applied|scheduled|next thursday"] },
 	{ in: "Call last friday", title: "Call last friday", chips: [`suggestion|scheduled|last friday|d=2026-09-25|n=${U}`] },
 	{ in: "Friday at 5pm", title: "Friday at 5pm", fb: true, s: "2026-10-02T17:00", chips: ["applied|scheduled|Friday at 5pm"] },
@@ -144,11 +146,11 @@ const CASES: Golden[] = [
 	{ in: "Call at midnight", title: "Call", s: "2026-10-02T00:00", chips: ["applied|scheduled|at midnight"] },
 	{ in: "Call at 9am", title: "Call", s: "2026-10-01T09:00", chips: ["applied|scheduled|at 9am"] },
 	{ in: "Call at 5am", title: "Call", s: "2026-10-02T05:00", chips: ["applied|scheduled|at 5am"] },
-	{ in: "Run at 5", title: "Run at 5", chips: ["choice|scheduled|at 5|a=05:00/17:00"] },
-	{ in: "Meet at 7", title: "Meet at 7", chips: ["choice|scheduled|at 7|a=07:00/19:00"] },
-	{ in: "Meet at 7:30", title: "Meet at 7:30", chips: ["choice|scheduled|at 7:30|a=07:30/19:30"] },
-	{ in: "Meet at 12", title: "Meet at 12", chips: ["choice|scheduled|at 12|a=12:00/00:00"] },
-	{ in: "Meet tomorrow at 5", title: "Meet tomorrow at 5", chips: ["choice|scheduled|tomorrow at 5|a=05:00/17:00"] },
+	{ in: "Run at 5", title: "Run at 5", chips: ["choice|scheduled|at 5|a=05:00=2026-10-02T05:00/17:00=2026-10-01T17:00"] },
+	{ in: "Meet at 7", title: "Meet at 7", chips: ["choice|scheduled|at 7|a=07:00=2026-10-01T07:00/19:00=2026-10-01T19:00"] },
+	{ in: "Meet at 7:30", title: "Meet at 7:30", chips: ["choice|scheduled|at 7:30|a=07:30=2026-10-01T07:30/19:30=2026-10-01T19:30"] },
+	{ in: "Meet at 12", title: "Meet at 12", chips: ["choice|scheduled|at 12|a=12:00=2026-10-01T12:00/00:00=2026-10-02T00:00"] },
+	{ in: "Meet tomorrow at 5", title: "Meet tomorrow at 5", chips: ["choice|scheduled|tomorrow at 5|a=05:00=2026-10-02T05:00/17:00=2026-10-02T17:00"] },
 	{ in: "Call tomorrow at 7pm", title: "Call", s: "2026-10-02T19:00", chips: ["applied|scheduled|tomorrow at 7pm"] },
 	{ in: "Call tomorrow 5pm", title: "Call", s: "2026-10-02T17:00", chips: ["applied|scheduled|tomorrow 5pm"] },
 	{ in: "Call 5pm tomorrow", title: "Call", s: "2026-10-02T17:00", chips: ["applied|scheduled|5pm tomorrow"] },
@@ -158,7 +160,7 @@ const CASES: Golden[] = [
 	{ in: "Stretch in 45 minutes", title: "Stretch", s: "2026-10-01T06:45", chips: ["applied|scheduled|in 45 minutes"] },
 	{ in: "Call Oct 5 at 3pm", title: "Call", s: "2026-10-05T15:00", chips: ["applied|scheduled|Oct 5 at 3pm"] },
 	{ in: "Call Oct 5 7:15pm", title: "Call", s: "2026-10-05T19:15", chips: ["applied|scheduled|Oct 5 7:15pm"] },
-	{ in: "Call Oct 5 at 3", title: "Call Oct 5 at 3", chips: ["choice|scheduled|Oct 5 at 3|a=03:00/15:00"] },
+	{ in: "Call Oct 5 at 3", title: "Call Oct 5 at 3", chips: ["choice|scheduled|Oct 5 at 3|a=03:00=2026-10-05T03:00/15:00=2026-10-05T15:00"] },
 	{ in: "Call from 3pm to 5pm", title: "Call from 3pm to 5pm", chips: [`suggestion|scheduled|from 3pm to 5pm|d=2026-10-01T15:00|n=${U}`] },
 
 	// --- deadlines (ny) ---
@@ -188,6 +190,12 @@ const CASES: Golden[] = [
 	{ in: "Study for 90 min", title: "Study", dur: 90, chips: ["applied|duration|for 90 min"] },
 	{ in: "Study for 1.5 hours", title: "Study", dur: 90, chips: ["applied|duration|for 1.5 hours"] },
 	{ in: "Study for 2 hrs", title: "Study", dur: 120, chips: ["applied|duration|for 2 hrs"] },
+	{ in: "Study for 2 hr", title: "Study", dur: 120, chips: ["applied|duration|for 2 hr"] },
+	{ in: "Study for 3 mins", title: "Study", dur: 3, chips: ["applied|duration|for 3 mins"] },
+	{ in: "Study for 1 minute", title: "Study", dur: 1, chips: ["applied|duration|for 1 minute"] },
+	{ in: "Study for 10 minutes", title: "Study", dur: 10, chips: ["applied|duration|for 10 minutes"] },
+	// A decimal comma is no duration: chrono reads "5 hours" from now.
+	{ in: "Study for 1,5 hours", title: "Study for 1,5 hours", chips: [`suggestion|scheduled|5 hours|d=2026-10-01T11:00|n=${U}`] },
 	{ in: "Study for 45 minutes", title: "Study", dur: 45, chips: ["applied|duration|for 45 minutes"] },
 	{ in: "Study for 1 hour 30 minutes", title: "Study", dur: 90, chips: ["applied|duration|for 1 hour 30 minutes"] },
 	{ in: "Study for 1h 30m", title: "Study", dur: 90, chips: ["applied|duration|for 1h 30m"] },
@@ -195,6 +203,7 @@ const CASES: Golden[] = [
 	{ in: "Study for 1h30", title: "Study", dur: 90, chips: ["applied|duration|for 1h30"] },
 	{ in: "Study for 25min", title: "Study", dur: 25, chips: ["applied|duration|for 25min"] },
 	{ in: "Study for 0.5h", title: "Study", dur: 30, chips: ["applied|duration|for 0.5h"] },
+	{ in: "Study for 1.25 hours", title: "Study", dur: 75, chips: ["applied|duration|for 1.25 hours"] },
 	{ in: "Study for an hour", title: "Study", dur: 60, chips: ["applied|duration|for an hour"] },
 	{ in: "Study for half an hour", title: "Study", dur: 30, chips: ["applied|duration|for half an hour"] },
 	{ in: "Study FOR 20 MIN", title: "Study", dur: 20, chips: ["applied|duration|FOR 20 MIN"] },
@@ -204,6 +213,7 @@ const CASES: Golden[] = [
 	{ in: "Study for 1441 min", title: "Study for 1441 min", chips: ["invalid|duration|for 1441 min|n=Duration must be 1 to 1440 minutes"] },
 	{ in: "Study for 25h", title: "Study for 25h", chips: ["invalid|duration|for 25h|n=Duration must be 1 to 1440 minutes"] },
 	{ in: "Study for 0m", title: "Study for 0m", chips: ["invalid|duration|for 0m|n=Duration must be 1 to 1440 minutes"] },
+	{ in: "Study for 99999999999999999999 min", title: "Study for 99999999999999999999 min", chips: ["invalid|duration|for 99999999999999999999 min|n=Duration must be 1 to 1440 minutes"] },
 	{ in: "Study for 5 meetings", title: "Study for 5 meetings" },
 	{ in: "Study for 2 days", title: "Study for 2 days" },
 	{ in: "Study after 2 days", title: "Study", s: "2026-10-03", chips: ["applied|scheduled|after 2 days"] },
@@ -324,15 +334,15 @@ const CASES: Golden[] = [
 	// a time: certain forms apply, a bare hour 1-12 is a suggestion (the user decides, like "at 5")
 	{ in: "Gym every monday at 9pm", title: "Gym", rec: "weekly:MO@21:00", chips: ["applied|recurrence|every monday at 9pm|r=weekly:MO@21:00"] },
 	{ in: "Gym every monday at 9am", title: "Gym", rec: "weekly:MO@09:00", chips: ["applied|recurrence|every monday at 9am|r=weekly:MO@09:00"] },
-	{ in: "Gym every monday at 9", title: "Gym every monday at 9", chips: ["choice|recurrence|every monday at 9|a=09:00/21:00"], block: 1 },
+	{ in: "Gym every monday at 9", title: "Gym every monday at 9", chips: ["choice|recurrence|every monday at 9|a=09:00=weekly:MO@09:00/21:00=weekly:MO@21:00"], block: 1 },
 	{ in: "Gym every monday at 9", dec: [{ span: { start: 4, end: 21 }, text: "every monday at 9", kind: "rule", rule: weeklyMondayAt("21:00") }], title: "Gym", rec: "weekly:MO@21:00", chips: ["applied|recurrence|every monday at 9|r=weekly:MO@21:00"] },
 	{ in: "Gym every monday at 9", dec: [{ span: { start: 4, end: 21 }, text: "every monday at 9", kind: "rule", rule: weeklyMondayAt("09:00") }], title: "Gym", rec: "weekly:MO@09:00", chips: ["applied|recurrence|every monday at 9|r=weekly:MO@09:00"] },
-	{ in: "Gym every day at 12", title: "Gym every day at 12", chips: ["choice|recurrence|every day at 12|a=12:00/00:00"], block: 1 },
-	{ in: "Gym every day at 5", title: "Gym every day at 5", chips: ["choice|recurrence|every day at 5|a=05:00/17:00"], block: 1 },
+	{ in: "Gym every day at 12", title: "Gym every day at 12", chips: ["choice|recurrence|every day at 12|a=12:00=daily@12:00/00:00=daily@00:00"], block: 1 },
+	{ in: "Gym every day at 5", title: "Gym every day at 5", chips: ["choice|recurrence|every day at 5|a=05:00=daily@05:00/17:00=daily@17:00"], block: 1 },
 	{ in: "Gym every day at 17:30", title: "Gym", rec: "daily@17:30", chips: ["applied|recurrence|every day at 17:30|r=daily@17:30"] },
 	{ in: "Gym every day at 13", title: "Gym", rec: "daily@13:00", chips: ["applied|recurrence|every day at 13|r=daily@13:00"] },
 	{ in: "Gym every day at 09:30", title: "Gym", rec: "daily@09:30", chips: ["applied|recurrence|every day at 09:30|r=daily@09:30"] },
-	{ in: "Gym every day at 9:30", title: "Gym every day at 9:30", chips: ["choice|recurrence|every day at 9:30|a=09:30/21:30"], block: 1 },
+	{ in: "Gym every day at 9:30", title: "Gym every day at 9:30", chips: ["choice|recurrence|every day at 9:30|a=09:30=daily@09:30/21:30=daily@21:30"], block: 1 },
 	{ in: "Gym every day at noon", title: "Gym", rec: "daily@12:00", chips: ["applied|recurrence|every day at noon|r=daily@12:00"] },
 	{ in: "Gym every day at midnight", title: "Gym", rec: "daily@00:00", chips: ["applied|recurrence|every day at midnight|r=daily@00:00"] },
 	{ in: "Gym every day at 12am", title: "Gym", rec: "daily@00:00", chips: ["applied|recurrence|every day at 12am|r=daily@00:00"] },
@@ -370,12 +380,12 @@ const CASES: Golden[] = [
 	{ in: "Standup Mar 8 at 2:00am", z: "ny", now: "2026-03-01T12:00", title: "Standup", s: "2026-03-08T03:00", chips: ["applied|scheduled|Mar 8 at 2:00am|w=dst-gap"] },
 	{ in: "Standup Mar 8 at 3:30am", z: "ny", now: "2026-03-01T12:00", title: "Standup", s: "2026-03-08T03:30", chips: ["applied|scheduled|Mar 8 at 3:30am"] },
 	{ in: "Standup Mar 8 at 1:59am", z: "ny", now: "2026-03-01T12:00", title: "Standup", s: "2026-03-08T01:59", chips: ["applied|scheduled|Mar 8 at 1:59am"] },
-	{ in: "Standup Mar 8 at 2:30", z: "ny", now: "2026-03-01T12:00", title: "Standup Mar 8 at 2:30", chips: ["choice|scheduled|Mar 8 at 2:30|a=02:30/14:30"] },
+	{ in: "Standup Mar 8 at 2:30", z: "ny", now: "2026-03-01T12:00", title: "Standup Mar 8 at 2:30", chips: ["choice|scheduled|Mar 8 at 2:30|a=02:30=2026-03-08T02:30/14:30=2026-03-08T14:30"] },
 	{ in: "Standup Nov 1 1:30am", z: "ny", now: "2026-10-25T12:00", title: "Standup", s: "2026-11-01T01:30", chips: ["applied|scheduled|Nov 1 1:30am|w=dst-ambiguous"] },
 	{ in: "Standup Nov 1 at 1:00am", z: "ny", now: "2026-10-25T12:00", title: "Standup", s: "2026-11-01T01:00", chips: ["applied|scheduled|Nov 1 at 1:00am|w=dst-ambiguous"] },
 	{ in: "Standup Nov 1 at 2:00am", z: "ny", now: "2026-10-25T12:00", title: "Standup", s: "2026-11-01T02:00", chips: ["applied|scheduled|Nov 1 at 2:00am"] },
 	{ in: "Standup Nov 1 at 12:59am", z: "ny", now: "2026-10-25T12:00", title: "Standup", s: "2026-11-01T00:59", chips: ["applied|scheduled|Nov 1 at 12:59am"] },
-	{ in: "Standup Nov 1 at 1:30", z: "ny", now: "2026-10-25T12:00", title: "Standup Nov 1 at 1:30", chips: ["choice|scheduled|Nov 1 at 1:30|a=01:30/13:30"] },
+	{ in: "Standup Nov 1 at 1:30", z: "ny", now: "2026-10-25T12:00", title: "Standup Nov 1 at 1:30", chips: ["choice|scheduled|Nov 1 at 1:30|a=01:30=2026-11-01T01:30/13:30=2026-11-01T13:30"] },
 	{ in: "Standup Mar 8 at 02:30", z: "ny", now: "2026-03-01T12:00", title: "Standup", s: "2026-03-08T03:30", chips: ["applied|scheduled|Mar 8 at 02:30|w=dst-gap"] },
 	{ in: "Standup 2026-03-08 02:30", z: "ny", now: "2026-03-01T12:00", title: "Standup", s: "2026-03-08T03:30", chips: ["applied|scheduled|2026-03-08 02:30|w=dst-gap"] },
 	{ in: "Standup Mar 29 2:30am", z: "berlin", now: "2026-03-20T12:00", title: "Standup", s: "2026-03-29T03:30", chips: ["applied|scheduled|Mar 29 2:30am|w=dst-gap"] },
@@ -397,8 +407,8 @@ const CASES: Golden[] = [
 	{ in: "Meet yesterday", z: "tokyo", title: "Meet", s: "2026-10-01", chips: ["applied|scheduled|yesterday"] },
 	{ in: "Meet at 7am", z: "tokyo", title: "Meet", s: "2026-10-02T07:00", chips: ["applied|scheduled|at 7am"] },
 	{ in: "Meet at 3am", z: "tokyo", title: "Meet", s: "2026-10-03T03:00", chips: ["applied|scheduled|at 3am"] },
-	{ in: "Meet at 7", z: "tokyo", title: "Meet at 7", chips: ["choice|scheduled|at 7|a=07:00/19:00"] },
-	{ in: "Meet at 4", z: "tokyo", title: "Meet at 4", chips: ["choice|scheduled|at 4|a=04:00/16:00"] },
+	{ in: "Meet at 7", z: "tokyo", title: "Meet at 7", chips: ["choice|scheduled|at 7|a=07:00=2026-10-02T07:00/19:00=2026-10-02T19:00"] },
+	{ in: "Meet at 4", z: "tokyo", title: "Meet at 4", chips: ["choice|scheduled|at 4|a=04:00=2026-10-03T04:00/16:00=2026-10-02T16:00"] },
 	{ in: "Meet tomorrow at 7pm", z: "tokyo", title: "Meet", s: "2026-10-03T19:00", chips: ["applied|scheduled|tomorrow at 7pm"] },
 	{ in: "Meet monday", z: "tokyo", title: "Meet", s: "2026-10-05", chips: ["applied|scheduled|monday"] },
 	{ in: "Meet next friday", z: "tokyo", title: "Meet", s: "2026-10-09", chips: ["applied|scheduled|next friday"] },
@@ -407,17 +417,17 @@ const CASES: Golden[] = [
 	{ in: "Meet tomorrow at 7pm", z: "berlin", title: "Meet", s: "2026-10-02T19:00", chips: ["applied|scheduled|tomorrow at 7pm"] },
 	{ in: "Meet Oct 5 18:00", z: "berlin", title: "Meet", s: "2026-10-05T18:00", chips: ["applied|scheduled|Oct 5 18:00"] },
 	{ in: "Meet at 14:30", z: "berlin", title: "Meet", s: "2026-10-01T14:30", chips: ["applied|scheduled|at 14:30"] },
-	{ in: "Meet at 11:30", z: "berlin", title: "Meet at 11:30", chips: ["choice|scheduled|at 11:30|a=11:30/23:30"] },
+	{ in: "Meet at 11:30", z: "berlin", title: "Meet at 11:30", chips: ["choice|scheduled|at 11:30|a=11:30=2026-10-02T11:30/23:30=2026-10-01T23:30"] },
 	{ in: "Meet at 11:30am", z: "berlin", title: "Meet", s: "2026-10-02T11:30", chips: ["applied|scheduled|at 11:30am"] },
-	{ in: "Meet at 3", z: "berlin", title: "Meet at 3", chips: ["choice|scheduled|at 3|a=03:00/15:00"] },
+	{ in: "Meet at 3", z: "berlin", title: "Meet at 3", chips: ["choice|scheduled|at 3|a=03:00=2026-10-02T03:00/15:00=2026-10-01T15:00"] },
 	{ in: "Meet 5/10", z: "berlin", loc: "en-GB", title: "Meet", s: "2026-10-05", chips: ["applied|scheduled|5/10"] },
 	{ in: "Meet 10/5", z: "berlin", loc: "en-GB", title: "Meet", s: "2027-05-10", chips: ["applied|scheduled|10/5"] },
 	{ in: "Meet 10/5", z: "berlin", title: "Meet", s: "2026-10-05", chips: ["applied|scheduled|10/5"] },
 	{ in: "Meet 5 Oct", z: "berlin", loc: "en-GB", title: "Meet", s: "2026-10-05", chips: ["applied|scheduled|5 Oct"] },
 	{ in: "Report by friday", z: "berlin", title: "Report", d: "2026-10-02", chips: ["applied|deadline|by friday"] },
-	{ in: "Meet friday", z: "tokyo", title: "Meet friday", chips: ["choice|scheduled|friday|a=Today/Next week"] },
-	{ in: "Report by friday", z: "tokyo", title: "Report by friday", chips: ["choice|deadline|by friday|a=Today/Next week"] },
-	{ in: "Meet fri", z: "tokyo", title: "Meet fri", chips: ["choice|scheduled|fri|a=Today/Next week"] },
+	{ in: "Meet friday", z: "tokyo", title: "Meet friday", chips: ["choice|scheduled|friday|a=Today=2026-10-02/Next week=2026-10-09"] },
+	{ in: "Report by friday", z: "tokyo", title: "Report by friday", chips: ["choice|deadline|by friday|a=Today=2026-10-02/Next week=2026-10-09"] },
+	{ in: "Meet fri", z: "tokyo", title: "Meet fri", chips: ["choice|scheduled|fri|a=Today=2026-10-02/Next week=2026-10-09"] },
 	{ in: "Meet friday at 5pm", z: "tokyo", title: "Meet", s: "2026-10-02T17:00", chips: ["applied|scheduled|friday at 5pm"] },
 
 	// --- manual precedence ---
@@ -431,7 +441,7 @@ const CASES: Golden[] = [
 	{ in: "Call @home", manual: ["tags"], title: "Call", tags: ["home"], chips: ["applied|tag|@home"] },
 	{ in: "Call friday #Study", manual: ["scheduled"], title: "Call friday", cat: CAT.study, chips: ["suggestion|scheduled|friday|d=2026-10-02|n=Replace date?", "applied|category|#Study"] },
 	{ in: "Call sun", manual: ["scheduled"], title: "Call sun", chips: ["suggestion|scheduled|sun|d=2026-10-04|n=Replace date?"] },
-	{ in: "Call thursday", manual: ["scheduled"], title: "Call thursday", chips: ["choice|scheduled|thursday|a=Today/Next week|n=Replace date?"] },
+	{ in: "Call thursday", manual: ["scheduled"], title: "Call thursday", chips: ["choice|scheduled|thursday|a=Today=2026-10-01/Next week=2026-10-08|n=Replace date?"] },
 	{ in: "Call tomorrow", manual: ["deadline", "duration", "category", "note", "tags"], title: "Call", s: "2026-10-02", chips: ["applied|scheduled|tomorrow"] },
 
 	// --- decisions ---
@@ -505,7 +515,7 @@ describe("golden cases", () => {
 	it.each(CASES.map((c, i) => [`${i} ${c.z ?? "ny"}${c.loc ? " " + c.loc : ""} ${JSON.stringify(c.in)}`, c] as const))(
 		"%s",
 		(_name, c) => {
-			const zk = ZONES[c.z ?? "ny"];
+			const zk = CLOCKS[c.z ?? "ny"];
 			const ctx = makeCtx({
 				zone: zk.zone,
 				now: at(zk.zone, c.now ?? zk.now),
@@ -530,6 +540,11 @@ describe("golden cases", () => {
 			expect(recurrence === undefined ? undefined : ruleKey(recurrence)).toBe(c.rec);
 			// A rule with a time takes the parse zone; one without has none.
 			if (recurrence !== undefined) expect(recurrence.tz).toBe(recurrence.time === null ? null : zk.zone);
+			// A timed alternative is in the parse zone too.
+			for (const a of r.chips.flatMap((chip) => chip.alternatives ?? [])) {
+				if (a.value?.kind === "datetime") expect(a.value.tz).toBe(zk.zone);
+				if (a.rule !== undefined) expect(a.rule.tz).toBe(zk.zone);
+			}
 			expect(chipLines(r)).toEqual(c.chips ?? []);
 			expect(r.blocking.length).toBe(c.block ?? 0);
 			for (const chip of r.chips) expect(chip.text).toBe(c.in.slice(chip.span.start, chip.span.end));

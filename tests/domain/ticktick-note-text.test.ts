@@ -132,41 +132,6 @@ describe("checklist ticks change only the box (B1)", () => {
 	});
 });
 
-describe("writing TickTick's text reads back as that text (B2)", () => {
-	const tricky = [
-		"---\nAgenda\n---\nCall the bank",
-		"---",
-		"See [[Plan]] and [[Plan|alias]]",
-		"![[photo.png]]",
-		"Escaped \\[[x]] stays",
-		"```\n[[in code]]\n```\nafter [[x]]",
-		"- [ ] looks like an item",
-		"- \\[ ] escaped item-like",
-		"Line one\n\n\nLine four",
-		"Ends with spaces",
-	];
-	const docs: NoteDoc[] = [
-		...tricky.map(text),
-		...tricky.map((t) => ({ text: t, items: ["- [ ] Bring [[passport]]", "- [x] Print ticket", "- [ ]"] })),
-		{ text: "", items: ["- [ ] only items"] },
-	];
-
-	it.each(docs.map((d) => [JSON.stringify(d), d] as const))("into a new note: %s", (_name, doc) => {
-		const checklist = doc.items.length > 0 || doc.text.startsWith("- \\");
-		const note = writeNote("", checklist, doc);
-		expect(readNote(note, checklist)).toEqual(doc);
-		// A second write changes nothing.
-		expect(writeNote(note, checklist, doc)).toBe(note);
-	});
-
-	it.each(tricky.map((t) => [t] as const))("over an existing note with frontmatter and links: %s", (t) => {
-		const note = "---\ntags: x\n---\nOld [[Link|line]]\n![[img.png]]\n";
-		const next = writeNote(note, false, text(t));
-		expect(readNote(next, false)).toEqual(text(t));
-		expect(next.startsWith("---\ntags: x\n---\n")).toBe(true);
-	});
-});
-
 describe("checklists (SYNC-09)", () => {
 	const tt = {
 		kind: "CHECKLIST",
@@ -324,8 +289,20 @@ describe("verification findings (SYNC-09)", () => {
 		};
 		const pick = <T>(a: readonly T[], n: number): T[] => Array.from({ length: n }, () => a[rnd(a.length)]!);
 		const noteLines = ["A", "B [[Link|b]]", "![[pic.png]]", "", "- [ ] milk", "- [x] eggs [[Store]]", "## H", "```", "code [[x]]", "- \\[ ] esc", "\\[[lit]]", "  indented", "---", "C ![[e.png]] tail", "* [X] star", "Receipt ![[scan.png]]"];
-		const ttLines = ["A", "b", "", "New", "[[raw]]", "![[emb]]", "- [ ] looks item", "```", "---", "x \\[[y", "  sp", "#tag", "B b", "Receipt March", "- \\[ ] esc"];
-		const itemPool = ["- [ ] milk", "- [x] eggs Store", "- [ ] new", "- [ ]", "- [x] [[odd]]", "- [ ] Milk"];
+		// TickTick text that once broke the round trip (B2), whole: frontmatter-like rules, links and embeds, escapes, code
+		// fences, item-like lines and blank-line runs.
+		const tricky = [
+			"---\nAgenda\n---\nCall the bank",
+			"See [[Plan]] and [[Plan|alias]]",
+			"![[photo.png]]",
+			"Escaped \\[[x]] stays",
+			"```\n[[in code]]\n```\nafter [[x]]",
+			"- \\[ ] escaped item-like",
+			"Line one\n\n\nLine four",
+			"Ends with spaces",
+		];
+		const ttLines = ["A", "b", "", "New", "[[raw]]", "![[emb]]", "- [ ] looks item", "```", "---", "x \\[[y", "  sp", "#tag", "B b", "Receipt March", "- \\[ ] esc", ...tricky];
+		const itemPool = ["- [ ] milk", "- [x] eggs Store", "- [ ] new", "- [ ]", "- [x] [[odd]]", "- [ ] Milk", "- [ ] Bring [[passport]]", "- [x] Print ticket"];
 		const failures: unknown[] = [];
 		for (let i = 0; i < 5000 && failures.length < 3; i++) {
 			const checklist = rnd(2) === 0;

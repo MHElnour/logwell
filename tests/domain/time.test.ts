@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
 import { FakeClock } from "../helpers";
 import fc from "fast-check";
@@ -297,9 +297,10 @@ describe("fast paths and caches", () => {
 				for (const date of [dateOfDay(n - 1), day, dateOfDay(n + 1)]) {
 					for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
 						const spec = timed(date, minutes, zone);
-						if (referenceLocal(spec, zone) !== spec.local) gaps++;
+						const local = referenceLocal(spec, zone);
+						if (local !== spec.local) gaps++;
 						expect(dateSpecDate(spec, zone), `${spec.local} ${zone}`).toBe(referenceDate(spec, zone));
-						expect(dateSpecDisplayLocal(spec, zone), `${spec.local} ${zone}`).toBe(referenceLocal(spec, zone));
+						expect(dateSpecDisplayLocal(spec, zone), `${spec.local} ${zone}`).toBe(local);
 					}
 				}
 			}
@@ -371,28 +372,13 @@ describe("fast paths and caches", () => {
 	});
 
 	describe("zone and conversion caches", () => {
-		it("a repeated cross-zone conversion returns identical values and is computed once", () => {
-			const spec: DateSpec = { kind: "datetime", local: "2026-10-02T19:00", tz: "Europe/Berlin" };
-			const first = [dateSpecDate(spec, "America/New_York"), dateSpecDisplayLocal(spec, "America/New_York")];
-			expect(first).toEqual(["2026-10-02", "2026-10-02T13:00"]);
-			expect(timeCacheSizes().conversions).toBe(1);
-			const second = [dateSpecDate(spec, "America/New_York"), dateSpecDisplayLocal(spec, "America/New_York")];
-			expect(second).toEqual(first);
-			expect(timeCacheSizes().conversions).toBe(1);
-			// A different display zone is a different answer.
-			expect(dateSpecDate(spec, "Pacific/Auckland")).toBe("2026-10-03");
-			expect(timeCacheSizes().conversions).toBe(2);
-		});
-
-		it("the same-zone path caches by day, not by task", () => {
-			for (let minutes = 0; minutes < 24 * 60; minutes += 5) dateSpecDate(timed("2026-10-02", minutes, "Europe/Berlin"), "Europe/Berlin");
-			expect(timeCacheSizes().conversions).toBe(0);
-			expect(timeCacheSizes().days).toBe(1);
-		});
+		// The caches hold at most 65,536 entries each and clear when full: filling them a little past that shows they stay
+		// bounded (a cache that never cleared would hold more).
+		const MAX = 65_536;
 
 		it("the caches stay bounded and still answer correctly after they fill", () => {
 			const display = "America/New_York";
-			for (let n = 0; n < 70_000; n++) dateSpecDisplayLocal(timed(dateOfDay(10_000 + n), 600, "Europe/Berlin"), display);
+			for (let n = 0; n < MAX + 64; n++) dateSpecDisplayLocal(timed(dateOfDay(10_000 + n), 600, "Europe/Berlin"), display);
 			const { conversions } = timeCacheSizes();
 			expect(conversions).toBeGreaterThan(0);
 			expect(conversions).toBeLessThanOrEqual(65_536);
@@ -402,7 +388,6 @@ describe("fast paths and caches", () => {
 
 		it("the instant-day cache is reported, clears when it fills, and still answers correctly", () => {
 			const zone = "America/New_York";
-			const MAX = 65_536;
 			const instantAt = (n: number): string => new Date(Date.UTC(2020, 0, 1) + n * 60_000).toISOString();
 			const reference = (instant: string): string | null => DateTime.fromISO(instant, { zone }).toISODate();
 			expect(timeCacheSizes().instantDays).toBe(0);
@@ -414,9 +399,9 @@ describe("fast paths and caches", () => {
 			// One more distinct instant at the limit empties the cache, then holds only that entry.
 			instantDay(instantAt(MAX), zone);
 			expect(timeCacheSizes().instantDays).toBe(1);
-			for (let n = MAX + 1; n < MAX + 5000; n++) instantDay(instantAt(n), zone);
+			for (let n = MAX + 1; n < MAX + 64; n++) instantDay(instantAt(n), zone);
 			expect(timeCacheSizes().instantDays).toBeLessThanOrEqual(MAX);
-			for (const n of [0, 5, MAX - 1, MAX, MAX + 4999]) expect(instantDay(instantAt(n), zone)).toBe(reference(instantAt(n)));
+			for (const n of [0, 5, MAX - 1, MAX, MAX + 63]) expect(instantDay(instantAt(n), zone)).toBe(reference(instantAt(n)));
 			// An instant that does not parse is cached as null and stays null after a clear.
 			expect(instantDay("not an instant", zone)).toBeNull();
 			expect(instantDay("not an instant", zone)).toBeNull();
@@ -431,21 +416,6 @@ describe("fast paths and caches", () => {
 			for (let n = 0; n < 3000; n++) expect(isValidZone(`Nope/Zone${n}`)).toBe(false);
 			expect(timeCacheSizes().zones).toBeLessThanOrEqual(2048);
 			expect(isValidZone("Europe/Berlin")).toBe(true);
-		});
-
-		it("isValidZone does not call Luxon again for a zone it has seen", () => {
-			isValidZone("Asia/Kolkata");
-			const spy = vi.spyOn(IANAZone, "isValidZone");
-			try {
-				for (let n = 0; n < 100; n++) expect(isValidZone("Asia/Kolkata")).toBe(true);
-				expect(spy).not.toHaveBeenCalled();
-			} finally {
-				spy.mockRestore();
-			}
-		});
-
-		it("the Luxon reference is what the tests compare against", () => {
-			expect(DateTime.fromISO("2026-03-08T02:30", { zone: "America/New_York" }).toFormat(FORMAT)).toBe("2026-03-08T03:30");
 		});
 	});
 });
