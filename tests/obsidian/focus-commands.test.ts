@@ -4,6 +4,45 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyDbText } from "../persistence/fixtures";
 import { type FakeApp, fakeApp, fileOf, loadPlugin } from "./fake-vault";
 
+// The focus commands, the start-focus command's selection, the recovery dialog's AbortSignal, the heartbeat across a
+// session close, and the active timer kept per database.
+
+// Obsidian's Notice records its message; Modal and Setting are just enough of a dialog to open and close one.
+const ui = vi.hoisted(() => ({ notices: [] as string[], opened: 0, closed: 0 }));
+vi.mock("obsidian", async (importOriginal) => {
+	const original = await importOriginal<Record<string, unknown>>();
+	class FakeModal {
+		contentEl = { createEl: () => ({}), empty: () => undefined };
+		constructor(readonly app: unknown) {}
+		setTitle(): void {}
+		open(): void {
+			ui.opened++;
+			(this as unknown as { onOpen(): void }).onOpen();
+		}
+		close(): void {
+			ui.closed++;
+			(this as unknown as { onClose(): void }).onClose();
+		}
+	}
+	class FakeSetting {
+		constructor(readonly el: unknown) {}
+		addButton(cb: (b: Record<string, () => unknown>) => void): this {
+			const btn: Record<string, () => unknown> = {};
+			for (const k of ["setButtonText", "setCta", "setDestructive", "onClick"]) btn[k] = () => btn;
+			cb(btn);
+			return this;
+		}
+	}
+	const Base = original.Notice as new (...args: unknown[]) => object;
+	class RecordedNotice extends Base {
+		constructor(message: unknown, ...rest: unknown[]) {
+			super(message, ...rest);
+			ui.notices.push(String(message));
+		}
+	}
+	return { ...original, Modal: FakeModal, Setting: FakeSetting, Notice: RecordedNotice };
+});
+
 interface Cmd {
 	id: string;
 	name: string;
@@ -62,6 +101,51 @@ describe("focus commands (D13)", () => {
 		cmd("stop-focus").checkCallback!(false);
 		await vi.waitFor(() => expect(focus.timer()).toBeNull());
 		expect(cmd("stop-focus").checkCallback!(true)).toBe(false);
+	});
+});
+
+describe("start-focus command (B3)", () => {
+	// It uses the selection from the app's state, and does nothing but say so when nothing is selected.
+	async function withSelection(selected: string | null) {
+		const s = await setup();
+		(s.plugin as unknown as { appView: () => unknown }).appView = () => ({ selectedTaskId: () => selected });
+		const start = vi.spyOn(s.plugin, "startFocus").mockResolvedValue(undefined);
+		ui.notices.length = 0;
+		return { start, run: () => s.cmd("start-focus").callback!() };
+	}
+
+	it("with nothing selected it shows a notice and starts nothing", async () => {
+		const { start, run } = await withSelection(null);
+		run();
+		expect(ui.notices).toEqual(["Select a task first."]);
+		expect(start).not.toHaveBeenCalled();
+	});
+
+	it("with a selected task it starts focus on it", async () => {
+		const { start, run } = await withSelection("t-1");
+		run();
+		expect(ui.notices).toEqual([]);
+		expect(start).toHaveBeenCalledWith("t-1");
+	});
+});
+
+describe("FocusHostUi.choose in the plugin (B4)", () => {
+	// The plugin's FocusHostUi.choose must hand its AbortSignal to the real ChoiceModal, so the recovery dialog closes
+	// when the banner resolves the question. A mocked ui.choose cannot show that.
+	it("aborting the signal closes the ChoiceModal once and resolves null", async () => {
+		const { plugin } = await setup();
+		ui.opened = 0;
+		ui.closed = 0;
+		const host = (plugin as unknown as { focusHost: { ui: { choose: (...a: unknown[]) => Promise<unknown> } } }).focusHost.ui;
+		const abort = new AbortController();
+		const result = host.choose("Title", "Message", [{ label: "Resume", value: "resume" }], "Decide later", abort.signal);
+		expect(ui.opened).toBe(1);
+		abort.abort();
+		await expect(result).resolves.toBeNull();
+		expect(ui.closed).toBe(1);
+		// A second abort-after-close must not close again.
+		abort.abort();
+		expect(ui.closed).toBe(1);
 	});
 });
 

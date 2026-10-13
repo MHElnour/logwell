@@ -285,9 +285,8 @@ describe("command line", () => {
 		return { root, ...spawnSync(process.execPath, [join(root, "scripts", "release-check.mjs"), ...args], { cwd: root, encoding: "utf8", env: { ...cleanEnv, ...env } }) };
 	};
 
-	it("the real repo's release notes pass lint", () => {
-		expect(spawnSync(process.execPath, [SCRIPT, "lint"], { encoding: "utf8" }).status).toBe(0);
-	});
+	// One smoke test per entry point: what each stage checks is tested on its function above, and CI runs
+	// `release-check.mjs lint` on the real repo.
 	it("the real repo's index lists every release file, newest first", () => {
 		const index = readFileSync(join(import.meta.dirname, "..", "..", "docs", "releases", "README.md"), "utf8");
 		const versions = index.split("\n").filter((l) => l.startsWith("- [")).map((l) => /^- \[([^\]]+)\]/.exec(l)?.[1]);
@@ -300,11 +299,6 @@ describe("command line", () => {
 		expect(versions[0]).toBe(current);
 		expect(versions.at(-1)).toBe("0.1.0");
 	});
-	it("pre exits 1 with a message on an empty unreleased.md", () => {
-		const r = cli(baseFiles("0.1.0", EMPTY_UNRELEASED), ["pre", "minor"]);
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("release-check: docs/releases/unreleased.md has no entries");
-	});
 	it("pre reads the bump from npm_new_version", () => {
 		const files = baseFiles("0.1.0", unreleased("## Added\n\n- x\n"));
 		const r = cli(files, ["pre"], { npm_old_version: "0.1.0", npm_new_version: "0.1.1" });
@@ -312,21 +306,10 @@ describe("command line", () => {
 		expect(r.stderr).toContain("patch release may only list Fixed and Security");
 		expect(cli(files, ["pre"], { npm_old_version: "0.1.0", npm_new_version: "0.2.0" }).status).toBe(0);
 	});
-	it("pre refuses a version whose release file already exists", () => {
-		const files = baseFiles("0.1.0", unreleased("## Fixed\n\n- x\n"), { "docs/releases/0.1.1.md": release("0.1.1", "2026-01-02", "## Fixed\n\n- y\n") });
-		const r = cli(files, ["pre"], { npm_old_version: "0.1.0", npm_new_version: "0.1.1" });
-		expect(r.status).toBe(1);
-		expect(r.stderr).toContain("0.1.1.md already exists");
-	});
 	it("verify prints the notes on stdout", () => {
 		const r = cli(baseFiles("0.1.0", EMPTY_UNRELEASED), ["verify", "0.1.0"]);
 		expect(r.status).toBe(0);
 		expect(r.stdout).toBe("## Added\n\n- First thing\n");
-	});
-	it("index rewrites the README from the release files", () => {
-		const r = cli(baseFiles("0.1.0", EMPTY_UNRELEASED, { "docs/releases/README.md": "stale\n" }), ["index"]);
-		expect(r.status).toBe(0);
-		expect(readFileSync(join(r.root, "docs/releases/README.md"), "utf8")).toBe(buildIndex([{ version: "0.1.0", date: "2026-01-01" }]));
 	});
 	it("version works end to end", () => {
 		const r = cli(baseFiles("0.1.0", unreleased("## Fixed\n\n- (#4) y. Thanks to @z for reporting.\n")), ["version", "0.1.1"], {}, true);

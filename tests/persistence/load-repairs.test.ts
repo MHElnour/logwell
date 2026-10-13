@@ -225,7 +225,7 @@ describe("sections", () => {
 			expect(removed.sections.has("new-sec")).toBe(false);
 		});
 
-		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already schema 3, so the e2e vault never migrates (§11.6)", (path) => {
+		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already at the current schema, so the e2e vault never migrates (§11.6)", (path) => {
 			const text = readFileSync(join(import.meta.dirname, "..", "..", path), "utf8");
 			const r = ok(loadText(text, NOW));
 			expect(r.migratedFrom).toBeNull();
