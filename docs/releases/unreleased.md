@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#115) Fixed a focus round started after the open database file was replaced, such as a damaged file put back outside Obsidian, being lost on the next start with no recovery prompt, or offered to another database. The running timer now stays with the database that is open.
 - (#114) Fixed the "Not synced" mark in a task block not changing when a list was linked with TickTick or unlinked, or when you chose **Keep** for tasks missing in TickTick, even after a reload. The block now updates the mark as Logwell's own lists do.
 - (#113) Fixed a note renamed or moved while Logwell was switching to another database keeping its old path in the database being closed, which broke the task's link to its note for good. The closing database now follows the rename too.
 - (#112) Fixed a database switch that was still finishing when Logwell was turned off, reloaded or updated opening the new database anyway and leaving it open: it kept saving the file and showing notices, and after an update two copies wrote the same file. Nothing opens any more once Logwell stops, and a database whose opening fails part way is closed.

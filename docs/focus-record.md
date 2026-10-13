@@ -43,5 +43,5 @@ The time in between is not counted at first. In the focus record it shows under 
 
 If Logwell saved the round just before Obsidian closed, it says so and ends the set.
 
-The running timer lives on the device where you started it. It is not in the database, so another computer does not show it. Saved rounds are in the database and sync with it. See [Your data](your-data.md).
+The running timer lives on the device where you started it, with the database it belongs to. If the database file is replaced while the timer runs, for example a damaged file put back outside Obsidian, the timer stays with the database that is open now. It is not in the database, so another computer does not show it. Saved rounds are in the database and sync with it. See [Your data](your-data.md).
 
