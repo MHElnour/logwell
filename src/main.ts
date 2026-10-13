@@ -394,6 +394,8 @@ export default class CheckpointPlugin extends Plugin {
 			vault.on("modify", (file) => {
 				if (!(file instanceof TFile)) return;
 				if (file.path === this.session?.path) void this.session.store.handleExternalChange();
+				// A session still opening reads the change once its open has read the file (the store queues it).
+				else if (file.path === this.openingSession?.path) void this.openingSession.store.handleExternalChange();
 				else if (file.extension === "md") this.events.emit("note", file.path);
 			}),
 		);

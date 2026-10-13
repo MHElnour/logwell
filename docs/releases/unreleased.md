@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#103) Fixed a change from another device that arrived while Logwell was still opening the database being ignored, so the open database showed the older version and your next edit became a conflict copy with the Keep mine / Keep theirs notice. The change is now loaded as soon as the database is open.
 - (#129) Fixed **Move up** on the first list doing nothing visible while adding an Undo step and putting the list before Inbox in the list pickers. Inbox now stays first everywhere and has no **Move up** or **Move down**, the ends of the list are off, each move is one visible step, and lists that share a place after Import backup with Merge by ID can be moved instead of showing an error.
 - (#104) Fixed two sections with the same name in a list making every open take a backup and save the database again, and two devices rewriting each other's file over and over. The duplicate is now named in a notice and the file is left as it is. A reload after a change from another device that does repair records now says so. **Merge by ID** no longer adds a backup's section next to one of the same name: its tasks go to the section you have.
 - (#128) Fixed deleting a list moving its open tasks into an Inbox synced with TickTick past the limit of 999 open tasks. The delete is now refused with the same message as other moves into a full list.
