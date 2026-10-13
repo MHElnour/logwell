@@ -593,6 +593,46 @@ describe("Save (C7)", () => {
 		expect(chips(m.root)).toHaveLength(1);
 		expect(chips(m.root)[0]!.getAttribute("data-status")).toBe("applied");
 	});
+
+	it("#130: text typed while a task saves is kept for the next task; the field clears only when it still holds the saved text", async () => {
+		for (const keepOpen of [true, false]) {
+			const h = await appHarness();
+			const saved: { title: string; warnings: string[] }[] = [];
+			let closed = 0;
+			const m = new QuickAddModel(
+				{ app: h.app, preset: {}, locale: () => "en", resolveNote: () => [], onSaved: (title, warnings) => saved.push({ title, warnings }), onError: (e) => { throw e; }, keepOpen: () => keepOpen, onClose: () => closed++ },
+				() => undefined,
+			);
+			const create = h.app.tasks.create.bind(h.app.tasks);
+			let release!: () => void;
+			const gate = new Promise<void>((r) => (release = r));
+			h.app.tasks.create = async (input) => {
+				await gate;
+				return create(input);
+			};
+			m.setDate("2026-10-20");
+			m.setInput("Task one");
+			const first = m.submit();
+			m.setInput("tomorrow");
+			release();
+			expect(await first).toBe("saved");
+			// The notice describes the task that was saved, not the text typed since.
+			expect(saved).toEqual([{ title: "Task one", warnings: [] }]);
+			expect(closed).toBe(0);
+			expect(m.input).toBe("tomorrow");
+			// The date picked for the saved task does not carry over.
+			expect(m.dateInputs().date).toBe("2026-10-02");
+			h.app.tasks.create = create;
+			m.setInput("Task two tomorrow");
+			expect(await m.submit()).toBe("saved");
+			expect([...h.app.store.state.tasks.values()].map((t) => [t.title, t.scheduled])).toEqual([
+				["Task one", { kind: "date", date: "2026-10-20" }],
+				["Task two", { kind: "date", date: "2026-10-02" }],
+			]);
+			expect(m.input).toBe(keepOpen ? "" : "Task two tomorrow");
+			expect(closed).toBe(keepOpen ? 0 : 1);
+		}
+	});
 });
 
 describe("Keyboard (C3)", () => {
@@ -1468,6 +1508,20 @@ describe("a repeat's end", () => {
 			expect(await m.submit()).toBe("saved");
 			const task = [...h.app.store.state.tasks.values()][0]!;
 			expect(task).toMatchObject({ title: "Pills", deadline: null, recurrence: { end: { kind: "date", date: "2026-12-01" } } });
+		});
+
+		it("#105: after Never is picked, a typed end left without its typed repeat is a deadline, as with no repeat", async () => {
+			const { h, m } = await model();
+			m.setInput("Water plants every day until Dec 1");
+			m.setRepeat(null);
+			m.dismiss(m.result.chips.find((c) => c.kind === "recurrence")!);
+			const end = m.result.chips.find((c) => c.text === "until Dec 1")!;
+			expect(end).toMatchObject({ kind: "deadline", status: "applied" });
+			expect(m.result.title).toBe("Water plants every day");
+			expect(m.repeatValue()).toBeNull();
+			expect(await m.submit()).toBe("saved");
+			const task = [...h.app.store.state.tasks.values()][0]!;
+			expect(task).toMatchObject({ title: "Water plants every day", recurrence: null, deadline: { kind: "date", date: "2026-12-01" } });
 		});
 
 		it("#12: the picker refuses an end before the first occurrence (a Monday task, weekly on Friday, ending Wednesday)", () => {

@@ -109,6 +109,9 @@ export class DbSession {
 			),
 		);
 		const app = this.app;
+		// A listener that throws is shown as an error; the change and the other listeners go on.
+		app.store.bus.onListenerError = showError;
+		app.focus.bus.onListenerError = showError;
 		this.tickTickApi = new TickTickHttp(app.tickTickSecret);
 		this.sync = new SyncService(app.store, app.tasks, app.sections, app.settings, this.tickTickApi, {
 			port: app.notes,
