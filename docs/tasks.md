@@ -35,6 +35,8 @@ Click a row to open its details. From top to bottom you see:
 - **Subtasks**, with the **Add subtask** bar.
 - The list button, the time focused and **Focus**, which starts a [focus timer](focus.md).
 
+Selecting another task closes an open repeat picker and empties the tag box, so nothing you started for one task is saved to the next.
+
 **More task actions** holds **Duplicate**, **Make subtask of…**, **Make top-level task**, **Urgent**, **Important**, **Show ID and timestamps** and **Delete**.
 
 Right-click a row for the row menu: **Open details**, **Complete**, **Start focus**, the **Schedule for** items, **Clear schedule**, the priorities, **Move to list…**, **Move to section…**, the **Move to quadrant** items, **Duplicate** and **Delete**.
