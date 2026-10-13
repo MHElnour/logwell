@@ -2,7 +2,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Source-level guards for the parsing layer: layering, iOS-safe regex, no network, no chrono date accessor.
+// Source-level guards for the parsing layer that ESLint does not check: iOS-safe regex and no network. The layer
+// imports and the chrono date accessor are lint rules (eslint.config.mjs).
 
 const ROOT = join(import.meta.dirname, "../../src/parsing");
 
@@ -23,19 +24,8 @@ describe("src/parsing source rules", () => {
 		expect(FILES.length).toBeGreaterThanOrEqual(3);
 	});
 
-	it("never calls the date accessor of a chrono result (spec §8)", () => {
-		for (const f of FILES) expect(f.text, f.file).not.toMatch(/\.date\s*\(/);
-	});
-
 	it("uses no regex lookbehind or named group syntax (iOS)", () => {
 		for (const f of FILES) expect(f.text, f.file).not.toContain("(?<");
-	});
-
-	it("does not import obsidian or the layers above it", () => {
-		for (const f of FILES) {
-			expect(f.text, f.file).not.toMatch(/from\s+["']obsidian/);
-			expect(f.text, f.file).not.toMatch(/from\s+["'][^"']*\/(app|persistence|ui|obsidian)\//);
-		}
 	});
 
 	it("makes no network calls (QA-11)", () => {
