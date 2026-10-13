@@ -199,6 +199,12 @@ export class CpbaseStore {
 	 * deliberate rollback. Cleared on success and on an external reload.
 	 */
 	private readonly attempted = new Set<string>();
+	/**
+	 * The header of the newest write attempt that threw. It may have landed and
+	 * been synced, so the retry continues from it and keeps it in history.
+	 * Cleared with `attempted`.
+	 */
+	private thrownMeta: DbMeta | null = null;
 	private lastSnapshotAt: number | null = null;
 	private closed = false;
 	/**
@@ -534,7 +540,7 @@ export class CpbaseStore {
 		this.pendingOps = [];
 		this.needsFullWrite = false;
 
-		const prev = this.current.meta;
+		const prev = this.thrownMeta ?? this.current.meta;
 		const meta = this.nextMeta(prev);
 		const content = serializeDb({ ...this.current, meta }, this.cache);
 		let journalOk = true;
@@ -559,6 +565,7 @@ export class CpbaseStore {
 			result = await this.deps.file.write(content, (text) => this.isOnDisk(text));
 		} catch (err) {
 			requeue();
+			this.thrownMeta = meta;
 			this.emit({ type: "save-error", message: err instanceof Error ? err.message : String(err) });
 			this.scheduleRetry();
 			return;
@@ -589,6 +596,7 @@ export class CpbaseStore {
 		}
 		this.casFailures = 0;
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.current = { ...this.current, meta };
 		this.disk = { revision: meta.revision };
 		if (snapshotFirst && journalOk) this.journalStale = false;
@@ -729,7 +737,11 @@ export class CpbaseStore {
 		this.replaceData(incoming);
 		this.disk = diskStateOf(text);
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.unsavedCopy = null;
+		// Our version is kept as the conflict copy, so the loaded one is this
+		// device's base from now on: the next open does not report ours as lost.
+		if (!fastForward) this.deps.local.setLastWritten(incoming.meta.dbId, incoming.meta.revision);
 		if (this.readOnly !== null) {
 			this.readOnly = null;
 			this.emit({ type: "writable" });

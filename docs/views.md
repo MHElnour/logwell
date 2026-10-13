@@ -85,7 +85,7 @@ In the list layout, open **View options**, choose **Group by…** and pick a gro
 
 In Today, Upcoming, Inbox, lists and tags:
 
-- Drag a row up or down to reorder it. This works under **Sort: default**. A parent moves with its subtasks.
+- Drag a row up or down to reorder it. This works under **Sort: default**. A parent moves with its subtasks. Only the row you drag moves: every other task keeps its place in every view, including tasks of the same list that this view does not show.
 - Drag a row onto another group to change that value: its day, priority, section or list. A new day keeps the task's time. This works under every sort.
 
 **Overdue**, **No date** and tag groups take no drops. After a move, a notice such as "Moved "Pay rent" to High." offers **Undo**.
