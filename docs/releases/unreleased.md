@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#109) Fixed a subtask you moved to another synced list in TickTick being moved back to its old list by the next sync, and no longer a subtask on either side. It now stays in the list you moved it to, as a top-level task, in Logwell and in TickTick.
 - (#108) Fixed a TickTick sync dropping everything changed in TickTick on a task, such as a new title and priority, when one of the changes could not apply in Logwell, like a column of the list you had just moved the task out of. The sync then sent the old values back to TickTick. Each change now applies on its own, and only the one Logwell cannot take is skipped.
 - (#117) Fixed edits made right before quitting Obsidian being lost when the last save failed, for example while a sync tool held the file: they are now kept as a conflict copy, as when a database closes. A database being switched to or from when Obsidian quits is saved too.
 - (#118) Fixed an error in one part of Logwell, such as a view or a task block, making a saved change report a failure and leaving the other views out of date. The error is now shown on its own, and a change made outside Obsidian still shows its conflict notice and saves its repairs.

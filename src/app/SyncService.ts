@@ -1310,7 +1310,10 @@ export class SyncService {
 		}
 		const homeList = listOfProject.get(link.ttProjectId ?? "")!.listId;
 		const ttList = listOfProject.get(tt.projectId)?.listId ?? homeList;
-		const pullList = ttList !== homeList && t.categoryId === homeList && t.parentId === null;
+		// Moved to another linked list in TickTick and still in its list here: TickTick's list wins. A subtask leaves its
+		// parent for it (a subtask shares its parent's list), whether TickTick names no parent or still the old one,
+		// unless its parent changed here since the last sync.
+		const pullList = ttList !== homeList && t.categoryId === homeList && (t.parentId === null || ours.parent === link.base.parent);
 		let written = 0;
 		/** Runs one pulled write; false when Logwell's rules refuse it. */
 		const applies = (write: () => void): boolean => {
@@ -1327,6 +1330,12 @@ export class SyncService {
 			if (applies(write)) written++;
 		};
 
+		// The parent first, so a subtask that leaves its parent can follow TickTick's list.
+		const parent = pull.has("parent") ? parentOf(tt) : undefined;
+		if (parent !== undefined) attempt(() => this.tasks.setParentIn(tx, t.id, parent));
+		else if (pullList && t.parentId !== null) attempt(() => this.tasks.setParentIn(tx, t.id, null));
+		const topLevel = (tx.get("tasks", t.id) ?? t).parentId === null;
+
 		// One patch per pulled value, the list first so a column of the new list follows it: a value Logwell's rules
 		// refuse (a column of a list the task left) is skipped, never the others with it. The task counts as one write.
 		const patches: TaskPatch[] = [];
@@ -1334,7 +1343,7 @@ export class SyncService {
 		if (pull.has("title")) patches.push({ title: ttTitle(tt.title) });
 		if (pull.has("priority")) patches.push({ priority: priorityFromTt(tt.priority) });
 		if (pull.has("date")) patches.push(pulledDatePatch(t, dateFromTt(tt, zone)));
-		if (pull.has("section") && t.parentId === null) {
+		if (pull.has("section") && topLevel) {
 			const section = sectionOf(tt);
 			if (section !== undefined) patches.push({ sectionId: section });
 		}
@@ -1353,10 +1362,6 @@ export class SyncService {
 			});
 		}
 		if (patched) written++;
-		if (pull.has("parent")) {
-			const parent = parentOf(tt);
-			if (parent !== undefined) attempt(() => this.tasks.setParentIn(tx, t.id, parent));
-		}
 		if (pull.has("status")) {
 			attempt(() => (statusFromTt(tt.status) === "completed" ? this.tasks.completeOneIn(tx, t.id) : this.tasks.reopenIn(tx, t.id)));
 		}
