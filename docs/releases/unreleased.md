@@ -49,6 +49,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#139) Fixed a false conflict copy and Keep mine / Keep theirs notice on another device after a save reported an error but reached the file anyway: the retried save now continues from the version that landed.
 - (#116) Fixed the next start after a conflict saying "Changes this device saved earlier are missing" and adding another conflict copy of the version you had discarded with **Keep theirs**, or not chosen for yet.
 - (#101) Fixed an edit that was waiting to be saved disappearing without a word when the database file was damaged (for example by merge markers) or came from a newer version of Logwell, and a valid file came back. The edit is kept as a conflict copy and the conflict notice offers **Keep mine** and **Keep theirs**; if the database closes first, a notice points at the copy.
 - (#102) Fixed Restore backup leaving out the edits made since the newest snapshot once Obsidian had quit in the middle of a save. The log of saved changes behind recovery now skips a line cut off by the crash, keeps later changes readable and is cleared after each snapshot again, so it no longer grows with every save.

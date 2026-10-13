@@ -1619,3 +1619,30 @@ describe("a version loaded over a fork is not reported missing later", () => {
 		expect(h.events.some((e) => e.type === "lost-revision")).toBe(true);
 	});
 });
+
+describe("the retry after a write that threw but landed", () => {
+	it("#139: keeps the landed revision in history, so a device that read it fast-forwards", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("t1"));
+		h.fs.failNextWrite((p) => p === DB_PATH, 1_000_000); // the whole file lands, then the write throws
+		await h.saveNow();
+		const landed = revisionOf(h.dbText());
+		// Another device syncs the landed file and reads it.
+		const other = h.newStore();
+		await other.open();
+		expect(other.data.meta.revision).toBe(landed);
+
+		h.scheduler.advance(SAVE_RETRY_MS);
+		await settle();
+		const retried = load(h.dbText()).meta;
+		expect(retried.revision).not.toBe(landed);
+		expect(retried.baseRevision).toBe(landed);
+		expect(retried.history).toContain(landed);
+
+		h.events.length = 0;
+		await other.handleExternalChange();
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+		expect(other.data.meta.revision).toBe(retried.revision);
+	});
+});
