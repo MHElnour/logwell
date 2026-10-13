@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#127) Fixed deleting a parent tag merging a child tag into an older tag of the same name, such as `home/calls` into `calls`, which took the child's color and joined both tags' tasks. The delete is now refused with the message a rename gives, and nothing changes.
 - (#125) Fixed an overdue task you tick in Today jumping to the Today group while its check plays. It now stays under Overdue until it leaves, and on the board the Overdue column no longer disappears and shifts the other columns for that moment.
 - (#131) Fixed a repeating task whose repeat had ended but which was still open, after an edit of the database file or a sync, failing to complete from its row or a task block with "This repeat has ended.". It now completes like any other task, and its menu no longer offers Skip, Edit repeat or Stop repeating.
 - (#124) Fixed changing the date of a repeating task after **Stop repeating** saying it now repeats from that date while it stayed completed and did not repeat. A repeat that has ended now keeps its date and the notice says to reopen the task first.
