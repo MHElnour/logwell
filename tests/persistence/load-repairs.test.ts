@@ -356,3 +356,39 @@ describe("long tag keys", () => {
 		});
 	});
 });
+
+describe("timed dates written with other digits", () => {
+	// A device whose language writes other digits (Arabic, Persian) once stored timed dates with them. Such a file
+	// still opens: the digits are read as 0 to 9, with an issue per date.
+
+	const NOW = "2026-10-13T10:00:00.000Z";
+	const ARABIC = "٢٠٢٦-١٠-١٣T١٧:٠٠";
+	const PERSIAN = "۲۰۲۶-۱۰-۱۴T۰۹:۳۰";
+
+	function fileWith(scheduled: string, deadline: string): string {
+		const data = createEmptyDb({ dbId: "db-1", revision: "r-000000000000", deviceId: "d-other", now: "2026-10-01T08:00:00.000Z" });
+		const tasks = new Map(data.tasks);
+		tasks.set("t1", makeTask("t1", { title: "Call mom", scheduled: { kind: "datetime", local: "2026-01-01T00:00", tz: "Africa/Cairo" }, deadline: { kind: "datetime", local: "2026-01-02T00:00", tz: "Asia/Tehran" } }));
+		const trash = new Map(data.trash);
+		trash.set("b1", { batchId: "b1", deletedAt: "2026-10-12T10:00:00.000Z", tasks: [makeTask("t2", { title: "Old call", scheduled: { kind: "datetime", local: "2026-01-01T00:00", tz: "Africa/Cairo" } })] });
+		return serializeDb({ ...data, tasks, trash }).replaceAll("2026-01-01T00:00", scheduled).replace("2026-01-02T00:00", deadline);
+	}
+
+	it("#100: loads with the digits 0 to 9 and one issue per date; the repaired file loads clean", () => {
+		const r = loadText(fileWith(ARABIC, PERSIAN), NOW);
+		if (r.kind !== "ok") throw new Error(`did not load: ${JSON.stringify(r)}`);
+		expect(r.data.tasks.get("t1")?.scheduled).toEqual({ kind: "datetime", local: "2026-10-13T17:00", tz: "Africa/Cairo" });
+		expect(r.data.tasks.get("t1")?.deadline).toEqual({ kind: "datetime", local: "2026-10-14T09:30", tz: "Asia/Tehran" });
+		expect(r.data.trash.get("b1")?.tasks[0]?.scheduled).toEqual({ kind: "datetime", local: "2026-10-13T17:00", tz: "Africa/Cairo" });
+		expect(r.issues).toHaveLength(3);
+		expect(r.issues[0]).toContain("Call mom");
+		expect(r.issues.join(" ")).toContain("Old call");
+		const again = loadText(serializeDb(r.data), NOW);
+		expect(again.kind === "ok" && again.issues).toEqual([]);
+	});
+
+	it("#100: a date that is still not a real time once read as 0 to 9 fails the load as before", () => {
+		const r = loadText(fileWith("٢٠٢٦-١٣-٠١T١٧:٠٠", PERSIAN), NOW);
+		expect(r.kind).not.toBe("ok");
+	});
+});

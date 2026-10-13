@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, dayNum, fmtMin, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
 import { FakeClock } from "../helpers";
 import fc from "fast-check";
 import { monthStats } from "../../src/domain/habits";
@@ -8,7 +8,7 @@ import { weekStartOf } from "../../src/domain/calendar";
 import { dayLabel, monthGrid, shiftDateByMonths } from "../../src/ui/quickadd/calendar";
 import { ci, habit, idx, ver } from "./habit-fixtures";
 import { rule, series } from "./recurrence-fixtures";
-import { DateTime, IANAZone } from "luxon";
+import { DateTime, IANAZone, Settings } from "luxon";
 import type { DateSpec } from "../../src/domain/types";
 
 describe("time (TIME-01..03)", () => {
@@ -78,6 +78,46 @@ describe("time (TIME-01..03)", () => {
 	it("adds days across month ends", () => {
 		expect(addDays("2026-10-31", 1)).toBe("2026-11-01");
 		expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+	});
+});
+
+describe("a device whose language writes other digits", () => {
+	// Arabic (Egypt), Persian and Bengali write numbers with their own digits by default. A stored or
+	// compared date always uses 0 to 9, whatever the device language.
+
+	const original = Settings.defaultLocale;
+	afterEach(() => {
+		Settings.defaultLocale = original;
+		resetTimeCaches();
+	});
+	const on = (locale: string): void => {
+		Settings.defaultLocale = locale;
+		resetTimeCaches();
+	};
+
+	it.each(["ar-EG", "fa-IR", "bn-BD"])("#100: a wall time keeps the digits 0 to 9 and reports no daylight saving change (%s)", (locale) => {
+		on(locale);
+		expect(resolveWallTime("2026-10-12T10:00", "Europe/Berlin")).toEqual({ local: "2026-10-12T10:00", warning: null });
+		expect(resolveWallTime("2026-03-29T02:30", "Europe/Berlin")).toEqual({ local: "2026-03-29T03:30", warning: "dst-gap" });
+	});
+
+	it.each(["ar-EG", "fa-IR", "bn-BD"])("#100: a timed date shown in another zone keeps the digits 0 to 9 (%s)", (locale) => {
+		on(locale);
+		const timed: DateSpec = { kind: "datetime", local: "2026-10-12T10:00", tz: "Europe/Berlin" };
+		expect(dateSpecDisplayLocal(timed, "America/New_York")).toBe("2026-10-12T04:00");
+		expect(dateSpecSortValue(timed, "America/New_York")).toBe("2026-10-12T04:00");
+		expect(dateSpecDate(timed, "Pacific/Auckland")).toBe("2026-10-12");
+		const gap: DateSpec = { kind: "datetime", local: "2026-03-29T02:30", tz: "Europe/Berlin" };
+		expect(dateSpecDisplayLocal(gap, "Europe/Berlin")).toBe("2026-03-29T03:30");
+	});
+
+	it("#100: another script's digits read as 0 to 9, and other text is kept", () => {
+		expect(latinDigits("٢٠٢٦-١٠-١٢T١٠:٠٠")).toBe("2026-10-12T10:00");
+		expect(latinDigits("۲۰۲۶-۱۰-۱۲T۱۷:۳۹")).toBe("2026-10-12T17:39");
+		expect(latinDigits("২০২৬-১০-১২T০৮:৫৯")).toBe("2026-10-12T08:59");
+		expect(latinDigits("𝟐𝟎𝟐𝟔")).toBe("2026");
+		expect(latinDigits("2026-10-12T10:00")).toBe("2026-10-12T10:00");
+		expect(latinDigits("Call ٥ x½")).toBe("Call 5 x½");
 	});
 });
 

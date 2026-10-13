@@ -4,6 +4,7 @@ import type { ActiveTimer } from "../domain/focus";
 import { nowInstant } from "../domain/ports";
 import type { QueryContext } from "../domain/queries";
 import { type SubtaskCount, subtaskCounts } from "../domain/tasks";
+import { formatLatin } from "../domain/time";
 import type { ID, Instant } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { UiHost } from "./host";
@@ -145,7 +146,7 @@ export function useFocus(host: UiHost, active = true): { timer: ActiveTimer | nu
  * only re-renders when the minute changed.
  */
 export function useClockTime(host: UiHost, zone: string): string {
-	const read = () => DateTime.fromJSDate(host.app.clock.now(), { zone }).toFormat("HH:mm");
+	const read = () => formatLatin(DateTime.fromJSDate(host.app.clock.now(), { zone }), "HH:mm");
 	const [, setTick] = useState(0);
 	const time = read();
 	const shown = useRef(time);
