@@ -2,9 +2,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { INBOX_ID } from "../../src/domain/types";
-import type { MenuSpec } from "../../src/ui/host";
-import { mountApp } from "./quick-add.helpers";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { type AppMount, click, expectLabelsResolve, labelledBy, mountApp, obsidianElement, type ObsidianElement, settle, sidebarItem, strayAriaLabels } from "./app-helpers";
+import { openViewMenu, pickItem } from "./view-menu-helpers";
 import { Modal } from "obsidian";
 import { pickListIcon } from "../../src/obsidian/modals";
 
@@ -15,71 +14,9 @@ describe("aria-label tooltips", () => {
 	// "Task lists" tooltip and hovering a task row showed the list's label. Containers must
 	// be named with aria-labelledby instead; aria-label stays on controls.
 
-	beforeAll(() => {
-		(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-			this.replaceChildren();
-		};
-	});
-
-	const mounted: { unmount: () => void }[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-	const settle = async () => {
-		for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
-	};
-
-	/**
-	 * Where an aria-label is allowed: elements the pointer actually targets as a control, where
-	 * a tooltip naming the control is wanted (icon-only buttons, inputs without visible text).
-	 * - button, input, select, textarea, a: native interactive controls. This covers role=tab
-	 *   (our tabs are buttons), the task checkbox and the add-bar input.
-	 * - [role=img]: the "Has description note" meta icon, whose tooltip is the point.
-	 * Everything else (nav, div/section/ul with role listbox, group, list, tablist, dialog, ...)
-	 * is a container: hovering anywhere inside it would surface the tooltip, anchored to the
-	 * container rather than the pointer. Rows (role=option) are deliberately not on the list:
-	 * their text content names them.
-	 */
-	const ALLOWED = ["button", "input", "select", "textarea", "a", '[role="img"]'];
-
-	function strayAriaLabels(root: ParentNode): string[] {
-		return [...root.querySelectorAll<HTMLElement>("[aria-label]")]
-			.filter((el) => !ALLOWED.some((sel) => el.matches(sel)))
-			.map((el) => `<${el.tagName.toLowerCase()} class="${el.className}" role="${el.getAttribute("role") ?? ""}" aria-label="${el.getAttribute("aria-label")}">`);
-	}
-
-	/** The accessible name that aria-labelledby resolves to, or null if it does not resolve. */
-	function labelledBy(el: Element): string | null {
-		const ids = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/).filter(Boolean);
-		if (ids.length === 0) return null;
-		const doc = el.ownerDocument;
-		const parts = ids.map((id) => doc.getElementById(id)?.textContent?.trim() ?? "");
-		return parts.some((p) => p === "") ? null : parts.join(" ");
-	}
-
-	/** Every aria-labelledby in scope resolves to non-empty text, and ids are unique per document. */
-	function expectLabelsResolve(root: ParentNode) {
-		const ids = [...document.querySelectorAll("[id]")].map((e) => e.id);
-		expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
-		for (const el of root.querySelectorAll("[aria-labelledby]")) {
-			expect(labelledBy(el), `unresolved aria-labelledby on <${el.tagName.toLowerCase()} class="${el.className}">`).not.toBeNull();
-		}
-	}
-
 	const nameOf = (root: ParentNode, sel: string) => labelledBy(root.querySelector(sel)!);
 
-	async function mount() {
-		const m = await mountApp();
-		mounted.push(m);
-		return m;
-	}
-	const click = async (el: Element | null) => {
-		if (el === null) throw new Error("element not found");
-		(el as HTMLElement).click();
-		await settle();
-	};
-
-	async function seed(h: Awaited<ReturnType<typeof mount>>["h"]) {
+	async function seed(h: AppMount["h"]) {
 		const cat = await h.app.categories.create("Work", "briefcase");
 		await h.app.tags.create("urgent", "red");
 		await h.app.tasks.create({ title: "Today task", scheduled: { kind: "date", date: "2026-10-01" } });
@@ -90,7 +27,7 @@ describe("aria-label tooltips", () => {
 
 	describe("no stray aria-label tooltips", () => {
 		it("the sidebar, the task list and the rail carry no aria-label on containers", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			await settle();
 			expect(m.root.querySelectorAll(".cp-task-row").length).toBeGreaterThan(0);
@@ -105,9 +42,9 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("rows and groups in a grouped view and the completed group", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
-			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Upcoming"))!);
+			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Upcoming")));
 			const groups = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-group")];
 			expect(groups.length).toBeGreaterThan(0);
 			for (const g of groups) {
@@ -119,17 +56,17 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the view menu button, the Completed group, the details pane and search groups", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			await new Promise((r) => setTimeout(r, 600));
 			await settle();
 			// The ⋯ button is a control, so its aria-label is allowed; the Completed group is named by its heading.
 			expect(m.root.querySelector('.cp-tasks [aria-label="View options"]')).not.toBeNull();
-			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Inbox"))!);
+			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Inbox")));
 			await click(m.root.querySelector(".cp-tasks .cp-completed-toggle"));
 			expect(nameOf(m.root, ".cp-tasks .cp-completed-group")).toBe("Completed · 1");
 			expect(m.root.querySelector(".cp-tasks .cp-completed-group")!.hasAttribute("aria-label")).toBe(false);
-			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Today"))!);
+			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Today")));
 			// Details pane.
 			await click(m.root.querySelector(".cp-tasks .cp-task-row"));
 			expect(m.root.querySelector(".cp-tasks .cp-details")).not.toBeNull();
@@ -150,24 +87,15 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("section headings, the board's section columns and the name field carry no stray aria-label", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");
 			await m.h.app.tasks.create({ title: "In alpha", sectionId: alpha.id });
 			await settle();
-			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Inbox"))!);
+			await click(sidebarItem(m.root, "Inbox"));
 			// The section headings show under "Group by: Section".
-			const menus: MenuSpec[] = [];
-			(m.host as unknown as { showMenu: (at: unknown, items: MenuSpec) => void }).showMenu = (_at, items) => void menus.push(items);
-			const run = async (title: string) => {
-				const item = menus.at(-1)!.find((i) => i !== "separator" && i.title === title);
-				if (item === undefined || item === "separator") throw new Error(`no menu item ${title}`);
-				item.run();
-				await settle();
-			};
-			await click(m.root.querySelector('.cp-tasks [aria-label="View options"]'));
-			await run("Group by…");
-			await run("Section");
+			const menu = await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
+			await pickItem(m, (await pickItem(m, menu, "Group by…"))!, "Section");
 			const groups = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-section-group")];
 			expect(groups.length).toBe(2);
 			for (const g of groups) {
@@ -180,7 +108,7 @@ describe("aria-label tooltips", () => {
 			expect(strayAriaLabels(m.root)).toEqual([]);
 			expectLabelsResolve(m.root);
 			// Board mode, with the name field open.
-			await click([...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.trim() === "Board")!);
+			await click([...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.trim() === "Board"));
 			await click(m.root.querySelector(".cp-tasks .cp-board-add-section"));
 			expect(m.root.querySelector(".cp-tasks .cp-section-name-input")).not.toBeNull();
 			expect(strayAriaLabels(m.root)).toEqual([]);
@@ -188,7 +116,7 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the add-bar chip list and its open chip panel", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			const input = m.root.querySelector<HTMLInputElement>('.cp-add-bar input[aria-label="Add task"]')!;
 			input.value = "Call mom tomorrow #Work";
@@ -205,7 +133,7 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the date popover (both tabs) and the more menu (every sub-view)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			const bar = m.root.querySelector<HTMLElement>(".cp-add-bar")!;
 			const tool = (label: string) => bar.querySelector<HTMLElement>(`.cp-qa-tool[aria-label="${label}"]`);
@@ -219,7 +147,7 @@ describe("aria-label tooltips", () => {
 			expect(strayAriaLabels(m.root)).toEqual([]);
 			expectLabelsResolve(m.root);
 
-			await click([...date.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === "Duration")!);
+			await click([...date.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === "Duration"));
 			expect(nameOf(date, ".cp-dur-presets")).toBe("Duration");
 			expect(strayAriaLabels(m.root)).toEqual([]);
 			expectLabelsResolve(m.root);
@@ -245,7 +173,7 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the matrix: quadrants are named by aria-labelledby, only the add buttons carry aria-label", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			await settle();
 			await click(m.root.querySelector('.cp-rail [aria-label="Matrix"]'));
@@ -262,13 +190,13 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the board: columns are named by aria-labelledby, only controls carry aria-label", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m.h);
 			await settle();
 			const mode = m.root.querySelector<HTMLElement>(".cp-tasks .cp-mode-switch")!;
 			expect(mode.hasAttribute("aria-label")).toBe(false);
 			expect(labelledBy(mode)).toBe("Layout");
-			await click([...mode.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent?.trim() === "Board")!);
+			await click([...mode.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent?.trim() === "Board"));
 			const cols = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks section.cp-board-col")];
 			expect(cols.map((c) => labelledBy(c))).toEqual(["Today"]);
 			for (const c of cols) expect(c.hasAttribute("aria-label")).toBe(false);
@@ -322,18 +250,12 @@ describe("aria-label and title", () => {
 	// Obsidian shows a tooltip for aria-label, so an element that also sets `title` showed two.
 	// Icon buttons keep aria-label and drop title, everywhere.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
 	const both = (root: ParentNode) =>
 		[...root.querySelectorAll<HTMLElement>("[aria-label][title]")].map((el) => `<${el.tagName.toLowerCase()} class="${el.className}" aria-label="${el.getAttribute("aria-label")}" title="${el.getAttribute("title")}">`);
 
 	describe("no element has both aria-label and title (F7)", () => {
 		it("holds in Tasks, Calendar, Matrix and Search", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const cat = await m.h.app.categories.create("Work", "briefcase");
 			await m.h.app.tags.create("urgent", "red");
 			const parent = await m.h.app.tasks.create({
@@ -372,47 +294,11 @@ describe("the icon picker", () => {
 	// the grid is named through aria-labelledby (a visually hidden label), not aria-label.
 	// `obsidian` is the stub from tests/app/obsidian-stub.ts; the Obsidian DOM helpers are faked.
 
-	interface Opts {
-		cls?: string;
-		text?: string;
-		type?: string;
-		attr?: Record<string, string>;
-	}
-	type Dom = HTMLElement & {
-		addClass(...c: string[]): void;
-		toggleClass(c: string, on: boolean): void;
-		empty(): void;
-		createEl(tag: string, o?: Opts): Dom;
-		createDiv(o?: Opts): Dom;
-		createSpan(o?: Opts): Dom;
-	};
-
-	function dom(tag = "div"): Dom {
-		const el = document.createElement(tag) as Dom;
-		el.addClass = (...c) => el.classList.add(...c);
-		el.toggleClass = (c, on) => {
-			for (const cls of [c].flat()) el.classList.toggle(cls, on);
-		};
-		el.empty = () => el.replaceChildren();
-		el.createEl = ((t: string, o: Opts = {}) => {
-			const child = dom(t);
-			if (o.cls !== undefined) child.className = o.cls;
-			if (o.text !== undefined) child.textContent = o.text;
-			if (o.type !== undefined) child.setAttribute("type", o.type);
-			for (const [k, v] of Object.entries(o.attr ?? {})) child.setAttribute(k, v);
-			el.appendChild(child);
-			return child;
-		}) as unknown as Dom["createEl"];
-		el.createDiv = (o) => el.createEl("div", o);
-		el.createSpan = (o) => el.createEl("span", o);
-		return el;
-	}
-
-	let opened: { contentEl: Dom }[] = [];
+	let opened: { contentEl: ObsidianElement }[] = [];
 	beforeAll(() => {
-		(Modal as unknown as { prototype: Record<string, unknown> }).prototype.open = function (this: { contentEl: Dom; modalEl: Dom; setTitle: () => void; onOpen: () => void }) {
-			this.modalEl = dom();
-			this.contentEl = dom();
+		(Modal as unknown as { prototype: Record<string, unknown> }).prototype.open = function (this: { contentEl: ObsidianElement; modalEl: ObsidianElement; setTitle: () => void; onOpen: () => void }) {
+			this.modalEl = obsidianElement();
+			this.contentEl = obsidianElement();
 			this.modalEl.appendChild(this.contentEl);
 			document.body.appendChild(this.modalEl);
 			this.setTitle = () => undefined;

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { emptyFilter, existingTagFilter } from "../../src/domain/queries";
 import type { Tag } from "../../src/domain/types";
 import { cal } from "./calendar-helpers";
-import { type CalMount, click, matrix, mountMatrix, openMatrix, settle, titlesIn } from "./matrix-helpers";
+import { click, mountApp, settle } from "./app-helpers";
+import { matrix, openMatrix, titlesIn } from "./matrix-helpers";
 import { checkedOf, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 
 // A view filter never keeps a tag that is gone (Lists, sections and tags rule 24): after a rename or a delete the
@@ -26,15 +27,10 @@ describe("existingTagFilter", () => {
 	});
 });
 
-const mounted: CalMount[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
 
 describe("a view filter after a tag rename or delete", () => {
 	it("the matrix drops the old key: its tasks show again and the dot goes off; the menu lists the new name", async () => {
-		const m = await mountMatrix();
-		mounted.push(m);
+		const m = await mountApp();
 		await m.h.app.tags.create("Calls", "red");
 		await m.h.app.tasks.create({ title: "Ring mum", urgent: true, tagKeys: ["calls"] });
 		await m.h.app.tasks.create({ title: "Plain", urgent: true });
@@ -54,8 +50,7 @@ describe("a view filter after a tag rename or delete", () => {
 	});
 
 	it("the calendar drops a deleted tag: the dot goes off", async () => {
-		const m = await mountMatrix();
-		mounted.push(m);
+		const m = await mountApp();
 		await m.h.app.tags.create("Calls");
 		m.handle.current!.showSection("calendar");
 		await settle();
@@ -68,8 +63,7 @@ describe("a view filter after a tag rename or delete", () => {
 	});
 
 	it("search drops a renamed tag: Clear filters goes away", async () => {
-		const m = await mountMatrix();
-		mounted.push(m);
+		const m = await mountApp();
 		await m.h.app.tags.create("Calls");
 		m.handle.current!.showSection("search");
 		await settle();

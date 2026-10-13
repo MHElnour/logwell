@@ -2,19 +2,12 @@ import type { HabitInput } from "../../src/domain/habits";
 import type { Habit } from "../../src/domain/types";
 import type { HabitDialogOptions } from "../../src/ui/host";
 import type { AppHarness } from "../app/harness";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { type AppMount, click, mountApp, type Notice, qa, recordNotices, text } from "./app-helpers";
 
 // Shared by the habit UI tests: a mounted app whose host records the Undo notices (message and store label), the
 // dialogs it was asked to open and the reminder gestures, and the five habits of the mockup.
 
-export { click, settle };
-
-export interface Notice {
-	message: string;
-	label: string;
-}
-
-export interface HabitMount extends CalMount {
+export interface HabitMount extends AppMount {
 	notices: Notice[];
 	dialogs: HabitDialogOptions[];
 	gestures: { n: number };
@@ -22,17 +15,11 @@ export interface HabitMount extends CalMount {
 }
 
 export async function mountHabits(): Promise<HabitMount> {
-	const m = await mountCal();
-	const notices: Notice[] = [];
+	const m = await mountApp();
+	const notices = recordNotices(m.host);
 	const dialogs: HabitDialogOptions[] = [];
 	const gestures = { n: 0 };
 	const opened: string[] = [];
-	Object.assign(m.host, {
-		notifyUndo: (message: string, label: string, mark: number) => {
-			notices.push({ message, label });
-			m.host.bindUndo(label, mark);
-		},
-	});
 	m.host.habitDialog = async (o) => void dialogs.push(o);
 	m.host.reminderGesture = () => void gestures.n++;
 	(m.host as unknown as { openSection: (s: string) => void }).openSection = (s) => void opened.push(s);
@@ -92,18 +79,10 @@ export async function seedMockup(h: AppHarness): Promise<Seeded> {
 	return { read, water, meditate, gym, walk };
 }
 
-export async function openHabits(m: CalMount): Promise<HTMLElement> {
+export async function openHabits(m: AppMount): Promise<HTMLElement> {
 	await click(m.root.querySelector('.cp-rail [aria-label="Habits"]'));
 	return m.root.querySelector<HTMLElement>(".cp-habits")!;
 }
-
-export const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
-	const found = root.querySelector<T>(sel);
-	if (found === null) throw new Error(`no element ${sel}`);
-	return found;
-};
-export const qa = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T[] => [...root.querySelectorAll<T>(sel)];
-export const text = (el: Element | null | undefined): string => el?.textContent?.replace(/\s+/gu, " ").trim() ?? "";
 
 /** The row of a habit on the page, by name. */
 export const rowOf = (root: ParentNode, name: string): HTMLElement => {

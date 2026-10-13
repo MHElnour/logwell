@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type VNode, render } from "preact";
+import { render } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EDIT_REPEAT_LABEL } from "../../src/app/RecurrenceService";
 import { explicitRule, repeatRuleProblem } from "../../src/domain/recurrence";
@@ -9,15 +9,13 @@ import { RepeatCustom, RepeatField, RepeatPicker, RepeatPresets } from "../../sr
 import { columnPatch, datePatch } from "../../src/ui/board/BoardView";
 import { detailsDateText } from "../../src/ui/format";
 import { groupPatch } from "../../src/ui/groupDrop";
-import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
 import { chipLabel } from "../../src/ui/quickadd/chipLabels";
 import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { type RepeatChoice, afterCompletionHint, draftOf, draftProblem, presetChoice, presetHint, presetOf, repeatLine, ruleOfDraft, ruleText, weekdaysFrom } from "../../src/ui/repeat";
 import { DEADLINE_CLEARED_TEXT, hasRepeatEditRequest, isPaneShown, notifyReanchored, onRepeatEditRequest, requestRepeatEdit } from "../../src/ui/repeatActions";
-import { appHarness } from "../app/harness";
-import { cal, cell, click, entries, entry, entryName, openCalendar } from "./calendar-helpers";
-import { FRIDAY, type M7Mount, lastNotice, mountM7, openDetails, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
-import { menuItem } from "./app-helpers";
+import { click, contextMenu, keydown, lastNotice, menuItem, mountNode, q, quickModel, settle, strayAriaLabels, typeInto } from "./app-helpers";
+import { cal, cell, entries, entry, entryName, openCalendar } from "./calendar-helpers";
+import { FRIDAY, type M7Mount, mountM7, openDetails, rowFor, rowsFor, showInbox, taskById, WEDNESDAY_CLOCK, weeklyFriday } from "./repeat-helpers";
 import { checkedOf, openViewMenu, pickItem } from "./view-menu-helpers";
 
 describe("the repeat picker", () => {
@@ -39,45 +37,10 @@ describe("the repeat picker", () => {
 	});
 	const never = { kind: "never" } as const;
 
-	let container: HTMLElement | null = null;
 	afterEach(() => {
-		if (container !== null) render(null, container);
-		container?.remove();
-		container = null;
 		vi.useRealTimers();
 	});
 
-	const settle = async () => {
-		for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
-	};
-
-	function mount(node: VNode): HTMLElement {
-		container = document.createElement("div");
-		document.body.appendChild(container);
-		render(node, container);
-		return container;
-	}
-
-	const click = async (el: Element | null | undefined) => {
-		if (el === null || el === undefined) throw new Error("element not found");
-		(el as HTMLElement).click();
-		await settle();
-	};
-	const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
-		const el = root.querySelector<T>(sel);
-		if (el === null) throw new Error(`no ${sel}`);
-		return el;
-	};
-	const keydown = (el: Element, key: string) => {
-		const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
-		el.dispatchEvent(e);
-		return e;
-	};
-	const setValue = async (el: HTMLInputElement | HTMLSelectElement, value: string, event: "input" | "change" = "input") => {
-		el.value = value;
-		el.dispatchEvent(new Event(event, { bubbles: true }));
-		await settle();
-	};
 	const opt = (root: ParentNode, id: string) => q<HTMLButtonElement>(root, `[data-preset="${id}"]`);
 
 	describe("preset helpers", () => {
@@ -163,7 +126,7 @@ describe("the repeat picker", () => {
 		function presets(value: RepeatChoice | null = null) {
 			const onPick = vi.fn();
 			const onCustom = vi.fn();
-			const root = mount(
+			const root = mountNode(
 				<div>
 					<span id="lbl">Repeat</span>
 					<RepeatPresets value={value} anchor={ANCHOR} labelledBy="lbl" onPick={onPick} onCustom={onCustom} />
@@ -219,9 +182,8 @@ describe("the repeat picker", () => {
 					expect(got!.rule, id).toMatchObject({ ...want, afterCompletion: false });
 					expect(got!.end, id).toEqual({ kind: "count", count: 4 });
 				}
-				render(null, container!);
-				container!.remove();
-				container = null;
+				render(null, root);
+				root.remove();
 			}
 		});
 
@@ -262,7 +224,7 @@ describe("the repeat picker", () => {
 		function custom(value: RepeatChoice | null = null, extra: Partial<typeof env> = {}) {
 			const onBack = vi.fn();
 			const onDone = vi.fn();
-			const root = mount(<RepeatCustom {...env} {...extra} value={value} onBack={onBack} onDone={onDone} />);
+			const root = mountNode(<RepeatCustom {...env} {...extra} value={value} onBack={onBack} onDone={onDone} />);
 			return { root, onBack, onDone };
 		}
 		const interval = (root: HTMLElement) => q<HTMLInputElement>(root, 'input[aria-label="Interval"]');
@@ -286,12 +248,12 @@ describe("the repeat picker", () => {
 
 		it("builds a weekly rule with picked weekdays, an interval and an end count", async () => {
 			const { root, onDone } = custom();
-			await setValue(interval(root), "2");
+			await typeInto(interval(root), "2");
 			for (const d of ["WE", "MO", "FR"]) await click(day(root, d));
 			expect(day(root, "MO").getAttribute("aria-pressed")).toBe("true");
 			expect(day(root, "MO").getAttribute("aria-label")).toBe("Monday");
 			await click(ends(root, "count"));
-			await setValue(q<HTMLInputElement>(root, 'input[aria-label="Times"]'), "10");
+			await typeInto(q<HTMLInputElement>(root, 'input[aria-label="Times"]'), "10");
 			expect(summary(root)).toBe("Every 2 weeks, Monday, Wednesday, Friday · ends after 10 times");
 			await click(done(root));
 			expect(onDone).toHaveBeenCalledTimes(1);
@@ -322,8 +284,8 @@ describe("the repeat picker", () => {
 
 		it("builds a daily after-completion rule: every 3 days", async () => {
 			const { root, onDone } = custom();
-			await setValue(interval(root), "3");
-			await setValue(unit(root), "daily", "change");
+			await typeInto(interval(root), "3");
+			await typeInto(unit(root), "daily", "change");
 			expect(root.querySelector(".cp-repeat-days")).toBeNull();
 			await click(check(root));
 			expect(summary(root)).toBe("3 days after done");
@@ -344,8 +306,8 @@ describe("the repeat picker", () => {
 			expect((onDone.mock.calls[0]![0] as RepeatChoice).rule).toMatchObject({ freq: "monthly", monthly: { kind: "day", day: 31 } });
 
 			await click(q(root, 'input[data-kind="nth"]'));
-			await setValue(q<HTMLSelectElement>(root, 'select[aria-label="Which one"]'), "-1", "change");
-			await setValue(q<HTMLSelectElement>(root, 'select[aria-label="Weekday"]'), "FR", "change");
+			await typeInto(q<HTMLSelectElement>(root, 'select[aria-label="Which one"]'), "-1", "change");
+			await typeInto(q<HTMLSelectElement>(root, 'select[aria-label="Weekday"]'), "FR", "change");
 			expect(summary(root)).toBe("Monthly on the last Friday");
 			expect(check(root).disabled).toBe(true);
 			expect(q(root, ".cp-repeat-check small").textContent).toBe("Not with this day of the month: the day is fixed.");
@@ -361,7 +323,7 @@ describe("the repeat picker", () => {
 		it("changing the weekday or the position of the Nth form selects that form", async () => {
 			const { root } = custom({ rule: rule({ freq: "monthly" }), end: never });
 			expect(q<HTMLInputElement>(root, 'input[data-kind="day"]').checked).toBe(true);
-			await setValue(q<HTMLSelectElement>(root, 'select[aria-label="Which one"]'), "2", "change");
+			await typeInto(q<HTMLSelectElement>(root, 'select[aria-label="Which one"]'), "2", "change");
 			expect(q<HTMLInputElement>(root, 'input[data-kind="nth"]').checked).toBe(true);
 		});
 
@@ -398,7 +360,7 @@ describe("the repeat picker", () => {
 			await click(ends(root, "date"));
 			expect(ends(root, "date").getAttribute("aria-pressed")).toBe("true");
 			expect(ends(root, "never").getAttribute("aria-pressed")).toBe("false");
-			await setValue(q<HTMLInputElement>(root, 'input[aria-label="End date"]'), "2026-12-31");
+			await typeInto(q<HTMLInputElement>(root, 'input[aria-label="End date"]'), "2026-12-31");
 			expect(summary(root)).toBe("Every Friday · ends Dec 31");
 			await click(done(root));
 			expect((onDone.mock.calls[0]![0] as RepeatChoice).end).toEqual({ kind: "date", date: "2026-12-31" });
@@ -406,21 +368,21 @@ describe("the repeat picker", () => {
 
 		it("shows the problem instead of saving: interval 0, no end date, a date before the start, 0 times", async () => {
 			const { root, onDone } = custom();
-			await setValue(interval(root), "0");
+			await typeInto(interval(root), "0");
 			expect(summary(root)).toBe("Repeat every 1 to 999.");
 			expect(q(root, ".cp-repeat-summary").classList.contains("is-problem")).toBe(true);
 			expect(done(root).disabled).toBe(true);
 			await click(done(root));
 			expect(onDone).not.toHaveBeenCalled();
-			await setValue(interval(root), "");
+			await typeInto(interval(root), "");
 			expect(summary(root)).toBe("Repeat every 1 to 999.");
-			await setValue(interval(root), "1");
+			await typeInto(interval(root), "1");
 			await click(ends(root, "date"));
 			expect(summary(root)).toBe("Pick an end date.");
-			await setValue(q<HTMLInputElement>(root, 'input[aria-label="End date"]'), "2026-10-01");
+			await typeInto(q<HTMLInputElement>(root, 'input[aria-label="End date"]'), "2026-10-01");
 			expect(summary(root)).toBe("The repeat ends before its first date.");
 			await click(ends(root, "count"));
-			await setValue(q<HTMLInputElement>(root, 'input[aria-label="Times"]'), "0");
+			await typeInto(q<HTMLInputElement>(root, 'input[aria-label="Times"]'), "0");
 			expect(summary(root)).toBe("End after 1 to 999 times.");
 			expect(done(root).disabled).toBe(true);
 		});
@@ -463,7 +425,7 @@ describe("the repeat picker", () => {
 			const onDone = vi.fn();
 			const onClose = vi.fn();
 			const outer = vi.fn();
-			const root = mount(
+			const root = mountNode(
 				<div onKeyDown={outer}>
 					<RepeatPicker {...env} value={value} onDone={onDone} onClose={onClose} />
 				</div>,
@@ -525,10 +487,8 @@ describe("the repeat picker", () => {
 		it("puts aria-label only on controls (Obsidian shows a tooltip for any element that has one)", async () => {
 			const { root } = picker();
 			await click(opt(root, "custom"));
-			await setValue(q<HTMLSelectElement>(root, 'select[aria-label="Unit"]'), "monthly", "change");
-			for (const el of root.querySelectorAll("[aria-label]")) {
-				expect(["BUTTON", "INPUT", "SELECT"], `${el.tagName}.${el.className}`).toContain(el.tagName);
-			}
+			await typeInto(q<HTMLSelectElement>(root, 'select[aria-label="Unit"]'), "monthly", "change");
+			expect(strayAriaLabels(root, ["button", "input", "select"])).toEqual([]);
 			expect(root.querySelectorAll("[aria-label]").length).toBeGreaterThan(3);
 		});
 	});
@@ -536,7 +496,7 @@ describe("the repeat picker", () => {
 	describe("the Repeat field", () => {
 		it("shows the rule on its button, opens the picker in place and applies a pick", async () => {
 			const onChange = vi.fn();
-			const root = mount(<RepeatField {...env} value={null} onChange={onChange} />);
+			const root = mountNode(<RepeatField {...env} value={null} onChange={onChange} />);
 			const button = q<HTMLButtonElement>(root, ".cp-repeat-button");
 			expect(button.textContent).toBe("Never");
 			expect(button.getAttribute("aria-expanded")).toBe("false");
@@ -551,7 +511,7 @@ describe("the repeat picker", () => {
 		});
 
 		it("shows an existing rule with its end and returns focus to the button on Escape", async () => {
-			const root = mount(<RepeatField {...env} value={{ rule: rule(), end: { kind: "count", count: 3 } }} onChange={() => undefined} />);
+			const root = mountNode(<RepeatField {...env} value={{ rule: rule(), end: { kind: "count", count: 3 } }} onChange={() => undefined} />);
 			const button = q<HTMLButtonElement>(root, ".cp-repeat-button");
 			expect(button.textContent).toBe("every Fri · ends after 3 times");
 			await click(button);
@@ -562,14 +522,14 @@ describe("the repeat picker", () => {
 		});
 
 		it("can be disabled with a title (a subtask does not repeat)", () => {
-			const root = mount(<RepeatField {...env} value={null} onChange={() => undefined} disabled title="A subtask cannot repeat" />);
+			const root = mountNode(<RepeatField {...env} value={null} onChange={() => undefined} disabled title="A subtask cannot repeat" />);
 			const button = q<HTMLButtonElement>(root, ".cp-repeat-button");
 			expect(button.disabled).toBe(true);
 			expect(button.title).toBe("A subtask cannot repeat");
 		});
 
 		it("opens when something else asks for it", async () => {
-			const root = mount(<RepeatField {...env} value={null} onChange={() => undefined} openRequest={1} />);
+			const root = mountNode(<RepeatField {...env} value={null} onChange={() => undefined} openRequest={1} />);
 			await settle();
 			expect(root.querySelector(".cp-repeat-pop")).not.toBeNull();
 		});
@@ -580,29 +540,15 @@ describe("the picker with series, panes and the calendar", () => {
 	// Repeating tasks: timed series moves, re-anchor notices, selection of history rows, the
 	// "Edit repeat…" request, the calendar's missed occurrences and the details picker's anchor.
 
-	const mounted: M7Mount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-	async function mount(): Promise<M7Mount> {
-		const m = await mountM7();
-		mounted.push(m);
-		return m;
-	}
 
 	const timedWeekly = { kind: "datetime", local: `${FRIDAY}T07:00`, tz: "Europe/Berlin" } as const;
 	const create = async (m: M7Mount, title: string, extra: Record<string, unknown> = {}) =>
 		(await m.h.app.tasks.create({ title, scheduled: { kind: "date", date: FRIDAY }, repeat: weeklyFriday, ...extra } as never)).task;
-	const contextMenu = async (m: M7Mount, row: HTMLElement) => {
-		row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-		await settle();
-		return m.host.menus.at(-1)!;
-	};
 	const ZONE = "Europe/Berlin";
 
 	describe("a timed series keeps its time when its date moves (D5)", () => {
 		it("the board's patches move the current occurrence, keeping time and zone; a plain task is unchanged", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Gym", { scheduled: timedWeekly });
 			const spec = m.h.app.effectiveSchedule(taskById(m, t.id));
 			expect(spec).toEqual(timedWeekly);
@@ -620,7 +566,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("'Schedule for tomorrow' on a timed series re-anchors it at the same time", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Gym", { scheduled: timedWeekly });
 			const section = await showInbox(m);
 			menuItem(await contextMenu(m, rowFor(section, "Gym")), "Schedule for tomorrow").run();
@@ -640,7 +586,7 @@ describe("the picker with series, panes and the calendar", () => {
 		}
 
 		it("a Schedule for… item on a series says the series now repeats from the new date, and whether its end was removed", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			reanchoring(m, { date: "2026-10-02", endCleared: true });
 			const section = await showInbox(m);
@@ -651,7 +597,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("without endCleared the notice has no end sentence; a plain task's date change has no notice", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			await m.h.app.tasks.create({ title: "Plain" });
 			const section = await showInbox(m);
@@ -667,7 +613,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("no notice when the write changed nothing", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			const orig = m.h.app.tasks.update.bind(m.h.app.tasks);
 			vi.spyOn(m.h.app.tasks, "update").mockImplementation(async (...args) => ({ ...(await orig(...args)), changed: false, reanchored: { date: FRIDAY, endCleared: false } }));
@@ -678,7 +624,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("notifyReanchored words the date relative to today", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			notifyReanchored(m.host, { title: "X" }, { date: FRIDAY, endCleared: false }, "Move task", m.h.app.store.undoMark());
 			expect(lastNotice(m)).toEqual({ message: '"X" now repeats from Fri, Oct 9.', label: "Move task" });
 		});
@@ -686,7 +632,7 @@ describe("the picker with series, panes and the calendar", () => {
 
 	describe("selection and the Edit repeat… request", () => {
 		it("selecting a series marks its open row, not its Completed history rows", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			await m.h.app.recurrence.complete(t.id);
 			const section = await showInbox(m);
@@ -699,7 +645,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("the first visible pane takes the request and it is spent; a later mount does not open the picker", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const seen: string[] = [];
 			const off = onRepeatEditRequest((id) => {
@@ -721,7 +667,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("re-selecting the task after the picker closed does not open it again", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const section = await showInbox(m);
 			menuItem(await contextMenu(m, rowFor(section, "Weekly review")), "Edit repeat…").run();
@@ -734,7 +680,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("#106: selecting another task closes the Custom repeat editor, so its draft is never written to that task", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Alpha", { repeat: { rule: { ...weeklyFriday.rule, interval: 3 } } });
 			const b = await create(m, "Bravo", { repeat: { rule: { ...weeklyFriday.rule, freq: "daily", weekdays: null } } });
 			const section = await showInbox(m);
@@ -752,7 +698,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("#106: a picker opened by Edit repeat… does not open again for another task, nor when coming back", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Alpha");
 			await create(m, "Bravo");
 			const section = await showInbox(m);
@@ -772,7 +718,7 @@ describe("the picker with series, panes and the calendar", () => {
 
 	describe("the details picker names the current occurrence", () => {
 		it("a series anchored on a Monday and due on a Friday hints from the Friday, and Weekly and Monthly store that weekday and day", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			// Every Monday and Friday from Monday Oct 5; completing the Monday leaves Friday Oct 9 as the current occurrence.
 			const t = (
 				await m.h.app.tasks.create({
@@ -799,7 +745,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("a month-end series due on the 30th still reads, and keeps, the 31st (Quick Add 'every month' on the 31st)", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const monthly = { ...weeklyFriday.rule, freq: "monthly" } as const;
 			const t = (await m.h.app.tasks.create({ title: "Rent", scheduled: { kind: "date", date: "2026-10-31" }, repeat: { rule: monthly } } as never)).task;
 			await m.h.app.recurrence.complete(t.id);
@@ -831,7 +777,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("a weekly series with no picked weekday shows its own anchor's weekday pressed in Custom, and nothing is written until Done", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const section = await showInbox(m);
 			await click(rowFor(section, "Weekly review"));
@@ -869,7 +815,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("a pane without a layout box (a background Logwell tab) leaves the request unspent and its picker closed", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const section = await showInbox(m);
 			await click(rowFor(section, "Weekly review"));
@@ -884,7 +830,7 @@ describe("the picker with series, panes and the calendar", () => {
 
 	describe("calendar selection of a series", () => {
 		it("only the current occurrence's entry is selected, not every date of the series", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await m.h.app.tasks.create({ title: "Chore", scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: { ...weeklyFriday.rule, freq: "daily" } } } as never);
 			await openCalendar(m);
 			const week = cal(m.root);
@@ -899,7 +845,7 @@ describe("the picker with series, panes and the calendar", () => {
 
 	describe("the row chip describes the rule in force today", () => {
 		it("a version that starts in the future is not the chip's text", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Gym");
 			await m.h.app.recurrence.setRepeat(t.id, { ...weeklyFriday.rule, freq: "daily" } as never, "2026-10-20");
 			const section = await showInbox(m);
@@ -908,7 +854,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("a timed rule's time is in the chip's title", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Gym", { scheduled: timedWeekly });
 			const section = await showInbox(m);
 			expect(rowFor(section, "Gym").querySelector(".cp-meta-repeat-text")?.textContent).toBe("every Fri");
@@ -932,7 +878,7 @@ describe("the picker with series, panes and the calendar", () => {
 
 	describe("calendar occurrences of an overdue series", () => {
 		it("the generated past dates after the current one are missed: faded and dashed with the overdue tint, named as missed", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			// Daily from Monday Sep 28; today is Thursday Oct 1: Sep 28 is current (overdue), Sep 29 and 30 are missed.
 			await m.h.app.tasks.create({ title: "Chore", scheduled: { kind: "date", date: "2026-09-28" }, repeat: { rule: { ...weeklyFriday.rule, freq: "daily" } } } as never);
 			await openCalendar(m);
@@ -952,7 +898,7 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 
 		it("a filtered calendar follows the series after an occurrence is skipped (the memo depends on the records)", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const work = await m.h.app.categories.create("Work");
 			const t = (await m.h.app.tasks.create({ title: "Review", categoryId: work.id, scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: { ...weeklyFriday.rule, freq: "daily" } } } as never)).task;
 			await openCalendar(m);
@@ -986,33 +932,9 @@ describe("the Yearly preset and the years unit", () => {
 		...patch,
 	});
 
-	let container: HTMLElement | null = null;
-	afterEach(() => {
-		if (container !== null) render(null, container);
-		container?.remove();
-		container = null;
-	});
-
-	const settle = async () => {
-		for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
-	};
-
-	function mount(node: VNode): HTMLElement {
-		container = document.createElement("div");
-		document.body.appendChild(container);
-		render(node, container);
-		return container;
-	}
-
-	const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
-		const el = root.querySelector<T>(sel);
-		if (el === null) throw new Error(`no ${sel}`);
-		return el;
-	};
-
 	describe("the Yearly preset (#12)", () => {
 		it("#12: is the sixth of seven presets, with the date's month and day as its hint", () => {
-			const root = mount(
+			const root = mountNode(
 				<div>
 					<span id="lbl">Repeat</span>
 					<RepeatPresets value={null} anchor={ANCHOR} labelledBy="lbl" onPick={vi.fn()} onCustom={vi.fn()} />
@@ -1026,7 +948,7 @@ describe("the Yearly preset and the years unit", () => {
 
 		it("#12: picks a yearly rule on the date, keeping the end", async () => {
 			const onPick = vi.fn();
-			const root = mount(<RepeatPresets value={{ rule: rule({ freq: "daily" }), end: { kind: "count", count: 4 } }} anchor={ANCHOR} labelledBy="lbl" onPick={onPick} onCustom={vi.fn()} />);
+			const root = mountNode(<RepeatPresets value={{ rule: rule({ freq: "daily" }), end: { kind: "count", count: 4 } }} anchor={ANCHOR} labelledBy="lbl" onPick={onPick} onCustom={vi.fn()} />);
 			q<HTMLButtonElement>(root, '[data-preset="yearly"]').click();
 			await settle();
 			const got = onPick.mock.calls[0]![0] as RepeatChoice;
@@ -1066,7 +988,7 @@ describe("the Yearly preset and the years unit", () => {
 	describe("the years unit of the custom editor (#12)", () => {
 		it("#12: offers years, has no On row for it, and builds every 2 years", async () => {
 			const onDone = vi.fn();
-			const root = mount(<RepeatCustom anchor={ANCHOR} today={TODAY} weekStart="MO" value={null} onBack={vi.fn()} onDone={onDone} />);
+			const root = mountNode(<RepeatCustom anchor={ANCHOR} today={TODAY} weekStart="MO" value={null} onBack={vi.fn()} onDone={onDone} />);
 			const unit = q<HTMLSelectElement>(root, 'select[aria-label="Unit"]');
 			expect([...unit.options].map((o) => o.textContent)).toEqual(["days", "weeks", "months", "years"]);
 			const interval = q<HTMLInputElement>(root, 'input[aria-label="Interval"]');
@@ -1111,14 +1033,9 @@ describe("Yearly in the details pane", () => {
 	const ANCHOR = "2026-01-15";
 	const monthly: RepeatRule = { freq: "monthly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null };
 
-	const mounted: M7Mount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 
 	async function monthlySeries(): Promise<{ m: M7Mount; id: string; pane: HTMLElement }> {
 		const m = await mountM7();
-		mounted.push(m);
 		const { task } = await m.h.app.tasks.create({ title: "Pay rent", scheduled: { kind: "date", date: ANCHOR }, repeat: { rule: monthly } } as never);
 		// Overdue since Jan 15: completing marks Jan 15 done and skips Feb to Sep, so the current occurrence is Oct 15.
 		await m.h.app.recurrence.complete(task.id);
@@ -1172,15 +1089,6 @@ describe("Yearly in the details pane", () => {
 describe("the details date chip and the Repeat field", () => {
 	// The details pane's Repeat field and its date chip.
 
-	const mounted: M7Mount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-	async function mount(): Promise<M7Mount> {
-		const m = await mountM7();
-		mounted.push(m);
-		return m;
-	}
 
 	const create = async (m: M7Mount, title: string, extra: Record<string, unknown> = {}) =>
 		(await m.h.app.tasks.create({ title, scheduled: { kind: "date", date: FRIDAY }, repeat: weeklyFriday, ...extra } as never)).task;
@@ -1191,7 +1099,7 @@ describe("the details date chip and the Repeat field", () => {
 
 	describe("the details date chip", () => {
 		it("shows the current occurrence and the rule: Fri, Oct 9 · every Fri", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review", false);
 			expect(q(pane, ".cp-due-chip").textContent).toContain("Fri, Oct 9 · every Fri");
@@ -1211,7 +1119,7 @@ describe("the details date chip and the Repeat field", () => {
 
 	describe("the Repeat field", () => {
 		it("sits next to the Scheduled field with the rule on its button, and the Deadline field is gone", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			const labels = [...pane.querySelectorAll(".cp-details-fields > .cp-field")].map((f) => f.firstElementChild?.textContent);
@@ -1224,7 +1132,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("shows Never on a task that repeats nothing, with its Deadline field", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await m.h.app.tasks.create({ title: "Plain" });
 			const pane = await openDetails(m, "Plain");
 			expect(button(pane).textContent).toBe("Never");
@@ -1232,7 +1140,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("a subtask has no Repeat field (D10)", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const parent = await create(m, "Weekly review");
 			await m.h.app.tasks.create({ title: "Inbox zero", parentId: parent.id });
 			const pane = await openDetails(m, "Weekly review");
@@ -1243,7 +1151,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("round trip: a preset changes the rule, the Undo notice carries the label and the store undoes it", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			await click(button(pane));
@@ -1259,7 +1167,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("Custom: weekly on Monday, Wednesday and Friday through the editor, with an end", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			// Done with nothing changed is no edit: no new version (the stored rule carries a weekStart the editor does not build), no notice.
@@ -1290,7 +1198,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("Never stops it repeating: a plain task on its current date", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			await click(button(pane));
@@ -1302,7 +1210,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("makes a plain task repeat; its deadline is cleared and the notice says so (decision 9)", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = (await m.h.app.tasks.create({ title: "Report", scheduled: { kind: "date", date: FRIDAY }, deadline: { kind: "date", date: "2026-10-12" } })).task;
 			const pane = await openDetails(m, "Report");
 			await click(button(pane));
@@ -1317,7 +1225,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("shows no notice when the write changed nothing", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			await click(button(pane));
@@ -1326,7 +1234,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("opens its picker when a row menu asks for it (Edit repeat…)", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review", false);
 			expect(pane.querySelector(".cp-details-fields")).toBeNull();
@@ -1337,7 +1245,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("refuses to clear the date of a repeating task", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			const pane = await openDetails(m, "Weekly review");
 			const date = q<HTMLInputElement>(pane, 'input[aria-label="Scheduled date"]');
@@ -1350,7 +1258,7 @@ describe("the details date chip and the Repeat field", () => {
 		});
 
 		it("#124: a stopped series refuses a new date, says to reopen it and shows its date field as before", async () => {
-			const m = await mount();
+			const m = await mountM7();
 			const t = await create(m, "Weekly review");
 			await m.h.app.recurrence.stop(t.id);
 			const section = await showInbox(m);
@@ -1374,32 +1282,12 @@ describe("the details date chip and the Repeat field", () => {
 // saving blocked; the date popover's Clear dismisses every typed repeat end; the pill of a repeat picked by hand shows
 // the end that will be saved; the picker keeps a stored end it did not change. Europe/Berlin, Wednesday 2026-10-07.
 
-async function model() {
-	const h = await appHarness();
-	h.clock.set("2026-10-07T08:00:00.000Z");
-	const m = new QuickAddModel(
-		{
-			app: h.app,
-			preset: {},
-			locale: () => "en",
-			resolveNote: () => [],
-			onSaved: () => undefined,
-			onError: (e) => {
-				throw e;
-			},
-			keepOpen: () => true,
-			onClose: () => undefined,
-		},
-		() => undefined,
-	);
-	return { h, m };
-}
 
 const friday = { freq: "weekly" as const, interval: 1, weekdays: ["FR" as const], monthly: null, afterCompletion: false, time: null, tz: null };
 
 describe("a hand-picked date over a typed yearly start (#12)", () => {
 	it("#12: saves at once on the picked date; the typed start is a 'Replace date?' offer, not a block", async () => {
-		const { h, m } = await model();
+		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Birthday every year on May 5 at 7");
 		m.setDate("2026-11-01");
 		expect(m.result.blocking).toEqual([]);
@@ -1415,7 +1303,7 @@ describe("a hand-picked date over a typed yearly start (#12)", () => {
 
 describe("Clear in the date popover (#12)", () => {
 	it("#12: dismisses an invalid repeat end too, so the date never comes back as a deadline", async () => {
-		const { m } = await model();
+		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Gym every friday until Oct 8");
 		expect(m.result.chips.map((c) => `${c.kind}/${c.status}`)).toEqual(["recurrence/applied", "repeatEnd/invalid"]);
 		m.clearDateFields();
@@ -1426,7 +1314,7 @@ describe("Clear in the date popover (#12)", () => {
 	});
 
 	it("#12: dismisses an end that waits for the repeat's time", async () => {
-		const { m } = await model();
+		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Gym every monday at 9 until Dec 1");
 		expect(m.result.chips.find((c) => c.kind === "repeatEnd")?.status).toBe("suggestion");
 		m.clearDateFields();
@@ -1436,7 +1324,7 @@ describe("Clear in the date popover (#12)", () => {
 
 describe("the pill of a repeat picked by hand (#12)", () => {
 	it("#12: shows the typed end that will be saved, not only the picked value", async () => {
-		const { m } = await model();
+		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setRepeat({ rule: friday, end: { kind: "never" } });
 		m.setInput("Gym until Dec 1");
 		expect(m.repeatValue()).toEqual({ rule: friday, end: { kind: "date", date: "2026-12-01" } });
@@ -1457,7 +1345,7 @@ describe("the repeat picker and a stored end (#12)", () => {
 
 describe("choosing a typed repeat's hour (#12)", () => {
 	it("#12: blocks saving: Enter opens the choice, and the pick saves with the chosen hour", async () => {
-		const { h, m } = await model();
+		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Gym every monday at 9");
 		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
 		expect(m.result.blocking).toEqual([chip.id]);
@@ -1472,7 +1360,7 @@ describe("choosing a typed repeat's hour (#12)", () => {
 	});
 
 	it("#12: the end typed after it waits for the hour and saves with it", async () => {
-		const { h, m } = await model();
+		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Gym every day at 7 until Dec 1");
 		expect(await m.submit()).toBe("blocked");
 		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
@@ -1482,7 +1370,7 @@ describe("choosing a typed repeat's hour (#12)", () => {
 	});
 
 	it("#12: a pick made without Enter only applies the hour: nothing saves by itself", async () => {
-		const { h, m } = await model();
+		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 		m.setInput("Gym every monday at 9");
 		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
 		m.activate(chip);

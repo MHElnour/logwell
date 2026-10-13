@@ -1,26 +1,14 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { addDays } from "../../src/domain/time";
-import { menuItem, mountU1, settle } from "./app-helpers";
+import { menuItem, mountApp, pressKey, settle, sidebarItem, typeInto } from "./app-helpers";
 import { detailsDateText } from "../../src/ui/format";
 
 describe("details pane", () => {
 	// The details pane, sidebar list icon and color editing.
 
-	let current: { unmount: () => void } | null = null;
-	afterEach(() => {
-		current?.unmount();
-		current = null;
-	});
-	async function mount() {
-		const m = await mountU1();
-		current = m;
-		return m;
-	}
-	const side = (root: HTMLElement, name: string) =>
-		[...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(name))!;
 	async function openTask(root: HTMLElement, title: string) {
-		side(root, "Inbox").click();
+		sidebarItem(root, "Inbox").click();
 		await settle();
 		[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes(title))!.click();
 		await settle();
@@ -30,7 +18,7 @@ describe("details pane", () => {
 
 	describe("details pane", () => {
 		it("top bar: priority checkbox, date chip, priority flag, more menu", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			const { task } = await h.app.tasks.create({
 				title: "Plan",
 				scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" },
@@ -57,7 +45,7 @@ describe("details pane", () => {
 		});
 
 		it("shows No date and priority none", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Bare" });
 			const d = await openTask(root, "Bare");
 			expect(d.querySelector(".cp-due-chip")?.textContent).toContain("No date");
@@ -65,7 +53,7 @@ describe("details pane", () => {
 		});
 
 		it("body: dashed add-tag button, tag pills, subtasks n / m", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const tag = await h.app.tags.create("work", "blue");
 			const { task } = await h.app.tasks.create({ title: "Parent", tagKeys: [tag.key] });
 			const sub = await h.app.tasks.create({ title: "Child", parentId: task.id });
@@ -83,7 +71,7 @@ describe("details pane", () => {
 		});
 
 		it("#106: a tag typed in Add tag for one task is not carried to the next selected task", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Alpha" });
 			const { task: bravo } = await h.app.tasks.create({ title: "Bravo" });
 			const d = await openTask(root, "Alpha");
@@ -105,7 +93,7 @@ describe("details pane", () => {
 		});
 
 		it("note card: none, linked (file name, open button), missing", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			h.notes.files.set("Notes/Plan.md", "body");
 			const { task } = await h.app.tasks.create({ title: "Noted" });
 			let d = await openTask(root, "Noted");
@@ -127,7 +115,7 @@ describe("details pane", () => {
 		});
 
 		it("note card: only the .md extension is hidden from the name", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			h.notes.files.set("Files/report.pdf", "body");
 			const { task } = await h.app.tasks.create({ title: "Reported" });
 			await openTask(root, "Reported");
@@ -138,10 +126,10 @@ describe("details pane", () => {
 		});
 
 		it("footer: list button and an enabled Focus button that starts focus", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			const cat = await h.app.categories.create("Work", "briefcase");
 			const { task } = await h.app.tasks.create({ title: "Footed", categoryId: cat.id });
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Footed"))!.click();
 			await settle();
@@ -170,16 +158,16 @@ describe("details pane", () => {
 
 	describe("list icon and color editing", () => {
 		it("the list menu offers Change icon and Change color", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			const cat = await h.app.categories.create("Study");
 			await settle();
-			side(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+			sidebarItem(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
 			const menu = host.menus.at(-1);
 			host.nextIcon = "book-open";
 			menuItem(menu, "Change icon…").run();
 			await settle();
 			expect(h.app.store.state.categories.get(cat.id)?.icon).toBe("book-open");
-			expect(icon(side(root, "Study"))).toBe("book-open");
+			expect(icon(sidebarItem(root, "Study"))).toBe("book-open");
 
 			host.nextIcon = null;
 			menuItem(menu, "Change icon…").run();
@@ -196,18 +184,18 @@ describe("details pane", () => {
 			menuItem(colorMenu, "Green").run();
 			await settle();
 			expect(h.app.store.state.categories.get(cat.id)?.color).toBe("green");
-			expect(side(root, "Study").classList.contains("cp-hue-green")).toBe(true);
+			expect(sidebarItem(root, "Study").classList.contains("cp-hue-green")).toBe(true);
 			menuItem(host.menus.at(-1), "None").run();
 			await settle();
 			expect(h.app.store.state.categories.get(cat.id)?.color).toBeNull();
 		});
 
 		it("the color menu lists all eight colors and none, marking the current one", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			const cat = await h.app.categories.create("Study");
 			await h.app.categories.setColor(cat.id, "pink");
 			await settle();
-			side(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+			sidebarItem(root, "Study").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
 			menuItem(host.menus.at(-1), "Change color…").run();
 			const items = host.menus.at(-1)!.filter((i) => i !== "separator");
 			expect(items.map((i) => i.title)).toEqual(["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "None"]);
@@ -217,7 +205,7 @@ describe("details pane", () => {
 
 	describe("details completion checkbox", () => {
 		it("reflects completing and reopening at once (checked, aria-label, no other interaction)", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Finish me" });
 			const d = await openTask(root, "Finish me");
 			const box = () => d.querySelector<HTMLInputElement>(".cp-details-top .cp-task-checkbox")!;
@@ -235,28 +223,19 @@ describe("details pane", () => {
 	});
 
 	describe("details subtasks use the Quick Add parser", () => {
-		const typeInto = async (input: HTMLInputElement, value: string) => {
-			input.value = value;
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-			await settle();
-		};
-		const enter = async (el: Element) => {
-			el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-			await settle();
-		};
 		const subInput = (d: HTMLElement) => d.querySelector<HTMLInputElement>(".cp-details-section .cp-qa-input")!;
 
 		it("parses date, priority and tags, keeps the parent's category and ID", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const cat = await h.app.categories.create("Study");
 			const { task: parent } = await h.app.tasks.create({ title: "Parent", categoryId: cat.id });
-			side(root, "Study").click();
+			sidebarItem(root, "Study").click();
 			await settle();
 			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Parent"))!.click();
 			await settle();
 			const d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
 			await typeInto(subInput(d), "Read ch 2 tomorrow !1 @reading");
-			await enter(subInput(d));
+			await pressKey(subInput(d), "Enter");
 			const subs = [...h.app.store.state.tasks.values()].filter((t) => t.parentId === parent.id);
 			expect(subs).toHaveLength(1);
 			const sub = subs[0]!;
@@ -270,17 +249,17 @@ describe("details pane", () => {
 		});
 
 		it("a typed #Category never moves a subtask (SUB-02): it stays in the parent's category", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const study = await h.app.categories.create("Study");
 			const work = await h.app.categories.create("Work");
 			const { task: parent } = await h.app.tasks.create({ title: "Parent", categoryId: study.id });
-			side(root, "Study").click();
+			sidebarItem(root, "Study").click();
 			await settle();
 			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Parent"))!.click();
 			await settle();
 			const d = root.querySelector<HTMLElement>(".cp-tasks .cp-details")!;
 			await typeInto(subInput(d), "Draft #Work");
-			await enter(subInput(d));
+			await pressKey(subInput(d), "Enter");
 			const sub = [...h.app.store.state.tasks.values()].find((t) => t.parentId === parent.id)!;
 			expect(sub.categoryId).toBe(study.id);
 			expect(sub.categoryId).not.toBe(work.id);

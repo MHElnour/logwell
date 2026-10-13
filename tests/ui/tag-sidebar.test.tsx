@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sidebarCounts, type TaskView } from "../../src/app/views";
 import { Sidebar } from "../../src/ui/Sidebar";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
-import { menuItem } from "./app-helpers";
+import { type AppMount, click, contextMenu, menuItem, mountApp, settle, tagLabels, tagRow, tagRows } from "./app-helpers";
 import { CREATE_TAG_LABEL } from "../../src/app/CategoryService";
 import { paletteColor } from "../../src/domain/types";
 import type { QuickAddPreset, TagDialogOptions, TagDialogValues } from "../../src/ui/host";
@@ -12,14 +11,9 @@ import type { QuickAddPreset, TagDialogOptions, TagDialogValues } from "../../sr
 describe("the tag tree", () => {
 	// The sidebar Tags section is a tree of parent tags.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 
 	async function mount() {
-		const m = await mountCal();
-		mounted.push(m);
+		const m = await mountApp();
 		const t = m.h.app.tasks;
 		await t.create({ title: "Go task", newTags: ["Programming/Go"] });
 		await t.create({ title: "Python task", newTags: ["Programming/Python"] });
@@ -29,18 +23,15 @@ describe("the tag tree", () => {
 		return m;
 	}
 
-	const sidebar = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
-	const rows = (m: CalMount) => [...sidebar(m).querySelectorAll<HTMLElement>(".cp-tag-tree .cp-sidebar-item")];
-	const labels = (m: CalMount) => rows(m).map((r) => r.querySelector(".cp-sidebar-label")!.textContent);
-	const rowFor = (m: CalMount, label: string) => rows(m).find((r) => r.querySelector(".cp-sidebar-label")!.textContent === label)!;
-	const fold = (m: CalMount, label: string) => sidebar(m).querySelector<HTMLButtonElement>(`.cp-tag-fold[data-tag-label="${label}"]`)!;
-	const rowTitles = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row .cp-task-title")].map((e) => e.textContent.trim()).sort();
+	const sidebar = (m: AppMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
+	const fold = (m: AppMount, label: string) => sidebar(m).querySelector<HTMLButtonElement>(`.cp-tag-fold[data-tag-label="${label}"]`)!;
+	const rowTitles = (m: AppMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row .cp-task-title")].map((e) => e.textContent.trim()).sort();
 
 	describe("sidebar tag tree", () => {
 		it("shows a parent row with its children indented, by their last segment", async () => {
 			const m = await mount();
-			expect(labels(m)).toEqual(["Errands", "Programming", "Go", "Python"]);
-			const depth = (l: string) => rowFor(m, l).closest("li")!.parentElement!.closest("li") !== null;
+			expect(tagLabels(m)).toEqual(["Errands", "Programming", "Go", "Python"]);
+			const depth = (l: string) => tagRow(m, l).closest("li")!.parentElement!.closest("li") !== null;
 			expect(depth("Programming")).toBe(false);
 			expect(depth("Go")).toBe(true);
 			expect(depth("Python")).toBe(true);
@@ -48,7 +39,7 @@ describe("the tag tree", () => {
 
 		it("a parent counts each descendant task once; children count their own", async () => {
 			const m = await mount();
-			const count = (l: string) => rowFor(m, l).querySelector(".cp-count")?.textContent;
+			const count = (l: string) => tagRow(m, l).querySelector(".cp-count")?.textContent;
 			expect(count("Programming")).toBe("3");
 			expect(count("Go")).toBe("2");
 			expect(count("Python")).toBe("2");
@@ -63,12 +54,12 @@ describe("the tag tree", () => {
 			expect(btn.getAttribute("aria-label")).toBe("Collapse Programming");
 			expect(btn.tabIndex).toBeGreaterThanOrEqual(0);
 			await click(btn);
-			expect(labels(m)).toEqual(["Errands", "Programming"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Programming"]);
 			const after = fold(m, "Programming");
 			expect(after.getAttribute("aria-expanded")).toBe("false");
 			expect(after.getAttribute("aria-label")).toBe("Expand Programming");
 			await click(after);
-			expect(labels(m)).toEqual(["Errands", "Programming", "Go", "Python"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Programming", "Go", "Python"]);
 		});
 
 		it("a leaf has no fold button, and the container is labelled without an aria-label", async () => {
@@ -80,48 +71,44 @@ describe("the tag tree", () => {
 
 		it("clicking the parent opens its view with both tasks; a child shows its own", async () => {
 			const m = await mount();
-			await click(rowFor(m, "Programming"));
+			await click(tagRow(m, "Programming"));
 			expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Programming");
-			expect(rowFor(m, "Programming").getAttribute("aria-current")).toBe("page");
+			expect(tagRow(m, "Programming").getAttribute("aria-current")).toBe("page");
 			expect(rowTitles(m)).toEqual(["Both", "Go task", "Python task"]);
-			await click(rowFor(m, "Go"));
+			await click(tagRow(m, "Go"));
 			expect(rowTitles(m)).toEqual(["Both", "Go task"]);
 		});
 
 		it("a parent made by its first child is a tag with a color dot and a menu, like a child", async () => {
 			const m = await mount();
-			const dot = (l: string) => rowFor(m, l).querySelector(".cp-tag-dot")!;
+			const dot = (l: string) => tagRow(m, l).querySelector(".cp-tag-dot")!;
 			expect(dot("Programming").classList.contains("cp-tag-none")).toBe(false);
 			expect(dot("Go").classList.contains("cp-tag-none")).toBe(false);
-			rowFor(m, "Programming").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+			tagRow(m, "Programming").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 			await settle();
 			expect(m.host.menus).toHaveLength(1);
-			rowFor(m, "Go").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+			tagRow(m, "Go").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 			await settle();
 			expect(m.host.menus).toHaveLength(2);
 		});
 
 		it("task rows show the tag by its own name", async () => {
 			const m = await mount();
-			await click(rowFor(m, "Go"));
+			await click(tagRow(m, "Go"));
 			const pill = m.root.querySelector(".cp-tasks .cp-task-row .cp-tag-pill")!;
 			expect(pill.textContent).toBe("@Go");
 		});
 	});
 
 	describe("tag tree: delete and expansion", () => {
-		const menuOf = async (m: CalMount, label: string) => {
-			rowFor(m, label).dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-			await settle();
-			return m.host.menus.at(-1)!;
-		};
+		const menuOf = (m: AppMount, label: string) => contextMenu(m, tagRow(m, label));
 		const deleteItem = (menu: Awaited<ReturnType<typeof menuOf>>) => menuItem(menu, "Delete");
 
 		it("deleting the open tag goes back to Inbox", async () => {
 			const m = await mount();
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
 			// A leaf: its view goes away, so the list returns to Inbox.
-			await click(rowFor(m, "Go"));
+			await click(tagRow(m, "Go"));
 			expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("@Go");
 			deleteItem(await menuOf(m, "Go")).run();
 			await settle();
@@ -131,7 +118,7 @@ describe("the tag tree", () => {
 		it("a delete that leaves nothing at or under the open key returns to Inbox", async () => {
 			const m = await mount();
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
-			await click(rowFor(m, "Errands"));
+			await click(tagRow(m, "Errands"));
 			deleteItem(await menuOf(m, "Errands")).run();
 			await settle();
 			expect(m.root.querySelector(".cp-main-title")!.textContent).toBe("Inbox");
@@ -142,10 +129,10 @@ describe("the tag tree", () => {
 			await m.h.app.tasks.create({ title: "Parent only", newTags: ["Programming"] });
 			await settle();
 			const messages: string[] = [];
-			m.host.choose = (async (_t: string, message: string) => {
+			m.host.choose = async (_t: string, message: string) => {
 				messages.push(message);
 				return null;
-			}) as unknown as typeof m.host.choose;
+			};
 			deleteItem(await menuOf(m, "Programming")).run();
 			await settle();
 			deleteItem(await menuOf(m, "Errands")).run();
@@ -193,15 +180,10 @@ describe("the tag tree", () => {
 describe("New tag", () => {
 	// The + beside Tags opens New tag (Lists, sections and tags rule 23b). The heading shows with no tags too.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 
 	/** A scripted dialog: each entry is what the user submits (null = dismiss); `outcomes` collects the save results. */
-	async function scripted(seed: (m: CalMount) => Promise<void>, ...submits: (TagDialogValues | null)[]) {
-		const m = await mountCal();
-		mounted.push(m);
+	async function scripted(seed: (m: AppMount) => Promise<void>, ...submits: (TagDialogValues | null)[]) {
+		const m = await mountApp();
 		await seed(m);
 		await settle();
 		const outcomes: (string | null)[] = [];
@@ -220,9 +202,9 @@ describe("New tag", () => {
 		return { m, tagDialog, outcomes, opened };
 	}
 
-	const sidebar = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
-	const plus = (m: CalMount) => sidebar(m).querySelector<HTMLButtonElement>('[aria-label="New tag"]');
-	const treeLabels = (m: CalMount) => [...sidebar(m).querySelectorAll(".cp-tag-tree .cp-sidebar-label")].map((e) => e.textContent);
+	const sidebar = (m: AppMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
+	const plus = (m: AppMount) => sidebar(m).querySelector<HTMLButtonElement>('[aria-label="New tag"]');
+	const treeLabels = (m: AppMount) => [...sidebar(m).querySelectorAll(".cp-tag-tree .cp-sidebar-label")].map((e) => e.textContent);
 	const none = async () => undefined;
 
 	describe("sidebar New tag", () => {
@@ -235,8 +217,7 @@ describe("New tag", () => {
 		});
 
 		it("without the dialog in the host there is no + (the heading still shows)", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			expect(plus(m)).toBeNull();
 			expect([...sidebar(m).querySelectorAll(".cp-sidebar-heading")].some((h) => h.textContent.includes("Tags"))).toBe(true);
 		});
@@ -313,14 +294,9 @@ describe("parent tags", () => {
 	// Every tag row is a tag record with the same menu (Lists, sections and tags rule 25); a parent's view presets its tag
 	// (rule 26); deleting a parent moves its child tags to the top level, and an open child view follows (rule 28).
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 
 	async function mount() {
-		const m = await mountCal();
-		mounted.push(m);
+		const m = await mountApp();
 		const t = m.h.app.tasks;
 		await t.create({ title: "Ring mum", newTags: ["Home/Calls"] });
 		await t.create({ title: "Weed the beds", newTags: ["Home/Garden"] });
@@ -329,29 +305,21 @@ describe("parent tags", () => {
 		return m;
 	}
 
-	const sidebar = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
-	const rows = (m: CalMount) => [...sidebar(m).querySelectorAll<HTMLElement>(".cp-tag-tree .cp-sidebar-item")];
-	const labels = (m: CalMount) => rows(m).map((r) => r.querySelector(".cp-sidebar-label")!.textContent);
-	const rowFor = (m: CalMount, label: string) => rows(m).find((r) => r.querySelector(".cp-sidebar-label")!.textContent === label)!;
 	/** Whether a row sits at the top of the tree (not inside a parent's list). */
-	const atTop = (m: CalMount, label: string) => rowFor(m, label).closest("li")!.parentElement!.closest("li") === null;
-	const active = (m: CalMount) => rows(m).filter((r) => r.getAttribute("aria-current") === "page");
-	const title = (m: CalMount) => m.root.querySelector(".cp-main-title")!.textContent;
-	const menuOf = async (m: CalMount, label: string) => {
-		rowFor(m, label).dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-		await settle();
-		return m.host.menus.at(-1)!;
-	};
-	const confirmAll = (m: CalMount) => {
+	const atTop = (m: AppMount, label: string) => tagRow(m, label).closest("li")!.parentElement!.closest("li") === null;
+	const active = (m: AppMount) => tagRows(m).filter((r) => r.getAttribute("aria-current") === "page");
+	const title = (m: AppMount) => m.root.querySelector(".cp-main-title")!.textContent;
+	const menuOf = (m: AppMount, label: string) => contextMenu(m, tagRow(m, label));
+	const confirmAll = (m: AppMount) => {
 		m.host.choose = (async () => true) as unknown as typeof m.host.choose;
 	};
 
 	describe("sidebar: a parent tag is a tag", () => {
 		it("every row has a color dot and the full menu: colors and Delete", async () => {
 			const m = await mount();
-			expect(labels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
-			for (const label of labels(m)) {
-				expect(rowFor(m, label).querySelector(".cp-tag-dot")!.classList.contains("cp-tag-none")).toBe(false);
+			expect(tagLabels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
+			for (const label of tagLabels(m)) {
+				expect(tagRow(m, label).querySelector(".cp-tag-dot")!.classList.contains("cp-tag-none")).toBe(false);
 				const menu = await menuOf(m, label);
 				expect(menuItem(menu, "No color")).toBeDefined();
 				expect(menuItem(menu, "Color: red")).toBeDefined();
@@ -364,14 +332,14 @@ describe("parent tags", () => {
 			menuItem(await menuOf(m, "Home"), "Color: purple").run();
 			await settle();
 			expect(m.h.app.store.state.tags.get("home")!.color).toBe("purple");
-			expect(rowFor(m, "Home").querySelector(".cp-tag-dot")!.classList.contains("cp-tag-purple")).toBe(true);
+			expect(tagRow(m, "Home").querySelector(".cp-tag-dot")!.classList.contains("cp-tag-purple")).toBe(true);
 		});
 
 		it("the header + in a parent's view presets that tag", async () => {
 			const m = await mount();
 			const presets: (QuickAddPreset | undefined)[] = [];
 			m.host.quickAdd = (preset?: QuickAddPreset) => void presets.push(preset);
-			await click(rowFor(m, "Home"));
+			await click(tagRow(m, "Home"));
 			m.root.querySelector<HTMLButtonElement>('.cp-tasks .cp-main-header [aria-label="Quick add task"]')!.click();
 			expect(presets.at(-1)?.tagKeys).toEqual(["home"]);
 		});
@@ -383,10 +351,10 @@ describe("parent tags", () => {
 			const tidy = await m.h.app.tasks.create({ title: "Tidy up", tagKeys: ["home"] });
 			await settle();
 			const messages: string[] = [];
-			m.host.choose = (async (_t: string, message: string) => {
+			m.host.choose = async (_t: string, message: string) => {
 				messages.push(message);
 				return null;
-			}) as unknown as typeof m.host.choose;
+			};
 			menuItem(await menuOf(m, "Home"), "Delete").run();
 			await settle();
 			menuItem(await menuOf(m, "Errands"), "Delete").run();
@@ -400,48 +368,48 @@ describe("parent tags", () => {
 			await settle();
 			expect(messages).toEqual(["Delete @Home? Its child tags move to the top level."]);
 			// Nothing was confirmed, so nothing changed.
-			expect(labels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
 		});
 
 		it("moves the children to the top, leaves the open parent view for Inbox, and Undo brings the tree back", async () => {
 			const m = await mount();
 			confirmAll(m);
-			await click(rowFor(m, "Home"));
+			await click(tagRow(m, "Home"));
 			expect(title(m)).toBe("@Home");
 			menuItem(await menuOf(m, "Home"), "Delete").run();
 			await settle();
-			expect(labels(m)).toEqual(["Calls", "Errands", "Garden"]);
+			expect(tagLabels(m)).toEqual(["Calls", "Errands", "Garden"]);
 			expect(title(m)).toBe("Inbox");
 			expect(m.host.messages.at(-1)).toBe("Deleted tag @Home.");
 			expect(await m.host.undoButtons.at(-1)!()).toBe(true);
 			await settle();
-			expect(labels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
 		});
 
 		it("an open child view follows its tag to the top level", async () => {
 			const m = await mount();
 			confirmAll(m);
-			await click(rowFor(m, "Calls"));
+			await click(tagRow(m, "Calls"));
 			expect(title(m)).toBe("@Calls");
 			expect(atTop(m, "Calls")).toBe(false);
-			expect(active(m)).toEqual([rowFor(m, "Calls")]);
+			expect(active(m)).toEqual([tagRow(m, "Calls")]);
 			menuItem(await menuOf(m, "Home"), "Delete").run();
 			await settle();
 			// The open view is now the moved tag's: its row is at the top, and it is the active one.
 			expect(m.h.app.store.state.tags.has("calls")).toBe(true);
 			expect(atTop(m, "Calls")).toBe(true);
-			expect(active(m)).toEqual([rowFor(m, "Calls")]);
+			expect(active(m)).toEqual([tagRow(m, "Calls")]);
 			expect(title(m)).toBe("@Calls");
 		});
 
 		it("an unrelated open tag view stays put", async () => {
 			const m = await mount();
 			confirmAll(m);
-			await click(rowFor(m, "Errands"));
+			await click(tagRow(m, "Errands"));
 			menuItem(await menuOf(m, "Home"), "Delete").run();
 			await settle();
 			expect(title(m)).toBe("@Errands");
-			expect(active(m)).toEqual([rowFor(m, "Errands")]);
+			expect(active(m)).toEqual([tagRow(m, "Errands")]);
 		});
 
 		it("a deeper open view from an older file follows its own tag, not a moved ancestor's path", async () => {
@@ -452,13 +420,13 @@ describe("parent tags", () => {
 			);
 			await settle();
 			confirmAll(m);
-			await click(rowFor(m, "Mum"));
+			await click(tagRow(m, "Mum"));
 			expect(title(m)).toBe("@Mum");
 			menuItem(await menuOf(m, "Home"), "Delete").run();
 			await settle();
 			expect(m.h.app.store.state.tags.has("mum")).toBe(true);
 			expect(title(m)).toBe("@Mum");
-			expect(active(m)).toEqual([rowFor(m, "Mum")]);
+			expect(active(m)).toEqual([tagRow(m, "Mum")]);
 		});
 	});
 });

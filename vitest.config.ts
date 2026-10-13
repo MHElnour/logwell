@@ -18,6 +18,8 @@ export default defineConfig({
 		alias: { obsidian: fileURLToPath(new URL("./tests/app/obsidian-stub.ts", import.meta.url)) },
 	},
 	test: {
+		// Obsidian's element additions for the UI tests (a no-op outside tests/ui and outside a DOM).
+		setupFiles: ["tests/ui/dom-setup.ts"],
 		projects: [
 			{
 				extends: true,

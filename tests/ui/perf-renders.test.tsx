@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as views from "../../src/app/views";
 import * as format from "../../src/ui/format";
 import { useFocus } from "../../src/ui/hooks";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { type AppMount, click, flushEffects, mountApp, settle, unmountAll } from "./app-helpers";
 import { syncLinkId } from "../../src/domain/types";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not
@@ -22,32 +22,19 @@ vi.mock("../../src/ui/format", async (importActual) => {
 });
 
 describe("render passes", () => {
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
 	const builds = () => vi.mocked(views.buildList).mock.calls.length;
 	const searches = () => vi.mocked(views.globalSearch).mock.calls.length;
 	const rowRenders = () => vi.mocked(format.rowDateText).mock.calls.length;
 
-	async function mountWithTasks(titles: string[]): Promise<{ m: CalMount; ids: string[] }> {
-		const m = await mountCal();
-		mounted.push(m);
+	async function mountWithTasks(titles: string[]): Promise<{ m: AppMount; ids: string[] }> {
+		const m = await mountApp();
 		const ids: string[] = [];
 		for (const title of titles) ids.push((await m.h.app.tasks.create({ title, scheduled: { kind: "date", date: "2026-10-01" } })).task.id);
-		await flush();
+		await flushEffects();
 		return { m, ids };
 	}
 
-	/** settle() plus time for Preact's passive effects (it runs them after a frame or 100 ms). */
-	const flush = async () => {
-		await settle();
-		await new Promise((r) => setTimeout(r, 120));
-		await settle();
-	};
-
-	const rows = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
+	const rows = (m: AppMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
 
 	describe("render passes", () => {
 		it("one edit renders the Tasks section once and only the changed row", async () => {
@@ -55,7 +42,7 @@ describe("render passes", () => {
 			expect(rows(m)).toHaveLength(3);
 			const [b0, r0, s0] = [builds(), rowRenders(), searches()];
 			await m.h.app.tasks.update(ids[1]!, { title: "B edited" });
-			await flush();
+			await flushEffects();
 			expect(rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim())).toContain("B edited");
 			expect(builds() - b0).toBe(1);
 			expect(rowRenders() - r0).toBe(1);
@@ -69,12 +56,12 @@ describe("render passes", () => {
 			const box = m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;
 			box.value = "call";
 			box.dispatchEvent(new Event("input", { bubbles: true }));
-			await flush();
+			await flushEffects();
 			const results = () => [...m.root.querySelectorAll<HTMLElement>(".cp-search .cp-task-row")];
 			expect(results()).toHaveLength(2);
 			const s0 = searches();
 			await m.h.app.tasks.update(ids[1]!, { title: "Call the plumber" });
-			await flush();
+			await flushEffects();
 			expect(results()).toHaveLength(3);
 			expect(searches() - s0).toBe(1);
 			// Selecting a result renders the section again; the tasks, query and filter are the same, so no search runs.
@@ -85,10 +72,10 @@ describe("render passes", () => {
 			// A list renamed to match: Search reads the list names again.
 			const s2 = searches();
 			const list = await m.h.app.categories.create("Errands");
-			await flush();
+			await flushEffects();
 			expect(m.root.querySelector(".cp-search")?.textContent).not.toContain("Call list");
 			await m.h.app.categories.update(list.id, { name: "Call list" });
-			await flush();
+			await flushEffects();
 			expect(searches() - s2).toBe(2);
 			expect(m.root.querySelector(".cp-search")?.textContent).toContain("Call list");
 		});
@@ -127,36 +114,34 @@ describe("render passes", () => {
 	});
 
 	describe("rows follow everything they draw", () => {
-		const meta = (m: CalMount, nth: number) => rows(m)[nth]!.querySelector(".cp-task-meta")!.textContent;
+		const meta = (m: AppMount, nth: number) => rows(m)[nth]!.querySelector(".cp-task-meta")!.textContent;
 
 		it("a renamed list, a recolored tag and a subtask count reach the rows that show them", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const list = await m.h.app.categories.create("Errands");
 			const tag = await m.h.app.tags.create("urgent");
 			const parent = await m.h.app.tasks.create({ title: "Parent", categoryId: list.id, tagKeys: [tag.key], scheduled: { kind: "date", date: "2026-10-01" } });
 			await m.h.app.tasks.create({ title: "Sub 1", parentId: parent.task.id, scheduled: { kind: "date", date: "2026-10-01" } });
 			const sub2 = await m.h.app.tasks.create({ title: "Sub 2", parentId: parent.task.id, scheduled: { kind: "date", date: "2026-10-01" } });
-			await flush();
+			await flushEffects();
 			const parentRow = () => rows(m).findIndex((r) => r.querySelector(".cp-task-title")!.textContent.trim() === "Parent");
 			expect(meta(m, parentRow())).toContain("Errands");
 			expect(meta(m, parentRow())).toContain("0/2");
 			await m.h.app.categories.update(list.id, { name: "Chores" });
-			await flush();
+			await flushEffects();
 			expect(meta(m, parentRow())).toContain("Chores");
 			await m.h.app.tasks.complete(sub2.task.id);
-			await flush();
+			await flushEffects();
 			expect(meta(m, parentRow())).toContain("1/2");
 			const pill = () => rows(m)[parentRow()]!.querySelector(".cp-tag-pill")!;
 			const before = pill().className;
 			await m.h.app.tags.setColor(tag.key, "purple");
-			await flush();
+			await flushEffects();
 			expect(pill().className).not.toBe(before);
 		});
 
 		it("the sidebar counts and the Upcoming list follow a change of the week start", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			let weekStart = "MO";
 			(m.h.app as unknown as { settings: { weekStart: () => string } }).settings.weekStart = () => weekStart;
 			// Every second week on Sunday and Monday, anchored on Sunday 2026-10-04 (a picked weekday, so the anchor stays) and
@@ -169,7 +154,7 @@ describe("render passes", () => {
 			await m.h.app.tasks.complete(t.id);
 			await m.h.app.tasks.complete(t.id);
 			await m.rerender();
-			await flush();
+			await flushEffects();
 			const upcoming = () => {
 				const item = [...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((i) => i.textContent.includes("Upcoming"))!;
 				return item.querySelector(".cp-count")?.textContent ?? "0";
@@ -178,7 +163,7 @@ describe("render passes", () => {
 			expect(upcoming()).toBe("0");
 			weekStart = "SU";
 			await m.rerender();
-			await flush();
+			await flushEffects();
 			// Sunday weeks: Monday 2026-10-05 is in the week of the anchor and still open.
 			expect(upcoming()).toBe("1");
 		});
@@ -203,19 +188,18 @@ describe("render passes", () => {
 			const focus = () => rows(m)[0]!.querySelector(".cp-meta-focus")?.textContent ?? "";
 			expect(focus()).toBe("");
 			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(25) as never));
-			await flush();
+			await flushEffects();
 			const first = focus();
 			expect(first).toContain("25");
 			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(50) as never));
-			await flush();
+			await flushEffects();
 			expect(focus()).toContain("50");
 			expect(focus()).not.toBe(first);
 			expect(m.h.app.store.state.tasks.get(ids[0]!)).toBe(task);
 		});
 
 		it("a repeating task's occurrence date follows the week start without the task record changing", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			let weekStart = "MO";
 			(m.h.app as unknown as { settings: { weekStart: () => string } }).settings.weekStart = () => weekStart;
 			// Every second week on Sunday and Monday from Sunday 2026-10-04: once Sunday is done, the week start decides whether
@@ -225,15 +209,15 @@ describe("render passes", () => {
 			for (const v of m.h.app.store.state.tasks.get(t.id)!.recurrence!.versions) delete (v.rule as { weekStart?: string }).weekStart;
 			await m.h.app.tasks.complete(t.id);
 			await m.rerender();
-			await flush();
+			await flushEffects();
 			await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((i) => i.textContent.includes("Inbox")));
-			await flush();
+			await flushEffects();
 			const task = m.h.app.store.state.tasks.get(t.id);
 			const dateText = () => rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.includes("Biweekly"))!.querySelector(".cp-meta-date")!.textContent;
 			const before = dateText();
 			weekStart = "SU";
 			await m.rerender();
-			await flush();
+			await flushEffects();
 			expect(dateText()).not.toBe(before);
 			expect(m.h.app.store.state.tasks.get(t.id)).toBe(task);
 		});
@@ -246,7 +230,7 @@ describe("render passes", () => {
 			// A day later: the same task is now overdue and reads differently.
 			m.h.clock.advance(2 * 86_400_000);
 			await m.rerender();
-			await flush();
+			await flushEffects();
 			expect(date()).not.toBe(before);
 		});
 	});
@@ -256,12 +240,12 @@ describe("render passes", () => {
 			const { m, ids } = await mountWithTasks(["A", "B", "C"]);
 			const board = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.includes("Board"))!;
 			await click(board);
-			await flush();
+			await flushEffects();
 			const cards = () => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-board-card")];
 			expect(cards()).toHaveLength(3);
 			const r0 = rowRenders();
 			await m.h.app.tasks.update(ids[1]!, { title: "B edited" });
-			await flush();
+			await flushEffects();
 			expect(cards().map((c) => c.querySelector(".cp-board-title")!.textContent.trim())).toContain("B edited");
 			expect(rowRenders() - r0).toBe(1);
 			const r1 = rowRenders();
@@ -276,7 +260,7 @@ describe("render passes", () => {
 			const { m, ids } = await mountWithTasks(["A", "B"]);
 			const board = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.includes("Board"))!;
 			await click(board);
-			await flush();
+			await flushEffects();
 			const session = (minutes: number) => ({
 				id: "s1",
 				deviceId: "d",
@@ -296,35 +280,33 @@ describe("render passes", () => {
 			const focus = () => card("A").querySelector(".cp-meta-focus")?.textContent ?? "";
 			expect(focus()).toBe("");
 			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(25) as never));
-			await flush();
+			await flushEffects();
 			expect(focus()).toContain("25");
 			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(50) as never));
-			await flush();
+			await flushEffects();
 			expect(focus()).toContain("50");
 			expect(card("B").querySelector(".cp-meta-focus")).toBeNull();
 		});
 
 		it("a card shows a change of its nested subtask", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const parent = await m.h.app.tasks.create({ title: "Parent", scheduled: { kind: "date", date: "2026-10-01" } });
 			const sub = await m.h.app.tasks.create({ title: "Sub", parentId: parent.task.id, scheduled: { kind: "date", date: "2026-10-01" } });
-			await flush();
+			await flushEffects();
 			const board = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.includes("Board"))!;
 			await click(board);
-			await flush();
+			await flushEffects();
 			const subTitles = () => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-board-subs .cp-board-title")].map((e) => e.textContent.trim());
 			expect(subTitles()).toEqual(["Sub"]);
 			await m.h.app.tasks.update(sub.task.id, { title: "Sub renamed" });
-			await flush();
+			await flushEffects();
 			expect(subTitles()).toEqual(["Sub renamed"]);
 		});
 	});
 
 	describe("useFocus", () => {
 		it("does not re-render on mount when the timer did not change", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const root = document.createElement("div");
 			let renders = 0;
 			function Probe() {
@@ -333,14 +315,13 @@ describe("render passes", () => {
 				return <span />;
 			}
 			render(<Probe />, root);
-			await flush();
+			await flushEffects();
 			expect(renders).toBe(1);
 			render(null, root);
 		});
 
 		it("still re-renders when the timer changed between the render and the subscription", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const root = document.createElement("div");
 			let last: ReturnType<typeof useFocus> | null = null;
 			function Probe() {
@@ -350,7 +331,7 @@ describe("render passes", () => {
 			render(<Probe />, root);
 			// Between the render and its effects: a timer starts.
 			await m.h.app.focus.start({ rounds: 1, focusSec: 60, breakSec: 60, longBreakSec: 60 }, null);
-			await flush();
+			await flushEffects();
 			expect(last!.timer).not.toBeNull();
 			await m.h.app.focus.stop();
 			render(null, root);
@@ -362,38 +343,28 @@ describe("rows and sync links", () => {
 	// Performance: the "Not synced" chip reads links, and a write to links must redraw only the rows whose own
 	// link (or whose list's link) changed, never every row.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 	const rowRenders = () => vi.mocked(format.rowDateText).mock.calls.length;
-	const flush = async () => {
-		await settle();
-		await new Promise((r) => setTimeout(r, 120));
-		await settle();
-	};
 
 	describe("rows and links", () => {
 		it("a link write redraws only the row of that task, and a link of a task not shown redraws none", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const ids: string[] = [];
 			for (const title of ["A", "B", "C"]) ids.push((await m.h.app.tasks.create({ title, scheduled: { kind: "date", date: "2026-10-01" } })).task.id);
 			const inboxLink = { kind: "list" as const, logwellId: "inbox", ttId: "p", ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: null, modifiedAt: "x" };
 			const put = (link: typeof inboxLink | (Omit<typeof inboxLink, "kind"> & { kind: "task"; mode: "localOnly" })) =>
 				m.h.app.store.run("test links", (tx) => void tx.put("syncLinks", link), { undoable: false });
 			await put(inboxLink);
-			await flush();
+			await flushEffects();
 			const rows = () => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
 			expect(rows()).toHaveLength(3);
 			const r0 = rowRenders();
 			await put({ ...inboxLink, kind: "task", logwellId: ids[1]!, ttId: "t", mode: "localOnly" });
-			await flush();
+			await flushEffects();
 			expect(rowRenders() - r0).toBe(1);
 			expect(rows().filter((r) => r.querySelector(".cp-meta-notsynced") !== null)).toHaveLength(1);
 			const r1 = rowRenders();
 			await put({ ...inboxLink, kind: "task", logwellId: "00000000-0000-4000-8000-0000000000ff", ttId: "u", mode: "localOnly" });
-			await flush();
+			await flushEffects();
 			expect(rowRenders() - r1).toBe(0);
 			expect(m.h.app.store.state.syncLinks.has(syncLinkId("task", ids[1]!))).toBe(true);
 			// A sync rewrites the list's link and the tasks' links without changing what the chip shows: no row is redrawn.
@@ -401,7 +372,7 @@ describe("rows and sync links", () => {
 			await put({ ...inboxLink, modifiedAt: "y" });
 			await put({ ...inboxLink, kind: "task", logwellId: ids[0]!, ttId: "a" } as never);
 			await put({ ...inboxLink, kind: "task", logwellId: ids[1]!, ttId: "t", mode: "localOnly", modifiedAt: "z" });
-			await flush();
+			await flushEffects();
 			expect(rowRenders() - r2).toBe(0);
 		});
 	});
@@ -411,15 +382,9 @@ describe("Tasks section memoization", () => {
 	// The Tasks section builds its rows and its Completed group (one `buildList`) only when their inputs change:
 	// selecting a row, which only moves `selectedId`, must not rebuild them.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
 	describe("Tasks section memoization", () => {
 		it("does not rebuild the rows or the Completed group when only the selection changes", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Ship it", scheduled: { kind: "date", date: "2026-10-01" } });
 			await settle();
 			const build = vi.mocked(views.buildList);
@@ -439,20 +404,18 @@ describe("render passes with the hold", () => {
 	// then once more when the 450 ms hold ends. Fake timers drive the hold; what they still hold is run before the
 	// real timers return, so Preact's effect scheduling is not left waiting for the next test.
 
-	const mounted: CalMount[] = [];
 	afterEach(async () => {
-		for (const m of mounted.splice(0)) m.unmount();
+		unmountAll();
 		if (vi.isFakeTimers()) await vi.runOnlyPendingTimersAsync();
 		vi.useRealTimers();
 	});
 
 	const builds = () => vi.mocked(views.buildList).mock.calls.length;
-	const rows = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
+	const rows = (m: AppMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
 
 	describe("render passes with the hold on a completed row", () => {
 		it("completing a task renders the Tasks section once, then once more when the hold ends", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const ids: string[] = [];
 			for (const title of ["A", "B"]) ids.push((await m.h.app.tasks.create({ title, scheduled: { kind: "date", date: "2026-10-01" } })).task.id);
 			await settle();
