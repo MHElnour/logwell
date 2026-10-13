@@ -381,11 +381,11 @@ describe("Focus page", () => {
 	describe("recovery banner (B31, AS-12)", () => {
 		/** Starts a ten-minute focus, "closes the app" after 30 s and reopens it ten minutes later. */
 		async function interrupted(m: CalMount): Promise<void> {
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(10 * 60_000);
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 		}
 
 		it("shows Resume, Finish and Discard calling resolveRecovery", async () => {
@@ -470,11 +470,11 @@ describe("Focus page", () => {
 
 		it("Include and Exclude a pending gap call includeGap", async () => {
 			const m = await mount();
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(5 * 60_000);
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
@@ -491,11 +491,11 @@ describe("Focus page", () => {
 
 		it("Include and Exclude show an Undo notice labelled as the store write", async () => {
 			const m = await mount();
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(5 * 60_000);
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
@@ -621,11 +621,11 @@ describe("Focus page", () => {
 
 		it("recovered and stopped rounds get their own dots", async () => {
 			const m = await mount();
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(5 * 60_000);
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
@@ -787,7 +787,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(5 * 60_000);
-			await m.h.app.focus.open("db");
+			await m.h.app.focus.open();
 			const page = await openFocus(m);
 			expect(buttonByText(page, "Finish")).toBeUndefined();
 		});

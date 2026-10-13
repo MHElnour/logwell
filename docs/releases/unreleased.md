@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#115) Fixed a focus round started after the open database file was replaced, such as a damaged file put back outside Obsidian, being lost on the next start with no recovery prompt, or offered to another database. The running timer now stays with the database that is open.
 - (#111) Fixed a list deleted in TickTick stopping the sync of every synced list with "not found (HTTP 404)", so new tasks and edits in the other lists were never sent. That list is now skipped with the notice "The TickTick list linked to "Work" no longer exists." and an **Unlink** button, and the other lists keep syncing.
 - (#110) Fixed deleting a list synced with TickTick leaving it linked: its tasks never synced again from the Inbox, their TickTick copies stayed where they were, and its TickTick list could not be linked to another list. Deleting a synced list now unlinks it, and its tasks follow the Inbox: the next sync moves them to the Inbox's TickTick list when the Inbox syncs, and deletes them in TickTick when it does not. A list deleted this way with an earlier version is unlinked at the next sync.
 - (#114) Fixed the "Not synced" mark in a task block not changing when a list was linked with TickTick or unlinked, or when you chose **Keep** for tasks missing in TickTick, even after a reload. The block now updates the mark as Logwell's own lists do.

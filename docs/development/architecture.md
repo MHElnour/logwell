@@ -216,4 +216,4 @@ npm run e2e         # builds first; local only
 - Read-only state: "damaged" or "newer-schema", in which the store refuses every command.
 - Sync link: a record in `syncLinks` that pairs a Logwell list, section or task with its TickTick copy and holds the field hashes.
 - Link mode: how a linked task takes part in the sync: `sync`, `excluded` while either copy repeats, or `localOnly` after Keep.
-- Device-local state: data kept in the vault's local storage per device and database, never in the file.
+- Device-local state: data kept in the vault's local storage per device and database, never in the file. It is keyed by the database's id as the store holds it at each read and save, so it follows a reload that changes the id; the focus timer and the rename queue go through `storableDbId` and store nothing under the placeholder of an unknown damaged database.
