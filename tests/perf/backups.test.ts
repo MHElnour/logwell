@@ -6,21 +6,19 @@ import { BackupStore, SNAPSHOT_INTERVAL_MS, type SnapshotKind } from "../../src/
 import { FakeClock } from "../helpers";
 import { BACKUP_ROOT, emptyDbText, harness, makeTask } from "../persistence/fixtures";
 import { MemoryFileGateway } from "../persistence/memoryGateway";
+import { median, perfLog } from "./measure";
 
 // Backup retention after every save (issue 35). A save that writes no snapshot still lists the snapshots folder
-// (`prune`), and the listing grows with the retention limits. This test counts the listings and times one
-// retention pass (list, parse and sort in memory, nothing deleted) with the folder at its retention limits. It
-// measures; the assertions are loose bounds so they pass today and on CI. Fixing issue 35 should take the
-// listings per plain save from 1 to 0.
+// (`prune`), and the listing grows with the retention limits. This test counts the listings and logs the time of one
+// retention pass (list, parse and sort in memory, nothing deleted) with the folder at its retention limits
+// (CHECKPOINT_PERF_LOG=1). The count is the check; the times have nothing in the same run to compare with. Fixing
+// issue 35 should take the listings per plain save from 1 to 0.
 //
 // The in-memory gateway has no disk I/O, so the timing is the CPU part of a listing (name parsing, sorting)
 // only. The real gateway adds two adapter calls per listing (`exists` and `list`).
 
 const PLAIN_SAVES = 50;
 const REPEATS = 200;
-const CI_SLACK = process.env.CI ? 4 : 1;
-const LISTING_BUDGET_MS = 5 * CI_SLACK;
-const LOG = Boolean(process.env.CHECKPOINT_PERF_LOG);
 
 // The retention limits in src/persistence/backups.ts: 5 hourly, 5 reload, 5 of each of the five "pre-" kinds
 // and daily snapshots for 14 days (today and the 14 days before it).
@@ -31,11 +29,6 @@ const FULL_FOLDER: { kind: SnapshotKind; count: number }[] = [
 	...PRE_KINDS.map((kind) => ({ kind, count: 5 })),
 ];
 const DAILY_COUNT = 15;
-
-function median(xs: number[]): number {
-	const s = [...xs].sort((a, b) => a - b);
-	return s[Math.floor(s.length / 2)] ?? 0;
-}
 
 describe("#35: backup retention listings", () => {
 	it(`${PLAIN_SAVES} plain saves list the snapshots folder at most once each`, async () => {
@@ -62,17 +55,13 @@ describe("#35: backup retention listings", () => {
 		expect(snapshotsWritten, "no snapshot is due during plain saves").toBe(0);
 		expect(h.dbText()).toContain(`"title":"Task ${PLAIN_SAVES - 1}"`);
 
-		if (LOG) {
-			process.stderr.write(
-				`issue-35: ${listings} snapshot listings for ${PLAIN_SAVES} plain saves (${(listings / PLAIN_SAVES).toFixed(2)} per save), ${snapshotsWritten} snapshots written\n`,
-			);
-		}
+		perfLog(`issue-35: ${listings} snapshot listings for ${PLAIN_SAVES} plain saves (${(listings / PLAIN_SAVES).toFixed(2)} per save), ${snapshotsWritten} snapshots written`);
 		// Today: exactly 1 per save (prune). The loose bound leaves room for a fix to lower it.
 		expect(listings).toBeLessThanOrEqual(PLAIN_SAVES);
 		await h.store.close();
 	});
 
-	it("times one retention pass with the snapshot folder at its retention limits", async () => {
+	it("logs one retention pass with the snapshot folder at its retention limits", async () => {
 		const gateway = new MemoryFileGateway();
 		const clock = new FakeClock("2026-10-01T10:00:00.000Z");
 		const backups = new BackupStore(gateway, `${BACKUP_ROOT}/db-1`, clock);
@@ -109,12 +98,8 @@ describe("#35: backup retention listings", () => {
 		}
 		const pruneMs = median(prunes);
 		const listMs = median(listed);
-		if (LOG) {
-			process.stderr.write(
-				`issue-35: ${files} snapshots; prune median ${pruneMs.toFixed(3)} ms (max ${Math.max(...prunes).toFixed(3)}), raw in-memory list median ${listMs.toFixed(3)} ms\n`,
-			);
-		}
-		expect(pruneMs).toBeLessThan(LISTING_BUDGET_MS);
+		perfLog(`issue-35: ${files} snapshots; prune median ${pruneMs.toFixed(3)} ms (max ${Math.max(...prunes).toFixed(3)}), raw in-memory list median ${listMs.toFixed(3)} ms`);
+		expect((await gateway.list(backups.snapshotDir)).length, "nothing pruned in the timed passes").toBe(files);
 	});
 
 	it("logs a disk listing of a folder with the same number of files (readdir and one stat per file)", async () => {
@@ -123,15 +108,16 @@ describe("#35: backup retention listings", () => {
 			const files = 5 + 5 + 5 * PRE_KINDS.length + DAILY_COUNT;
 			for (let i = 0; i < files; i++) await writeFile(join(dir, `hourly-20261001T1000${i.toString().padStart(2, "0")}000Z~20261001T100000000Z~r-000000000000.cpbase`), "x");
 			const times: number[] = [];
+			let listed = 0;
 			for (let i = 0; i < REPEATS; i++) {
 				const start = performance.now();
 				const names = await readdir(dir);
 				await Promise.all(names.map((n) => stat(join(dir, n))));
 				times.push(performance.now() - start);
+				listed = names.length;
 			}
-			const ms = median(times);
-			if (LOG) process.stderr.write(`issue-35: disk readdir + stat of ${files} files, median ${ms.toFixed(3)} ms (warm OS cache)\n`);
-			expect(ms).toBeLessThan(LISTING_BUDGET_MS * 4);
+			perfLog(`issue-35: disk readdir + stat of ${files} files, median ${median(times).toFixed(3)} ms (warm OS cache)`);
+			expect(listed).toBe(files);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
