@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FocusService } from "../../src/app/FocusService";
+import { RecurrenceService } from "../../src/app/RecurrenceService";
+import { DbSession } from "../../src/obsidian/session";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
-import { makeTask } from "../persistence/fixtures";
-import { fakeApp } from "./fake-vault";
+import { emptyDbText, makeTask } from "../persistence/fixtures";
+import { fakeApp, loadPlugin } from "./fake-vault";
 
 // Unloading the plugin while the database opens closes the opening session; the rest of
 // its open then fails against the closed store. That is expected and shows no error once the plugin is gone.
@@ -48,5 +50,75 @@ describe("unloading while the database opens", () => {
 		await new Promise((r) => setTimeout(r, 20));
 		expect(plugin.session).toBeNull();
 		expect(shown).toEqual([]);
+	});
+});
+
+/** Every session that opens, and every one that closes, from here on. */
+function trackSessions() {
+	const opened: DbSession[] = [];
+	const closed = new Set<DbSession>();
+	type Run = (this: DbSession) => Promise<void>;
+	const open = Object.getOwnPropertyDescriptor(DbSession.prototype, "open")!.value as Run;
+	const close = Object.getOwnPropertyDescriptor(DbSession.prototype, "close")!.value as Run;
+	vi.spyOn(DbSession.prototype, "open").mockImplementation(function (this: DbSession) {
+		opened.push(this);
+		return open.call(this);
+	});
+	vi.spyOn(DbSession.prototype, "close").mockImplementation(function (this: DbSession) {
+		closed.add(this);
+		return close.call(this);
+	});
+	return { opened, closed };
+}
+
+function twoDatabases() {
+	const fake = fakeApp();
+	fake.files.set("A.cpbase", emptyDbText("db-a", "r-aaaaaaaaaaaa"));
+	fake.files.set("B.cpbase", emptyDbText("db-b", "r-bbbbbbbbbbbb"));
+	shown.length = 0;
+	return fake;
+}
+
+describe("unloading while a database switch runs", () => {
+	it("#112: a switch still closing the old database at unload opens nothing afterwards", async () => {
+		const fake = twoDatabases();
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		const sessions = trackSessions();
+		// The unload lands while the switch waits for the old database's sync request.
+		vi.spyOn(DbSession.prototype, "settleSync").mockImplementation(async () => {
+			plugin.onunload();
+			await new Promise((r) => setTimeout(r, 10));
+		});
+		plugin.settings.activeDatabasePath = "B.cpbase";
+		await plugin.openActiveDatabase();
+		expect(sessions.opened.map((s) => s.path)).toEqual([]);
+		expect(plugin.session).toBeNull();
+		expect(shown).toEqual([]);
+	});
+
+	it("#112: an open queued before the unload does not run after it", async () => {
+		const fake = twoDatabases();
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		const sessions = trackSessions();
+		plugin.settings.activeDatabasePath = "B.cpbase";
+		const first = plugin.openActiveDatabase();
+		const second = plugin.openActiveDatabase();
+		plugin.onunload();
+		await first;
+		await second;
+		expect(sessions.opened.map((s) => s.path)).toEqual([]);
+		expect(plugin.session).toBeNull();
+	});
+
+	it("#112: a database whose open fails after its file was read is closed", async () => {
+		const fake = twoDatabases();
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		const sessions = trackSessions();
+		vi.spyOn(RecurrenceService.prototype, "endExhaustedSeries").mockRejectedValue(new Error("Could not end the series."));
+		await plugin.setActiveDatabase("B.cpbase");
+		expect(plugin.session).toBeNull();
+		expect(sessions.opened.map((s) => s.path)).toEqual(["B.cpbase"]);
+		expect(sessions.closed.has(sessions.opened[0]!)).toBe(true);
+		expect(shown).toHaveLength(1);
 	});
 });

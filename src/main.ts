@@ -220,7 +220,8 @@ export default class CheckpointPlugin extends Plugin {
 
 	private queueOpen(body: () => Promise<void>, guard: () => boolean = () => true): Promise<void> {
 		const run = async () => {
-			if (!guard()) return;
+			// Nothing opens once the plugin is unloaded: no one would close it.
+			if (this.unloaded || !guard()) return;
 			this.openingNow = true;
 			try {
 				await body();
@@ -257,6 +258,8 @@ export default class CheckpointPlugin extends Plugin {
 				this.events.emit("session", undefined);
 			}
 		}
+		// Unloaded while the old database closed (a switch waits for its sync request): open nothing.
+		if (this.unloaded) return;
 		const path = this.settings.activeDatabasePath;
 		if (path === "") return;
 		if (this.app.vault.getFileByPath(path) === null) {
@@ -286,7 +289,11 @@ export default class CheckpointPlugin extends Plugin {
 			session.startSync();
 		} catch (err) {
 			// Unloaded meanwhile: onunload closed this session, and the rest of its open failing is expected.
-			if (!this.unloaded) showError(err);
+			if (!this.unloaded) {
+				showError(err);
+				// A session the plugin does not keep is closed, saving what its open already wrote.
+				await session.close().catch((closeErr: unknown) => showError(closeErr));
+			}
 		} finally {
 			this.openingSession = null;
 		}
