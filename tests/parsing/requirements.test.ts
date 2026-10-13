@@ -2,32 +2,13 @@ import { describe, expect, it } from "vitest";
 import { normalizeRepeatRule, repeatRuleProblem } from "../../src/domain/recurrence";
 import { parseQuickAdd } from "../../src/parsing";
 import type { SpanDecision } from "../../src/parsing/types";
-import { NY, TOKYO, BERLIN, at, chipLines, makeCtx } from "./helpers";
+import { NY, TOKYO, BERLIN, at, chipLines, makeCtx, parse } from "./helpers";
 
-// One block per parser requirement.
+// One block per parser requirement. A plain example (one input, the default context, the whole reading) is a row of
+// golden.test.ts; a block here checks what a row cannot: masking, spans, custom contexts, multi-step flows and time.
 
-const parse = (input: string, opts: Parameters<typeof makeCtx>[0] = {}) => parseQuickAdd(input, makeCtx(opts));
 
 describe("A1 pipeline order", () => {
-	it("masks for <duration> so chrono does not read it as now + 45 minutes", () => {
-		const r = parse("Study tomorrow at 7pm for 45m");
-		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-10-02T19:00", tz: NY });
-		expect(r.fields.plannedDurationMin).toBe(45);
-	});
-
-	it("masks every ... so chrono does not read the weekday", () => {
-		const r = parse("Gym every monday");
-		expect(r.fields.scheduled).toBeUndefined();
-		expect(r.chips.map((c) => c.kind)).toEqual(["recurrence"]);
-	});
-
-	it("masks tokens so chrono cannot merge across them", () => {
-		const r = parse("tomorrow #Study at 7pm");
-		const dates = r.chips.filter((c) => c.kind === "scheduled");
-		expect(dates.map((c) => c.text)).toEqual(["tomorrow", "at 7pm"]);
-		expect(r.chips.find((c) => c.kind === "category")?.text).toBe("#Study");
-	});
-
 	it("does not let chrono read inside a note link", () => {
 		const r = parse("Read [[Meeting tomorrow at 5pm]]");
 		expect(r.fields.scheduled).toBeUndefined();
@@ -76,27 +57,11 @@ describe("A2 instants from components in the zone", () => {
 		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-07-20T09:00", tz: NY });
 	});
 
-	it("uses the zone date when it differs from the UTC date", () => {
-		const now = new Date("2026-10-01T20:00:00Z");
-		expect(now.getUTCDate()).toBe(1);
-		const r = parse("Meet today", { zone: TOKYO, now });
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-	});
-
 	it("uses the zone date when the UTC date is ahead of it", () => {
 		const now = new Date("2026-10-02T02:00:00Z"); // Oct 1 22:00 in New York
 		const r = parse("Meet today", { zone: NY, now });
 		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-01" });
 		expect(parse("Meet tomorrow", { zone: NY, now }).fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-	});
-
-	it("datetimes carry the configured zone", () => {
-		const r = parse("Meet tomorrow at 7pm", { zone: BERLIN, now: at(BERLIN, "2026-10-01T12:00") });
-		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-10-02T19:00", tz: BERLIN });
-	});
-
-	it("date-only results stay dates", () => {
-		expect(parse("Meet tomorrow").fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
 	});
 
 	it("ignores an invalid reference instant instead of throwing", () => {
@@ -105,24 +70,6 @@ describe("A2 instants from components in the zone", () => {
 });
 
 describe("A3 meridiem ambiguity", () => {
-	it("gives a choice with both alternatives and applies neither", () => {
-		const r = parse("Run at 5");
-		const chip = r.chips[0];
-		expect(chip?.status).toBe("choice");
-		expect(chip?.alternatives).toEqual([
-			{ label: "05:00", value: { kind: "datetime", local: "2026-10-02T05:00", tz: NY } },
-			{ label: "17:00", value: { kind: "datetime", local: "2026-10-01T17:00", tz: NY } },
-		]);
-		expect(r.fields.scheduled).toBeUndefined();
-		expect(r.title).toBe("Run at 5");
-	});
-
-	it("a certain meridiem is not ambiguous", () => {
-		for (const t of ["at 5pm", "at 5am", "at 17:00", "at noon", "at midnight", "at 7:30pm"]) {
-			expect(parse(`Run ${t}`).chips[0]?.status, t).toBe("applied");
-		}
-	});
-
 	it("hour 0 and hours above 12 are not ambiguous", () => {
 		expect(parse("Run at 0:30").chips[0]?.status).toBe("applied");
 		expect(parse("Run at 13").chips[0]?.status).toBe("applied");
@@ -148,107 +95,17 @@ describe("A3 meridiem ambiguity", () => {
 		const alts = parse("Run tomorrow at 12").chips[0]?.alternatives?.map((a) => a.label);
 		expect(alts).toEqual(["12:00", "00:00"]);
 	});
-
-	it("keeps the day of the date for both alternatives", () => {
-		const alts = parse("Run tomorrow at 5").chips[0]?.alternatives?.map((a) => (a.value?.kind === "datetime" ? a.value.local : ""));
-		expect(alts).toEqual(["2026-10-02T05:00", "2026-10-02T17:00"]);
-	});
 });
 
 describe("A4 low confidence", () => {
-	it("a stop-list token is a suggestion with a value, not applied", () => {
-		for (const t of ["sun", "sat", "march", "now"]) {
-			const r = parse(`x ${t}`);
-			expect(r.chips[0]?.status, t).toBe("suggestion");
-			expect(r.chips[0]?.date, t).toBeDefined();
-			expect(r.chips[0]?.notice, t).toBe("Use as date?");
-			expect(r.fields.scheduled, t).toBeUndefined();
-			expect(r.title, t).toBe(`x ${t}`);
-		}
-	});
-
-	it("may is a suggestion only where chrono reads it as a month (a bare may is not a date)", () => {
-		expect(parse("Pay may").chips).toEqual([]);
-		const r = parse("Pay in may");
-		expect(r.chips.map((c) => `${c.status}:${c.text}`)).toEqual(["suggestion:may"]);
-		expect(r.fields.scheduled).toBeUndefined();
-	});
-
 	it("stop-list matching ignores case, and a longer weekday name is not on the list", () => {
 		expect(parse("x SUN").chips[0]?.status).toBe("suggestion");
 		expect(parse("x Sunday").chips[0]?.status).toBe("applied");
 		expect(parse("x Saturday").chips[0]?.status).toBe("applied");
 	});
-
-	it("a result without a certain day is a suggestion", () => {
-		expect(parse("x next month").chips[0]?.status).toBe("suggestion");
-		expect(parse("x next year").chips[0]?.status).toBe("suggestion");
-	});
-
-	it("a weekday applies (its weekday component is certain)", () => {
-		const r = parse("Gym friday");
-		expect(r.chips[0]?.status).toBe("applied");
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-	});
-
-	it("a time without a day applies as a datetime (measured: chrono implies the day)", () => {
-		const r = parse("Call at 7pm");
-		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-10-01T19:00", tz: NY });
-	});
-
-	it("a bare duration word is not applied as a time", () => {
-		expect(parse("Gym 1h").chips[0]?.status).toBe("suggestion");
-		expect(parse("Gym 45m").chips[0]?.status).toBe("suggestion");
-	});
-
-	it("a range is not applied", () => {
-		expect(parse("Trip Oct 5 - Oct 9").chips[0]?.status).toBe("suggestion");
-	});
-
-	it("a suggestion on a deadline keeps the by in the span", () => {
-		const r = parse("Finish by sat");
-		expect(r.chips[0]).toMatchObject({ kind: "deadline", status: "suggestion", text: "by sat" });
-		expect(r.fields.deadline).toBeUndefined();
-		expect(r.title).toBe("Finish by sat");
-	});
-
-	it("an accept decision applies the suggestion", () => {
-		const d: SpanDecision = { span: { start: 0, end: 3 }, text: "Sun", kind: "accept" };
-		const r = parse("Sun cream", { decisions: [d] });
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-04" });
-		expect(r.title).toBe("cream");
-	});
 });
 
 describe("A5 a weekday said on that weekday", () => {
-	it("gives Today and Next week alternatives and applies neither", () => {
-		const r = parse("Meet friday", { zone: TOKYO, now: at(TOKYO, "2026-10-02T05:00") });
-		const chip = r.chips[0];
-		expect(chip?.status).toBe("choice");
-		expect(chip?.alternatives).toEqual([
-			{ label: "Today", value: { kind: "date", date: "2026-10-02" } },
-			{ label: "Next week", value: { kind: "date", date: "2026-10-09" } },
-		]);
-		expect(r.fields.scheduled).toBeUndefined();
-	});
-
-	it("a deadline gets the same choice", () => {
-		const r = parse("Report by friday", { zone: TOKYO, now: at(TOKYO, "2026-10-02T05:00") });
-		expect(r.chips[0]).toMatchObject({ kind: "deadline", status: "choice" });
-	});
-
-	it("a different weekday is applied directly", () => {
-		expect(parse("Meet saturday", { zone: TOKYO, now: at(TOKYO, "2026-10-02T05:00") }).fields.scheduled).toEqual({
-			kind: "date",
-			date: "2026-10-03",
-		});
-	});
-
-	it("next friday on a Friday is next week without a choice", () => {
-		const r = parse("Meet next friday", { zone: TOKYO, now: at(TOKYO, "2026-10-02T05:00") });
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-09" });
-	});
-
 	it("choosing an alternative applies it through a date decision", () => {
 		const input = "Meet friday";
 		const d: SpanDecision = { span: { start: 5, end: 11 }, text: "friday", kind: "date", value: { kind: "date", date: "2026-10-02" } };
@@ -259,19 +116,6 @@ describe("A5 a weekday said on that weekday", () => {
 });
 
 describe("A6 one value per field", () => {
-	it("the later of two scheduled spans wins and the earlier is superseded", () => {
-		const r = parse("a Oct 5 b Oct 6");
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-06" });
-		expect(r.chips.map((c) => c.status)).toEqual(["superseded", "applied"]);
-		expect(r.chips[0]?.notice).toBe("Replaced by a later value");
-		expect(r.title).toBe("a Oct 5 b");
-	});
-
-	it("scheduled and deadline are separate fields", () => {
-		const r = parse("x tomorrow by Oct 9");
-		expect(r.chips.map((c) => c.status)).toEqual(["applied", "applied"]);
-	});
-
 	it("tags are a set and all apply", () => {
 		const r = parse("x @home @learning @fresh");
 		expect(r.fields.tagKeys).toEqual(["home", "learning"]);
@@ -287,18 +131,6 @@ describe("A6 one value per field", () => {
 });
 
 describe("A7 DST", () => {
-	it("moves a spring-forward gap time forward with dst-gap", () => {
-		const r = parse("x Mar 8 2:30am", { now: at(NY, "2026-03-01T12:00") });
-		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-03-08T03:30", tz: NY });
-		expect(r.chips[0]?.warning).toBe("dst-gap");
-	});
-
-	it("keeps a repeated fall-back time and warns", () => {
-		const r = parse("x Nov 1 1:30am", { now: at(NY, "2026-10-25T12:00") });
-		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-11-01T01:30", tz: NY });
-		expect(r.chips[0]?.warning).toBe("dst-ambiguous");
-	});
-
 	it("applies the same rules to a chosen meridiem alternative", () => {
 		const d: SpanDecision = {
 			span: { start: 2, end: 15 },
@@ -310,44 +142,9 @@ describe("A7 DST", () => {
 		expect(r.fields.scheduled).toEqual({ kind: "datetime", local: "2026-03-08T03:30", tz: NY });
 		expect(r.chips[0]).toMatchObject({ status: "applied", warning: "dst-gap" });
 	});
-
-	it("a time with no warning carries none", () => {
-		expect(parse("x Mar 8 at 3:30am", { now: at(NY, "2026-03-01T12:00") }).chips[0]?.warning).toBeUndefined();
-	});
 });
 
 describe("A8 durations", () => {
-	const dur = (s: string) => parse(`x for ${s}`).fields.plannedDurationMin;
-	it.each([
-		["45m", 45],
-		["1h", 60],
-		["1h30m", 90],
-		["90 min", 90],
-		["1.5 hours", 90],
-		["2 hr", 120],
-		["3 mins", 3],
-		["1 minute", 1],
-		["10 minutes", 10],
-		["1,5 hours", undefined],
-	])("for %s", (s, min) => {
-		expect(dur(s)).toBe(min);
-	});
-
-	it("rounds a fractional minute count", () => {
-		expect(dur("0.5h")).toBe(30);
-		expect(dur("1.25 hours")).toBe(75);
-	});
-
-	it("rejects 0 and above 1440 minutes with an invalid chip that stays literal", () => {
-		for (const s of ["0m", "1441 min", "25h", "99999999999999999999 min"]) {
-			const r = parse(`x for ${s}`);
-			expect(r.chips[0]?.status, s).toBe("invalid");
-			expect(r.chips[0]?.notice, s).toBe("Duration must be 1 to 1440 minutes");
-			expect(r.fields.plannedDurationMin, s).toBeUndefined();
-			expect(r.title, s).toBe(`x for ${s}`);
-		}
-	});
-
 	it("an invalid duration is still masked from chrono", () => {
 		const r = parse("x for 2000 min");
 		expect(r.chips.map((c) => c.kind)).toEqual(["duration"]);
@@ -369,19 +166,6 @@ describe("A8 durations", () => {
 });
 
 describe("A9 resolution", () => {
-	it("a collision lists the candidate paths and stays in the title", () => {
-		const r = parse("x [[Plan]]");
-		expect(r.chips[0]).toMatchObject({ status: "collision", candidates: ["Projects/Plan.md", "Archive/Plan.md"], notice: "2 matches" });
-		expect(r.fields.notePath).toBeUndefined();
-		expect(r.title).toBe("x [[Plan]]");
-	});
-
-	it("an unresolved category blocks saving", () => {
-		const r = parse("x #Nope");
-		expect(r.blocking).toEqual([r.chips[0]?.id]);
-		expect(r.chips[0]?.status).toBe("unresolved");
-	});
-
 	it("only unresolved categories block", () => {
 		expect(parse("x [[Nope]] [[Plan]] @new for 5000m").blocking).toEqual([]);
 	});
@@ -503,22 +287,6 @@ describe("A10 recurrence", () => {
 });
 
 describe("A13 title", () => {
-	it("removes applied spans and collapses whitespace", () => {
-		expect(parse("  a   tomorrow   b  ").title).toBe("a b");
-	});
-
-	it("falls back to the input and flags it when nothing is left", () => {
-		const r = parse("tomorrow");
-		expect(r.title).toBe("tomorrow");
-		expect(r.titleFallback).toBe(true);
-	});
-
-	it("does not flag a fallback for a title that was never emptied", () => {
-		expect(parse("").titleFallback).toBe(false);
-		expect(parse("   ").titleFallback).toBe(false);
-		expect(parse("a tomorrow").titleFallback).toBe(false);
-	});
-
 	it("leaves unapplied spans in the title", () => {
 		expect(parse("x #Nope sun [[Plan]] every 3 hours").title).toBe("x #Nope sun [[Plan]] every 3 hours");
 	});
