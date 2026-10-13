@@ -2,6 +2,7 @@ import { type CompleteResult, DST_WARNING_TEXT, type TaskPatch } from "../app/Ta
 import { addDays } from "../domain/time";
 import { plural } from "../domain/text";
 import { quadrantOf } from "../domain/queries";
+import { isActiveSeries } from "../domain/tasks";
 import { type LocalDate, PRIORITIES, type Priority, type Task } from "../domain/types";
 import { PRIORITY_NAME, capitalize } from "./format";
 import { ICON } from "./icons";
@@ -48,8 +49,9 @@ export async function toggleComplete(host: UiHost, task: Task): Promise<void> {
 			return;
 		}
 		// An open repeating task completes its occurrence and stays; its subtasks come back unchecked, so
-		// there is nothing to confirm. The notice (Undo, "Complete occurrence") says what was done.
-		if (task.recurrence !== null && task.status === "open") {
+		// there is nothing to confirm. The notice (Undo, "Complete occurrence") says what was done. A series that
+		// has ended completes as a plain task.
+		if (isActiveSeries(task)) {
 			await completeOccurrence(host, task);
 			return;
 		}
@@ -208,7 +210,7 @@ export function taskMenu(host: UiHost, task: Task, today: string, onOpen: () => 
 		});
 	const quadrant = quadrantOf(task);
 	const repeating = task.recurrence !== null;
-	const activeSeries = repeating && task.status === "open";
+	const activeSeries = isActiveSeries(task);
 	return [
 		{ title: "Open details", icon: "panel-right", run: onOpen },
 		{

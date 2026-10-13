@@ -1,6 +1,6 @@
 import { DomainError } from "./errors";
 import { compareSortKeys } from "./sortKey";
-import { type Category, type ID, INBOX_ID, TAG_COLORS, type Task } from "./types";
+import { type Category, type ID, INBOX_ID, type Recurrence, TAG_COLORS, type Task } from "./types";
 
 // Pure task and category rules.
 
@@ -105,6 +105,15 @@ export function assertUniqueCategoryName(
 
 export function isOpen(task: Task): boolean {
 	return task.status === "open";
+}
+
+/**
+ * A repeating task whose repeat still runs: a series, not ended (`endedAt`), and open. Complete, Skip, Edit repeat
+ * and Stop repeating act on its occurrences. Any other task, a series that has ended included, is a plain task to
+ * them: a stopped series is completed, and one a hand edit or a sync left ended but open completes as a plain task.
+ */
+export function isActiveSeries(task: Task): task is Task & { recurrence: Recurrence } {
+	return task.recurrence !== null && task.recurrence.endedAt === null && task.status === "open";
 }
 
 /**
