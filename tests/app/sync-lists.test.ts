@@ -589,6 +589,39 @@ describe("deletions", () => {
 			expect(s.h.app.store.state.trash.size).toBe(0);
 		});
 
+		it("#119: a task gone from TickTick goes to Trash alone; its subtasks that are not gone stay as top-level tasks", async () => {
+			const s = await withTasks(3);
+			const [p, q] = s.ids as [string, string, string];
+			const qTt = s.ttIdOf("Errand 2");
+			// Q made a subtask in Logwell and not sent yet; R a new subtask never sent.
+			await s.h.app.tasks.setParent(q, p);
+			const r = await s.h.app.tasks.create({ title: "New step", parentId: p });
+			s.tt.remove(s.ttIdOf("Errand 1"));
+			await s.sync.sync();
+			expect([...s.h.app.store.state.trash.values()].flatMap((e) => e.tasks.map((t) => t.title))).toEqual(["Errand 1"]);
+			expect(s.h.app.store.state.tasks.get(q)).toMatchObject({ parentId: null, categoryId: s.listId });
+			expect(s.h.app.store.state.tasks.get(r.task.id)).toMatchObject({ parentId: null, categoryId: s.listId });
+			s.tick();
+			await s.sync.sync();
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tt.get(qTt)).toMatchObject({ title: "Errand 2", status: 0 });
+			expect(s.tt.live(s.projectId).map((t) => t.id)).toContain(qTt);
+			expect(s.tt.findByTitle("New step")?.parentId ?? "").toBe("");
+		});
+
+		it("#119: the confirmed Move to Trash keeps a subtask that is not gone, as a top-level task, and Undo nests it again", async () => {
+			const s = await withTasks(6);
+			for (const id of s.ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
+			const res = await s.sync.sync();
+			expect(res.needsConfirmation[0]!.tasks).toHaveLength(5);
+			// Added while the question is open.
+			const sub = await s.h.app.tasks.create({ title: "Keep me", parentId: s.ids[0]! });
+			await s.sync.trashMissing(s.listId, res.needsConfirmation[0]!.tasks.map((t) => t.id));
+			expect(s.h.app.store.state.tasks.get(sub.task.id)).toMatchObject({ parentId: null, categoryId: s.listId });
+			expect(await s.h.app.store.undo()).toBe(TICKTICK_TRASH_LABEL);
+			expect(s.h.app.store.state.tasks.get(sub.task.id)?.parentId).toBe(s.ids[0]);
+		});
+
 		it("keeps a deleted task's note", async () => {
 			const s = await withTasks(1);
 			s.h.notes.files.set("Task notes/Errand 1.md", "my notes");
