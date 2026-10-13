@@ -21,6 +21,7 @@ import {
 import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
 import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { AppStore } from "./store";
+import type { TaskIndex } from "./taskIndex";
 import type { Tx } from "./tx";
 import type { WriteResult } from "./writes";
 
@@ -34,6 +35,8 @@ export class CategoryService {
 	constructor(
 		private readonly store: AppStore,
 		private readonly ids: IdGenerator,
+		/** The task index, for the synced-list cap a delete's move into Inbox obeys. */
+		private readonly lists: TaskIndex,
 	) {}
 
 	list(): Category[] {
@@ -134,7 +137,10 @@ export class CategoryService {
 		return n;
 	}
 
-	/** Tasks move to Inbox in the same write; undo restores both. */
+	/**
+	 * Tasks move to Inbox in the same write; undo restores both. Refused when the move would take a synced Inbox past
+	 * its open-task cap.
+	 */
 	delete(id: ID): Promise<number> {
 		return this.store.run("Delete category", (tx) => {
 			if (id === INBOX_ID) throw new DomainError("InboxProtected", "The Inbox cannot be deleted.");
@@ -148,6 +154,7 @@ export class CategoryService {
 			}
 			for (const s of tx.all("sections")) if (s.categoryId === id) tx.remove("sections", s.id);
 			tx.remove("categories", id);
+			this.lists.assertSyncedRoom(tx);
 			return moved;
 		});
 	}

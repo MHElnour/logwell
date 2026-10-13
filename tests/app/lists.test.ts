@@ -5,6 +5,7 @@ import { isDomainError } from "../../src/domain/errors";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
 import { type AppHarness, appHarness, makeReadOnly } from "./harness";
+import { makeTask } from "../persistence/fixtures";
 
 describe("sections", () => {
 	// SectionService, integrity rules, grouping, import and list creation.
@@ -386,6 +387,33 @@ describe("categories (CAT-01..07)", () => {
 		expect(h.app.store.state.categories.get(cat.id)?.name).toBe("Study");
 		expect(h.app.store.state.tasks.get(t1.id)?.categoryId).toBe(cat.id);
 		expect(h.app.store.state.tasks.get(t2.id)?.categoryId).toBe(cat.id);
+	});
+
+	it("#128: deleting a list refuses to move open tasks into a synced Inbox past 999 open tasks, and writes nothing", async () => {
+		const h = await appHarness();
+		const cat = await h.app.categories.create("Study");
+		const read = (await h.app.tasks.create({ title: "Read", categoryId: cat.id })).task;
+		const done = (await h.app.tasks.create({ title: "Done", categoryId: cat.id })).task;
+		await h.app.tasks.complete(done.id);
+		const at = h.clock.now().toISOString();
+		await h.app.store.run(
+			"Seed",
+			(tx) => {
+				for (let i = 0; i < 999; i++) tx.put("tasks", makeTask(`inbox-${i}`, { title: `Open ${i}`, sortKey: `a${i.toString(36).padStart(3, "0")}` }));
+				tx.put("syncLinks", { kind: "list", logwellId: INBOX_ID, ttId: "p-inbox", ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: at, modifiedAt: at });
+			},
+			{ undoable: false },
+		);
+		const before = h.app.store.state;
+		await expect(h.app.categories.delete(cat.id)).rejects.toMatchObject({
+			code: "SyncedListFull",
+			message: "Can't add the task: Inbox is synced with TickTick and already has 999 open tasks.",
+		});
+		expect(h.app.store.state).toBe(before);
+		// With no open task to move in, the delete goes ahead.
+		await h.app.tasks.complete(read.id);
+		expect(await h.app.categories.delete(cat.id)).toBe(2);
+		expect(h.app.store.state.categories.has(cat.id)).toBe(false);
 	});
 
 	it("reorders categories", async () => {

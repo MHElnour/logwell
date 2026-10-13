@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#128) Fixed deleting a list moving its open tasks into an Inbox synced with TickTick past the limit of 999 open tasks. The delete is now refused with the same message as other moves into a full list.
 - (#139) Fixed a false conflict copy and Keep mine / Keep theirs notice on another device after a save reported an error but reached the file anyway: the retried save now continues from the version that landed.
 - (#127) Fixed deleting a parent tag merging a child tag into an older tag of the same name, such as `home/calls` into `calls`, which took the child's color and joined both tags' tasks. The delete is now refused with the message a rename gives, and nothing changes.
 - (#125) Fixed an overdue task you tick in Today jumping to the Today group while its check plays. It now stays under Overdue until it leaves, and on the board the Overdue column no longer disappears and shifts the other columns for that moment.
