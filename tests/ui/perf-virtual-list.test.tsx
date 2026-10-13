@@ -679,9 +679,7 @@ describe("collapse", () => {
 		await m.draw(groups(), { sections: sections() });
 		expect(rowOf(m, 2000)).toBeNull();
 		collapsed = true;
-		const start = performance.now();
 		await m.draw(groups(), { sections: sections() });
-		expect(performance.now() - start).toBeLessThan(500);
 		// "No section" shows only its heading; "Later" now starts right under it and draws its first rows.
 		expect(rowOf(m, 0)).toBeNull();
 		const first = rowOf(m, 2000);

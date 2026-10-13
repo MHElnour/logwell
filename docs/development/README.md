@@ -16,7 +16,7 @@ Tests are grouped by feature: one file per feature or part of one (for example `
 - A feature gets a second file only when its tests need different module mocks (`vi.mock`), which apply to a whole file (for example the schema readers `tests/persistence/older-reader-v2.test.ts` to `-v5`).
 - When files are merged, each keeps its hooks, helpers and state inside its own top-level `describe`, and the merged file uses `// @vitest-environment happy-dom` if any part needs a DOM.
 - A test that fakes timers runs what is still pending (`await vi.runOnlyPendingTimersAsync()`) before `vi.useRealTimers()`, and every prototype or global patch is restored in the matching after-hook, so no test depends on the order of the others.
-- Unit tests never go into the timed files (`tests/perf/`, `tests/ui/performance.test.tsx`, `tests/ui/perf-virtual-list.test.tsx`).
+- Unit tests never go into the timed files (`tests/perf/`, `tests/ui/performance.test.tsx`). A timed test compares times measured in the same run or logs them, never a fixed number of milliseconds (`tests/perf/measure.ts`).
 
 The unit suite runs a sample of the Quick Add repeat grammar grid (`tests/parsing/repeat-grammar-grid.ts`). The whole grid, every repeat form with every title, separator and follower in two zones (about 41,000 cases), runs on demand:
 
