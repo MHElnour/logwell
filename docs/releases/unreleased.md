@@ -49,6 +49,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#130) Fixed text typed in Quick Add while the previous task was still being saved being wiped when the save finished. It now stays in the field for the next task.
 - (#105) Fixed Quick Add dropping a typed `until` date after **Never** was picked as the repeat: the chip showed it as applied, but the task was saved with no end and no deadline. With **Never** picked, `until Dec 1` is now a deadline, as on a task that does not repeat.
 - (#124) Fixed changing the date of a repeating task after **Stop repeating** saying it now repeats from that date while it stayed completed and did not repeat. A repeat that has ended now keeps its date and the notice says to reopen the task first.
 - (#107) Fixed a drag in Today or Upcoming changing the order of tasks you did not drag in their own list: a task with no date between two dragged ones could end up on the other side. Now only the task you drag moves, in every view.
