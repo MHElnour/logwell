@@ -45,6 +45,8 @@ Tip: change synced tasks in one place, such as TickTick. Both sides stay editabl
 
 Choose **Unlink from TickTick** in the list's menu, or **Unlink** in settings. Every task stays on both sides.
 
+Deleting a linked list unlinks it too, and its TickTick list can be linked again. Its tasks move to the Inbox, so the next sync moves them to the Inbox's TickTick list when the Inbox is linked, and deletes them in TickTick when it is not. Undo of the delete links the list again.
+
 ## What syncs
 
 Title, list, section, subtask parent, priority, open or completed, tags and one date sync both ways. Urgent, important, **Duration (min)** and order stay in Logwell. Reminders and attachments stay in TickTick.
@@ -75,7 +77,7 @@ Sync writes only the notes it created, and never deletes or renames them. If you
 - Logwell pulls when Obsidian opens and at the interval you set, 5 to 60 minutes.
 - **Sync now**, or the command **Sync with TickTick now**, syncs at once.
 
-A sync cannot be undone. While the database is read-only, sync waits.
+A sync cannot be undone. While the database is read-only, sync waits. If the database turns read-only or Obsidian closes right after TickTick took a new task, this device remembers the task, and the next sync links it to its TickTick copy instead of sending it again.
 
 ## Change a task on both sides
 
@@ -103,6 +105,7 @@ A failure stops the sync with a notice that names the list. Nothing retries in a
 | "TickTick: too many requests. Sync will try again at the next pull." | Wait. |
 | "…the API token was refused… Replace it in Settings > Logwell." | Choose **Open settings** and choose another token. |
 | "…has 99 open tasks, the limit of TickTick's free plan." | Complete or move tasks in TickTick, then choose **Sync now**. |
+| "The TickTick list linked to "Work" no longer exists." | The list was deleted in TickTick. Choose **Unlink**, then link the list again if you want it synced. The other lists keep syncing, and nothing in this list changes until you unlink it. |
 | "…no answer… (network error)." | Check your connection. |
 
 See also [Troubleshooting](troubleshooting.md).

@@ -16,6 +16,8 @@ class FakeHost extends U1Host {
 	chooseAnswers: unknown[] = [];
 	nextNote: string | null = null;
 	readonly presets: QuickAddPreset[] = [];
+	/** Set to make the next note previews fail, as a vault read that throws. */
+	renderFailure: Error | null = null;
 	override async choose<T>(_t: string, message: string, buttons: ButtonSpec<T>[]): Promise<T | null> {
 		this.messages.push(message);
 		const answer = this.chooseAnswers.shift();
@@ -29,6 +31,7 @@ class FakeHost extends U1Host {
 		this.presets.push(preset);
 	}
 	override async renderNote(path: string, el: HTMLElement) {
+		if (this.renderFailure !== null) throw this.renderFailure;
 		el.textContent = this.h.notes.files.get(path) ?? "";
 		return () => undefined;
 	}
@@ -55,6 +58,19 @@ describe("app UI (smoke)", () => {
 		expect(byText(root, ".cp-task-row", "Buy milk")).toBeDefined();
 		expect(h.app.store.state.tasks.size).toBe(1);
 		expect(h.notes.writes).toEqual([]);
+	});
+
+	it("#134: a note preview that fails to render says which note, instead of failing silently", async () => {
+		const { h, host, root } = await mount();
+		h.notes.files.set("Plan.md", "Plan body text");
+		const { task } = await h.app.tasks.create({ title: "Plan the trip" });
+		await h.app.tasks.linkNote(task.id, "Plan.md");
+		host.renderFailure = new Error("EIO");
+		byText(root, ".cp-sidebar-item", "Inbox").click();
+		await settle();
+		byText(root, ".cp-task-row", "Plan the trip").click();
+		await settle();
+		expect(host.messages).toContain("Could not show the note Plan.md: EIO");
 	});
 
 	it("AS-02 / TASK-02 / AS-06: details, title restore, note link and missing note", async () => {
@@ -153,6 +169,22 @@ describe("app UI (smoke)", () => {
 		await settle();
 		expect(root.querySelector(".cp-main-title")?.textContent).toBe("Inbox");
 		expect(root.querySelector<HTMLTextAreaElement>(".cp-details-title")?.value).toBe("Beta");
+	});
+
+	it("UI-01: ArrowDown moves to the next row and Enter opens its details", async () => {
+		const { h, root } = await mount();
+		await h.app.tasks.create({ title: "First" });
+		await h.app.tasks.create({ title: "Second" });
+		byText(root, ".cp-sidebar-item", "Inbox").click();
+		await settle();
+		const first = byText(root, ".cp-task-row", "First");
+		first.focus();
+		keydown(first, "ArrowDown");
+		const second = byText(root, ".cp-task-row", "Second");
+		expect(document.activeElement).toBe(second);
+		keydown(second, "Enter");
+		await settle();
+		expect(root.querySelector<HTMLTextAreaElement>(".cp-details-title")?.value).toBe("Second");
 	});
 
 	it("deletes with an undo notice and shows the batch in Trash", async () => {

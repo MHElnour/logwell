@@ -1,5 +1,5 @@
 import { DomainError, isDomainError } from "../domain/errors";
-import { compareSortKeys, keyBetween } from "../domain/sortKey";
+import { keyBetween } from "../domain/sortKey";
 import { TagNames, normalizeTagKey, tagDisplayPath, tagNamesOf, tagPath } from "../domain/tags";
 import { categoryNameKey, requireTitle, subtasksOf } from "../domain/tasks";
 import {
@@ -31,13 +31,15 @@ import {
 	type TtTaskWrite,
 } from "../domain/ticktick/types";
 import { type ID, type Instant, type SyncLink, type Task, paletteColor, syncLinkId } from "../domain/types";
-import type { DbData } from "../persistence/schema";
-import { type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorKind } from "./ports";
+import { type DbData, storableDbId } from "../persistence/schema";
+import { MemoryTickTickPending, type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorKind, type TickTickPending, type TickTickPendingPort } from "./ports";
 import type { SectionService } from "./SectionService";
 import type { AppStore } from "./store";
 import type { TaskInput, TaskPatch, TaskService } from "./TaskService";
-import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "./taskIndex";
+import type { TaskIndex } from "./taskIndex";
 import { INBOX_ALIAS, InboxAliasApi, canonicalProjectId } from "./tickTickInbox";
+import { assertLinkable, countPushable, markGoneTaskLink } from "./tickTickLink";
+import { type LinkedList, linkedLists } from "./syncMarks";
 import { type NotePush, SyncNotes, type SyncNotesDeps, TICKTICK_NOTE_WARNING, ownsNote } from "./syncNotes";
 import { type StoredNoteBase, docFromTickTick, isChecklist, sameDoc, storedBase, ttNoteWrite } from "../domain/ticktick/noteText";
 import { sameLines } from "../domain/textMerge";
@@ -108,8 +110,11 @@ const NO_SECTION_HASH = EMPTY_HASHES.section!;
 const OPEN_HASH = EMPTY_HASHES.status!;
 const EMPTY_TAGS = tagsHash([]);
 
-/** `list-limit`: TickTick refused a write to a list at its free plan's open-task limit. */
-export type SyncFailureKind = TickTickErrorKind | "list-limit";
+/**
+ * `list-limit`: TickTick refused a write to a list at its free plan's open-task limit. `list-gone`: the TickTick list a
+ * list is linked to no longer exists (HTTP 404 for its data); that list is skipped and the others sync.
+ */
+export type SyncFailureKind = TickTickErrorKind | "list-limit" | "list-gone";
 
 /** Why a sync stopped: the list it was working on and the reason. */
 export interface SyncFailure {
@@ -155,17 +160,17 @@ export interface FirstSyncPlan {
 	toTickTick: number;
 }
 
-interface LinkedList {
-	listId: ID;
-	name: string;
-	link: SyncLink;
-}
-
-interface ListPull extends LinkedList {
+interface ListPull extends Omit<LinkedList, "link"> {
 	projectId: string;
 	data: TtProjectData;
 	/** Its completed tasks needed more than one read: `lastPulledAt` is written even by a quiet sync. */
 	splitCompleted: boolean;
+	/**
+	 * A project no list links any more (its list was deleted) that task links still name, keyed by its project id and
+	 * named as in TickTick. Its data holds only those tasks: they leave it like tasks moved out of a linked list, and
+	 * nothing else comes from it.
+	 */
+	leaving?: true;
 }
 
 /** A Logwell task and its TickTick task after the pull: what the push compares. */
@@ -187,6 +192,8 @@ interface PullPlan {
 	/** Links to mark `excluded`: the task repeats on one side. */
 	exclude: Set<string>;
 	newLinks: LinkDraft[];
+	/** Entries of `pendingCreates` (list, task) the pull settled: forgotten once the links command has committed. */
+	settled: [ID, ID][];
 	needsConfirmation: PendingTrash[];
 	/** Logwell tasks and sections written. */
 	written: number;
@@ -197,6 +204,26 @@ interface PullPlan {
 interface AnsweredCreate {
 	ttId: string;
 	base: Record<string, string>;
+}
+
+/** `pendingCreates` from what this device stored (`TickTickPending`); an entry that cannot be read is left out. */
+function readPending(stored: unknown): Map<ID, Map<ID, AnsweredCreate | null>> {
+	const out = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	const lists = (stored as { lists?: unknown } | null)?.lists;
+	if (typeof lists !== "object" || lists === null) return out;
+	const isHashes = (v: unknown): v is Record<string, string> => typeof v === "object" && v !== null && Object.values(v).every((h) => typeof h === "string");
+	for (const [listId, entries] of Object.entries(lists)) {
+		if (typeof entries !== "object" || entries === null) continue;
+		const pending = new Map<ID, AnsweredCreate | null>();
+		for (const [logwellId, a] of Object.entries(entries as Record<string, unknown>)) {
+			if (a === null) pending.set(logwellId, null);
+			else if (typeof a === "object" && typeof (a as AnsweredCreate).ttId === "string" && isHashes((a as AnsweredCreate).base)) {
+				pending.set(logwellId, { ttId: (a as AnsweredCreate).ttId, base: { ...(a as AnsweredCreate).base } });
+			}
+		}
+		if (pending.size > 0) out.set(listId, pending);
+	}
+	return out;
 }
 
 type LinkDraft = Pick<SyncLink, "kind" | "logwellId" | "ttId" | "ttProjectId" | "etag" | "base"> & {
@@ -381,10 +408,13 @@ export class SyncService {
 	 * (`maybePartial`: the answer and the new id were lost; value null), matched by title on the next sync only;
 	 * or TickTick answered but writing the link failed (the store turned read-only; value: TickTick's id and the
 	 * hashes that were sent), matched by that id whatever the copy's status, and looked up by id if the pull does
-	 * not see it. The hashes sent are the base, so later edits on either side merge as usual. In memory only: after a
-	 * reload such a task can come in twice.
+	 * not see it. The hashes sent are the base, so later edits on either side merge as usual. Kept on this device per
+	 * database (`pendingPort`), so a restart does not lose it, and an entry is forgotten only once the command that
+	 * links its task has committed (or once its copy is gone).
 	 */
-	private readonly pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	private pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	/** The database id `pendingCreates` was loaded for: null for none that may be stored under, undefined before a load. */
+	private pendingOf: string | null | undefined = undefined;
 	/** TickTick ids a lookup found gone, kept for the next sync while their tasks stay missing and undecided. */
 	private goneInTickTick = new Set<string>();
 
@@ -393,6 +423,38 @@ export class SyncService {
 		const pending = this.pendingCreates.get(listId) ?? new Map<ID, AnsweredCreate | null>();
 		pending.set(logwellId, answer);
 		this.pendingCreates.set(listId, pending);
+		this.savePending();
+	}
+
+	/** Forgets entries of `pendingCreates` (list, task) and saves what is left. */
+	private forget(entries: readonly (readonly [ID, ID])[]): void {
+		if (entries.length === 0) return;
+		for (const [listId, logwellId] of entries) this.pendingCreates.get(listId)?.delete(logwellId);
+		this.savePending();
+	}
+
+	/** Loads `pendingCreates` from this device when the open database is another one than it was loaded for. */
+	private loadPending(): void {
+		const dbId = storableDbId(this.store.state.meta.dbId, this.store.readOnlyState !== null);
+		if (dbId === this.pendingOf) return;
+		this.pendingOf = dbId;
+		this.pendingCreates = readPending(dbId === null ? null : this.pendingPort.load(dbId));
+	}
+
+	/** Saves `pendingCreates` under the database it was loaded for. A storage that fails keeps it in memory only. */
+	private savePending(): void {
+		const dbId = this.pendingOf;
+		if (dbId === null || dbId === undefined) return;
+		const lists: TickTickPending["lists"] = {};
+		for (const [listId, pending] of this.pendingCreates) {
+			if (pending.size === 0) this.pendingCreates.delete(listId);
+			else lists[listId] = Object.fromEntries(pending);
+		}
+		try {
+			this.pendingPort.save(dbId, Object.keys(lists).length === 0 ? null : { v: 1, lists });
+		} catch (err) {
+			console.warn("Logwell: could not save the TickTick tasks waiting to be linked.", err);
+		}
 	}
 
 	private readonly index: TaskIndex;
@@ -410,6 +472,8 @@ export class SyncService {
 		private readonly settings: Pick<SettingsPort, "zone">,
 		api: TickTickApi,
 		notes?: SyncNotesDeps,
+		/** Where `pendingCreates` is kept on this device. */
+		private readonly pendingPort: TickTickPendingPort = new MemoryTickTickPending(),
 	) {
 		this.index = tasks.lists;
 		this.notes = notes === undefined ? null : new SyncNotes(notes, store, tasks, { content: TICKTICK_SYNC_LABEL, links: TICKTICK_LINKS_LABEL });
@@ -456,10 +520,7 @@ export class SyncService {
 						const trashed = trashedIds(tx);
 						for (const id of ids) {
 							this.unmarked.delete(id);
-							const link = tx.get("syncLinks", syncLinkId("task", id));
-							if (link === undefined || link.pendingDelete === true) continue;
-							if (tx.get("tasks", id) !== undefined || trashed.has(id)) continue;
-							tx.put("syncLinks", { ...link, pendingDelete: true, modifiedAt: tx.now });
+							if (!trashed.has(id)) markGoneTaskLink(tx, id);
 						}
 					},
 					{ undoable: false },
@@ -520,14 +581,10 @@ export class SyncService {
 
 	/** The first-sync preview. Writes nothing. */
 	async planFirstSync(listId: ID, projectId: string): Promise<FirstSyncPlan> {
-		this.assertLinkable(this.store.state, listId, projectId);
+		assertLinkable(this.store.state, this.index, listId, projectId);
 		const data = await this.api.getProjectData(projectId);
 		assertTaskProject(data);
-		let toTickTick = 0;
-		const tasks = this.store.state.tasks;
-		for (const t of this.index.tasksOf((id) => tasks.get(id), listId)) {
-			if (t.status === "open" && t.recurrence === null) toTickTick++;
-		}
+		const toTickTick = countPushable(this.store.state, this.index, listId);
 		const toLogwell = data.tasks.filter((t) => statusFromTt(t.status) === "open" && isSyncable(t)).length;
 		return { listId, projectId, toLogwell, toTickTick };
 	}
@@ -538,7 +595,7 @@ export class SyncService {
 	 */
 	applyFirstSync(listId: ID, projectId: string): Promise<SyncResult> {
 		return this.serial(async () => {
-			this.assertLinkable(this.store.state, listId, projectId);
+			assertLinkable(this.store.state, this.index, listId, projectId);
 			let data: TtProjectData;
 			try {
 				data = await this.api.getProjectData(projectId);
@@ -553,7 +610,7 @@ export class SyncService {
 			await this.store.run(
 				TICKTICK_LINKS_LABEL,
 				(tx) => {
-					this.assertLinkable(tx.base, listId, projectId);
+					assertLinkable(tx.base, this.index, listId, projectId);
 					tx.put("syncLinks", {
 						kind: "list",
 						logwellId: listId,
@@ -641,7 +698,8 @@ export class SyncService {
 				},
 				{ undoable: false },
 			);
-			this.pendingCreates.delete(listId);
+			this.loadPending();
+			if (this.pendingCreates.delete(listId)) this.savePending();
 			return { wrote, label: TICKTICK_UNLINK_LABEL };
 		});
 	}
@@ -703,48 +761,34 @@ export class SyncService {
 
 	// -- checks --------------------------------------------------------------------------------------------------
 
-	private assertLinkable(state: DbData, listId: ID, projectId: string): void {
-		const list = state.categories.get(listId);
-		if (list === undefined) throw new DomainError("NotFound", "The list no longer exists.");
-		if (state.syncLinks.has(syncLinkId("list", listId))) throw new DomainError("InvalidValue", "This list is already linked to TickTick.");
-		// Completed tasks do not count.
-		if (this.index.openCount(listId) > SYNCED_LIST_OPEN_MAX) {
-			throw new DomainError(
-				"SyncedListFull",
-				`Can't link the list: ${list.name} has more than ${SYNCED_LIST_OPEN_MAX} open tasks, the most a list synced with TickTick can hold.`,
-			);
-		}
-		for (const l of state.syncLinks.values()) {
-			if (l.kind === "list" && canonicalProjectId(l.ttId) === canonicalProjectId(projectId)) throw new DomainError("InvalidValue", "That TickTick list is already linked to another list.");
-		}
-	}
-
-	/** The linked lists whose Logwell list exists, in list order. A link whose list has not arrived is skipped. */
-	private linkedLists(state: DbData): LinkedList[] {
-		const out: LinkedList[] = [];
-		for (const link of state.syncLinks.values()) {
-			if (link.kind !== "list") continue;
-			const list = state.categories.get(link.logwellId);
-			if (list !== undefined) out.push({ listId: list.id, name: list.name, link });
-		}
-		return out.sort((a, b) => compareSortKeys(state.categories.get(a.listId)!.sortKey, state.categories.get(b.listId)!.sortKey));
-	}
 
 	// -- one sync ------------------------------------------------------------------------------------------------
 
 	/**
-	 * A list link written with the Inbox's real id (`inbox<digits>`, by an early build) is the same project as `inbox`:
-	 * the links of that list are rewritten to the alias, in a links command that is not undoable.
+	 * Heals the list links, in a links command that is not undoable. A list link written with the Inbox's real id
+	 * (`inbox<digits>`, by an early build) is the same project as `inbox`: the links of that list are rewritten to the
+	 * alias. A list link whose list is gone (deleted by an earlier version, which left its links) goes with its sections'
+	 * links; its tasks keep theirs, so they leave its project like the tasks of a list deleted now.
 	 */
-	private async healInboxLinks(): Promise<void> {
-		const links = this.store.state.syncLinks;
+	private async healListLinks(): Promise<void> {
+		const { syncLinks: links, categories } = this.store.state;
 		let stale = false;
-		for (const l of links.values()) if (l.kind === "list" && l.ttId !== canonicalProjectId(l.ttId)) stale = true;
+		for (const l of links.values()) if (l.kind === "list" && (l.ttId !== canonicalProjectId(l.ttId) || !categories.has(l.logwellId))) stale = true;
 		if (!stale) return;
 		await this.store.run(
 			TICKTICK_LINKS_LABEL,
 			(tx) => {
+				const gone = new Set<string>();
 				for (const l of tx.all("syncLinks")) {
+					if (l.kind !== "list" || tx.get("categories", l.logwellId) !== undefined) continue;
+					gone.add(canonicalProjectId(l.ttId));
+					tx.remove("syncLinks", syncLinkId("list", l.logwellId));
+				}
+				for (const l of tx.all("syncLinks")) {
+					if (l.kind === "section" && tx.get("sections", l.logwellId) === undefined && gone.has(canonicalProjectId(l.ttProjectId ?? ""))) {
+						tx.remove("syncLinks", syncLinkId("section", l.logwellId));
+						continue;
+					}
 					const ttId = l.kind === "list" ? canonicalProjectId(l.ttId) : l.ttId;
 					const ttProjectId = l.ttProjectId === null ? null : canonicalProjectId(l.ttProjectId);
 					if (ttId !== l.ttId || ttProjectId !== l.ttProjectId) tx.put("syncLinks", { ...l, ttId, ttProjectId, modifiedAt: tx.now });
@@ -785,13 +829,15 @@ export class SyncService {
 	private async runSync(): Promise<SyncResult> {
 		await this.marking;
 		if (this.unmarked.size > 0) await this.markRemoved([...this.unmarked]);
-		await this.healInboxLinks();
+		await this.healListLinks();
+		this.loadPending();
 		const startedAt: Instant = this.store.now();
 		/** The state when the sync started: unchanged at the end means the sync wrote nothing. */
 		const stateAtStart = this.store.state;
-		const lists = this.linkedLists(this.store.state);
+		const lists = linkedLists(this.store.state);
 
-		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written.
+		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written, except one
+		// that no longer exists (HTTP 404), which stops its list only.
 		const pulls: ListPull[] = [];
 		const seen = new Map<string, TtTask>();
 		/** Some list's completed tasks may lack some: a cut answer that could not be narrowed (TickTick sync rule 23). */
@@ -801,6 +847,9 @@ export class SyncService {
 		 * first completed read even past PULL_REQUESTS_MAX, so a list is never skipped; only splits stop there.
 		 */
 		const spent = { requests: 0 };
+		/** The projects of linked lists whose TickTick list no longer exists, and their failures. */
+		const held = new Set<string>();
+		const gone: SyncFailure[] = [];
 		for (const l of lists) {
 			const projectId = canonicalProjectId(l.link.ttId);
 			try {
@@ -823,10 +872,36 @@ export class SyncService {
 				// The open tasks are read first and win: a task reopened after its completion is open.
 				for (const t of data.tasks) seen.set(t.id, t);
 			} catch (err) {
-				return failed(failureOf(err, l));
+				if (!isNotFound(err)) return failed(failureOf(err, l));
+				// A TickTick list that no longer exists stops its list only: nothing of it is pulled or pushed, and its
+				// tasks and links stay as they are until the list is unlinked.
+				held.add(projectId);
+				gone.push({ listId: l.listId, listName: l.name, kind: "list-gone", message: `The TickTick list linked to "${l.name}" no longer exists.`, retryAfterSec: null });
 			}
 		}
 		const listOfProject = new Map(pulls.map((p) => [p.projectId, p]));
+		// 1b. The projects of deleted lists that task links still name: read once, for the copies of those tasks. Gone
+		// in TickTick too, their copies went with them: only the links go.
+		const leavingLinks = new Map<string, Map<string, ID>>();
+		for (const link of this.store.state.syncLinks.values()) {
+			if (link.kind !== "task" || link.mode === "localOnly" || link.ttProjectId === null || listOfProject.has(link.ttProjectId) || held.has(link.ttProjectId)) continue;
+			const group = leavingLinks.get(link.ttProjectId) ?? new Map<string, ID>();
+			group.set(link.ttId, syncLinkId("task", link.logwellId));
+			leavingLinks.set(link.ttProjectId, group);
+		}
+		const dropLinks = new Set<string>();
+		for (const [projectId, group] of leavingLinks) {
+			try {
+				const data = await this.api.getProjectData(projectId);
+				spent.requests++;
+				const tasks = data.tasks.filter((t) => group.has(t.id));
+				listOfProject.set(projectId, { listId: projectId, name: data.project.name, projectId, data: { ...data, tasks }, splitCompleted: false, leaving: true });
+				for (const t of tasks) seen.set(t.id, t);
+			} catch (err) {
+				if (!isNotFound(err)) return failed(failureOf(err, null));
+				for (const id of group.values()) dropLinks.add(id);
+			}
+		}
 
 		// 2. Linked tasks expected open but not seen: one lookup each. Completed or won't do there is completed here;
 		// not found, or open but missing from the project, is missing. At most LOOKUP_MAX in all, and none past
@@ -900,6 +975,7 @@ export class SyncService {
 			// Creates that TickTick answered but whose link was not written: their copy is looked up by its id when
 			// the pull did not see it (completed outside the window). Gone there, the entry is dropped and the
 			// Logwell task goes up again as new.
+			const goneCopies: [ID, ID][] = [];
 			for (const [listId, pending] of this.pendingCreates) {
 				const pull = pulls.find((p) => p.listId === listId);
 				if (pull === undefined) continue;
@@ -910,13 +986,17 @@ export class SyncService {
 						const tt = await this.api.getTask(pull.projectId, ttId);
 						lookedUp.set(ttId, tt);
 						if (statusFromTt(tt.status) === "completed") seen.set(tt.id, tt);
-						else pending.delete(logwellId);
+						else goneCopies.push([listId, logwellId]);
 					} catch (err) {
-						if (isNotFound(err)) pending.delete(logwellId);
-						else return failed(failureOf(err, pull));
+						if (!isNotFound(err)) {
+							this.forget(goneCopies);
+							return failed(failureOf(err, pull));
+						}
+						goneCopies.push([listId, logwellId]);
 					}
 				}
 			}
+			this.forget(goneCopies);
 		}
 		// A cut completed answer may lack completions, which would read as gone: no Trash verdict this sync, in any list.
 		// Everything else is applied and the window moves on; a hidden completion is found by a lookup at a later sync,
@@ -938,13 +1018,13 @@ export class SyncService {
 		if (this.stopped) return failed(stoppedFailure());
 
 		// 3. The content command: everything pulled, one write.
-		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, waiting, listOfProject, remoteTags.known), {
+		const plan = await this.store.run(TICKTICK_SYNC_LABEL, (tx) => this.applyPull(tx, pulls, seen, missing, waiting, listOfProject, held, remoteTags.known), {
 			undoable: false,
 		});
 		const result: SyncResult = {
-			ok: true,
-			error: null,
-			failures: [],
+			ok: gone.length === 0,
+			error: gone[0] ?? null,
+			failures: gone,
 			content: { wrote: plan.wrote, label: TICKTICK_SYNC_LABEL },
 			pulled: plan.written,
 			pushed: 0,
@@ -969,6 +1049,8 @@ export class SyncService {
 				{ undoable: false },
 			);
 		}
+		// Linked now, the creates the pull settled are forgotten. A command that failed above keeps them for the next sync.
+		this.forget(plan.settled);
 
 		// 4b. Description notes, between the pull and the push (vault I/O, outside any command).
 		let notePushes: NotePush[] = [];
@@ -982,7 +1064,7 @@ export class SyncService {
 
 		// 5. Push, 6. bookkeeping (always, with what TickTick confirmed).
 		const drafts = new Map<string, LinkDraft>();
-		const removeLinks = new Set(plan.removeLinks);
+		const removeLinks = new Set([...plan.removeLinks, ...dropLinks]);
 		try {
 			await this.push(plan, pulls, listOfProject, seen, lookedUp, drafts, removeLinks, result, remoteTags, notePushes);
 		} catch (err) {
@@ -1005,11 +1087,13 @@ export class SyncService {
 		missing: ReadonlySet<string>,
 		waiting: ReadonlySet<ID>,
 		listOfProject: Map<string, ListPull>,
+		/** The projects of linked lists whose TickTick list no longer exists: their tasks wait. */
+		held: ReadonlySet<string>,
 		remoteTags: ReadonlyMap<string, TtTag> | null,
 	): PullPlan {
 		const zone = this.settings.zone();
 		const tags = pullTags(tx, remoteTags);
-		const plan: PullPlan = { pairs: [], deletes: [], removeLinks: new Set(), newLinks: [], exclude: new Set(), needsConfirmation: [], written: 0, wrote: false };
+		const plan: PullPlan = { pairs: [], deletes: [], removeLinks: new Set(), newLinks: [], settled: [], exclude: new Set(), needsConfirmation: [], written: 0, wrote: false };
 		const linkByTt = new Map<string, SyncLink>();
 		const sectionByColumn = new Map<string, ID | null>();
 		const sectionLinkByColumn = new Map<string, SyncLink>();
@@ -1081,11 +1165,15 @@ export class SyncService {
 		};
 		const keys = new SortKeys(tx, this.index);
 
+		// Creates not linked yet, as this pull settles them; what it settles goes in `plan.settled`, forgotten only once
+		// the links are written.
+		const pendingCreates = new Map([...this.pendingCreates].map(([listId, pending]) => [listId, new Map(pending)]));
+
 		// Creates that TickTick answered but whose link was not written (the store turned read-only): linked now by
 		// TickTick's id, whatever the copy's status, with Logwell's values as the base, so a change made there since
 		// (a completion) is pulled like any other.
 		const answered = new Set<string>();
-		for (const pending of this.pendingCreates.values()) {
+		for (const pending of pendingCreates.values()) {
 			for (const [logwellId, answer] of pending) {
 				if (answer === null) continue;
 				const tt = seen.get(answer.ttId);
@@ -1121,7 +1209,7 @@ export class SyncService {
 		}
 		fresh.sort((a, b) => (a.tt.parentId ? 1 : 0) - (b.tt.parentId ? 1 : 0));
 		for (const { tt, pull } of fresh) {
-			const pending = this.pendingCreates.get(pull.listId);
+			const pending = pendingCreates.get(pull.listId);
 			const match = pending === undefined ? undefined : this.matchPending(tx, pending, pull.listId, ttTitle(tt.title));
 			if (match !== undefined) {
 				pending!.delete(match.id);
@@ -1144,8 +1232,10 @@ export class SyncService {
 			plan.pairs.push({ logwellId: task.id, ttId: tt.id, ttProjectId: tt.projectId, etag: tt.etag ?? null, ttHashes: ttHashes(tt, lwHashes(task, tags.names)) });
 		}
 		// Title matches are for this sync only; an answered create waits until its copy is seen (looked up above).
-		for (const pending of this.pendingCreates.values()) {
-			for (const [logwellId, answer] of pending) if (answer === null) pending.delete(logwellId);
+		for (const [listId, pending] of this.pendingCreates) {
+			for (const [logwellId, answer] of pending) {
+				if (answer === null || pendingCreates.get(listId)?.has(logwellId) !== true) plan.settled.push([listId, logwellId]);
+			}
 		}
 
 		// Linked tasks, parents first so a moved parent takes its subtasks along.
@@ -1214,18 +1304,23 @@ export class SyncService {
 				plan.exclude.add(id);
 				continue;
 			}
-			if (!listOfProject.has(this.projectOfList(tx, t.categoryId) ?? "")) {
+			const project = this.projectOfList(tx, t.categoryId) ?? "";
+			// Moved to a list whose TickTick list no longer exists: it waits with that list's tasks.
+			if (held.has(project)) continue;
+			if (!listOfProject.has(project)) {
 				// Moved to a list that is not linked: it leaves TickTick.
 				leave(link, id);
 				continue;
 			}
 			const tt = seen.get(link.ttId);
 			if (tt === undefined) {
-				// Only a task TickTick confirmed gone; one not looked up yet waits for the next sync.
+				// Only a task TickTick confirmed gone; one not looked up yet waits for the next sync. One that left a
+				// deleted list is judged with the tasks of the linked list it is in now.
 				if (missing.has(link.ttId)) {
-					const group = missingByList.get(home.listId) ?? [];
+					const listId = home.leaving === true ? listOfProject.get(project)!.listId : home.listId;
+					const group = missingByList.get(listId) ?? [];
 					group.push(t);
-					missingByList.set(home.listId, group);
+					missingByList.set(listId, group);
 				}
 				continue;
 			}

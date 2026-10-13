@@ -52,8 +52,10 @@ export class U1Host implements UiHost {
 	notify(m: string) {
 		this.messages.push(m);
 	}
-	error(err: unknown) {
-		this.messages.push(err instanceof Error ? err.message : String(err));
+	/** Records the error's text, after the context when there is one, as the Obsidian host shows it. */
+	error(err: unknown, context?: string) {
+		const message = err instanceof Error ? err.message : String(err);
+		this.messages.push(context === undefined ? message : `${context}: ${message}`);
 	}
 	/** The Undo button of each notice, newest last, bound as the Obsidian host binds it (`store.undoFor`). */
 	readonly undoButtons: (() => Promise<boolean>)[] = [];

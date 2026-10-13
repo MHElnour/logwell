@@ -1,3 +1,4 @@
+import { MemoryTickTickPending } from "../../src/app/ports";
 import { SyncService } from "../../src/app/SyncService";
 import type { ID, SyncLink, SyncLinkKind, Task } from "../../src/domain/types";
 import { syncLinkId } from "../../src/domain/types";
@@ -12,6 +13,8 @@ export interface SyncHarness {
 	h: AppHarness;
 	tt: FakeTickTick;
 	sync: SyncService;
+	/** A new sync engine on the same database, TickTick and device storage, as after Obsidian restarts: `sync` is replaced. */
+	restart(): SyncService;
 	/** The Logwell task with this title (throws when none). */
 	task(title: string): Task;
 	/** The Logwell tasks with this title. */
@@ -31,17 +34,33 @@ export async function syncHarness(initial?: string, fake?: FakeTickTick): Promis
 	const tt = fake ?? new FakeTickTick(h.clock);
 	// The setting is read through the harness object, so a test can turn it on and off between syncs.
 	let harness: SyncHarness | null = null;
-	const sync = new SyncService(h.app.store, h.app.tasks, h.app.sections, { zone: () => ZONE }, tt, {
-		port: h.notes,
-		enabled: () => harness?.notesOn === true,
-		folder: () => "Task notes",
-	});
+	const device = new MemoryTickTickPending();
+	const engine = () =>
+		new SyncService(
+			h.app.store,
+			h.app.tasks,
+			h.app.sections,
+			{ zone: () => ZONE },
+			tt,
+			{
+				port: h.notes,
+				enabled: () => harness?.notesOn === true,
+				folder: () => "Task notes",
+			},
+			device,
+		);
+	const sync = engine();
 	const all = (title: string) => [...h.app.store.state.tasks.values()].filter((t) => t.title === title);
 	const link = (kind: SyncLinkKind, id: ID) => h.app.store.state.syncLinks.get(syncLinkId(kind, id));
 	harness = {
 		h,
 		tt,
 		sync,
+		restart() {
+			harness!.sync.stop();
+			harness!.sync = engine();
+			return harness!.sync;
+		},
 		notesOn: false,
 		tasks: all,
 		task(title) {

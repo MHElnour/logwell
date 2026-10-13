@@ -1,6 +1,7 @@
-import { type App, Modal, Setting } from "obsidian";
+import { type App, Setting } from "obsidian";
 import type { ImportChangeKind, ImportPreview } from "../app/DataService";
 import { COLLECTIONS } from "../persistence/schema";
+import { ResolvingModal } from "./resolvingModal";
 
 type ImportMode = "replace" | "merge";
 
@@ -24,18 +25,15 @@ const COLLECTION_LABELS: Record<string, string> = {
 };
 
 /** The preview shown before any import. */
-class ImportPreviewModal extends Modal {
-	private mode: ImportMode | null = null;
-
+class ImportPreviewModal extends ResolvingModal<ImportMode | null> {
 	constructor(
 		app: App,
 		private readonly fileName: string,
 		private readonly preview: ImportPreview,
-		private readonly resolve: (mode: ImportMode | null) => void,
 		/** Why the preview is shown again (it was stale when confirmed). */
 		private readonly notice: string | null,
 	) {
-		super(app);
+		super(app, null);
 	}
 
 	override onOpen(): void {
@@ -81,26 +79,17 @@ class ImportPreviewModal extends Modal {
 				b
 					.setButtonText("Merge by ID")
 					.setCta()
-					.onClick(() => this.finish("merge")),
+					.onClick(() => this.cpAnswer("merge")),
 			)
 			.addButton((b) =>
 				b
 					.setButtonText("Replace all")
 					.setDestructive()
-					.onClick(() => this.finish("replace")),
+					.onClick(() => this.cpAnswer("replace")),
 			)
 			.addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()));
 	}
 
-	private finish(mode: ImportMode): void {
-		this.mode = mode;
-		this.close();
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.resolve(this.mode);
-	}
 }
 
 export function showImportPreview(
@@ -109,5 +98,5 @@ export function showImportPreview(
 	preview: ImportPreview,
 	notice: string | null = null,
 ): Promise<ImportMode | null> {
-	return new Promise((resolve) => new ImportPreviewModal(app, fileName, preview, resolve, notice).open());
+	return new ImportPreviewModal(app, fileName, preview, notice).cpAsk();
 }

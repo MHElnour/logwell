@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
+import { describeRule } from "../../src/domain/recurrence";
+import { RepeatChip } from "../../src/ui/RepeatChip";
 import {
 	COMPLETE_OCCURRENCE_LABEL,
 	REOPEN_OCCURRENCE_LABEL,
@@ -7,9 +9,9 @@ import {
 	STOP_REPEATING_LABEL,
 } from "../../src/app/RecurrenceService";
 import { LINGER_MS } from "../../src/ui/useLingering";
-import { click, contextMenu, lastNotice, menuItem, q, settle } from "./app-helpers";
+import { click, contextMenu, lastNotice, menuItem, mountNode, q, settle } from "./app-helpers";
 import { openBoard } from "./board-helpers";
-import { type M7Mount, FRIDAY, mountM7, rowFor, rowsFor, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
+import { type M7Mount, FRIDAY, mountM7, openDetails, rowFor, rowsFor, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
 import { menuTitles as titles } from "./view-menu-helpers";
 
 // Repeating tasks in rows, cards and menus. The clock is Thursday
@@ -50,6 +52,18 @@ describe("the row", () => {
 		await create(m, "Gym", { repeat: { rule: weeklyFriday.rule, end: { kind: "count", count: 4 } } });
 		const row = rowFor(await showInbox(m), "Gym");
 		expect(q(row, ".cp-meta-repeat").title).toBe("Repeats every Fri · ends after 4 times");
+	});
+
+	it("#135: the chip reads the rule in force on the day its row was drawn for, not the app's day", async () => {
+		const m = await mountM7();
+		const t = await create(m, "Weekly review");
+		const rec = t.recurrence!;
+		const first = rec.versions[0]!;
+		// A daily rule from November on: the app's day (October 1) still has the weekly one.
+		const task = { ...t, recurrence: { ...rec, versions: [first, { ...first, effectiveFrom: "2026-11-06", rule: { ...first.rule, freq: "daily" as const } }] } };
+		const root = mountNode(<RepeatChip host={m.host} task={task} today="2026-11-10" />);
+		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).toBe(describeRule(task.recurrence, "2026-11-10"));
+		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).not.toBe("every Fri");
 	});
 
 	it("a board card shows the chip and the occurrence's date", async () => {
@@ -288,5 +302,34 @@ describe("Completed history rows (D7)", () => {
 		await click(rowsFor(section, "Weekly review").find((r) => r.dataset.occurrence === FRIDAY));
 		expect(q(section, ".cp-details .cp-details-title")).not.toBeNull();
 		expect(taskById(m, t.id).title).toBe("Weekly review");
+	});
+
+	it("a weekly series done on three weeks keeps its three done rows when its rule is edited in the details", async () => {
+		const m = await mountM7();
+		const t = await create(m, "Weekly review", { scheduled: { kind: "date", date: "2026-10-01" } });
+		// Done on its day three weeks running: Thursday Oct 1, 8 and 15.
+		await m.h.app.recurrence.complete(t.id);
+		m.h.clock.set("2026-10-08T10:00:00Z");
+		await m.h.app.recurrence.complete(t.id);
+		m.h.clock.set("2026-10-15T10:00:00Z");
+		await m.h.app.recurrence.complete(t.id);
+		await m.rerender();
+		const records = () =>
+			[...m.h.app.store.state.occurrenceRecords.values()]
+				.filter((r) => r.taskId === t.id)
+				.map((r) => `${r.occurrenceDate}:${r.status}`)
+				.sort();
+		const done = ["2026-10-01:done", "2026-10-08:done", "2026-10-15:done"];
+		expect(records()).toEqual(done);
+
+		const pane = await openDetails(m, "Weekly review");
+		await click(q(pane, ".cp-repeat-button"));
+		await click(q(pane, '.cp-repeat-pop [data-preset="weekday"]'));
+		expect(taskById(m, t.id).recurrence!.versions.map((v) => v.effectiveFrom)).toEqual(["2026-10-01", "2026-10-15"]);
+		expect(records()).toEqual(done);
+		const section = await showInbox(m);
+		await click(completedToggle(section));
+		const history = rowsFor(section, "Weekly review").filter((r) => r.dataset.occurrence !== undefined);
+		expect(history.map((r) => r.dataset.occurrence).sort()).toEqual(["2026-10-01", "2026-10-08", "2026-10-15"]);
 	});
 });

@@ -1,18 +1,18 @@
-import { type App, FuzzySuggestModal, Modal, Setting, type TFile, type TFolder, getIconIds, setIcon } from "obsidian";
+import { type App, FuzzySuggestModal, Setting, type TFile, type TFolder, getIconIds, setIcon } from "obsidian";
 import { TAG_COLORS, type TagColor } from "../domain/types";
 import type { ButtonSpec, NewListOptions, NewListValues } from "../ui/host";
 import { LIST_ICONS } from "../ui/icons";
 import { capitalize } from "../ui/format";
 import { el } from "./dom";
 import { openFormModal } from "./formModal";
+import { ResolvingModal } from "./resolvingModal";
 
 /** Unique element ids for the icon picker, which can be opened again before the old DOM is gone. */
 let iconGridSeq = 0;
 
 // Small reusable modals. Each returns a promise that resolves on close.
 
-export class ChoiceModal<T> extends Modal {
-	private result: T | null = null;
+export class ChoiceModal<T> extends ResolvingModal<T | null> {
 	private cpOnAbort: (() => void) | null = null;
 
 	constructor(
@@ -20,11 +20,10 @@ export class ChoiceModal<T> extends Modal {
 		private readonly title: string,
 		private readonly message: string,
 		private readonly buttons: ButtonSpec<T>[],
-		private readonly resolve: (value: T | null) => void,
 		private readonly cancelLabel: string = "Cancel",
 		private readonly cpSignal?: AbortSignal,
 	) {
-		super(app);
+		super(app, null);
 	}
 
 	override onOpen(): void {
@@ -41,10 +40,7 @@ export class ChoiceModal<T> extends Modal {
 				btn.setButtonText(b.label);
 				if (b.cta === true) btn.setCta();
 				if (b.warning === true) btn.setDestructive();
-				btn.onClick(() => {
-					this.result = b.value;
-					this.close();
-				});
+				btn.onClick(() => this.cpAnswer(b.value));
 			});
 		}
 		setting.addButton((btn) => btn.setButtonText(this.cancelLabel).onClick(() => this.close()));
@@ -54,8 +50,7 @@ export class ChoiceModal<T> extends Modal {
 		// A normal close first: a later abort must not close this modal a second time.
 		if (this.cpOnAbort !== null) this.cpSignal?.removeEventListener("abort", this.cpOnAbort);
 		this.cpOnAbort = null;
-		this.contentEl.empty();
-		this.resolve(this.result);
+		super.onClose();
 	}
 }
 
@@ -69,7 +64,7 @@ export function choose<T>(
 	/** Aborting closes the dialog and resolves null, for a question that was answered elsewhere. */
 	signal?: AbortSignal,
 ): Promise<T | null> {
-	return new Promise((resolve) => new ChoiceModal(app, title, message, buttons, resolve, cancelLabel, signal).open());
+	return new ChoiceModal(app, title, message, buttons, cancelLabel, signal).cpAsk();
 }
 
 export interface PromptField {
@@ -80,18 +75,16 @@ export interface PromptField {
 	description?: string;
 }
 
-class PromptModal extends Modal {
+class PromptModal extends ResolvingModal<Record<string, string> | null> {
 	private values: Record<string, string> = {};
-	private submitted = false;
 
 	constructor(
 		app: App,
 		private readonly title: string,
 		private readonly fields: PromptField[],
 		private readonly submitLabel: string,
-		private readonly resolve: (values: Record<string, string> | null) => void,
 	) {
-		super(app);
+		super(app, null);
 	}
 
 	override onOpen(): void {
@@ -99,8 +92,7 @@ class PromptModal extends Modal {
 		const form = this.contentEl.createEl("form");
 		form.addEventListener("submit", (evt) => {
 			evt.preventDefault();
-			this.submitted = true;
-			this.close();
+			this.cpAnswer(this.values);
 		});
 		this.fields.forEach((f, i) => {
 			this.values[f.key] = f.value;
@@ -116,16 +108,8 @@ class PromptModal extends Modal {
 			b
 				.setButtonText(this.submitLabel)
 				.setCta()
-				.onClick(() => {
-					this.submitted = true;
-					this.close();
-				}),
+				.onClick(() => this.cpAnswer(this.values)),
 		);
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.resolve(this.submitted ? this.values : null);
 	}
 }
 
@@ -135,7 +119,7 @@ export function prompt(
 	fields: PromptField[],
 	submitLabel = "Save",
 ): Promise<Record<string, string> | null> {
-	return new Promise((resolve) => new PromptModal(app, title, fields, submitLabel, resolve).open());
+	return new PromptModal(app, title, fields, submitLabel).cpAsk();
 }
 
 /** A fuzzy picker over arbitrary items. Resolves null when dismissed. */
@@ -220,16 +204,13 @@ function gridKey(e: KeyboardEvent, el: HTMLElement, list: HTMLElement[]): boolea
 const iconButtonLabel = (name: string): string => name.replace(/-/g, " ");
 
 /** A filterable grid of list icons. Resolves a name, null for "None", or undefined when dismissed. */
-class IconPickerModal extends Modal {
-	private result: string | null | undefined = undefined;
-
+class IconPickerModal extends ResolvingModal<string | null | undefined> {
 	constructor(
 		app: App,
 		private readonly current: string | null,
-		private readonly resolve: (icon: string | null | undefined) => void,
 		private readonly cpAccentClass: string = "",
 	) {
-		super(app);
+		super(app, undefined);
 	}
 
 	override onOpen(): void {
@@ -243,10 +224,7 @@ class IconPickerModal extends Modal {
 		const gridLabelId = `cp-icon-grid-label-${++iconGridSeq}`;
 		this.contentEl.createSpan({ cls: "cp-sr-only", text: "Icons", attr: { id: gridLabelId } });
 		const grid = this.contentEl.createDiv({ cls: "cp-icon-grid", attr: { role: "group", "aria-labelledby": gridLabelId } });
-		const choose = (icon: string | null) => {
-			this.result = icon;
-			this.close();
-		};
+		const choose = (icon: string | null) => this.cpAnswer(icon);
 		const buttons: { name: string; el: HTMLButtonElement }[] = [];
 		const visible = () => buttons.filter((b) => !b.el.hasClass("cp-hidden")).map((b) => b.el);
 		// Roving tabindex: one tab stop in the grid; arrows, Home and End move inside it.
@@ -274,15 +252,10 @@ class IconPickerModal extends Modal {
 		});
 		window.setTimeout(() => filter.focus(), 0);
 	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.resolve(this.result);
-	}
 }
 
 export function pickListIcon(app: App, current: string | null, accentClass = ""): Promise<string | null | undefined> {
-	return new Promise((resolve) => new IconPickerModal(app, current, resolve, accentClass).open());
+	return new IconPickerModal(app, current, accentClass).cpAsk();
 }
 
 /** The most icons the New list grid draws for one search; a longer result asks for a longer query. */

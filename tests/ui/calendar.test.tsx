@@ -709,6 +709,22 @@ describe("calendar section", () => {
 			expect(cal(m.root).querySelector(".cp-cal-unscheduled")).toBeNull();
 		});
 
+		it("a deadline-only task is a flag in the grid and a row in the drawer, and the toggle counts the drawer's rows", async () => {
+			const m = await mountApp();
+			await m.h.app.tasks.create({ title: "Someday" });
+			await m.h.app.tasks.create({ title: "Report", deadline: day("2026-10-03") });
+			await m.h.app.tasks.create({ title: "Planned", scheduled: day("2026-10-02") });
+			await openCalendar(m);
+			const flags = entries(cal(m.root), "Report");
+			expect(flags).toHaveLength(1);
+			expect(flags[0]!.classList.contains("is-deadline")).toBe(true);
+			const toggle = byLabel(cal(m.root), "Unscheduled")!;
+			expect(toggle.querySelector(".cp-count-pill")?.textContent).toBe("2");
+			await click(toggle);
+			const titles = [...cal(m.root).querySelectorAll(".cp-cal-unscheduled .cp-task-row .cp-task-title")].map((r) => r.textContent.trim());
+			expect(titles.sort()).toEqual(["Report", "Someday"]);
+		});
+
 		it("has a visible close button that closes the drawer and returns focus to the toggle", async () => {
 			const m = await mountApp();
 			await openCalendar(m);

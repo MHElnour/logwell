@@ -135,15 +135,14 @@ describe("a change to the database file while it opens", () => {
 	it("#103: is read once the open finishes, so the next edit saves with no conflict", async () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);
-		// Another device's save lands after B is read, while the rest of its open goes on.
-		type Open = (this: FocusService, dbId: string) => ReturnType<FocusService["open"]>;
+		// Another device's save lands after B is read, while the rest of its open goes on (the focus timer of B is
+		// the one opened from here on).
+		type Open = (this: FocusService) => ReturnType<FocusService["open"]>;
 		const focusOpen = Object.getOwnPropertyDescriptor(FocusService.prototype, "open")!.value as Open;
-		const spy = vi.spyOn(FocusService.prototype, "open").mockImplementation(function (this: FocusService, dbId: string) {
-			if (dbId === "db-b") {
-				fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("remote")).next, "r-remote000001"));
-				fake.fire("modify", fileOf(B));
-			}
-			return focusOpen.call(this, dbId);
+		const spy = vi.spyOn(FocusService.prototype, "open").mockImplementation(function (this: FocusService) {
+			fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("remote")).next, "r-remote000001"));
+			fake.fire("modify", fileOf(B));
+			return focusOpen.call(this);
 		});
 		try {
 			await plugin.setActiveDatabase(B);

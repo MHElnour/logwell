@@ -2,7 +2,7 @@
 import { Plugin } from "obsidian";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyDbText } from "../persistence/fixtures";
-import { fakeApp, loadPlugin } from "./fake-vault";
+import { type FakeApp, fakeApp, fileOf, loadPlugin } from "./fake-vault";
 
 interface Cmd {
 	id: string;
@@ -23,7 +23,10 @@ async function setup() {
 	return { fake, plugin, commands, cmd: (id: string) => commands.find((c) => c.id === id)! };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
 
 describe("focus commands (D13)", () => {
 	it("registers the four commands with the agreed names and no hotkeys", async () => {
@@ -99,5 +102,46 @@ describe("active timer wiring (D11)", () => {
 		const again = await loadPlugin(fake, "A.cpbase");
 		expect(again.session!.focusOpened).not.toBe("none");
 		expect(again.session!.app.focus.timer()?.sessionId).toBe(sessionId);
+	});
+
+	const timerOf = (fake: FakeApp, dbId: string) => fake.app.loadLocalStorage(`logwell-active-timer-${dbId}`) as { sessionId: string } | null;
+
+	it("#115: a timer started after a damaged database got its real id back is kept under that id, never the placeholder", async () => {
+		// The damaged-file notice is built with Obsidian's createFragment.
+		vi.stubGlobal("createFragment", () => document.createDocumentFragment());
+		const fake = fakeApp();
+		const good = emptyDbText("db-a", "r-aaaaaaaaaaaa");
+		// Damaged in its first line, on a device that never knew it: it opens read-only under the placeholder id.
+		fake.files.set("A.cpbase", `<<<<<<< HEAD\n${good}`);
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		const session = plugin.session!;
+		expect(session.store.data.meta.dbId).toBe("unknown");
+		// The good file is put back outside Obsidian.
+		fake.files.set("A.cpbase", good);
+		fake.fire("modify", fileOf("A.cpbase"));
+		await vi.waitFor(() => expect(session.store.readOnlyState).toBeNull());
+		await session.app.focus.start(config, null);
+		const sessionId = session.app.focus.timer()!.sessionId;
+		expect(timerOf(fake, "db-a")?.sessionId).toBe(sessionId);
+		expect(timerOf(fake, "unknown")).toBeNull();
+
+		// Obsidian restarts: the round is found and offered for recovery.
+		plugin.onunload();
+		const again = await loadPlugin(fake, "A.cpbase");
+		expect(again.session!.focusOpened).toBe("recovery");
+		expect(again.session!.app.focus.timer()?.sessionId).toBe(sessionId);
+	});
+
+	it("#115: a timer running when the file is replaced by another database is kept under that database's id from then on", async () => {
+		const { fake, plugin } = await setup();
+		const session = plugin.session!;
+		await session.app.focus.start(config, null);
+		fake.files.set("A.cpbase", emptyDbText("db-b", "r-bbbbbbbbbbbb"));
+		fake.fire("modify", fileOf("A.cpbase"));
+		await vi.waitFor(() => expect(session.store.data.meta.dbId).toBe("db-b"));
+		await session.app.focus.pause();
+		expect(timerOf(fake, "db-b")?.sessionId).toBe(session.app.focus.timer()!.sessionId);
+		// Nothing is left under the old id for another database to pick up.
+		expect(timerOf(fake, "db-a")).toBeNull();
 	});
 });

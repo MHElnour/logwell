@@ -1,5 +1,7 @@
+import { compareSortKeys } from "../domain/sortKey";
 import type { ID, SyncLink, Task } from "../domain/types";
 import { syncLinkId } from "../domain/types";
+import type { DbData } from "../persistence/schema";
 
 // What the UI marks as synced, read from the links alone. One reader for the sidebar
 // marker, the list header and the "Not synced" chip.
@@ -9,6 +11,32 @@ type Links = ReadonlyMap<string, SyncLink>;
 /** The list is linked to a TickTick project (the sidebar marker and the list header). */
 export function isListSynced(links: Links, listId: ID): boolean {
 	return links.has(syncLinkId("list", listId));
+}
+
+/** A list linked to TickTick: the Logwell list's id and name, and its link. */
+export interface LinkedList {
+	listId: ID;
+	name: string;
+	link: SyncLink;
+}
+
+/**
+ * The lists linked to TickTick, in list order. A link whose Logwell list does not exist (not arrived yet, or gone)
+ * is left out. Read over the lists, which are few, never over every link (each synced task has one).
+ */
+export function linkedLists(state: Pick<DbData, "categories" | "syncLinks">): LinkedList[] {
+	const out: LinkedList[] = [];
+	for (const list of state.categories.values()) {
+		const link = state.syncLinks.get(syncLinkId("list", list.id));
+		if (link !== undefined) out.push({ listId: list.id, name: list.name, link });
+	}
+	return out.sort((a, b) => compareSortKeys(state.categories.get(a.listId)!.sortKey, state.categories.get(b.listId)!.sortKey));
+}
+
+/** Whether any existing list is linked to TickTick (`linkedLists` is not empty), without building the list. */
+export function hasLinkedList(state: Pick<DbData, "categories" | "syncLinks">): boolean {
+	for (const id of state.categories.keys()) if (isListSynced(state.syncLinks, id)) return true;
+	return false;
 }
 
 /** Why an open task in a synced list is not synced (the "Not synced" chip), or null when it syncs or is not in a synced list. */

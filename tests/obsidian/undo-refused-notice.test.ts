@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { Plugin } from "obsidian";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NOTHING_TO_UNDO } from "../../src/ui/format";
 import { undoAction } from "../../src/obsidian/notices";
 import { ViewHost } from "../../src/obsidian/host";
+import { emptyDbText } from "../persistence/fixtures";
+import { fakeApp, loadPlugin } from "./fake-vault";
 
-// Issue 19: an Undo button that cannot undo says "Nothing to undo.", whichever notice it is on.
+// Issue 19: an Undo button that cannot undo says "Nothing to undo.", whichever notice it is on. The Undo last
+// task change command says the same once nothing is left.
 
 const shown = vi.hoisted(() => ({ notices: [] as unknown[], actions: [] as { label: string; run: () => unknown }[][] }));
 
@@ -50,5 +54,35 @@ describe("a refused Undo from a notice", () => {
 		await undoAction(() => Promise.resolve(false), () => routed.push("x")).run();
 		expect(routed).toEqual(["x"]);
 		expect(shown.notices).toEqual([NOTHING_TO_UNDO]);
+	});
+});
+
+describe("the Undo last task change command", () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	it("undoes the last task change and names it; with nothing left it says Nothing to undo.", async () => {
+		const commands: { id: string; callback?: () => void }[] = [];
+		vi.spyOn(Plugin.prototype, "addCommand").mockImplementation(((c: { id: string }) => void commands.push(c)) as never);
+		const fake = fakeApp();
+		fake.files.set("A.cpbase", emptyDbText("db-a", "r-aaaaaaaaaaaa"));
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		const app = plugin.session!.app;
+		const { task } = await app.tasks.create({ title: "Pay rent" });
+		await app.tasks.complete(task.id);
+		const completeLabel = app.store.undoLabel;
+		const undo = commands.find((c) => c.id === "undo-last-change")!.callback!;
+		shown.notices.length = 0;
+
+		undo();
+		await vi.waitFor(() => expect(shown.notices).toHaveLength(1));
+		expect(shown.notices).toEqual([`Undone: ${completeLabel}`]);
+		expect(app.store.state.tasks.get(task.id)?.status).toBe("open");
+
+		undo();
+		await vi.waitFor(() => expect(shown.notices).toHaveLength(2));
+		expect(app.store.state.tasks.has(task.id)).toBe(false);
+		undo();
+		await vi.waitFor(() => expect(shown.notices).toHaveLength(3));
+		expect(shown.notices.at(-1)).toBe(NOTHING_TO_UNDO);
 	});
 });

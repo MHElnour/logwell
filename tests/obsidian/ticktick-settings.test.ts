@@ -255,6 +255,16 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect(t.refresh).toHaveBeenCalled();
 	});
 
+	it("#135: Unlink here is the list menu's unlink: a list that was unlinked meanwhile writes nothing and says nothing", async () => {
+		const t = setup({ device: true, linked: [WORK] });
+		t.sync.unlinkList.mockResolvedValueOnce({ wrote: false, label: "x" });
+		t.render("Work").buttons[0]!.click();
+		await flush();
+		expect(t.sync.unlinkList).toHaveBeenCalledWith(WORK);
+		expect(t.notices).toEqual([]);
+		expect(t.refresh).toHaveBeenCalled();
+	});
+
 	it("the linked lists row carries the limits note", () => {
 		const desc = setup({ device: true }).rows().find((r) => r.name === "Linked lists")!.desc!;
 		expect(desc).toContain("999 open tasks");

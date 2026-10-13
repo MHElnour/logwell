@@ -256,6 +256,38 @@ describe("render passes", () => {
 			expect(rowRenders() - r2).toBe(2);
 		});
 
+		it("#135: a card shows its focused time, as the row does, and redraws when only that changes", async () => {
+			const { m, ids } = await mountWithTasks(["A", "B"]);
+			const board = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent.includes("Board"))!;
+			await click(board);
+			await flushEffects();
+			const session = (minutes: number) => ({
+				id: "s1",
+				deviceId: "d",
+				taskId: ids[0]!,
+				taskTitleSnapshot: "A",
+				plannedSec: 1500,
+				status: "completed" as const,
+				segments: [{ start: "2026-10-01T08:00:00.000Z", end: new Date(Date.parse("2026-10-01T08:00:00.000Z") + minutes * 60_000).toISOString() }],
+				unobserved: [],
+				splitFrom: null,
+				startedAt: "2026-10-01T08:00:00.000Z",
+				endedAt: "2026-10-01T09:00:00.000Z",
+				finalizedAt: "2026-10-01T09:00:00.000Z",
+			});
+			const card = (title: string) =>
+				[...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-board-card")].find((c) => c.querySelector(".cp-board-title")!.textContent.trim() === title)!;
+			const focus = () => card("A").querySelector(".cp-meta-focus")?.textContent ?? "";
+			expect(focus()).toBe("");
+			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(25) as never));
+			await flushEffects();
+			expect(focus()).toContain("25");
+			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", session(50) as never));
+			await flushEffects();
+			expect(focus()).toContain("50");
+			expect(card("B").querySelector(".cp-meta-focus")).toBeNull();
+		});
+
 		it("a card shows a change of its nested subtask", async () => {
 			const m = await mountApp();
 			const parent = await m.h.app.tasks.create({ title: "Parent", scheduled: { kind: "date", date: "2026-10-01" } });

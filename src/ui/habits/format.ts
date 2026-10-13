@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
 import { plural } from "../../domain/text";
-import { addDays, dateOf, dayNumOf, formatLatin, utcDay } from "../../domain/time";
+import { addDays, formatLatin, utcDay } from "../../domain/time";
 import type { Checkin, Habit, HabitVersion, LocalDate, TimeOfDay } from "../../domain/types";
 import { ICON } from "../icons";
 import { capitalize, formatDuration } from "../format";
@@ -151,11 +151,6 @@ export function stripDays(today: LocalDate, share: (date: LocalDate) => { met: n
 /** "2026-10" for the month of a date. */
 export function monthOf(date: LocalDate): string {
 	return date.slice(0, 7);
-}
-
-/** The month `by` months after a "2026-10" month (before it when negative). */
-export function shiftMonth(month: string, by: number): string {
-	return dateOf(dayNumOf(Number(month.slice(0, 4)), Number(month.slice(5, 7)) + by, 1)).slice(0, 7);
 }
 
 /** The calendar cell class of a day status (met, part, miss, off, fut). */

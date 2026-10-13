@@ -2,11 +2,13 @@ import { type App, SecretComponent, type Setting, type SettingDefinitionItem, ty
 import { type CheckpointSettings, DEFAULT_SETTINGS, TICKTICK_PULL_RANGE } from "../app/settings";
 import { SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
 import type { SyncService } from "../app/SyncService";
+import { linkedLists } from "../app/syncMarks";
 import type { TickTickDevicePort, TickTickSecretPort } from "../app/ports";
 import { plural } from "../domain/text";
 import type { DbData } from "../persistence/schema";
 import { formatAgo } from "../ui/format";
 import type { TickTickScheduler } from "./tickTickScheduler";
+import { unlinkListFlow } from "./tickTickFlow";
 
 // The "TickTick sync" group of the settings tab. Rows that
 // follow the state (token, device switch, status, linked lists) are evaluated each time the tab renders and after
@@ -35,23 +37,14 @@ export interface TickTickSettingsDeps {
 export const ONE_DEVICE_TEXT = "TickTick sync is on for this device. Keep it off on your other devices: only one device should sync.";
 const LIMITS_NOTE = `A synced list holds at most ${SYNCED_LIST_OPEN_MAX} open tasks. TickTick's free plan allows 9 lists and 99 open tasks per list; Logwell cannot see your plan, so going over that shows an error.`;
 
-function linkedLists(state: DbData): { id: string; name: string }[] {
-	const out: { id: string; name: string }[] = [];
-	for (const l of state.syncLinks.values()) {
-		if (l.kind !== "list") continue;
-		const list = state.categories.get(l.logwellId);
-		if (list !== undefined) out.push({ id: list.id, name: list.name });
-	}
-	return out.sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export function tickTickSettingItems(deps: TickTickSettingsDeps): SettingDefinitionItem[] {
 	const session = () => deps.session() ?? null;
 	const hasToken = () => session()?.app.tickTickSecret.get() != null;
 	const on = () => hasToken() && session()?.app.tickTickDevice.isEnabled() === true;
 	const lists = () => {
 		const s = session();
-		return s === null ? [] : linkedLists(s.app.store.state);
+		// By name here, unlike the sync's list order.
+		return s === null ? [] : linkedLists(s.app.store.state).sort((a, b) => a.name.localeCompare(b.name));
 	};
 
 	const rows: SettingGroupItem[] = [
@@ -148,14 +141,8 @@ export function tickTickSettingItems(deps: TickTickSettingsDeps): SettingDefinit
 						const s = session();
 						if (s === null) return;
 						button.setDisabled(true);
-						void s.sync
-							.unlinkList(list.id)
-							.then(() => {
-								s.tickTick.refresh();
-								deps.notify(`${list.name} is no longer synced with TickTick. Its tasks stay on both sides.`);
-							})
-							.catch(deps.error)
-							.finally(deps.refresh);
+						const flow = { state: () => s.app.store.state, sync: s.sync, notify: deps.notify, error: deps.error, linked: () => s.tickTick.refresh() };
+						void unlinkListFlow(flow, list.listId).finally(deps.refresh);
 					}),
 				);
 			},
