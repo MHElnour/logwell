@@ -38,6 +38,12 @@ Related notices:
 - "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy."
 - "A sync conflict copy of a Logwell database appeared: …" A sync tool made its own copy of the file. Logwell does not read or merge it. The active database is the one you use.
 
+## A notice says some records were repaired or need your attention
+
+"Some database records were repaired: …" means Logwell fixed records it could not use as they were, such as a task in a list that no longer exists. It takes a **Before repair** snapshot first and saves the repaired file once.
+
+"Some database records need your attention: …" names something Logwell leaves as it is, such as two sections with the same name in one list. Nothing is written for it; the notice shows each time the database opens until you rename or delete one of them.
+
 ## Restore a backup
 
 Open the Data page, find the snapshot under **Backups** and choose **Restore**. See [Your data](your-data.md#back-up-and-restore). To restore a file you made with **Export backup**, use **Import backup**. See [Your data](your-data.md#import-a-backup).

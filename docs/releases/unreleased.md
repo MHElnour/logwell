@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#104) Fixed two sections with the same name in a list making every open take a backup and save the database again, and two devices rewriting each other's file over and over. The duplicate is now named in a notice and the file is left as it is. A reload after a change from another device that does repair records now says so. **Merge by ID** no longer adds a backup's section next to one of the same name: its tasks go to the section you have.
 - (#128) Fixed deleting a list moving its open tasks into an Inbox synced with TickTick past the limit of 999 open tasks. The delete is now refused with the same message as other moves into a full list.
 - (#139) Fixed a false conflict copy and Keep mine / Keep theirs notice on another device after a save reported an error but reached the file anyway: the retried save now continues from the version that landed.
 - (#127) Fixed deleting a parent tag merging a child tag into an older tag of the same name, such as `home/calls` into `calls`, which took the child's color and joined both tags' tasks. The delete is now refused with the message a rename gives, and nothing changes.

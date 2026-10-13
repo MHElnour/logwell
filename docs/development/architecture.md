@@ -106,7 +106,7 @@ flowchart TD
   O --> P[snapshot plus journal.ts replayJournal]
 ```
 
-On open, `loadText` parses the file, runs the steps in `src/persistence/migrations.ts` and validates every record with `validateDb` (`src/persistence/validate.ts`), which also repairs broken references. What happens to a migrated or repaired file is Data and safety rule 13.
+On open, `loadText` parses the file, runs the steps in `src/persistence/migrations.ts` and validates every record with `validateDb` (`src/persistence/validate.ts`), which also repairs broken references. What happens to a migrated or repaired file is Data and safety rule 13. Only `issues` (what a repair changed) make the store rewrite the file, on open and on an outside reload, each with a `repaired` event; `notes` (a problem left as it is, such as two sections of one name in a list) only give a `noticed` event on open.
 
 A save writes a journal entry (`src/persistence/journal.ts`) to the plugin's backup folder, then writes the database text through `VaultDbFile` in `src/obsidian/gateways.ts`. Its `vault.process` callback checks that the file still holds a revision this device read or wrote. If not, the store treats the text as an outside change (Data and safety rule 5).
 
