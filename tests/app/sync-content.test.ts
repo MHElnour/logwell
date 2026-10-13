@@ -84,6 +84,20 @@ describe("edits (SYNC-07)", () => {
 		expect(s.link("task", s.id)?.etag).toBe(s.tt.get(s.ttId)?.etag);
 	});
 
+	it("#108: keeps the other values TickTick changed when one of them is refused", async () => {
+		const s = await oneTask();
+		const home = await linkedList(s, "Home");
+		await s.h.app.tasks.update(s.id, { categoryId: home.listId });
+		// A column of the list the task just left in Logwell: refused there.
+		const doing = s.tt.addColumn(s.projectId, "Doing");
+		s.tt.edit(s.ttId, { title: "Call the bank now", priority: 5, columnId: doing.id });
+		const r = await s.sync.sync();
+		expect(r.ok).toBe(true);
+		expect(s.h.app.store.state.tasks.get(s.id)).toMatchObject({ title: "Call the bank now", priority: 1, categoryId: home.listId, sectionId: null });
+		expect(s.tt.get(s.ttId)).toMatchObject({ title: "Call the bank now", priority: 5, projectId: home.projectId });
+		expect(s.tasks("Call the bank now (TickTick)")).toHaveLength(0);
+	});
+
 	it("moves the date that was sent: the deadline, and the schedule when equal (SYNC-05)", async () => {
 		const s = await oneTask();
 		await s.h.app.tasks.update(s.id, { scheduled: { kind: "date", date: "2026-10-05" }, deadline: { kind: "date", date: "2026-10-09" } });
