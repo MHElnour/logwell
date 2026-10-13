@@ -1470,6 +1470,20 @@ describe("a repeat's end", () => {
 			expect(task).toMatchObject({ title: "Pills", deadline: null, recurrence: { end: { kind: "date", date: "2026-12-01" } } });
 		});
 
+		it("#105: after Never is picked, a typed end left without its typed repeat is a deadline, as with no repeat", async () => {
+			const { h, m } = await model();
+			m.setInput("Water plants every day until Dec 1");
+			m.setRepeat(null);
+			m.dismiss(m.result.chips.find((c) => c.kind === "recurrence")!);
+			const end = m.result.chips.find((c) => c.text === "until Dec 1")!;
+			expect(end).toMatchObject({ kind: "deadline", status: "applied" });
+			expect(m.result.title).toBe("Water plants every day");
+			expect(m.repeatValue()).toBeNull();
+			expect(await m.submit()).toBe("saved");
+			const task = [...h.app.store.state.tasks.values()][0]!;
+			expect(task).toMatchObject({ title: "Water plants every day", recurrence: null, deadline: { kind: "date", date: "2026-12-01" } });
+		});
+
 		it("#12: the picker refuses an end before the first occurrence (a Monday task, weekly on Friday, ending Wednesday)", () => {
 			const d = { ...draftOf(null, "2026-10-05"), freq: "weekly" as const, days: ["FR" as const], endKind: "date" as const, endDate: "2026-10-07" };
 			expect(draftProblem(d, "2026-10-05", "MO")).toBe("The repeat ends before its first date.");

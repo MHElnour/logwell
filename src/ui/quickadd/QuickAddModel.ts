@@ -152,6 +152,8 @@ export class QuickAddModel {
 			pickedEnd: this.manual.has("recurrence") && this.vals.repeat !== null && this.vals.repeat.end.kind !== "never",
 			// A typed end of a repeat picked by hand is checked against that repeat.
 			...(this.manual.has("recurrence") && this.vals.repeat !== null ? { pickedRule: this.vals.repeat.rule } : {}),
+			// Never picked by hand is no repeat for a typed end: `until Dec 1` is then a deadline.
+			pickedNever: this.manual.has("recurrence") && this.vals.repeat === null,
 		});
 	}
 
