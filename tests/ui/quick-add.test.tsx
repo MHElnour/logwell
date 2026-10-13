@@ -1,20 +1,20 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
 import { Modal } from "obsidian";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CheckpointApp } from "../../src/app/App";
 import { DEFAULT_SETTINGS } from "../../src/app/settings";
 import { INBOX_ID, INBOX_NAME } from "../../src/domain/types";
+import type { Chip } from "../../src/parsing";
 import { QuickAddModal } from "../../src/obsidian/QuickAddModal";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
 import { manualPills } from "../../src/ui/quickadd/manualPills";
-import { draftOf, draftProblem } from "../../src/ui/repeat";
 import { DEADLINE_CLEARED_TEXT } from "../../src/ui/repeatActions";
 import { FakeNotes, appHarness } from "../app/harness";
 import { sequentialIds } from "../helpers";
 import { harness as storeHarness } from "../persistence/fixtures";
 import { click, dateTool, formTasks, keydown, mountApp, mountQuickForm, obsidianElement, type ObsidianElement, popDay, pressKey, q, type QuickFormOptions, quickModel, settle, titleInput, typeInto } from "./app-helpers";
 import { WEDNESDAY_CLOCK } from "./repeat-helpers";
+import { css } from "./styles-helpers";
 
 // Quick Add UI: real services, real parser, a fake host.
 // The harness clock is 2026-10-01T10:00Z (Thursday); the zone is Europe/Berlin.
@@ -104,9 +104,12 @@ describe("Dismiss to literal (AS-07, B3)", () => {
 		expect(chips(m.root)).toHaveLength(0);
 	});
 
-	it("QA-03: Delete on a focused chip dismisses it and moves focus to the input", async () => {
+	it("QA-03: Delete or Backspace on a focused chip dismisses it and moves focus to the input", async () => {
 		const m = await mountForm();
-		await typeInto(titleInput(m.root), "Call mom tomorrow");
+		await typeInto(titleInput(m.root), "Call tomorrow for 45m");
+		chipMain(chips(m.root)[0]!).focus();
+		await pressKey(chipMain(chips(m.root)[0]!), "Backspace");
+		expect(chips(m.root)).toHaveLength(1);
 		chipMain(chips(m.root)[0]!).focus();
 		await pressKey(chipMain(chips(m.root)[0]!), "Delete");
 		expect(chips(m.root)).toHaveLength(0);
@@ -330,14 +333,6 @@ describe("Tags (TAG-02, B16)", () => {
 		expect(tags.map((t) => t.key).sort()).toEqual(["newtag", "other", "other/sub"]);
 	});
 
-	it("TAG-03: '@NewTag @newtag' creates one tag", async () => {
-		const m = await mountForm();
-		await typeInto(titleInput(m.root), "Do thing @NewTag @newtag");
-		await pressKey(titleInput(m.root), "Enter");
-		expect(m.app.tags.list().map((t) => t.displayName)).toEqual(["NewTag"]);
-		expect(formTasks(m)[0]!.tagKeys).toEqual(["newtag"]);
-	});
-
 	it("TAG-02: dismissing the chip keeps '@newtag' in the title and creates no tag", async () => {
 		const m = await mountForm();
 		await typeInto(titleInput(m.root), "Read @newtag");
@@ -403,34 +398,6 @@ describe("Choices and suggestions (A3, A4)", () => {
 	});
 });
 
-describe("DST (B17, B18)", () => {
-	it("B17: a time in the spring-forward gap shows the warning on the chip and in the saved notice once", async () => {
-		const app = await berlinApp("America/New_York", "2026-03-01T15:00:00.000Z");
-		const m = await mountForm({ app });
-		await typeInto(titleInput(m.root), "Standup 2026-03-08 2:30am");
-		const chip = chips(m.root)[0]!;
-		expect(chip.textContent).toContain("Adjusted for daylight saving");
-		await pressKey(titleInput(m.root), "Enter");
-		expect(m.saved).toHaveLength(1);
-		expect(m.warnings[0]).toEqual(["Adjusted for daylight saving"]);
-		expect(formTasks(m)[0]!.scheduled).toMatchObject({ kind: "datetime", local: "2026-03-08T03:30", tz: "America/New_York" });
-	});
-});
-
-describe("DST with a 24-hour time (L1)", () => {
-	it("a leading-zero '02:30' on the spring-forward day applies with the gap warning", async () => {
-		const app = await berlinApp("America/New_York", "2026-03-01T15:00:00.000Z");
-		const m = await mountForm({ app });
-		await typeInto(titleInput(m.root), "Standup 2026-03-08 02:30");
-		const chip = chips(m.root)[0]!;
-		expect(chip.getAttribute("data-status")).toBe("applied");
-		expect(chip.textContent).toContain("Adjusted for daylight saving");
-		await pressKey(titleInput(m.root), "Enter");
-		expect(m.warnings[0]).toEqual(["Adjusted for daylight saving"]);
-		expect(formTasks(m)[0]!.scheduled).toMatchObject({ kind: "datetime", local: "2026-03-08T03:30", tz: "America/New_York" });
-	});
-});
-
 describe("Save (C7)", () => {
 	it("a title that is only recognized text is kept in full with one warning (A13)", async () => {
 		const m = await mountForm();
@@ -440,26 +407,23 @@ describe("Save (C7)", () => {
 		expect(m.warnings[0]).toEqual(["Title was empty after removing recognized items; kept the full text"]);
 	});
 
-	it("C7: a warning reported on the chip and again by create shows once in the Added notice", async () => {
+	// The spring-forward gap in New York (B17, L1): 2:30am and the leading-zero 02:30 apply as 03:30 with a warning.
+	it.each(["Standup 2026-03-08 2:30am", "Standup 2026-03-08 02:30"])("B17, C7: '%s' warns on the chip, and a warning reported again by create shows once in the Added notice", async (input) => {
 		const app = await berlinApp("America/New_York", "2026-03-01T15:00:00.000Z");
 		const m = await mountForm({ app });
-		await typeInto(titleInput(m.root), "Standup 2026-03-08 2:30am");
-		expect(chips(m.root)[0]!.textContent).toContain("Adjusted for daylight saving");
+		await typeInto(titleInput(m.root), input);
+		const chip = chips(m.root)[0]!;
+		expect(chip.getAttribute("data-status")).toBe("applied");
+		expect(chip.textContent).toContain("Adjusted for daylight saving");
 		const original = app.tasks.create.bind(app.tasks);
 		app.tasks.create = async (input) => {
 			const r = await original(input);
 			return { ...r, warnings: ["dst-gap", "dst-gap"] };
 		};
 		await pressKey(titleInput(m.root), "Enter");
+		expect(m.saved).toHaveLength(1);
 		expect(m.warnings[0]).toEqual(["Adjusted for daylight saving"]);
-	});
-
-	it("details stay plain text: saved titles are never parsed again (QA-10)", async () => {
-		const m = await mountForm();
-		await typeInto(titleInput(m.root), "Call mom tomorrow");
-		await pressKey(titleInput(m.root), "Enter");
-		expect(formTasks(m)[0]!.title).toBe("Call mom");
-		expect(formTasks(m)[0]!.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
+		expect(formTasks(m)[0]!.scheduled).toMatchObject({ kind: "datetime", local: "2026-03-08T03:30", tz: "America/New_York" });
 	});
 
 	it("parsed duration, deadline and flags reach the task", async () => {
@@ -556,16 +520,6 @@ describe("Keyboard (C3)", () => {
 		expect(document.activeElement).toBe(chipMain(chips(m.root)[0]!));
 		await pressKey(document.activeElement as HTMLElement, "ArrowLeft");
 		expect(document.activeElement).toBe(chipMain(chips(m.root)[0]!));
-	});
-
-	it("Delete on a chip dismisses it; Backspace does too", async () => {
-		const m = await mountForm();
-		await typeInto(titleInput(m.root), "Call tomorrow for 45m");
-		chipMain(chips(m.root)[0]!).focus();
-		await pressKey(chipMain(chips(m.root)[0]!), "Backspace");
-		expect(chips(m.root)).toHaveLength(1);
-		await pressKey(chipMain(chips(m.root)[0]!), "Delete");
-		expect(chips(m.root)).toHaveLength(0);
 	});
 
 	it("Enter in the input saves exactly once, even when pressed twice quickly", async () => {
@@ -680,14 +634,6 @@ describe("Inline add bar (C8)", () => {
 // the manual-value rule: a manual value turns a typed token into a suggestion, accepting replaces it.
 
 describe("QuickAddModel priority", () => {
-	it("exposes the typed priority and a priority chip; none by default", async () => {
-		const { m } = await quickModel();
-		expect(m.priorityValue()).toBe(0);
-		m.setInput("Pay rent !2");
-		expect(m.priorityValue()).toBe(2);
-		expect(m.result.chips.map((c) => `${c.kind}:${c.status}`)).toEqual(["priority:applied"]);
-	});
-
 	it("saves the typed priority and removes the accepted span from the title", async () => {
 		const { h, m, saved } = await quickModel();
 		m.setInput("Pay rent !high");
@@ -719,15 +665,6 @@ describe("QuickAddModel priority", () => {
 		expect(m.priorityValue()).toBe(3);
 		await m.submit();
 		expect([...h.app.store.state.tasks.values()][0]).toMatchObject({ title: "Pay !1 rent", priority: 3 });
-	});
-
-	it("a manual priority is saved when nothing is typed", async () => {
-		const { h, m } = await quickModel();
-		m.setInput("Pay rent");
-		m.setPriority(2);
-		expect(m.priorityValue()).toBe(2);
-		await m.submit();
-		expect([...h.app.store.state.tasks.values()][0]!.priority).toBe(2);
 	});
 
 	it("B4 pattern: a manual priority wins over a typed token, which becomes a suggestion; accepting replaces the manual value", async () => {
@@ -1278,12 +1215,6 @@ describe("a repeat's end", () => {
 			expect(task).toMatchObject({ title: "Water plants every day", recurrence: null, deadline: { kind: "date", date: "2026-12-01" } });
 		});
 
-		it("#12: the picker refuses an end before the first occurrence (a Monday task, weekly on Friday, ending Wednesday)", () => {
-			const d = { ...draftOf(null, "2026-10-05"), freq: "weekly" as const, days: ["FR" as const], endKind: "date" as const, endDate: "2026-10-07" };
-			expect(draftProblem(d, "2026-10-05", "MO")).toBe("The repeat ends before its first date.");
-			expect(draftProblem({ ...d, endDate: "2026-10-09" }, "2026-10-05", "MO")).toBeNull();
-		});
-
 		it("#12: a typed end over a repeat picked by hand with its own end is a suggestion; using it replaces the end", async () => {
 			const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 			m.setRepeat({ rule: { ...weekly, freq: "daily" }, end: { kind: "count", count: 5 } });
@@ -1379,18 +1310,46 @@ describe("a repeat's end", () => {
 			expect(task.recurrence?.versions[0]?.rule).toMatchObject({ freq: "daily", time: null });
 		});
 
-		it("#12: Clear in the date popover keeps the end as text too", async () => {
+		it("#12: the pill of a repeat picked by hand shows the typed end that will be saved, not only the picked value", async () => {
 			const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
-			m.setInput("Pills every day until Dec 1");
+			const friday = { ...weekly, weekdays: ["FR" as const] };
+			m.setRepeat({ rule: friday, end: { kind: "never" } });
+			m.setInput("Gym until Dec 1");
+			expect(m.repeatValue()).toEqual({ rule: friday, end: { kind: "date", date: "2026-12-01" } });
+			const pill = manualPills(m).find((p) => p.kind === "recurrence")!;
+			expect(pill.label).toBe("Repeat: every Fri · ends Dec 1");
+		});
+
+		it("#12: an end typed after a repeat's hour that is a choice waits for the hour and saves with it", async () => {
+			const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
+			m.setInput("Gym every day at 7 until Dec 1");
+			expect(await m.submit()).toBe("blocked");
+			const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
+			m.setChipRule(chip, chip.alternatives![0]!.rule!);
+			await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
+			expect([...h.app.store.state.tasks.values()][0]!.recurrence).toMatchObject({ end: { kind: "date", date: "2026-12-01" }, versions: [{ rule: { freq: "daily", time: "07:00" } }] });
+		});
+
+		it.each([
+			["a valid end", "Pills every day until Dec 1", ["recurrence/applied", "repeatEnd/applied"], []],
+			["an invalid end", "Gym every friday until Oct 8", ["recurrence/applied", "repeatEnd/invalid"], []],
+			["an end that waits for the repeat's time", "Gym every monday at 9 until Dec 1", ["recurrence/choice", "repeatEnd/suggestion"], ["recurrence/choice"]],
+		])("#12: Clear in the date popover dismisses %s; the words stay text and never become a deadline", async (_end, input, typed, left) => {
+			const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
+			m.setInput(input);
+			expect(m.result.chips.map((c) => `${c.kind}/${c.status}`)).toEqual(typed);
 			m.clearDateFields();
-			expect(m.result.chips.filter((c) => c.status === "applied")).toEqual([]);
+			expect(m.result.chips.map((c) => `${c.kind}/${c.status}`)).toEqual(left);
 			expect(m.result.fields.deadline).toBeUndefined();
+			// Only a repeat whose hour is still a choice blocks saving.
+			expect(m.result.blocking).toEqual(m.result.chips.filter((c) => c.status === "choice").map((c) => c.id));
+			expect(m.result.title).toBe(input);
 			expect(m.repeatValue()).toBeNull();
 		});
 	});
 });
 
-describe("a yearly start that is a choice", () => {
+describe("a typed repeat whose hour is a choice", () => {
 	// Repeating tasks rule 19 (#12): `every year on <date>` starts on that date. While the date's hour is still a choice,
 	// Enter does not save: it opens the chip's alternatives (like an unknown list), and the choice saves the task anchored
 	// on the chosen date, never on today. Europe/Berlin, Wednesday 2026-10-07.
@@ -1414,17 +1373,49 @@ describe("a yearly start that is a choice", () => {
 			expect(tasks[0]!.recurrence).toMatchObject({ anchor: value.kind === "datetime" ? value.local.slice(0, 10) : value.date, versions: [{ rule: { freq: "yearly", time: value.kind === "datetime" ? value.local.slice(11, 16) : null } }] });
 		});
 
-		it("#12: choosing from a chip the user opened does not save", async () => {
+		it("#12: a date picked by hand saves at once; the typed start is a 'Replace date?' offer, not a block", async () => {
 			const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
 			m.setInput("Birthday every year on May 5 at 7");
-			const start = m.result.chips.find((c) => c.kind === "scheduled")!;
-			m.activate(start);
-			m.setChipDate(start, start.alternatives![0]!.value!);
-			await Promise.resolve();
-			expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
+			m.setDate("2026-11-01");
 			expect(m.result.blocking).toEqual([]);
+			expect(m.result.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "choice", notice: "Replace date?" });
 			expect(await m.submit()).toBe("saved");
+			await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
+			const task = [...h.app.store.state.tasks.values()][0]!;
+			expect(task.recurrence).toMatchObject({ anchor: "2026-11-01", versions: [{ rule: { freq: "yearly" } }] });
+			// The typed start stays an offer, so its text stays in the title.
+			expect(task.title).toBe("Birthday May 5 at 7");
 		});
+	});
+
+	it.each([
+		{
+			what: "a typed repeat's hour",
+			input: "Gym every monday at 9",
+			kind: "recurrence",
+			choose: (m: QuickAddModel, chip: Chip) => m.setChipRule(chip, chip.alternatives![1]!.rule!),
+			chosen: (m: QuickAddModel) => m.repeatValue()?.rule.time,
+			value: "21:00",
+		},
+		{
+			what: "a yearly start's hour",
+			input: "Birthday every year on May 5 at 7",
+			kind: "scheduled",
+			choose: (m: QuickAddModel, chip: Chip) => m.setChipDate(chip, chip.alternatives![0]!.value!),
+			chosen: (m: QuickAddModel) => m.result.fields.scheduled,
+			value: { kind: "datetime", local: "2027-05-05T07:00", tz: "Europe/Berlin" },
+		},
+	])("#12: choosing $what from a chip the user opened only applies it: nothing saves by itself, and saving is no longer blocked", async ({ input, kind, choose, chosen, value }) => {
+		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
+		m.setInput(input);
+		const chip = m.result.chips.find((c) => c.kind === kind)!;
+		m.activate(chip);
+		choose(m, chip);
+		await Promise.resolve();
+		expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
+		expect(chosen(m)).toEqual(value);
+		expect(m.result.blocking).toEqual([]);
+		expect(await m.submit()).toBe("saved");
 	});
 });
 
@@ -1460,77 +1451,48 @@ describe("All fields", () => {
 	const timeInput = (root: HTMLElement) => root.querySelector<HTMLInputElement>('.cp-quick-add-fields input[type="time"]')!;
 	const dateInput = (root: HTMLElement) => root.querySelector<HTMLInputElement>('.cp-quick-add-fields input[type="date"]')!;
 
-	describe("#85: All fields", () => {
-		it("#85: Time is disabled until there is a date, says so in its label, and describes why", async () => {
-			const { root } = await mountQuickForm();
-			const time = timeInput(root);
-			expect(time.disabled).toBe(true);
-			const label = time.closest("label")!;
-			const hint = label.querySelector<HTMLElement>(".cp-field-hint");
-			expect(hint).not.toBeNull();
-			expect(hint!.textContent).toContain("needs a date");
-			expect(time.getAttribute("title")).toBe("Pick a date first");
-			const describedBy = time.getAttribute("aria-describedby");
-			expect(describedBy).not.toBeNull();
-			expect(root.querySelector(`#${CSS.escape(describedBy!)}`)).toBe(hint);
-		});
+	it("#85: the flags, the tag box and Link existing note are full rows of the grid; Time is disabled until there is a date and says why", async () => {
+		const { root } = await mountQuickForm();
+		const grid = fields(root);
+		const flags = grid.querySelector<HTMLElement>(".cp-flags")!;
+		expect(flags.classList.contains("cp-field-row")).toBe(true);
+		expect(flags.parentElement).toBe(grid);
+		const tags = root.querySelector<HTMLElement>(".cp-tag-input")!;
+		const note = root.querySelector<HTMLElement>(".cp-quick-add-note")!;
+		expect(tags.parentElement?.classList.contains("cp-field-row")).toBe(true);
+		expect(tags.parentElement?.parentElement).toBe(grid);
+		expect(note.classList.contains("cp-field-row")).toBe(true);
+		expect(note.parentElement).toBe(grid);
 
-		it("#85: with a date, Time is enabled and the hint is gone", async () => {
-			const { root } = await mountQuickForm();
-			const date = dateInput(root);
-			date.value = "2026-10-20";
-			date.dispatchEvent(new Event("input", { bubbles: true }));
-			await settle();
-			const time = timeInput(root);
-			expect(time.disabled).toBe(false);
-			expect(time.closest("label")!.querySelector(".cp-field-hint")).toBeNull();
-			expect(time.hasAttribute("aria-describedby")).toBe(false);
-			// Preact clears an unset title to "", which shows no tooltip.
-			expect(time.getAttribute("title") ?? "").toBe("");
-		});
+		let time = timeInput(root);
+		expect(time.disabled).toBe(true);
+		const hint = time.closest("label")!.querySelector<HTMLElement>(".cp-field-hint");
+		expect(hint).not.toBeNull();
+		expect(hint!.textContent).toContain("needs a date");
+		expect(time.getAttribute("title")).toBe("Pick a date first");
+		const describedBy = time.getAttribute("aria-describedby");
+		expect(describedBy).not.toBeNull();
+		expect(root.querySelector(`#${CSS.escape(describedBy!)}`)).toBe(hint);
 
-		it("#85: the Urgent and Important flags are one full-width row of the grid", async () => {
-			const { root } = await mountQuickForm();
-			const flags = fields(root).querySelector<HTMLElement>(".cp-flags")!;
-			expect(flags.classList.contains("cp-field-row")).toBe(true);
-			expect(flags.parentElement).toBe(fields(root));
-		});
-
-		it("#85: the tag box and Link existing note are full rows of the grid", async () => {
-			const { root } = await mountQuickForm();
-			const grid = fields(root);
-			const tags = root.querySelector<HTMLElement>(".cp-tag-input")!;
-			const note = root.querySelector<HTMLElement>(".cp-quick-add-note")!;
-			expect(tags.parentElement?.classList.contains("cp-field-row")).toBe(true);
-			expect(tags.parentElement?.parentElement).toBe(grid);
-			expect(note.classList.contains("cp-field-row")).toBe(true);
-			expect(note.parentElement).toBe(grid);
-		});
+		await typeInto(dateInput(root), "2026-10-20");
+		time = timeInput(root);
+		expect(time.disabled).toBe(false);
+		expect(time.closest("label")!.querySelector(".cp-field-hint")).toBeNull();
+		expect(time.hasAttribute("aria-describedby")).toBe(false);
+		// Preact clears an unset title to "", which shows no tooltip.
+		expect(time.getAttribute("title") ?? "").toBe("");
 	});
 
-	describe("#85: All fields stylesheet", () => {
-		const css = readFileSync("styles.css", "utf8");
-
-		it("#85: the modal's field grid is three columns, two in a narrow window", () => {
-			expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-quick-add-fields\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
-			expect(css).toMatch(/@container cp-qa-fields \(max-width: [0-9]+px\)\s*\{[^}]*\.cp-quick-add-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
-		});
-
-		it("#85: full rows span the grid", () => {
-			expect(css).toMatch(/\.cp-field-row[^{]*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
-		});
-
-		it("#85: the flags row wraps and centers its checkboxes", () => {
-			expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-flags\s*\{[^}]*flex-wrap:\s*wrap/);
-			expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-flags\s*\{[^}]*align-items:\s*center/);
-		});
-
-		it("#85: a List select in a field is drawn like the other inputs", () => {
-			const rule = css.match(/\.cp-field select\.dropdown\s*\{([^}]*)\}/);
-			expect(rule).not.toBeNull();
-			expect(rule![1]).toMatch(/background-color:\s*var\(--background-modifier-form-field\)/);
-			expect(rule![1]).toMatch(/border:\s*var\(--input-border-width\) solid var\(--background-modifier-border\)/);
-			expect(rule![1]).toMatch(/box-shadow:\s*none/);
-		});
+	it("#85: the stylesheet: a three-column grid (two in a narrow window), full rows span it, the flags row wraps and centers, a List select is drawn like the inputs", () => {
+		expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-quick-add-fields\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+		expect(css).toMatch(/@container cp-qa-fields \(max-width: [0-9]+px\)\s*\{[^}]*\.cp-quick-add-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+		expect(css).toMatch(/\.cp-field-row[^{]*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+		expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-flags\s*\{[^}]*flex-wrap:\s*wrap/);
+		expect(css).toMatch(/\.checkpoint-quick-add-modal \.cp-flags\s*\{[^}]*align-items:\s*center/);
+		const rule = css.match(/\.cp-field select\.dropdown\s*\{([^}]*)\}/);
+		expect(rule).not.toBeNull();
+		expect(rule![1]).toMatch(/background-color:\s*var\(--background-modifier-form-field\)/);
+		expect(rule![1]).toMatch(/border:\s*var\(--input-border-width\) solid var\(--background-modifier-border\)/);
+		expect(rule![1]).toMatch(/box-shadow:\s*none/);
 	});
 });

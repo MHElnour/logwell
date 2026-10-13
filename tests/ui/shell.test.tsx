@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { ACCENTS, DEFAULT_SETTINGS, sanitizeSettings } from "../../src/app/settings";
 import { accentClass } from "../../src/ui/accent";
 import { ICON, categoryIcon } from "../../src/ui/icons";
-import { mountApp, settle } from "./app-helpers";
+import { click, mountApp, q, settle } from "./app-helpers";
+import { css } from "./styles-helpers";
 
 // Design tokens' markup hooks, rail and sidebar, accent, empty states.
 
@@ -42,7 +43,7 @@ describe("rail", () => {
 		const buttons = [...root.querySelectorAll<HTMLElement>(".cp-rail button")];
 		expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "Data"]);
 		expect(buttons.map(iconOf)).toEqual([ICON.railTasks, ICON.railCalendar, ICON.railFocus, ICON.railHabits, ICON.railMatrix, ICON.railSearch, ICON.railData]);
-		expect(ICON.railTasks).toBe("square-check");
+		expect([ICON.railTasks, ICON.railCalendar, ICON.railFocus, ICON.railHabits, ICON.railMatrix]).toEqual(["square-check", "calendar", "target", "flame", "layout-grid"]);
 		expect(buttons[0]!.classList.contains("is-active")).toBe(true);
 		expect(buttons[0]!.getAttribute("aria-pressed")).toBe("true");
 		expect(buttons[1]!.classList.contains("is-active")).toBe(false);
@@ -58,7 +59,6 @@ describe("rail", () => {
 		// Keyboard order stays the DOM order, and the spacer is not focusable.
 		expect(rail.querySelectorAll("button")).toHaveLength(7);
 		expect(kids[7]!.getAttribute("aria-label")).toBe("Data");
-		const css = (await import("node:fs")).readFileSync("styles.css", "utf8");
 		expect(css).toMatch(/\.cp-rail-spacer\s*\{[^}]*flex:\s*1 1 auto/);
 	});
 
@@ -69,6 +69,28 @@ describe("rail", () => {
 		const data = root.querySelector<HTMLElement>('.cp-rail [aria-label="Data"]')!;
 		expect(data.classList.contains("is-active")).toBe(true);
 		expect(data.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it.each([
+		["calendar", "Calendar", ".cp-calendar"],
+		["focus", "Focus", ".cp-focus"],
+		["habits", "Habits", ".cp-habits"],
+		["matrix", "Matrix", ".cp-matrix"],
+	] as const)("the %s section is shown only while its rail button is active, and the app handle shows it", async (id, label, root) => {
+		const m = await mountApp();
+		const section = () => q(m.root, root).closest<HTMLElement>(".cp-section")!;
+		const button = () => q(m.root, `.cp-rail [aria-label="${label}"]`);
+		expect(section().hidden).toBe(true);
+		await click(button());
+		expect(section().hidden).toBe(false);
+		expect(button().getAttribute("aria-pressed")).toBe("true");
+		expect(button().classList.contains("is-active")).toBe(true);
+		await click(q(m.root, '.cp-rail [aria-label="Tasks"]'));
+		expect(section().hidden).toBe(true);
+		expect(button().getAttribute("aria-pressed")).toBe("false");
+		m.handle.current!.showSection(id);
+		await settle();
+		expect(section().hidden).toBe(false);
 	});
 });
 
@@ -88,7 +110,6 @@ describe("sidebar", () => {
 	});
 
 	it("the toggle is not hidden on wide views, and a collapsed sidebar is hidden by CSS", async () => {
-		const css = (await import("node:fs")).readFileSync("styles.css", "utf8");
 		expect(css).toMatch(/\.cp-tasks\.is-sidebar-collapsed \.cp-sidebar-pane\s*\{[^}]*display:\s*none/);
 		expect(css).not.toMatch(/\.cp-sidebar-toggle,\s*\n\.checkpoint-view \.cp-details-close\s*\{\s*display:\s*none/);
 	});

@@ -5,6 +5,7 @@ import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
 import { click, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
 import { render } from "preact";
 import { TaskCheckbox } from "../../src/ui/common";
+import { css } from "./styles-helpers";
 
 describe("task row", () => {
 	// The task row (priority look and menu), completion, list color.
@@ -190,8 +191,6 @@ describe("task row", () => {
 		});
 
 		it("the stylesheet animates only a just-completed row's checkbox", async () => {
-			const { readFileSync } = await import("node:fs");
-			const css = readFileSync("styles.css", "utf8");
 			expect(css).not.toMatch(/view \.cp-task-checkbox:checked\s*\{[^}]*animation/);
 			expect(css).toMatch(/\.cp-task-row\.is-just-completed \.cp-task-checkbox:checked\s*\{[^}]*animation/);
 		});

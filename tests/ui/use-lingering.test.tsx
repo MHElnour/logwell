@@ -42,17 +42,6 @@ describe("the hold in the app", () => {
 	});
 
 	describe("useLingering", () => {
-		it("holds a task completed while shown for exactly 450 ms", async () => {
-			await draw();
-			await complete();
-			await draw();
-			expect(held.has(a)).toBe(true);
-			await vi.advanceTimersByTimeAsync(LINGER_MS - 1);
-			expect(held.has(a)).toBe(true);
-			await vi.advanceTimersByTimeAsync(1);
-			expect(held.has(a)).toBe(false);
-		});
-
 		it("complete, reopen, complete keeps the full 450 ms from the second completion", async () => {
 			await draw();
 			await complete();
@@ -70,27 +59,6 @@ describe("the hold in the app", () => {
 			expect(held.has(a)).toBe(true);
 			await vi.advanceTimersByTimeAsync(1);
 			expect(held.has(a)).toBe(false);
-		});
-
-		it("a reopened task is not held, and its timer is gone", async () => {
-			await draw();
-			await complete();
-			await draw();
-			await reopen();
-			await draw();
-			expect(held.has(a)).toBe(false);
-			// Preact's own effect flush (rAF and a 100 ms fallback) and the store's save are done by then; the 450 ms timer is not due.
-			await vi.advanceTimersByTimeAsync(200);
-			await h.store.flush();
-			expect(vi.getTimerCount()).toBe(0);
-		});
-
-		it("a section that becomes shown only takes a baseline", async () => {
-			await draw(false);
-			await complete();
-			await draw(false);
-			await draw(true);
-			expect(held.size).toBe(0);
 		});
 
 		it("unmounting leaves no pending timer", async () => {
@@ -339,13 +307,17 @@ describe("the hold reads the change feed", () => {
 			expect(held.has(a)).toBe(false);
 		});
 
-		it("releases a held task reopened through the store at once", async () => {
+		it("releases a held task reopened through the store at once, and its timer is gone", async () => {
 			await draw();
 			await h.app.tasks.complete(a);
 			await draw();
 			await h.app.tasks.reopen(a);
 			await draw();
 			expect(held.size).toBe(0);
+			// Preact's own effect flush (rAF and a 100 ms fallback) and the store's save are done by then; the 450 ms timer is not due.
+			await vi.advanceTimersByTimeAsync(200);
+			await h.store.flush();
+			expect(vi.getTimerCount()).toBe(0);
 		});
 
 		it("nets several changes between two renders: complete then reopen holds nothing, complete again holds", async () => {

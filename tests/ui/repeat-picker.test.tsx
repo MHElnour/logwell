@@ -10,12 +10,11 @@ import { columnPatch, datePatch } from "../../src/ui/board/BoardView";
 import { detailsDateText } from "../../src/ui/format";
 import { groupPatch } from "../../src/ui/groupDrop";
 import { chipLabel } from "../../src/ui/quickadd/chipLabels";
-import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { type RepeatChoice, afterCompletionHint, draftOf, draftProblem, presetChoice, presetHint, presetOf, repeatLine, ruleOfDraft, ruleText, weekdaysFrom } from "../../src/ui/repeat";
 import { DEADLINE_CLEARED_TEXT, hasRepeatEditRequest, isPaneShown, notifyReanchored, onRepeatEditRequest, requestRepeatEdit } from "../../src/ui/repeatActions";
-import { click, contextMenu, keydown, lastNotice, menuItem, mountNode, q, quickModel, settle, strayAriaLabels, typeInto } from "./app-helpers";
+import { click, contextMenu, keydown, lastNotice, menuItem, mountNode, q, settle, strayAriaLabels, typeInto } from "./app-helpers";
 import { cal, cell, entries, entry, entryName, openCalendar } from "./calendar-helpers";
-import { FRIDAY, type M7Mount, mountM7, openDetails, rowFor, rowsFor, showInbox, taskById, WEDNESDAY_CLOCK, weeklyFriday } from "./repeat-helpers";
+import { FRIDAY, type M7Mount, mountM7, openDetails, rowFor, rowsFor, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
 import { checkedOf, openViewMenu, pickItem } from "./view-menu-helpers";
 
 describe("the repeat picker", () => {
@@ -56,6 +55,9 @@ describe("the repeat picker", () => {
 			expect(presetOf({ rule: rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }), end: never }, ANCHOR)).toBe("custom");
 			expect(presetOf({ rule: rule({ interval: 2 }), end: never }, ANCHOR)).toBe("custom");
 			expect(presetOf({ rule: rule({ freq: "daily", afterCompletion: true }), end: never }, ANCHOR)).toBe("custom");
+			expect(presetOf({ rule: rule({ freq: "yearly" }), end: never }, ANCHOR)).toBe("yearly");
+			expect(presetOf({ rule: rule({ freq: "yearly", interval: 2 }), end: never }, ANCHOR)).toBe("custom");
+			expect(presetOf({ rule: rule({ freq: "yearly", afterCompletion: true }), end: never }, ANCHOR)).toBe("custom");
 		});
 
 		it("builds every preset as a valid rule and keeps the time, the zone and the end of the value it replaces", () => {
@@ -65,6 +67,7 @@ describe("the repeat picker", () => {
 				expect(presetOf(c, ANCHOR), id).toBe(id);
 			}
 			expect(presetChoice("never", { rule: rule(), end: never })).toBeNull();
+			expect(presetChoice("yearly", null, ANCHOR)!.rule).toEqual(rule({ freq: "yearly" }));
 			const timed: RepeatChoice = { rule: rule({ time: "09:30", tz: "Europe/Berlin" }), end: { kind: "date", date: "2026-12-31" } };
 			const daily = presetChoice("daily", timed)!;
 			expect(daily.rule.time).toBe("09:30");
@@ -154,6 +157,7 @@ describe("the repeat picker", () => {
 			expect(opt(root, "weekly").querySelector("small")?.textContent).toBe("on Friday");
 			expect(opt(root, "monthly").querySelector("small")?.textContent).toBe("on the 9th");
 			expect(opt(root, "yearly").querySelector("small")?.textContent).toBe("on Oct 9");
+			expect(presetHint("yearly", "2028-02-29")).toBe("on Feb 29");
 			expect(opt(root, "never").querySelector("small")).toBeNull();
 		});
 
@@ -170,7 +174,7 @@ describe("the repeat picker", () => {
 				weekday: { freq: "weekly", interval: 1, weekdays: ["MO", "TU", "WE", "TH", "FR"] },
 				weekly: { freq: "weekly", interval: 1, weekdays: null },
 				monthly: { freq: "monthly", interval: 1, monthly: null },
-				yearly: { freq: "yearly", interval: 1, weekdays: null, monthly: null },
+				yearly: { freq: "yearly", interval: 1, weekdays: null, monthly: null, time: null, tz: null },
 			};
 			for (const [id, want] of Object.entries(expected)) {
 				const { root, onPick } = presets({ rule: rule({ freq: "daily" }), end: { kind: "count", count: 4 } });
@@ -933,38 +937,6 @@ describe("the Yearly preset and the years unit", () => {
 	});
 
 	describe("the Yearly preset (#12)", () => {
-		it("#12: is the sixth of seven presets, with the date's month and day as its hint", () => {
-			const root = mountNode(
-				<div>
-					<span id="lbl">Repeat</span>
-					<RepeatPresets value={null} anchor={ANCHOR} labelledBy="lbl" onPick={vi.fn()} onCustom={vi.fn()} />
-				</div>,
-			);
-			const labels = [...root.querySelectorAll('[role="option"]')].map((o) => o.querySelector(".cp-repeat-opt-label")?.textContent);
-			expect(labels).toEqual(["Never", "Daily", "Every weekday", "Weekly", "Monthly", "Yearly", "Custom…"]);
-			expect(q(root, '[data-preset="yearly"] small').textContent).toBe("on Oct 9");
-			expect(presetHint("yearly", "2028-02-29")).toBe("on Feb 29");
-		});
-
-		it("#12: picks a yearly rule on the date, keeping the end", async () => {
-			const onPick = vi.fn();
-			const root = mountNode(<RepeatPresets value={{ rule: rule({ freq: "daily" }), end: { kind: "count", count: 4 } }} anchor={ANCHOR} labelledBy="lbl" onPick={onPick} onCustom={vi.fn()} />);
-			q<HTMLButtonElement>(root, '[data-preset="yearly"]').click();
-			await settle();
-			const got = onPick.mock.calls[0]![0] as RepeatChoice;
-			expect(got.rule).toEqual(rule());
-			expect(got.end).toEqual({ kind: "count", count: 4 });
-		});
-
-		it("#12: is the preset of an every-year rule; every 2 years or after completion is Custom", () => {
-			const c = presetChoice("yearly", null)!;
-			expect(repeatRuleProblem(c.rule)).toBeNull();
-			expect(presetOf(c, ANCHOR)).toBe("yearly");
-			expect(presetChoice("yearly", null, "2026-10-09")!.rule).toEqual(rule());
-			expect(presetOf({ rule: rule({ interval: 2 }), end: never }, ANCHOR)).toBe("custom");
-			expect(presetOf({ rule: rule({ afterCompletion: true }), end: never }, ANCHOR)).toBe("custom");
-		});
-
 		it("#12: names the series' first date for yearly only, when one is given", () => {
 			expect(presetHint("yearly", ANCHOR, "2026-01-15")).toBe("on Jan 15");
 			expect(presetHint("monthly", ANCHOR, "2026-01-15")).toBe("on the 9th");
@@ -1278,105 +1250,22 @@ describe("the details date chip and the Repeat field", () => {
 	});
 });
 
-// Tasks and Quick Add rules 23 and 37, Repeating tasks rule 19 (#12): a value picked by hand wins and never leaves
-// saving blocked; the date popover's Clear dismisses every typed repeat end; the pill of a repeat picked by hand shows
-// the end that will be saved; the picker keeps a stored end it did not change. Europe/Berlin, Wednesday 2026-10-07.
-
+// The custom editor's draft and a repeat's end (#12). Europe/Berlin, Wednesday 2026-10-07.
 
 const friday = { freq: "weekly" as const, interval: 1, weekdays: ["FR" as const], monthly: null, afterCompletion: false, time: null, tz: null };
 
-describe("a hand-picked date over a typed yearly start (#12)", () => {
-	it("#12: saves at once on the picked date; the typed start is a 'Replace date?' offer, not a block", async () => {
-		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Birthday every year on May 5 at 7");
-		m.setDate("2026-11-01");
-		expect(m.result.blocking).toEqual([]);
-		expect(m.result.chips.find((c) => c.kind === "scheduled")).toMatchObject({ status: "choice", notice: "Replace date?" });
-		expect(await m.submit()).toBe("saved");
-		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
-		const task = [...h.app.store.state.tasks.values()][0]!;
-		expect(task.recurrence).toMatchObject({ anchor: "2026-11-01", versions: [{ rule: { freq: "yearly" } }] });
-		// The typed start stays an offer, so its text stays in the title (Tasks and Quick Add rule 23).
-		expect(task.title).toBe("Birthday May 5 at 7");
-	});
-});
-
-describe("Clear in the date popover (#12)", () => {
-	it("#12: dismisses an invalid repeat end too, so the date never comes back as a deadline", async () => {
-		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Gym every friday until Oct 8");
-		expect(m.result.chips.map((c) => `${c.kind}/${c.status}`)).toEqual(["recurrence/applied", "repeatEnd/invalid"]);
-		m.clearDateFields();
-		expect(m.result.chips).toEqual([]);
-		expect(m.result.fields.deadline).toBeUndefined();
-		expect(m.result.blocking).toEqual([]);
-		expect(m.result.title).toBe("Gym every friday until Oct 8");
+describe("the repeat picker and a repeat's end (#12)", () => {
+	it("#12: refuses an end before the first occurrence (a Monday task, weekly on Friday, ending Wednesday)", () => {
+		const d = { ...draftOf(null, "2026-10-05"), freq: "weekly" as const, days: ["FR" as const], endKind: "date" as const, endDate: "2026-10-07" };
+		expect(draftProblem(d, "2026-10-05", "MO")).toBe("The repeat ends before its first date.");
+		expect(draftProblem({ ...d, endDate: "2026-10-09" }, "2026-10-05", "MO")).toBeNull();
 	});
 
-	it("#12: dismisses an end that waits for the repeat's time", async () => {
-		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Gym every monday at 9 until Dec 1");
-		expect(m.result.chips.find((c) => c.kind === "repeatEnd")?.status).toBe("suggestion");
-		m.clearDateFields();
-		expect(m.result.chips.filter((c) => c.kind === "repeatEnd" || c.kind === "deadline")).toEqual([]);
-	});
-});
-
-describe("the pill of a repeat picked by hand (#12)", () => {
-	it("#12: shows the typed end that will be saved, not only the picked value", async () => {
-		const { m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setRepeat({ rule: friday, end: { kind: "never" } });
-		m.setInput("Gym until Dec 1");
-		expect(m.repeatValue()).toEqual({ rule: friday, end: { kind: "date", date: "2026-12-01" } });
-		const pill = manualPills(m).find((p) => p.kind === "recurrence")!;
-		expect(pill.label).toBe("Repeat: every Fri · ends Dec 1");
-	});
-});
-
-describe("the repeat picker and a stored end (#12)", () => {
 	it("#12: keeps a stored count above 999 while it is unchanged, as the services do", () => {
 		const stored = { rule: friday, end: { kind: "count" as const, count: 1500 } };
 		const d = draftOf(stored, "2026-10-07");
 		expect(draftProblem(d, "2026-10-07", "MO", stored.end)).toBeNull();
 		expect(draftProblem({ ...d, endCount: "1501" }, "2026-10-07", "MO", stored.end)).toBe("End after 1 to 999 times.");
 		expect(draftProblem(d, "2026-10-07", "MO")).toBe("End after 1 to 999 times.");
-	});
-});
-
-describe("choosing a typed repeat's hour (#12)", () => {
-	it("#12: blocks saving: Enter opens the choice, and the pick saves with the chosen hour", async () => {
-		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Gym every monday at 9");
-		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
-		expect(m.result.blocking).toEqual([chip.id]);
-		expect(await m.submit()).toBe("blocked");
-		expect(m.openChipId).toBe(chip.id);
-		expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
-		m.setChipRule(chip, chip.alternatives![1]!.rule!);
-		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
-		const task = [...h.app.store.state.tasks.values()][0]!;
-		expect(task.title).toBe("Gym");
-		expect(task.recurrence?.versions[0]?.rule).toMatchObject({ freq: "weekly", weekdays: ["MO"], time: "21:00" });
-	});
-
-	it("#12: the end typed after it waits for the hour and saves with it", async () => {
-		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Gym every day at 7 until Dec 1");
-		expect(await m.submit()).toBe("blocked");
-		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
-		m.setChipRule(chip, chip.alternatives![0]!.rule!);
-		await vi.waitFor(() => expect([...h.app.store.state.tasks.values()]).toHaveLength(1));
-		expect([...h.app.store.state.tasks.values()][0]!.recurrence).toMatchObject({ end: { kind: "date", date: "2026-12-01" }, versions: [{ rule: { freq: "daily", time: "07:00" } }] });
-	});
-
-	it("#12: a pick made without Enter only applies the hour: nothing saves by itself", async () => {
-		const { h, m } = await quickModel({ at: WEDNESDAY_CLOCK });
-		m.setInput("Gym every monday at 9");
-		const chip = m.result.chips.find((c) => c.kind === "recurrence")!;
-		m.activate(chip);
-		m.setChipRule(chip, chip.alternatives![1]!.rule!);
-		await Promise.resolve();
-		expect([...h.app.store.state.tasks.values()]).toHaveLength(0);
-		expect(m.repeatValue()?.rule.time).toBe("21:00");
 	});
 });

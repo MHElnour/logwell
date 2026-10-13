@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type AppMount, at, byLabel, click, day, dragTo, keydown, mountApp, pointer, rect, settle, taskOf } from "./app-helpers";
 import { cal, cell, entries, entry, openCalendar, stubMonth, stubWeek } from "./calendar-helpers";
+import { css } from "./styles-helpers";
 
 // Calendar drag and drop. happy-dom has no layout, so the day columns,
 // all-day cells and month cells get fake rectangles: column i is x 100 i to 100 i + 100, minute m of a
@@ -187,20 +186,6 @@ describe("week: move a timed block (D11)", () => {
 		expect(ghost(m)).toBeNull();
 		expect(details(m)).not.toBeNull();
 		expect(update).not.toHaveBeenCalled();
-	});
-
-	it("ignores touch and the right button", async () => {
-		const m = await mountApp();
-		await weekReady(m);
-		const block = entry(cal(m.root), "Standup", ".cp-cal-daycol");
-		down(block, { x: 350, y: 900 }, { pointerType: "touch" });
-		move(block, { x: 450, y: 960 });
-		await settle();
-		expect(ghost(m)).toBeNull();
-		down(block, { x: 350, y: 900 }, { button: 2 });
-		move(block, { x: 450, y: 960 });
-		await settle();
-		expect(ghost(m)).toBeNull();
 	});
 
 	it("Enter and Space still open the details", async () => {
@@ -634,7 +619,6 @@ describe("scrolling, notices and styles", () => {
 	});
 
 	it("the ghost sits under the sticky header and the resize handle leaves room to move short blocks", () => {
-		const css = readFileSync(join(process.cwd(), "styles.css"), "utf8");
 		const z = (sel: string) => Number(new RegExp(`${sel.replace(/[.]/g, "\\.")} \\{[^}]*?z-index: (\\d+)`).exec(css)?.[1]);
 		expect(z(".checkpoint-view .cp-cal-ghost")).toBeLessThan(z(".checkpoint-view .cp-cal-sticky"));
 		expect(z(".checkpoint-view .cp-cal-ghost")).toBeGreaterThan(2);

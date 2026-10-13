@@ -54,18 +54,7 @@ describe("Focus page", () => {
 		await tickFor(m, 60);
 	}
 
-	describe("the rail and the page", () => {
-		it("has a Focus entry after Calendar that shows the page", async () => {
-			const m = await mountApp();
-			const labels = [...m.root.querySelectorAll(".cp-rail button")].map((b) => b.getAttribute("aria-label"));
-			expect(labels.indexOf("Focus")).toBe(labels.indexOf("Calendar") + 1);
-			expect(m.root.querySelector(".cp-rail [aria-label='Focus'] [data-icon]")?.getAttribute("data-icon")).toBe("target");
-			const section = m.root.querySelector<HTMLElement>(".cp-focus")!;
-			expect(section.closest<HTMLElement>(".cp-section")!.hidden).toBe(true);
-			await openFocus(m);
-			expect(section.closest<HTMLElement>(".cp-section")!.hidden).toBe(false);
-		});
-
+	describe("the page", () => {
 		it("shows the idle ring with the remembered set values", async () => {
 			const m = await mountApp();
 			const page = await openFocus(m);
@@ -456,7 +445,7 @@ describe("Focus page", () => {
 			expect(text(page, ".cp-focus-set-task")).toBe("Old name (deleted)");
 		});
 
-		it("Include and Exclude a pending gap call includeGap", async () => {
+		it("Include and Exclude a pending gap call includeGap, each with an Undo notice labelled as the store write", async () => {
 			const m = await mountApp();
 			await m.h.app.focus.open();
 			await m.h.app.focus.start(cfg(1, 600), null);
@@ -469,12 +458,19 @@ describe("Focus page", () => {
 			const gap = page.querySelector<HTMLElement>(".cp-focus-gap")!;
 			expect(gap.textContent).toContain("+5m unobserved, not counted");
 			const spy = vi.spyOn(m.h.app.focus, "includeGap");
+			const notify = vi.spyOn(m.host as unknown as { notifyUndo(message: string, label: string): void }, "notifyUndo");
 			await pressButton(gap, "Include");
 			expect(spy).toHaveBeenCalledWith(expect.any(String), 0, true);
 			await settle();
 			expect(text(page, ".cp-focus-round-time")).toBe("5m");
+			expect(notify).toHaveBeenCalledTimes(1);
+			expect(notify.mock.calls[0]![1]).toBe("Edit focus record");
+			expect(m.h.app.store.undoLabel).toBe("Edit focus record");
 			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Exclude");
 			expect(spy).toHaveBeenLastCalledWith(expect.any(String), 0, false);
+			await settle();
+			expect(notify).toHaveBeenCalledTimes(2);
+			expect(notify.mock.calls[1]![1]).toBe(m.h.app.store.undoLabel);
 		});
 
 		it("Include and Exclude show an Undo notice labelled as the store write", async () => {
@@ -672,45 +668,26 @@ describe("Focus page", () => {
 			expect(menuItem(menu, "Delete record").warning).toBe(true);
 		});
 
-		it("Change task… picks another task", async () => {
-			const m = await mountApp();
-			await withTask(m);
-			const other = (await m.h.app.tasks.create({ title: "Other" })).task;
-			const page = await openFocus(m);
-			const menu = await openMenu(page, m);
-			const pick = vi.fn(async () => other.id);
-			m.host.pickTask = pick as unknown as typeof m.host.pickTask;
-			menuItem(menu, "Change task…").run();
-			await settle();
-			expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBe(other.id);
-		});
-
-		it("Remove task clears the task", async () => {
-			const m = await mountApp();
-			await withTask(m);
-			const page = await openFocus(m);
-			menuItem(await openMenu(page, m), "Remove task").run();
-			await settle();
-			expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBeNull();
-			expect(text(page, ".cp-focus-set-task")).toBe("No task");
-		});
-
 		type Notify = { notifyUndo(message: string, label: string): void };
 
-		it("Change task and Remove task show an Undo notice labelled as the store write", async () => {
+		it("Change task… picks another task and Remove task clears it, each with an Undo notice labelled as the store write", async () => {
 			const m = await mountApp();
 			await withTask(m);
 			const other = (await m.h.app.tasks.create({ title: "Other" })).task;
 			const notify = vi.spyOn(m.host as unknown as Notify, "notifyUndo");
 			const page = await openFocus(m);
-			m.host.pickTask = (async () => other.id) as unknown as typeof m.host.pickTask;
+			const pick = vi.fn(async () => other.id);
+			m.host.pickTask = pick as unknown as typeof m.host.pickTask;
 			menuItem(await openMenu(page, m), "Change task…").run();
 			await settle();
+			expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBe(other.id);
 			expect(notify).toHaveBeenCalledTimes(1);
 			expect(notify.mock.calls[0]![1]).toBe("Assign focus record");
 			expect(m.h.app.store.undoLabel).toBe("Assign focus record");
 			menuItem(await openMenu(page, m), "Remove task").run();
 			await settle();
+			expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBeNull();
+			expect(text(page, ".cp-focus-set-task")).toBe("No task");
 			expect(notify).toHaveBeenCalledTimes(2);
 			expect(notify.mock.calls[1]![1]).toBe(m.h.app.store.undoLabel);
 			await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
@@ -862,32 +839,24 @@ describe("focus minutes stepper", () => {
 	const down = (value: number) => Math.max(1, value - stepFor(value, -1, true));
 	const up = (value: number) => Math.min(120, value + stepFor(value, 1, true));
 
-	describe("focus minutes stepper", () => {
-		it("steps down from an odd value to the multiple of 5 below, then by 1 at or below 5", () => {
-			expect(down(7)).toBe(5);
-			expect(down(6)).toBe(5);
-			expect(down(9)).toBe(5);
-			expect(down(11)).toBe(10);
-			expect(down(5)).toBe(4);
-			expect(down(4)).toBe(3);
-			expect(down(1)).toBe(1);
-		});
-
-		it("steps down by 5 from a multiple of 5", () => {
-			expect(down(25)).toBe(20);
-			expect(down(10)).toBe(5);
-		});
-
-		it("steps up as before: by 1 below 5, then by 5", () => {
-			expect(up(3)).toBe(4);
-			expect(up(4)).toBe(5);
-			expect(up(5)).toBe(10);
-			expect(up(7)).toBe(12);
-		});
-
-		it("steps by 1 on a field that is not coarse", () => {
-			expect(stepFor(6, -1, false)).toBe(1);
-			expect(stepFor(6, 1, false)).toBe(1);
-		});
+	it("steps by 5, by 1 at or below 5, and down from a value that is not a multiple of 5 to the multiple below; a field that is not coarse steps by 1", () => {
+		const steps: ["down" | "up", number, number][] = [
+			["down", 7, 5],
+			["down", 6, 5],
+			["down", 9, 5],
+			["down", 11, 10],
+			["down", 5, 4],
+			["down", 4, 3],
+			["down", 1, 1],
+			["down", 25, 20],
+			["down", 10, 5],
+			["up", 3, 4],
+			["up", 4, 5],
+			["up", 5, 10],
+			["up", 7, 12],
+		];
+		for (const [way, from, to] of steps) expect((way === "down" ? down : up)(from), `${way} from ${from}`).toBe(to);
+		expect(stepFor(6, -1, false)).toBe(1);
+		expect(stepFor(6, 1, false)).toBe(1);
 	});
 });
