@@ -748,11 +748,13 @@ export class TaskService {
 	/** Purges trash entries older than 30 days. */
 	purgeExpired(): Promise<number> {
 		const cutoff = instantFromNow(this.store.clock, -TRASH_RETENTION_DAYS * 24 * 3600 * 1000);
-		const expired = [...this.store.state.trash.values()].filter((e) => e.deletedAt < cutoff);
-		if (expired.length === 0 || this.store.readOnlyState !== null) return Promise.resolve(0);
+		const isExpired = (e: TrashEntry) => e.deletedAt < cutoff;
+		if (![...this.store.state.trash.values()].some(isExpired) || this.store.readOnlyState !== null) return Promise.resolve(0);
 		return this.store.run(
 			"Purge trash",
 			(tx) => {
+				// Decided again in the command: a restore or a new delete queued before it changes what has expired.
+				const expired = tx.all("trash").filter(isExpired);
 				for (const e of expired) tx.remove("trash", e.batchId);
 				forgetTasks(tx, expired.flatMap((e) => e.tasks));
 				return expired.length;
