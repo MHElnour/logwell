@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
+import { FocusService } from "../../src/app/FocusService";
 import { SAVE_DEBOUNCE_MS } from "../../src/persistence/CpbaseStore";
 import { descendant, emptyDbText, load, makeTask, withTask } from "../persistence/fixtures";
 import { type FakeApp, fakeApp, fileOf, loadPlugin } from "./fake-vault";
@@ -127,6 +128,77 @@ describe("pinning the database path per session (N7)", () => {
 		await switching;
 		expect(plugin.settings.activeDatabasePath).toBe("B-moved.cpbase");
 		expect(plugin.session?.path).toBe("B-moved.cpbase");
+	});
+});
+
+describe("a change to the database file while it opens", () => {
+	it("#103: is read once the open finishes, so the next edit saves with no conflict", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		// Another device's save lands after B is read, while the rest of its open goes on.
+		type Open = (this: FocusService, dbId: string) => ReturnType<FocusService["open"]>;
+		const focusOpen = Object.getOwnPropertyDescriptor(FocusService.prototype, "open")!.value as Open;
+		const spy = vi.spyOn(FocusService.prototype, "open").mockImplementation(function (this: FocusService, dbId: string) {
+			if (dbId === "db-b") {
+				fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("remote")).next, "r-remote000001"));
+				fake.fire("modify", fileOf(B));
+			}
+			return focusOpen.call(this, dbId);
+		});
+		try {
+			await plugin.setActiveDatabase(B);
+		} finally {
+			spy.mockRestore();
+		}
+		const session = plugin.session!;
+		await session.store.flush();
+		expect([...session.app.store.state.tasks.values()].map((t) => t.title)).toEqual(["Task remote"]);
+
+		await session.app.tasks.create({ title: "mine" });
+		await session.store.flush();
+		expect(titles(fake.files.get(B)).sort()).toEqual(["Task remote", "mine"]);
+		expect(notices.actions).toEqual([]);
+		const conflicts = [...fake.plugin.files.keys()].filter((p) => p.includes("/conflicts/"));
+		expect(conflicts).toEqual([]);
+	});
+});
+
+describe("a note renamed during a database switch", () => {
+	it("#113: is followed by the database being closed, as well as by the one opening", async () => {
+		const fake = setup();
+		const note = { path: "Notes/X.md", linkedAt: "2026-10-01T09:00:00.000Z" };
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => withTask(d, makeTask("a1", { descriptionNote: note })).next, "r-a00000000001"));
+		fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("b1", { descriptionNote: note })).next, "r-b00000000001"));
+		const plugin = await loadPlugin(fake, A);
+		// The note's folder is renamed while the switch waits for A's sync request (the test stub's
+		// files all count as folders, so a folder rename is the one these tests can send).
+		const settle = vi.spyOn(plugin.session!, "settleSync").mockImplementation(async () => {
+			fake.fire("rename", fileOf("Archive"), "Notes");
+			await new Promise((r) => setTimeout(r, 10));
+		});
+		await plugin.setActiveDatabase(B);
+		expect(settle).toHaveBeenCalled();
+		const notePaths = (text: string | undefined) => [...load(text ?? "").tasks.values()].map((t) => t.descriptionNote?.path);
+		expect(notePaths(fake.files.get(A))).toEqual(["Archive/X.md"]);
+		expect([...plugin.session!.app.store.state.tasks.values()].map((t) => t.descriptionNote?.path)).toEqual(["Archive/X.md"]);
+		expect(notices.errors).toEqual([]);
+	});
+
+	it("#113: one that reaches the closing database after its file closed is applied when it opens again", async () => {
+		const fake = setup();
+		const note = { path: "Notes/X.md", linkedAt: "2026-10-01T09:00:00.000Z" };
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => withTask(d, makeTask("a1", { descriptionNote: note })).next, "r-a00000000001"));
+		const plugin = await loadPlugin(fake, A);
+		const store = plugin.session!.store;
+		const close = store.close.bind(store);
+		vi.spyOn(store, "close").mockImplementation(async () => {
+			await close();
+			fake.fire("rename", fileOf("Archive"), "Notes");
+		});
+		await plugin.setActiveDatabase(B);
+		await plugin.setActiveDatabase(A);
+		expect([...plugin.session!.app.store.state.tasks.values()].map((t) => t.descriptionNote?.path)).toEqual(["Archive/X.md"]);
+		expect(notices.errors).toEqual([]);
 	});
 });
 
