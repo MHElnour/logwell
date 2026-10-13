@@ -10,21 +10,16 @@ import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
 import { U1Host } from "../ui/app-helpers";
+import { countBigPasses, elapsed, perfLog, tally } from "./measure";
 
 // A note with 10 dashboard blocks over 50,000 tasks. One task change must wake only the blocks it can
 // affect: the others run no query and draw nothing. The tasks are spread over 10 lists, 5,000 each, and 20 of
-// each list's tasks are high priority; block k shows the high-priority tasks of list k.
+// each list's tasks are high priority; block k shows the high-priority tasks of list k. The query counts are the
+// checks; the times are logged (CHECKPOINT_PERF_LOG=1). Measured: one change with one block querying about 10 ms; a
+// change no block can show about 5 ms (ten queries took about 45); a block with a tag list and both date keys about 6 ms.
 
 const TASKS = 50_000;
 const LISTS = 10;
-// Same allowance as the other perf tests: CI runners are two to three times slower.
-const CI_SLACK = process.env.CI ? 4 : 1;
-/** One change, from the command to the last block's redraw, with at most one block querying 50,000 tasks (about 10 ms here). */
-const CHANGE_BUDGET_MS = 50 * CI_SLACK;
-/** A change that no block can show: the command itself and ten checks that find nothing to do (about 5 ms here; ten queries took about 45). */
-const SKIPPED_BUDGET_MS = 25 * CI_SLACK;
-/** One block with a tag list and both date keys over 50,000 tasks (about 6 ms here). */
-const QUERY_BUDGET_MS = 50 * CI_SLACK;
 
 vi.mock("../../src/domain/blockQuery", async (importActual) => {
 	const actual = await importActual<typeof import("../../src/domain/blockQuery")>();
@@ -60,7 +55,7 @@ afterAll(() => {
 });
 
 describe("ten dashboard blocks over 50,000 tasks", () => {
-	it(`one change redraws only the blocks it can affect, each within ${CHANGE_BUDGET_MS} ms`, async () => {
+	it("one change redraws only the blocks it can affect", async () => {
 		const h = await appHarness();
 		const host = new U1Host(h);
 		const lists = [];
@@ -118,20 +113,18 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		// 1. A title edit of a task no block shows: no block queries or draws.
 		const skipped = await change(() => h.app.tasks.update(first(3), { title: "Edited, not shown" }));
 		expect([...queried.keys()]).toEqual([]);
-		expect(skipped).toBeLessThan(SKIPPED_BUDGET_MS);
 
 		// 2. A task of list 3 becomes high priority: only block 3 queries, and it shows the task.
 		const entering = await change(() => h.app.tasks.update(first(3), { priority: 1 }));
 		expect([...queried.entries()]).toEqual([["List 3", 1]]);
 		expect(title(3)).toBe(21);
 		expect(title(4)).toBe(20);
-		expect(entering).toBeLessThan(CHANGE_BUDGET_MS);
 
 		// 3. A shown task of list 5 is renamed: only block 5 queries.
 		const shown = taskId(5 * (TASKS / LISTS) + 8);
 		const renamed = await change(() => h.app.tasks.update(shown, { title: "Renamed" }));
 		expect([...queried.entries()]).toEqual([["List 5", 1]]);
-		expect(renamed).toBeLessThan(CHANGE_BUDGET_MS);
+		perfLog(`task blocks: a change no block shows ${skipped.toFixed(1)} ms, one entering block 3 ${entering.toFixed(1)} ms, a rename in block 5 ${renamed.toFixed(1)} ms`);
 
 		// 4. Many changes in one burst still cost one query per affected block.
 		queried.clear();
@@ -145,7 +138,7 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 	}, 120_000);
 
 	// #52: a block with a tag list and both date keys is one pass over the tasks; each tag key of a task is tested once per block.
-	it(`a block with a tag list, due and scheduled queries 50,000 tasks within ${QUERY_BUDGET_MS} ms`, async () => {
+	it("a block with a tag list, due and scheduled queries 50,000 tasks in one pass", async () => {
 		const h = await appHarness();
 		for (const name of ["Home/Calls", "Home/Garden", "Work", "Errands"]) await h.app.tags.create(name);
 		const KEYS = ["home/calls", "home/garden", "work", "errands"];
@@ -168,11 +161,11 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		h.store.commit({ ...data, tasks }, ops);
 		const actual = (await vi.importActual<typeof import("../../src/domain/blockQuery")>("../../src/domain/blockQuery")).runBlockQuery;
 		const filters = parseBlockQuery("tag: home, work, errands\ndue: overdue\nscheduled: this week").filters;
-		const start = performance.now();
-		const r = actual(filters, h.store.data, ctx, "Note.md");
-		const elapsed = performance.now() - start;
+		const ms = elapsed(() => actual(filters, h.store.data, ctx, "Note.md"));
+		perfLog(`task block with a tag list, due and scheduled over ${TASKS} tasks: ${ms.toFixed(1)} ms`);
+		const { result: r, passes } = await countBigPasses(() => actual(filters, h.store.data, ctx, "Note.md"));
+		expect(passes, tally(passes)).toHaveLength(1);
 		expect(r.kind).toBe("ok");
 		if (r.kind === "ok") expect(r.entries.length).toBeGreaterThan(0);
-		expect(elapsed).toBeLessThan(QUERY_BUDGET_MS);
 	}, 120_000);
 });

@@ -201,6 +201,13 @@ export class CpbaseStore {
 	private readonly attempted = new Set<string>();
 	private lastSnapshotAt: number | null = null;
 	private closed = false;
+	/**
+	 * The conflict copy holding edits that were pending when the file turned
+	 * damaged or newer-schema. They reached no file, so the next valid file is a
+	 * fork, not a fast-forward. Cleared once that conflict is announced, or when
+	 * Restore backup writes them.
+	 */
+	private unsavedCopy: string | null = null;
 
 	constructor(private readonly deps: StoreDeps) {}
 
@@ -607,10 +614,12 @@ export class CpbaseStore {
 				if (newest === undefined || newest.revision !== revision) {
 					await backups.writeSnapshot("hourly", content);
 					// The journal is truncated at a snapshot, but only when the
-					// snapshot covers its newest entry. An entry whose write
+					// snapshot covers its newest readable entry: that entry's revision
+					// is the snapshot's or one of its ancestors. An entry whose write
 					// never reached the file survives until then.
-					const journal = await backups.readJournal();
-					if (journal.length > 0 && journal[journal.length - 1]?.rev === revision) await backups.resetJournal();
+					const header = readHeader(content);
+					const last = (await backups.readJournal()).at(-1);
+					if (header !== null && last !== undefined && lineageRelation(header, last.rev, []) === "descendant") await backups.resetJournal();
 				}
 				this.lastSnapshotAt = now.getTime();
 			}
@@ -664,8 +673,9 @@ export class CpbaseStore {
 			return;
 		}
 		if (result.kind !== "ok") {
-			// Keep the in-memory state (the newest valid one) and stop writing.
-			if (this.isDirty) await this.writeConflictCopy();
+			// Keep the in-memory state (the newest valid one) and stop writing. The
+			// pending edits are kept as a copy, announced when a valid file returns.
+			if (this.isDirty) this.unsavedCopy = await this.writeConflictCopy();
 			this.pendingOps = [];
 			this.needsFullWrite = false;
 			this.disk = diskStateOf(text);
@@ -692,12 +702,15 @@ export class CpbaseStore {
 		// with pending edits it is handled as a fork.
 		const rollback = ours.history.includes(incoming.meta.revision);
 		const fastForward =
-			placeholder ||
-			(incoming.meta.dbId === ours.dbId &&
-				!this.isDirty &&
-				(rollback || lineageRelation(incoming.meta, ours.revision, ours.history) !== "fork"));
+			this.unsavedCopy === null &&
+			(placeholder ||
+				(incoming.meta.dbId === ours.dbId &&
+					!this.isDirty &&
+					(rollback || lineageRelation(incoming.meta, ours.revision, ours.history) !== "fork")));
 		let conflictPath: string | null = null;
-		if (!fastForward) conflictPath = await this.writeConflictCopy();
+		// Edits kept when the file turned unreadable are already in their copy (and
+		// a newer-schema memory is not ours to copy).
+		if (!fastForward) conflictPath = this.unsavedCopy ?? (await this.writeConflictCopy());
 		// An older file cannot hold sections (before v3), repeating
 		// tasks (before v4), TickTick links (before v5) or yearly repeats (before v6), so replacing newer memory
 		// with it would silently drop them.
@@ -716,6 +729,7 @@ export class CpbaseStore {
 		this.replaceData(incoming);
 		this.disk = diskStateOf(text);
 		this.attempted.clear();
+		this.unsavedCopy = null;
 		if (this.readOnly !== null) {
 			this.readOnly = null;
 			this.emit({ type: "writable" });
@@ -825,7 +839,11 @@ export class CpbaseStore {
 			// The compare-and-swap base is the damaged text, so a file that changed
 			// again meanwhile is handled as an external change instead.
 			await this.saveNow();
-			if (this.readOnly === null) this.emit({ type: "writable" });
+			if (this.readOnly === null) {
+				// The edits kept when the file turned unreadable are in the file now.
+				this.unsavedCopy = null;
+				this.emit({ type: "writable" });
+			}
 			this.emit({ type: "loaded", cause: "replace" });
 		});
 	}
@@ -886,7 +904,10 @@ export class CpbaseStore {
 			// rather than dropping them when the session ends. This does not depend on
 			// what the file holds now: a sync tool may have recreated it right after
 			// the failed save.
-			if (this.current !== null && this.isDirty && this.backups !== null) {
+			if (this.unsavedCopy !== null) {
+				// Edits kept when the file turned unreadable never reached a file: say where they are.
+				this.emit({ type: "pending-saved-as-conflict", path: this.unsavedCopy });
+			} else if (this.current !== null && this.isDirty && this.backups !== null) {
 				try {
 					const path = await this.writeConflictCopy();
 					this.emit({ type: "pending-saved-as-conflict", path });
