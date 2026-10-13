@@ -18,7 +18,7 @@ import { LocalStorageReminderState } from "./reminderState";
 import { LocalStorageRenameQueue } from "./renameQueue";
 import { TICKTICK_TIMEOUT_MS, TickTickHttp } from "./tickTickHttp";
 import { ConfirmationPrompter, type LinkFlowDeps, linkListFlow, unlinkListFlow } from "./tickTickFlow";
-import { LocalStorageTickTickDevice, SecretStorageTickTickSecret } from "./tickTickPorts";
+import { LocalStorageTickTickDevice, LocalStorageTickTickPending, SecretStorageTickTickSecret } from "./tickTickPorts";
 import { askMissing, pickLinkOption, showFirstSyncPreview } from "./tickTickDialogs";
 import { TickTickScheduler } from "./tickTickScheduler";
 
@@ -113,11 +113,19 @@ export class DbSession {
 		app.store.bus.onListenerError = showError;
 		app.focus.bus.onListenerError = showError;
 		this.tickTickApi = new TickTickHttp(app.tickTickSecret);
-		this.sync = new SyncService(app.store, app.tasks, app.sections, app.settings, this.tickTickApi, {
-			port: app.notes,
-			enabled: () => plugin.settings.tickTickNotes,
-			folder: () => plugin.settings.noteFolder,
-		});
+		this.sync = new SyncService(
+			app.store,
+			app.tasks,
+			app.sections,
+			app.settings,
+			this.tickTickApi,
+			{
+				port: app.notes,
+				enabled: () => plugin.settings.tickTickNotes,
+				folder: () => plugin.settings.noteFolder,
+			},
+			new LocalStorageTickTickPending(obsidian),
+		);
 		this.tickTick = new TickTickScheduler({
 			store: app.store,
 			sync: this.sync,
