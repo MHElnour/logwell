@@ -2,7 +2,7 @@
 import { Modal } from "obsidian";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type HabitInput, validateHabitInput } from "../../src/domain/habits";
-import { HabitModal, buildHabitForm } from "../../src/obsidian/habitDialog";
+import { buildHabitForm, habitDialog } from "../../src/obsidian/habitDialog";
 import { habitDialogOptions } from "../../src/ui/habits/actions";
 import type { HabitDialogOptions } from "../../src/ui/host";
 import { appHarness } from "../app/harness";
@@ -528,8 +528,23 @@ describe("the Modal", () => {
 		return el;
 	};
 	const superClose = vi.fn();
+	/** The modal `habitDialog` opened last, with the titles it set. */
+	let opened: { modal: Modal; titles: string[] } | null = null;
 	beforeAll(() => {
-		(Modal as unknown as { prototype: { close: () => void } }).prototype.close = superClose;
+		const proto = (Modal as unknown as { prototype: Record<string, unknown> }).prototype;
+		proto.close = superClose;
+		// Obsidian's open(): the elements, then onOpen.
+		proto.open = function (this: Modal & { onOpen(): void }) {
+			const m = this as unknown as { modalEl: Dom; contentEl: Dom; setTitle: (t: string) => void };
+			const titles: string[] = [];
+			m.modalEl = dom();
+			m.contentEl = dom();
+			m.modalEl.appendChild(m.contentEl);
+			document.body.appendChild(m.modalEl);
+			m.setTitle = (t) => void titles.push(t);
+			opened = { modal: this, titles };
+			void this.onOpen();
+		};
 	});
 	afterEach(() => superClose.mockClear());
 
@@ -543,15 +558,9 @@ describe("the Modal", () => {
 			...options,
 		};
 		let resolved = 0;
-		const modal = new HabitModal({} as never, full, () => void resolved++, accent);
-		const m = modal as unknown as { modalEl: Dom; contentEl: Dom; setTitle: (t: string) => void };
-		const titles: string[] = [];
-		m.modalEl = dom();
-		m.contentEl = dom();
-		m.modalEl.appendChild(m.contentEl);
-		document.body.appendChild(m.modalEl);
-		m.setTitle = (t) => void titles.push(t);
-		modal.onOpen();
+		void habitDialog({} as never, full, accent).then(() => void resolved++);
+		const { modal, titles } = opened!;
+		const m = modal as unknown as { modalEl: Dom; contentEl: Dom };
 		return { modal, modalEl: m.modalEl, contentEl: m.contentEl, titles, resolved: () => resolved, options: full };
 	}
 
@@ -580,19 +589,26 @@ describe("the Modal", () => {
 		expect(modal).toBeDefined();
 	});
 
-	it("Cancel closes; closing (Escape goes through close()) empties the content and resolves the promise once", () => {
+	it("Cancel closes; closing (Escape goes through close()) empties the content and resolves the promise once", async () => {
 		const { modal, contentEl, resolved } = open();
 		[...contentEl.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Cancel")!.click();
 		expect(superClose).toHaveBeenCalledTimes(1);
 		modal.onClose();
+		modal.onClose();
+		await new Promise((r) => setTimeout(r, 0));
 		expect(contentEl.childElementCount).toBe(0);
 		expect(resolved()).toBe(1);
 	});
 
-	it("keeps Obsidian's own fields apart: the class adds only cp-prefixed members and overrides onOpen and onClose", () => {
-		const own = Object.getOwnPropertyNames(HabitModal.prototype).filter((n) => n !== "constructor").sort();
-		expect(own).toEqual(["onClose", "onOpen"]);
+	it("keeps Obsidian's own fields apart: the modal classes add only cp-prefixed members besides onOpen and onClose", () => {
 		const { modal } = open();
+		const own: string[] = [];
+		for (let p = Object.getPrototypeOf(modal) as object; p !== Modal.prototype; p = Object.getPrototypeOf(p) as object) {
+			own.push(...Object.getOwnPropertyNames(p).filter((n) => n !== "constructor"));
+		}
+		expect(own).toContain("onOpen");
+		expect(own).toContain("onClose");
+		for (const k of own) expect(k === "onOpen" || k === "onClose" || k.startsWith("cp"), k).toBe(true);
 		const fields = Object.keys(modal).filter((k) => !["modalEl", "contentEl", "setTitle"].includes(k));
 		expect(fields.length).toBeGreaterThan(0);
 		for (const k of fields) expect(k.startsWith("cp"), k).toBe(true);

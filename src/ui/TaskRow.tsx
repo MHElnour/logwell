@@ -1,20 +1,16 @@
 import { useRef } from "preact/hooks";
-import { NOT_SYNCED_TITLE, notSyncedReason } from "../app/syncMarks";
 import type { ListEntry, QueryContext } from "../domain/queries";
 import { tagLabel } from "../domain/tags";
 import type { SubtaskCount } from "../domain/tasks";
 import type { ID, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { occurrenceMenu, taskMenu } from "./actions";
-import { Icon, TaskCheckbox, hueClass } from "./common";
+import { TaskCheckbox, hueClass } from "./common";
 import { dueSpecOf, entryKey, formatDate, formatDuration } from "./format";
 import type { UiHost } from "./host";
-import { focusedText } from "./focus/format";
-import { focusTotalsOf } from "./focus/totals";
-import { ICON } from "./icons";
 import { quadrantWords } from "./matrix/quadrants";
 import { RepeatChip } from "./RepeatChip";
-import { deadlineMark, dueMark, listMark, noteMark, subtaskMark, toneOf } from "./rowMeta";
+import { deadlineMark, dueMark, focusMark, listMark, noteMark, notSyncedMark, subtaskMark, toneOf } from "./rowMeta";
 import { memoComponent, sameDay, sameEntry, sameFocusTotal, sameLookups, sameSubtasks, sameSyncMark } from "./rowMemo";
 import { onItemKeyDown, useCompleteToggle } from "./rowItem";
 
@@ -119,9 +115,6 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 
 	const tags = task.tagKeys;
 	const firstTag = tags.length > 0 ? state.tags.get(tags[0]!) : undefined;
-	const focusSec = focusTotalsOf(state).get(task.id) ?? 0;
-	// An open task of a TickTick list that does not sync says so.
-	const notSynced = occurrence === null ? notSyncedReason(state.syncLinks, task) : null;
 	return (
 		<div
 			class={`cp-task-row${selected ? " is-selected" : ""}${done ? " is-completed" : ""}${completing ? " is-completing" : ""}${justCompleted ? " is-just-completed" : ""}${entry.depth === 1 ? " is-subtask" : ""}${dragging === true ? " is-dragging" : ""}`}
@@ -163,23 +156,14 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 					</span>
 				)}
 				{task.descriptionNote !== null && noteMark(host)}
-				{occurrence === null && task.recurrence !== null && <RepeatChip host={host} task={task} />}
-				{notSynced !== null && (
-					<span class="cp-meta-notsynced" title={NOT_SYNCED_TITLE[notSynced]}>
-						Not synced
-					</span>
-				)}
+				{occurrence === null && task.recurrence !== null && <RepeatChip host={host} task={task} today={ctx.today} />}
+				{/* An open task of a TickTick list that does not sync says so. */}
+				{occurrence === null && notSyncedMark(state, task)}
 				{subtaskMark(subCount, subtasks)}
 				{showCategory && category !== undefined && listMark(category)}
 				{deadlineMark(host, entry, ctx)}
 				{task.plannedDurationMin !== null && <span class="cp-meta-duration">{formatDuration(task.plannedDurationMin)}</span>}
-				{focusSec > 0 && (
-					<span class="cp-meta-focus" title="Focused time">
-						<Icon host={host} icon={ICON.railFocus} />
-						<span aria-hidden="true">{focusedText(focusSec)}</span>
-						<span class="cp-sr-only">{`${focusedText(focusSec)} focused`}</span>
-					</span>
-				)}
+				{focusMark(host, state, task)}
 				{showMatrix && (task.urgent || task.important) && (
 					<span class="cp-meta-matrix" title="Matrix flags">
 						{quadrantWords(task.urgent, task.important)}
