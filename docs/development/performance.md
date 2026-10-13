@@ -73,6 +73,8 @@ These run in `npm test`, in Node or happy-dom, not in Obsidian. They live in the
 
 `tests/limits/limits.test.ts` checks the harness itself: the matrix shape, the CSV round trip, the generated databases and `classify`.
 
+The task index check in `tests/app/task-index.test.ts` (a unit test, not in the `perf` project) runs 300 seeded commands. After every step it compares the index, each list's order, the sidebar and subtask counts and the change feed with a fresh build. Every 10th step and on the last, it also compares every view, board, calendar and matrix built with the index against the full read. The runs that break the index on purpose, to show the check catches it, run only with `CHECKPOINT_TAMPER_CHECKS=1`. Run them after changing that check or the index's `verify`.
+
 ## Run the checks
 
 Use a quiet machine, one run at a time, and keep the mouse off the Obsidian window. The `device` column is read with `sysctl`; where that is missing it reads `unknown CPU`.

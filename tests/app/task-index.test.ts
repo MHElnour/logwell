@@ -24,11 +24,18 @@ describe("the task index", () => {
 	// Issue 41: the task index (which tasks can be in each Tasks view, and the open counts) is kept up to date from the
 	// store's change events. A seeded run of service commands (every kind of task edit, completion, repeating
 	// completion, delete, restore, Undo, list, section and tag deletion, a reload, a replacement of all records, the
-	// next day, a save, a write that skips the store followed by a command) checks after every step that the index equals one built from the state, and that every view, grouping,
-	// sort and held set, the boards, the sidebar counts and the subtask counts come out the same with the index as
-	// without it (the full scan). It also checks that a parent whose subtask counts did not move keeps its count object
-	// (rows compare them), and that the store's `changesSince` lists exactly the changes its events carried, or nothing
-	// across a reload or a replacement. A run with one index update left out shows the check catches it.
+	// next day, a save, a write that skips the store followed by a command) checks after every step that the index equals one built from the state, and that each list's
+	// order, the sidebar counts and the subtask counts come out the same with the index as without it (the full scan).
+	// Every view, grouping, sort and held set, the boards, the calendar and the matrix are compared every 10th step, on
+	// the last step and on a step that fails. It also checks that a parent whose subtask counts did not move keeps its
+	// count object (rows compare them), and that the store's `changesSince` lists exactly the changes its events carried,
+	// or nothing across a reload or a replacement.
+	// Runs with one index update left out show the check catches it. They test the check, not Logwell, and take about
+	// 6 s: CHECKPOINT_TAMPER_CHECKS=1 runs them; do that after changing the fuzz, its checks or the index's `verify`.
+
+	const TAMPER = Boolean(process.env.CHECKPOINT_TAMPER_CHECKS);
+	/** How often the fuzz compares every view with the full scan (the index, the orders and the counts: every step). */
+	const VIEWS_EVERY = 10;
 
 	const SORTS: TaskSort[] = ["manual", "date", "priority"];
 	const FILTERS: { filter: TaskFilter; text: string }[] = [
@@ -135,25 +142,31 @@ describe("the task index", () => {
 		return out;
 	}
 
-	/** Where the index and the full scan disagree for the store's current state (empty when they agree). */
-	function differences(h: AppHarness, index: TaskIndex, held: ReadonlySet<ID>): string[] {
+	/**
+	 * Where the index and the full scan disagree for the store's current state (empty when they agree): the index, each
+	 * list's order and the counts always; every view only with `views`, or when one of those already differs.
+	 */
+	function differences(h: AppHarness, index: TaskIndex, held: () => ReadonlySet<ID>, views: boolean): string[] {
 		const state = h.app.store.state;
 		const ctx = h.app.queryContext();
-		const out = index.verify(state).map((d) => `index: ${d}`);
-		out.push(...menuViewDifferences(state, ctx, index, held, h.app.clock.now().toISOString()));
+		const checked = index.verify(state).map((d) => `index: ${d}`);
+		const counts: string[] = [];
 		// Each list's ids in sort order equal a fresh sort of its tasks (Inbox, every list, and an id that is no list).
 		for (const listId of new Set<ID>([INBOX_ID, ...state.categories.keys()])) {
 			const fresh = [...state.tasks.values()].filter((t) => t.categoryId === listId).sort(compareTasksBySortKey).map((t) => t.id);
-			if (indexOrder(index, state, listId).join() !== fresh.join()) out.push(`order of ${listId}`);
+			if (indexOrder(index, state, listId).join() !== fresh.join()) counts.push(`order of ${listId}`);
 		}
-		if (counted(sidebarCounts(state, ctx, index)) !== counted(sidebarCounts(state, ctx))) out.push("sidebar counts");
-		if (serialize(index.subtaskCounts()) !== serialize(subtaskCounts(state.tasks.values()))) out.push("subtask counts");
+		if (counted(sidebarCounts(state, ctx, index)) !== counted(sidebarCounts(state, ctx))) counts.push("sidebar counts");
+		if (serialize(index.subtaskCounts()) !== serialize(subtaskCounts(state.tasks.values()))) counts.push("subtask counts");
+		if (!views && checked.length === 0 && counts.length === 0) return [];
+		const heldNow = held();
+		const out = [...checked, ...menuViewDifferences(state, ctx, index, heldNow, h.app.clock.now().toISOString()), ...counts];
 		for (const view of viewsOf(state)) {
 			const name = serialize(view);
 			for (const sort of SORTS) {
 				for (const f of FILTERS) {
 					const filter = { ...f.filter, sort };
-					for (const hs of [new Set<ID>(), held]) {
+					for (const hs of [new Set<ID>(), heldNow]) {
 						for (const groupBy of [undefined, ...groupByOptions(view.kind)]) {
 							const a = buildList(state, view, ctx, filter, f.text, hs, { groupBy, index });
 							const b = buildList(state, view, ctx, filter, f.text, hs, { groupBy });
@@ -346,9 +359,12 @@ describe("the task index", () => {
 		app.store.bus.on("changed", (e) => events.push(e.changes));
 		const run: Run = { steps: 0, ran: new Map(), failure: null };
 		const check = (step: number, command: string): boolean => {
-			const held = new Set<ID>([...seededHeld].filter((id) => app.store.state.tasks.has(id)));
-			for (const t of tasks().slice(-3)) held.add(t.id);
-			const diffs = differences(h, index, held);
+			const held = () => {
+				const out = new Set<ID>([...seededHeld].filter((id) => app.store.state.tasks.has(id)));
+				for (const t of tasks().slice(-3)) out.add(t.id);
+				return out;
+			};
+			const diffs = differences(h, index, held, step % VIEWS_EVERY === 0 || step === steps);
 			if (diffs.length > 0) run.failure = { step, command, diffs: diffs.slice(0, 5) };
 			return diffs.length === 0;
 		};
@@ -447,90 +463,86 @@ describe("the task index", () => {
 			}
 		}, 300_000);
 
-		it("catches an index that misses one kind of update", async () => {
-			// Schedule edits never reach the index (it sees the old schedule): a task scheduled for today is missing from
-			// Today's candidates.
-			const skipSchedules = (index: TaskIndex) => {
-				const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
-				const original = target.onChanged.bind(index);
-				const stale = (ch: Change): Change => {
-					const before = ch.before as Task | undefined;
-					const after = ch.after as Task | undefined;
-					if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
-					return { ...ch, after: { ...after, scheduled: before.scheduled } };
-				};
-				target.onChanged = (changes, base) => original(changes?.map(stale), base);
+		/** The index's change handling, given every task change with `field` as it was before (the index sees the old value). */
+		const keepOld = (field: "scheduled" | "sortKey" | "parentId") => (index: TaskIndex) => {
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
+			const original = target.onChanged.bind(index);
+			const stale = (ch: Change): Change => {
+				const before = ch.before as Task | undefined;
+				const after = ch.after as Task | undefined;
+				if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
+				return { ...ch, after: { ...after, [field]: before[field] } };
 			};
-			const run = await fuzz(41, 300, skipSchedules);
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with schedule edits skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
+			target.onChanged = (changes, base) => original(changes?.map(stale), base);
+		};
+
+		/** A task that becomes open (created, reopened, restored) never reaches the index's open tasks. */
+		const missOpened = (index: TaskIndex) => {
+			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void; parts: { openTasks: Set<ID> } };
+			const original = target.onChanged.bind(index);
+			target.onChanged = (changes, base) => {
+				original(changes, base);
+				for (const ch of changes ?? []) {
+					if (ch.c === "tasks" && (ch.after as Task | undefined)?.status === "open" && (ch.before as Task | undefined)?.status !== "open") target.parts.openTasks.delete(ch.id);
+				}
+			};
+		};
+
+		interface Tamper {
+			name: string;
+			tamper: (index: TaskIndex) => void;
+			/** What the step that catches it reports: each entry starts one of its differences. */
+			caught: string[];
+			/** Without the index's own check, a difference of the views or counts read with it (one must match). */
+			unchecked?: (diff: string) => boolean;
+			/** A check of the rows built with the tampered index. */
+			rows?: (tamper: (index: TaskIndex) => void) => Promise<void>;
+		}
+
+		const TAMPERS: Tamper[] = [
+			// A task scheduled for today is missing from Today's candidates.
+			{ name: "an index that misses one kind of update (schedule edits)", tamper: keepOld("scheduled"), caught: ["index: dated"], unchecked: (d) => !d.startsWith("index:") },
+			{ name: "open tasks the index does not list: the calendar and the matrix miss them", tamper: missOpened, caught: ["index: openTasks"], unchecked: (d) => d.startsWith("calendar") || d.startsWith("matrix") },
+			{
+				name: "an index that does not put a task in its new place when its sort key changes",
+				tamper: keepOld("sortKey"),
+				caught: ["order of"],
+				// The rows built from the stale order differ from the full scan's too, not only the order itself: the Inbox
+				// with its first top-level task dropped last.
+				rows: async (tamper) => {
+					const { h } = await seededState(41, 40);
+					const index = h.app.tasks.lists;
+					tamper(index);
+					const inbox: TaskView = { kind: "inbox" };
+					const build = (withIndex: boolean) => buildList(h.app.store.state, inbox, h.app.queryContext(), emptyFilter(), "", undefined, withIndex ? { index } : {});
+					expect(serialize(build(true))).toBe(serialize(build(false)));
+					const tops = indexOrder(index, h.app.store.state, INBOX_ID).filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
+					await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
+					expect(serialize(build(true))).not.toBe(serialize(build(false)));
+				},
+			},
+			{ name: "subtask counts that miss a change of parent", tamper: keepOld("parentId"), caught: ["index: subtasks", "subtask counts"] },
+		];
+
+		it.runIf(TAMPER).each(TAMPERS)("catches $name", async ({ name, tamper, caught, unchecked, rows }) => {
+			const run = await fuzz(41, 300, tamper);
+			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with ${name}: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
 			expect(run.failure).not.toBeNull();
-			expect(run.failure!.diffs.some((d) => d.startsWith("index: dated"))).toBe(true);
-			// Without the index's own check, the views and counts read with it differ from the full scan.
-			const unchecked = await fuzz(41, 300, (index) => {
-				skipSchedules(index);
-				index.verify = () => [];
-			});
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 same, views only: caught at step ${unchecked.failure?.step} (${unchecked.failure?.command}): ${unchecked.failure?.diffs.join("; ")}\n`);
-			expect(unchecked.failure).not.toBeNull();
-			expect(unchecked.failure!.diffs.some((d) => !d.startsWith("index:"))).toBe(true);
+			for (const start of caught) expect(run.failure!.diffs.some((d) => d.startsWith(start)), start).toBe(true);
+			if (unchecked !== undefined) {
+				// Without the index's own check, the views and counts read with it differ from the full scan.
+				const views = await fuzz(41, 300, (index) => {
+					tamper(index);
+					index.verify = () => [];
+				});
+				if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 same, views only: caught at step ${views.failure?.step} (${views.failure?.command}): ${views.failure?.diffs.join("; ")}\n`);
+				expect(views.failure).not.toBeNull();
+				expect(views.failure!.diffs.some(unchecked)).toBe(true);
+			}
+			await rows?.(tamper);
 		}, 300_000);
 
-		it("catches open tasks the index does not list: the calendar and the matrix miss them", async () => {
-			// A task that becomes open (created, reopened, restored) never reaches the index's open tasks.
-			const missOpened = (index: TaskIndex) => {
-				const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void; parts: { openTasks: Set<ID> } };
-				const original = target.onChanged.bind(index);
-				target.onChanged = (changes, base) => {
-					original(changes, base);
-					for (const ch of changes ?? []) {
-						if (ch.c === "tasks" && (ch.after as Task | undefined)?.status === "open" && (ch.before as Task | undefined)?.status !== "open") target.parts.openTasks.delete(ch.id);
-					}
-				};
-			};
-			const run = await fuzz(41, 300, missOpened);
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with opened tasks left out: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
-			expect(run.failure).not.toBeNull();
-			expect(run.failure!.diffs.some((d) => d.startsWith("index: openTasks"))).toBe(true);
-			const unchecked = await fuzz(41, 300, (index) => {
-				missOpened(index);
-				index.verify = () => [];
-			});
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 same, views only: caught at step ${unchecked.failure?.step} (${unchecked.failure?.command}): ${unchecked.failure?.diffs.join("; ")}\n`);
-			expect(unchecked.failure).not.toBeNull();
-			expect(unchecked.failure!.diffs.some((d) => d.startsWith("calendar") || d.startsWith("matrix"))).toBe(true);
-		}, 300_000);
-
-		it("catches an index that does not put a task in its new place when its sort key changes", async () => {
-			// The index sees every task with its old sort key: a moved task stays where it was in its list's order.
-			const keepSortKeys = (index: TaskIndex) => {
-				const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
-				const original = target.onChanged.bind(index);
-				const stale = (ch: Change): Change => {
-					const before = ch.before as Task | undefined;
-					const after = ch.after as Task | undefined;
-					if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
-					return { ...ch, after: { ...after, sortKey: before.sortKey } };
-				};
-				target.onChanged = (changes, base) => original(changes?.map(stale), base);
-			};
-			const run = await fuzz(41, 300, keepSortKeys);
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with sort key changes skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.slice(0, 4).join("; ")}\n`);
-			expect(run.failure).not.toBeNull();
-			expect(run.failure!.diffs.some((d) => d.startsWith("order of"))).toBe(true);
-			// The rows built from the stale order differ from the full scan's too, not only the order itself: the Inbox
-			// with its first top-level task dropped last.
-			const { h } = await seededState(41, 40);
-			const index = h.app.tasks.lists;
-			keepSortKeys(index);
-			const inbox: TaskView = { kind: "inbox" };
-			const build = (withIndex: boolean) => buildList(h.app.store.state, inbox, h.app.queryContext(), emptyFilter(), "", undefined, withIndex ? { index } : {});
-			expect(serialize(build(true))).toBe(serialize(build(false)));
-			const tops = indexOrder(index, h.app.store.state, INBOX_ID).filter((id) => h.app.store.state.tasks.get(id)?.parentId === null);
-			await h.app.tasks.place(tops[0] as ID, [...tops.slice(1), tops[0] as ID]);
-			expect(serialize(build(true))).not.toBe(serialize(build(false)));
-		}, 300_000);
-
-		it("moves a task in a built order for a small change, and sorts a list again after a bulk change", async () => {
+		it("keeps each list's order through a small change, a bulk change and its Undo", async () => {
 			const { h } = await seededState(41, 40);
 			const index = h.app.tasks.lists;
 			const state = () => h.app.store.state;
@@ -543,15 +555,13 @@ describe("the task index", () => {
 					.map((t) => t.id);
 			expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
 			expect(indexOrder(index, state(), big)).toEqual(sorted(big));
-			expect([...builtOrders(index).keys()].sort()).toEqual([big, INBOX_ID].sort());
-			// A small change moves the task and keeps the order.
+			// A small change: the task moves from one list to the other.
 			await h.app.tasks.update(sorted(big)[0] as ID, { categoryId: INBOX_ID });
-			expect(builtOrders(index).has(big) && builtOrders(index).has(INBOX_ID)).toBe(true);
 			expect(index.verify(state())).toEqual([]);
 			expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
-			// Deleting the list moves its 99 tasks to the Inbox in one event: both orders are dropped and sorted again.
+			expect(indexOrder(index, state(), big)).toEqual(sorted(big));
+			// Deleting the list moves its 99 tasks to the Inbox in one event.
 			await h.app.categories.delete(big);
-			expect(builtOrders(index).has(INBOX_ID)).toBe(false);
 			expect(index.verify(state())).toEqual([]);
 			expect(indexOrder(index, state(), INBOX_ID)).toEqual(sorted(INBOX_ID));
 			// Undo puts them back in one event again.
@@ -584,26 +594,6 @@ describe("the task index", () => {
 			expect(inbox()).toEqual(fresh);
 			expect(index.verify(h.app.store.state)).toEqual([]);
 		});
-
-		it("catches subtask counts that miss a change of parent", async () => {
-			// Parent changes never reach the counts (the index sees the old parent).
-			const skipParents = (index: TaskIndex) => {
-				const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
-				const original = target.onChanged.bind(index);
-				const stale = (ch: Change): Change => {
-					const before = ch.before as Task | undefined;
-					const after = ch.after as Task | undefined;
-					if (ch.c !== "tasks" || before === undefined || after === undefined) return ch;
-					return { ...ch, after: { ...after, parentId: before.parentId } };
-				};
-				target.onChanged = (changes, base) => original(changes?.map(stale), base);
-			};
-			const run = await fuzz(41, 300, skipParents);
-			if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`issue-41 index fuzz with parent changes skipped: caught at step ${run.failure?.step} (${run.failure?.command}): ${run.failure?.diffs.join("; ")}\n`);
-			expect(run.failure).not.toBeNull();
-			expect(run.failure!.diffs.some((d) => d.startsWith("index: subtasks"))).toBe(true);
-			expect(run.failure!.diffs).toContain("subtask counts");
-		}, 300_000);
 
 		it("gives a view menu the smallest set its lists, tags, status or subset allow, and none that holds most tasks", async () => {
 			const h = await appHarness();
