@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#113) Fixed a note renamed or moved while Logwell was switching to another database keeping its old path in the database being closed, which broke the task's link to its note for good. The closing database now follows the rename too.
 - (#112) Fixed a database switch that was still finishing when Logwell was turned off, reloaded or updated opening the new database anyway and leaving it open: it kept saving the file and showing notices, and after an update two copies wrote the same file. Nothing opens any more once Logwell stops, and a database whose opening fails part way is closed.
 - (#103) Fixed a change from another device that arrived while Logwell was still opening the database being ignored, so the open database showed the older version and your next edit became a conflict copy with the Keep mine / Keep theirs notice. The change is now loaded as soon as the database is open.
 - (#123) Fixed an open task that TickTick left out of a list's data for a while, without changing it, going to Logwell's Trash and then coming back from TickTick as a second copy. Such a task now stays as it is; a task counts as deleted in TickTick only once TickTick changed it since the last sync.

@@ -310,6 +310,10 @@ export default class CheckpointPlugin extends Plugin {
 			void this.session.app.tasks.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 			return;
 		}
+		// The database a switch is closing takes it too: once closed it never hears of it. A rename that
+		// arrives after its store closed waits in its rename queue for its next open.
+		const closing = this.closingSession;
+		if (closing !== null) void closing.app.tasks.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 		if (this.openingNow) this.renamesDuringOpen.push({ oldPath, newPath, isFolder });
 	}
 
