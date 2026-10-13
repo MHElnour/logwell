@@ -403,6 +403,10 @@ export class TaskService {
 			const spec = normalizeSpec(patch.scheduled, warnings);
 			// The schedule of a repeating task is its series.
 			if (current.recurrence !== null) {
+				// An ended series repeats again only through Reopen: a new date would move a series that stays ended.
+				if (spec !== null && (current.recurrence.endedAt !== null || !isOpen(current))) {
+					throw new DomainError("InvalidValue", "This repeat has ended. Reopen the task to change its date.");
+				}
 				const zone = this.settings.zone();
 				const records = recordsOfTask(tx, id);
 				const ws = this.settings.weekStart();

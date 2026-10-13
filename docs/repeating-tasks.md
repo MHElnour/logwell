@@ -111,7 +111,7 @@ If you fall behind on a fixed schedule, completing marks the earliest missed dat
 
 ## Move a repeating task to another day
 
-Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date.
+Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date. A repeat that has ended, after **Stop repeating** or at its end, cannot get a new date: reopen the task first.
 
 ## Review and reopen past occurrences
 
