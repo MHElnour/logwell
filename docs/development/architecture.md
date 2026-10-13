@@ -37,7 +37,7 @@ flowchart TD
 
 `CheckpointApp` (`src/app/App.ts`) is the composition root of the app layer: one `AppStore` and every service, plus `queryContext()`, the context every view reads. A view whose file is not the active database shows **Make active** instead of the app.
 
-Closing a session stops the TickTick sync, lets a focus write finish, applies the note renames still queued and closes the store, which saves what is pending. When Obsidian quits, the plugin's quit task saves the open session and any session a switch is closing or opening with `CpbaseStore.flushBeforeQuit`; like `close`, it keeps what cannot be written as a conflict copy. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there.
+Closing a session stops the TickTick sync, lets a focus write finish, applies the note renames still queued and closes the store, which saves what is pending. When Obsidian quits, the plugin's quit task saves the open session and any session a switch is closing or opening with `CpbaseStore.flushBeforeQuit`; like `close`, it keeps what cannot be written as a conflict copy. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there. Once the plugin is unloaded no open runs, not even one queued before or a switch still closing the old database, and a session whose open fails is closed, so no session outlives the plugin or stays open unused.
 
 ## A change
 
