@@ -123,6 +123,20 @@ describe("failure notices (screen 10)", () => {
 		expect(syncNow).toHaveBeenCalledTimes(1);
 	});
 
+	it("#111: a TickTick list that no longer exists is named and offers Unlink, which unlinks the list", async () => {
+		const { fake, tt, project } = vault({ linked: true, tasks: 0 });
+		tt.projects.delete(project.id);
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		cleanup = () => plugin.onunload();
+		await vi.waitFor(() => expect(mocks.actionNotice).toHaveBeenCalled());
+		const [message, actions] = mocks.actionNotice.mock.calls[0] as [string, { label: string; run: () => void }[]];
+		expect(message).toBe('The TickTick list linked to "Work" no longer exists.');
+		expect(actions.map((a) => a.label)).toEqual(["Unlink"]);
+		actions[0]!.run();
+		await vi.waitFor(() => expect(plugin.session!.app.store.state.syncLinks.size).toBe(0));
+		expect(mocks.notices).toContain("Work is no longer synced with TickTick. Its tasks stay on both sides.");
+	});
+
 	it("too many requests is a plain notice", async () => {
 		const { fake, tt } = vault({ linked: true, tasks: 0 });
 		tt.fail("getProjectData", new TickTickError("rate-limited", "TickTick: too many requests", { status: 429, retryAfterSec: 30 }));

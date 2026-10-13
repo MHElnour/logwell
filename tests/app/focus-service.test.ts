@@ -59,7 +59,7 @@ async function setup(): Promise<Setup> {
 		return new FocusService(h.app.store, h.clock, sequentialIds(`e${n++}`), port, s);
 	};
 	const svc = make();
-	await svc.open(DB);
+	await svc.open();
 	return { h, port, svc, settings, reload: make };
 }
 
@@ -286,7 +286,7 @@ describe("open (B31, B33)", () => {
 		const svc2 = s.reload();
 		const events: string[] = [];
 		svc2.bus.on("recovery-needed", () => events.push("recovery"));
-		expect(await svc2.open(DB)).toBe("recovery");
+		expect(await svc2.open()).toBe("recovery");
 		expect(events).toEqual(["recovery"]);
 		expect(svc2.timer()).toMatchObject({ state: "paused", needsRecovery: true });
 		expect(svc2.timer()?.unobserved[0]).toMatchObject({ resolution: "pending" });
@@ -305,7 +305,7 @@ describe("open (B31, B33)", () => {
 		s.port.stored.set(DB, before);
 		const writes = s.h.fs.writes.length;
 		const svc2 = s.reload();
-		expect(await svc2.open(DB)).toBe("already-saved");
+		expect(await svc2.open()).toBe("already-saved");
 		expect(svc2.timer()).toBeNull();
 		expect(s.port.timer).toBeNull();
 		expect(sessions(s)).toHaveLength(1);
@@ -317,7 +317,7 @@ describe("open (B31, B33)", () => {
 		for (const junk of [{ v: 2, phase: "focus" }, "text", { v: 1 }, 7]) {
 			s.port.stored.set(DB, JSON.stringify(junk));
 			const svc2 = s.reload();
-			expect(await svc2.open(DB)).toBe("none");
+			expect(await svc2.open()).toBe("none");
 			expect(svc2.timer()).toBeNull();
 		}
 	});
@@ -329,7 +329,7 @@ describe("open (B31, B33)", () => {
 		await s.svc.pause();
 		s.h.clock.advance(3_600_000);
 		const svc2 = s.reload();
-		expect(await svc2.open(DB)).toBe("restored");
+		expect(await svc2.open()).toBe("restored");
 		expect(svc2.timer()).toMatchObject({ state: "paused", needsRecovery: false, unobserved: [] });
 	});
 });
@@ -343,7 +343,7 @@ describe("AS-12", () => {
 		// The service is dropped; ten minutes pass.
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		const t = svc2.timer()!;
 		expect(t).toMatchObject({ state: "paused", needsRecovery: true });
 		expect(t.segments).toHaveLength(1);
@@ -353,7 +353,7 @@ describe("AS-12", () => {
 		]);
 		// A second open adds no second gap.
 		const svc3 = s.reload();
-		expect(await svc3.open(DB)).toBe("recovery");
+		expect(await svc3.open()).toBe("recovery");
 		expect(svc3.timer()?.unobserved).toHaveLength(1);
 		expect(sessions(s)).toEqual([]);
 		// Finish: one record, 3 minutes.
@@ -378,14 +378,14 @@ describe("AS-12", () => {
 		await ticks(s, s.svc, 60, 15);
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("resume");
 		expect(svc2.timer()).toMatchObject({ state: "running", needsRecovery: false });
 		expect(svc2.timer()?.unobserved).toHaveLength(1);
 
 		const svc3 = s.reload();
 		s.h.clock.advance(600_000);
-		await svc3.open(DB);
+		await svc3.open();
 		const writes = s.h.fs.writes.length;
 		await svc3.resolveRecovery("discard");
 		expect(svc3.timer()).toBeNull();
@@ -788,7 +788,7 @@ describe("set id (P3)", () => {
 		await s.svc.start(cfg(2), null);
 		const setId = s.svc.timer()!.setId;
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		expect(svc2.timer()?.setId).toBe(setId);
 	});
 });
@@ -895,7 +895,7 @@ describe("finish (P5)", () => {
 		await ticks(s, s.svc, 10, 10);
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("resume");
 		s.h.clock.advance(10_000);
 		await svc2.finish();
@@ -1077,7 +1077,7 @@ describe("edits report whether they wrote", () => {
 		await ticks(s, s.svc, 90, 30);
 		s.h.clock.advance(5 * 60_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("finish");
 		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
 	}
@@ -1109,7 +1109,7 @@ describe("modifiedAt of an edited record", () => {
 		await ticks(s, s.svc, 90, 30);
 		s.h.clock.advance(5 * 60_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("finish");
 		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
 	}

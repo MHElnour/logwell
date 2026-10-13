@@ -105,6 +105,7 @@ A failure stops the sync with a notice that names the list. Nothing retries in a
 | "TickTick: too many requests. Sync will try again at the next pull." | Wait. |
 | "…the API token was refused… Replace it in Settings > Logwell." | Choose **Open settings** and choose another token. |
 | "…has 99 open tasks, the limit of TickTick's free plan." | Complete or move tasks in TickTick, then choose **Sync now**. |
+| "The TickTick list linked to "Work" no longer exists." | The list was deleted in TickTick. Choose **Unlink**, then link the list again if you want it synced. The other lists keep syncing, and nothing in this list changes until you unlink it. |
 | "…no answer… (network error)." | Check your connection. |
 
 See also [Troubleshooting](troubleshooting.md).

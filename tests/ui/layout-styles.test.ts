@@ -129,3 +129,10 @@ describe("task row tag pill", () => {
 		expect(rule).toContain("text-overflow: ellipsis");
 	});
 });
+
+describe("group headings", () => {
+	it("a past date's heading and its overdue label are red", () => {
+		expect(block(".checkpoint-view .cp-task-group > .cp-group-heading.is-overdue {")).toMatch(/color:\s*var\(--cp-red-text\)/);
+		expect(block(".checkpoint-view .cp-group-heading .cp-group-overdue {")).toMatch(/color:\s*var\(--cp-red-text\)/);
+	});
+});

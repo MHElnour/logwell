@@ -133,12 +133,18 @@ export class DbSession {
 		});
 	}
 
-	/** A failure notice; a refused token offers the settings, the free plan's list limit offers Sync now. */
+	/**
+	 * A failure notice; a refused token offers the settings, the free plan's list limit offers Sync now, a TickTick list
+	 * that no longer exists offers Unlink.
+	 */
 	private notifyFailure(failure: SyncFailure, text: string): void {
+		const listId = failure.listId;
 		if (failure.kind === "unauthorized") {
 			actionNotice(`${text}. Replace it in Settings > Logwell.`, [{ label: "Open settings", run: () => this.plugin.openSettings() }]);
 		} else if (failure.kind === "list-limit") {
 			actionNotice(text, [{ label: "Sync now", run: () => void this.tickTick.syncNow() }]);
+		} else if (failure.kind === "list-gone" && listId !== null) {
+			actionNotice(text, [{ label: "Unlink", run: () => void this.unlinkFromTickTick(listId) }]);
 		} else {
 			new Notice(text);
 		}
@@ -193,7 +199,7 @@ export class DbSession {
 
 	async open(): Promise<void> {
 		await this.store.open();
-		this.focusOpened = await this.app.focus.open(this.store.data.meta.dbId);
+		this.focusOpened = await this.app.focus.open();
 		await this.app.tasks.resumeRenames();
 		await this.app.tasks.purgeExpired();
 		await this.app.recurrence.endExhaustedSeries();

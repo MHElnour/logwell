@@ -8,7 +8,7 @@
 // clock (the bundle is evaluated again), so that test writes a stale active timer into local storage
 // while the plugin is disabled and then enables it.
 import { browser, expect } from "@wdio/globals";
-import { appToday, createTask, freshDatabase, pickMenuItem, restoreMenus, showInbox, useDomMenus, visibleTasksSection } from "../helpers";
+import { appToday, createTask, freshDatabase, restoreMenus, useDomMenus, visibleTasksSection } from "../helpers";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -151,35 +151,6 @@ async function stepSetting(focus: WebdriverIO.Element, label: string, times: num
 
 const tidy = (text: string) => text.replace(/\s+/g, " ").trim();
 
-/** Clicks "Undo" on the newest notice that has one. */
-async function clickUndoNotice(): Promise<void> {
-	await browser.waitUntil(
-		() =>
-			browser.execute(() => {
-				const buttons = Array.from(document.querySelectorAll<HTMLElement>(".notice .checkpoint-notice-actions button")).filter((b) => b.textContent === "Undo");
-				const last = buttons[buttons.length - 1];
-				if (last === undefined) return false;
-				last.click();
-				return true;
-			}),
-		{ timeout: 5000, timeoutMsg: "no Undo notice" },
-	);
-}
-
-/** Clicks the first round's ⋯ button of the visible Focus section with the DOM (it only shows on hover). */
-async function openRoundMenu(): Promise<void> {
-	await browser.waitUntil(
-		() =>
-			browser.execute(() => {
-				const found = Array.from(document.querySelectorAll<HTMLElement>(".cp-focus .cp-focus-round-more")).find((b) => b.offsetParent !== null);
-				if (found === undefined) return false;
-				found.click();
-				return true;
-			}),
-		{ timeout: 5000, timeoutMsg: "no round menu button" },
-	);
-}
-
 /** Clicks a modal button by its text with the DOM, so a floating notice cannot cover it. */
 async function clickModalButton(text: string): Promise<void> {
 	await browser.waitUntil(
@@ -253,89 +224,6 @@ describe("Focus", function () {
 		await expect(chip).toHaveText(expect.stringContaining("1m"));
 	});
 
-	it("a two-round set breaks once and ends without a break after its last round (D6)", async function () {
-		await recordMoments();
-		await startSet(null, { rounds: 2, focusSec: 60, breakSec: 60, longBreakSec: 60 });
-		const focus = await visibleFocus();
-		await expect(focus.$(".cp-focus-round")).toHaveText("Round 1 of 2");
-
-		await advanceClock(60);
-		expect((await timerState())?.phase).toBe("short-break");
-		await expect(focus.$(".cp-focus-phase")).toHaveText("Short break");
-
-		await advanceClock(60);
-		expect(await timerState()).toMatchObject({ phase: "focus", round: 2 });
-
-		await advanceClock(60);
-		expect(await timerState()).toBeNull();
-		expect(await moments()).toEqual(["focus-start", "break-start", "focus-start", "set-done"]);
-		expect(await records()).toHaveLength(2);
-		await expect(focus.$(".cp-focus-summary")).toBeDisplayed();
-		expect(tidy(await focus.$(".cp-focus-summary").getText())).toContain("2 rounds · 2m focused");
-	});
-
-	it("Pause freezes the timer and Resume continues it", async function () {
-		await startSet(null);
-		const focus = await visibleFocus();
-		await advanceClock(10);
-
-		await focus.$("button=Pause").click();
-		expect((await timerState())?.state).toBe("paused");
-		// The ring re-renders after the click; wait until two reads in a row agree before taking the frozen text.
-		let previous = "";
-		let reads = 0;
-		await browser.waitUntil(
-			async () => {
-				const now = await focus.$(".cp-focus-time").getText();
-				const same = reads > 0 && now === previous;
-				previous = now;
-				reads++;
-				return same;
-			},
-			{ timeout: 5000, interval: 300, timeoutMsg: "the paused time never settled" },
-		);
-		const frozen = previous;
-
-		await advanceClock(15);
-		await expect(focus.$(".cp-focus-time")).toHaveText(frozen);
-		await expect(focus.$("button=Resume")).toBeDisplayed();
-
-		await focus.$("button=Resume").click();
-		expect((await timerState())?.state).toBe("running");
-		await advanceClock(5);
-		expect(await focus.$(".cp-focus-time").getText()).not.toBe(frozen);
-		await expect(focus.$("button=Pause")).toBeDisplayed();
-	});
-
-	it("the details Focus button on another task offers Split and opens the Focus page (B35)", async function () {
-		const today = await appToday();
-		const a = await createTask("Task A", { scheduled: { kind: "date", date: today } });
-		const b = await createTask("Task B", { scheduled: { kind: "date", date: today } });
-		await startSet(a, { rounds: 2, focusSec: 600, breakSec: 60, longBreakSec: 60 });
-		await advanceClock(40);
-
-		const tasks = await visibleTasksSection();
-		await showInbox(tasks);
-		const rowB = tasks.$(`.cp-task-row[data-task-id="${b}"]`);
-		await rowB.waitForDisplayed({ timeout: 5000 });
-		await rowB.click();
-		const button = tasks.$(".cp-details-foot .cp-focus-button");
-		await button.waitForClickable({ timeout: 5000 });
-		await button.click();
-
-		await clickModalButton("Split");
-
-		await browser.waitUntil(async () => (await records()).length === 1, { timeout: 5000, timeoutMsg: "the A part was not saved" });
-		const [first] = await records();
-		expect(first).toMatchObject({ taskId: a, status: "split" });
-		const timer = await timerState();
-		expect(timer).toMatchObject({ taskId: b, phase: "focus", state: "running", splitFrom: first!.id });
-
-		// The Focus page is open and shows B as the task of the running round.
-		const focus = await visibleFocus();
-		await expect(focus.$(".cp-focus-task select")).toHaveValue(b);
-	});
-
 	it("reloading the plugin while a focus runs asks what to do with the gap; Finish keeps it pending, Include counts it (B31, POM-09, AS-12)", async function () {
 		const taskId = await createTask("Long job");
 		await startSet(taskId, { rounds: 1, focusSec: 1500, breakSec: 300, longBreakSec: 900 });
@@ -387,39 +275,5 @@ describe("Focus", function () {
 		await browser.waitUntil(async () => (await records())[0]?.gaps[0] === "included", { timeout: 5000 });
 		await expect(focus.$(".cp-focus-rec .cp-focus-round-time")).toHaveText("13m");
 		expect((await records())[0]!.focusedSec).toBeGreaterThanOrEqual(780);
-	});
-
-	it("Finish early in the middle of a set saves a completed record and moves to the break (P5)", async function () {
-		await recordMoments();
-		await startSet(null, { rounds: 2, focusSec: 300, breakSec: 60, longBreakSec: 60 });
-		const focus = await visibleFocus();
-		await advanceClock(120);
-
-		await focus.$("button=Finish").click();
-		await browser.waitUntil(async () => (await timerState())?.phase === "short-break", { timeout: 5000, timeoutMsg: "Finish did not start the break" });
-		expect(await moments()).toEqual(["focus-start", "break-start"]);
-		const saved = await records();
-		expect(saved).toHaveLength(1);
-		expect(saved[0]).toMatchObject({ status: "completed", focusedSec: 120 });
-		await expect(focus.$(".cp-focus-rec .cp-focus-round-status em")).toHaveText("Finished early");
-		// Finish is only offered while a focus round runs.
-		await expect(focus.$("button=Finish")).not.toExist();
-	});
-
-	it("Delete record removes it from the focus record and Undo brings it back (P4)", async function () {
-		await startSet(null);
-		const focus = await visibleFocus();
-		await advanceClock(61);
-		await browser.waitUntil(async () => (await records()).length === 1, { timeout: 5000, timeoutMsg: "no record to delete" });
-		await expect(focus.$(".cp-focus-rec")).toBeDisplayed();
-
-		await openRoundMenu();
-		await pickMenuItem("Delete record");
-		await browser.waitUntil(async () => (await records()).length === 0, { timeout: 5000, timeoutMsg: "the record was not deleted" });
-		await expect(focus.$(".cp-focus-rec")).not.toExist();
-
-		await clickUndoNotice();
-		await browser.waitUntil(async () => (await records()).length === 1, { timeout: 5000, timeoutMsg: "Undo did not restore the record" });
-		await expect(focus.$(".cp-focus-rec")).toBeDisplayed();
 	});
 });

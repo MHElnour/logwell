@@ -3,6 +3,7 @@ import * as machine from "../domain/focus";
 import type { ActiveTimer, FocusMoment, FocusSetConfig, Step } from "../domain/focus";
 import { type Clock, type IdGenerator, nowInstant } from "../domain/ports";
 import type { FocusSession, GapResolution, ID } from "../domain/types";
+import { storableDbId } from "../persistence/schema";
 import { EventBus } from "./events";
 import type { ActiveTimerPort, FocusSettingsPort } from "./ports";
 import { FOCUS_RANGES } from "./settings";
@@ -40,7 +41,10 @@ export class FocusService {
 	readonly bus = new EventBus<FocusEvents>();
 	private active: ActiveTimer | null = null;
 	private summary: { rounds: number; focusedSec: number } | null = null;
-	private dbId: string | null = null;
+	/** Set by `open`: the timer reaches the port only once it was read from there. */
+	private opened = false;
+	/** The database id the timer was last read or saved under, so a timer that moves to a new id leaves none behind. */
+	private savedUnder: string | null = null;
 	/** Commands run one at a time, pause and resume included, so a failed write always restores the right timer. */
 	private tail: Promise<unknown> = Promise.resolve();
 	/** While a record is being written the port is not touched, so the timer never moves ahead of the file. */
@@ -96,14 +100,25 @@ export class FocusService {
 		return nowInstant(this.clock);
 	}
 
-	/** Loads the timer: first a round the file already holds, then a timer that was running. */
-	open(dbId: string): Promise<OpenResult> {
+	/**
+	 * The id the timer is stored under: the database's id now, read on every save (a reload can give the store
+	 * another one, such as the real id of a damaged database opened under the placeholder), or null while the store
+	 * holds only the placeholder, which names no database.
+	 */
+	private knownDbId(): string | null {
+		return storableDbId(this.store.state.meta.dbId, this.store.readOnlyState !== null);
+	}
+
+	/** Loads the timer of the open database: first a round the file already holds, then a timer that was running. */
+	open(): Promise<OpenResult> {
 		return this.serial(() => {
-			this.dbId = dbId;
+			this.opened = true;
 			this.summary = null;
 			this.shortDiscarded.clear();
 			this.discardedTimer = null;
-			const timer = machine.parseActiveTimer(this.port.load(dbId));
+			const dbId = this.knownDbId();
+			this.savedUnder = dbId;
+			const timer = dbId === null ? null : machine.parseActiveTimer(this.port.load(dbId));
 			if (timer === null) {
 				this.active = null;
 				this.bus.emit("focus", undefined);
@@ -112,7 +127,7 @@ export class FocusService {
 			if (timer.sessionId !== null && this.store.state.focusSessions.has(timer.sessionId)) {
 				// The round was written before the crash; the set ends and nothing is written.
 				this.active = null;
-				this.port.save(dbId, null);
+				this.persist();
 				this.bus.emit("focus", undefined);
 				return Promise.resolve<OpenResult>("already-saved");
 			}
@@ -352,10 +367,14 @@ export class FocusService {
 		}
 	}
 
-	/** The device-local copy of the timer. Skipped while a record is being written. */
+	/** The device-local copy of the timer, under the database's current id. Skipped while a record is being written. */
 	private persist(): void {
-		if (this.dbId === null || this.finalizing > 0) return;
-		this.port.save(this.dbId, this.active);
+		const dbId = this.knownDbId();
+		if (!this.opened || dbId === null || this.finalizing > 0) return;
+		// The store's id changed since the last save (the file was replaced): the timer moves to the new id.
+		if (this.savedUnder !== null && this.savedUnder !== dbId) this.port.save(this.savedUnder, null);
+		this.port.save(dbId, this.active);
+		this.savedUnder = dbId;
 		this.lastPersistMs = this.clock.now().getTime();
 	}
 
