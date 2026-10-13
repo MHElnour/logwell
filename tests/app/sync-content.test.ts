@@ -73,6 +73,21 @@ describe("edits (SYNC-07)", () => {
 		expect(s.link("task", copy.id)).toBeDefined();
 	});
 
+	it("#121: the copy of a version completed in TickTick is completed, and not sent there as a new open task", async () => {
+		const s = await oneTask();
+		await s.h.app.tasks.update(s.id, { title: "Call the bank (Logwell)" });
+		s.tt.edit(s.ttId, { title: "Phone the bank", status: 2 });
+		await s.sync.sync();
+		expect(s.h.app.store.state.tasks.get(s.id)).toMatchObject({ title: "Call the bank (Logwell)", status: "completed" });
+		expect(s.task("Phone the bank (TickTick)").status).toBe("completed");
+		expect(s.tt.findByTitle("Phone the bank (TickTick)")).toBeUndefined();
+		expect(s.tt.get(s.ttId)).toMatchObject({ title: "Call the bank (Logwell)", status: 2 });
+		s.tick();
+		await s.sync.sync();
+		expect(s.tt.findByTitle("Phone the bank (TickTick)")).toBeUndefined();
+		expect(s.tasks("Phone the bank (TickTick)")).toHaveLength(1);
+	});
+
 	it("only refreshes the link when both sides hold the same value", async () => {
 		const s = await oneTask();
 		await s.h.app.tasks.update(s.id, { title: "Same" });
