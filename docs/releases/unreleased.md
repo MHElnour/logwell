@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#130) Fixed text typed in Quick Add while the previous task was still being saved being wiped when the save finished. It now stays in the field for the next task.
 - (#105) Fixed Quick Add dropping a typed `until` date after **Never** was picked as the repeat: the chip showed it as applied, but the task was saved with no end and no deadline. With **Never** picked, `until Dec 1` is now a deadline, as on a task that does not repeat.
 - (#129) Fixed **Move up** on the first list doing nothing visible while adding an Undo step and putting the list before Inbox in the list pickers. Inbox now stays first everywhere and has no **Move up** or **Move down**, the ends of the list are off, each move is one visible step, and lists that share a place after Import backup with Merge by ID can be moved instead of showing an error.
 - (#104) Fixed two sections with the same name in a list making every open take a backup and save the database again, and two devices rewriting each other's file over and over. The duplicate is now named in a notice and the file is left as it is. A reload after a change from another device that does repair records now says so. **Merge by ID** no longer adds a backup's section next to one of the same name: its tasks go to the section you have.
