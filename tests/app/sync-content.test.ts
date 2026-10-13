@@ -113,6 +113,21 @@ describe("edits (SYNC-07)", () => {
 });
 
 describe("clearing a value (probed against the real API 2026-10-08)", () => {
+	it("#120: a date cleared in TickTick clears both dates in Logwell and is not sent back", async () => {
+		const s = await oneTask();
+		await s.h.app.tasks.update(s.id, { scheduled: { kind: "date", date: "2026-10-12" }, deadline: { kind: "date", date: "2026-10-16" } });
+		await s.sync.sync();
+		expect(s.tt.get(s.ttId)?.dueDate).toBe("2026-10-16T00:00:00+0200");
+		s.tick();
+		s.tt.edit(s.ttId, { startDate: undefined, dueDate: undefined });
+		const n = pushes(s);
+		await s.sync.sync();
+		expect(s.h.app.store.state.tasks.get(s.id)).toMatchObject({ scheduled: null, deadline: null });
+		expect(s.tt.get(s.ttId)?.dueDate).toBeUndefined();
+		expect(s.tt.get(s.ttId)?.startDate).toBeUndefined();
+		expect(pushes(s)).toBe(n);
+	});
+
 	it("clears the date with null (an empty string is ignored there)", async () => {
 		const s = await oneTask();
 		await s.h.app.tasks.update(s.id, { deadline: { kind: "date", date: "2026-10-09" } });
