@@ -110,6 +110,20 @@ describe("columns and cards (D3, D4)", () => {
 		expect(item(m.root, "Lunch").querySelector(".cp-meta-date.is-today")).not.toBeNull();
 	});
 
+	it("#125: ticking the only overdue card keeps it and the Overdue column in place during its check animation", async () => {
+		const m = await mount();
+		await seed(m);
+		await openBoard(m, "Today");
+		await m.h.app.tasks.complete(taskOf(m, "Late").id);
+		await settle();
+		expect(columnTitles(m.root)).toEqual(["Overdue", "Today"]);
+		expect(cardTitles(m.root, "overdue")).toEqual(["Late"]);
+		expect(cardTitles(m.root, "today")).toEqual(["Report", "Lunch"]);
+		await new Promise((r) => setTimeout(r, 600));
+		await settle();
+		expect(columnTitles(m.root)).toEqual(["Today"]);
+	});
+
 	it("Upcoming has one column per day from tomorrow, empty days included, and Inbox has No section", async () => {
 		const m = await mount();
 		await seed(m);

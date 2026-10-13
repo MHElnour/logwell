@@ -15,7 +15,7 @@ import {
 	startRecurrence,
 } from "../domain/recurrence";
 import { compareSortKeys } from "../domain/sortKey";
-import { subtasksOf } from "../domain/tasks";
+import { isActiveSeries, subtasksOf } from "../domain/tasks";
 import { isValidLocalDate, todayIn } from "../domain/time";
 import type { ID, LocalDate, OccurrenceRecord, Recurrence, RepeatEnd, RepeatRule, RepeatVersion, Task, WeekStart } from "../domain/types";
 import type { SettingsPort } from "./ports";
@@ -52,12 +52,12 @@ export function requireTask(tx: Tx, id: ID): Task {
 	return t;
 }
 
-/** A repeating task whose series has not ended. */
+/** A repeating task whose repeat still runs (`isActiveSeries`). */
 function requireActiveSeries(tx: Tx, id: ID): Task & { recurrence: Recurrence } {
 	const task = requireTask(tx, id);
 	if (task.recurrence === null) invalidValue("This task does not repeat.");
-	if (task.recurrence.endedAt !== null || task.status === "completed") invalidValue("This repeat has ended.");
-	return task as Task & { recurrence: Recurrence };
+	if (!isActiveSeries(task)) invalidValue("This repeat has ended.");
+	return task;
 }
 
 /** The records of one task, sorted by date (not by resolution; every engine reader is order-free). */
@@ -314,8 +314,7 @@ export class RecurrenceService {
 		const ws = this.weekStart();
 		const out: (Task & { recurrence: Recurrence })[] = [];
 		for (const t of tasks) {
-			if (t.recurrence === null || t.recurrence.endedAt !== null || t.status !== "open") continue;
-			if (isSeriesEnded(t.recurrence, index.get(t.id) ?? [], ws)) out.push(t as Task & { recurrence: Recurrence });
+			if (isActiveSeries(t) && isSeriesEnded(t.recurrence, index.get(t.id) ?? [], ws)) out.push(t);
 		}
 		return out;
 	}
