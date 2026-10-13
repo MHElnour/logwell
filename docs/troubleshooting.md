@@ -26,13 +26,15 @@ When Logwell knows the database's id, from the file's header or from this device
 
 To repair the file yourself, fix it and Logwell loads it once it is valid.
 
+A change that was not saved yet when the file became damaged is kept as a conflict copy. When a valid file is back, Logwell loads it and shows the conflict notice with **Keep mine** and **Keep theirs**, so the change is never dropped without a word. If the database closes first, a notice points at the copy. The same applies when a file from a newer version of Logwell arrives while a change waits.
+
 ## A conflict copy appeared after sync
 
 A notice says "The database changed outside Obsidian while this device had other changes. The other version is now loaded; yours was kept as a conflict copy." Two devices changed the database before a sync finished. Choose **Keep mine** or **Keep theirs**, in the notice or on the Data page under **Conflicts**. See [Your data](your-data.md#sync).
 
 Related notices:
 
-- "Changes this device saved earlier are missing from the database file. They were restored as a conflict copy." **Open conflict view** leads to the copy.
+- "Changes this device saved earlier are missing from the database file. They were restored as a conflict copy." **Open conflict view** leads to the copy. A version already kept as a conflict copy when the other version was loaded is not reported again, whether you chose **Keep theirs** or have not chosen yet.
 - "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy."
 - "A sync conflict copy of a Logwell database appeared: …" A sync tool made its own copy of the file. Logwell does not read or merge it. The active database is the one you use.
 

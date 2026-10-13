@@ -1,4 +1,5 @@
 import { describeEnd, describeRule, versionAt } from "../domain/recurrence";
+import { isActiveSeries } from "../domain/tasks";
 import type { Task } from "../domain/types";
 import { Icon } from "./common";
 import type { UiHost } from "./host";
@@ -10,8 +11,8 @@ import { withTime } from "./repeat";
  * task that does not repeat looks exactly as before. The title adds the end ("every Fri · ends after 10 times").
  */
 export function RepeatChip({ host, task }: { host: UiHost; task: Task }) {
+	if (!isActiveSeries(task)) return null;
 	const rec = task.recurrence;
-	if (rec === null || rec.endedAt !== null || task.status !== "open") return null;
 	const today = host.app.queryContext().today;
 	// The rule in force today, not a later version that has not started.
 	const text = describeRule(rec, today);

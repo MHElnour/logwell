@@ -343,6 +343,24 @@ describe("completing from the block", () => {
 		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("open");
 	});
 
+	it("#131: completes a task whose repeat has ended but which is still open as a plain task", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
+		// A hand-edited file or a sync can leave a series ended and open.
+		await m.h.app.store.run(
+			"Test setup",
+			(tx) => {
+				const cur = tx.get("tasks", a.id)!;
+				tx.put("tasks", { ...cur, recurrence: { ...cur.recurrence!, endedAt: "2026-09-30T10:00:00.000Z" } });
+			},
+			{ undoable: false },
+		);
+		await completeBlockTask(m.host, m.h.app.store.state.tasks.get(a.id)!);
+		expect(m.host.messages).toEqual([]);
+		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("completed");
+		expect(m.host.undos).toEqual([{ message: 'Completed "Water".', label: "Complete task" }]);
+	});
+
 	it("asks before completing a task with open subtasks; Complete all completes both under one label", async () => {
 		const m = await mount();
 		const parent = (await m.h.app.tasks.create({ title: "Parent" })).task;

@@ -840,6 +840,39 @@ describe("the repeating branches of TaskService", () => {
 			const t = await daily(h, "2026-10-07");
 			expect((await h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-07" } })).changed).toBe(false);
 		});
+
+		const ENDED = "This repeat has ended. Reopen the task to change its date.";
+
+		it("#124: a new date for a stopped series is refused with a pointer to Reopen, and nothing is written", async () => {
+			const h = await setup();
+			const t = await daily(h);
+			await h.app.recurrence.stop(t.id);
+			const stopped = task(h, t.id);
+			const label = h.app.store.undoLabel;
+			const oct20 = { kind: "date" as const, date: "2026-10-20" };
+			await rejects(h.app.tasks.update(t.id, { scheduled: oct20 }), ENDED);
+			await rejects(h.app.tasks.update(t.id, { title: "Yoga", scheduled: oct20 }), ENDED);
+			await rejects(h.app.tasks.place(t.id, [t.id], { scheduled: oct20 }), ENDED);
+			expect(task(h, t.id)).toBe(stopped);
+			expect(h.app.store.undoLabel).toBe(label);
+			// Other fields still change; Reopen makes it repeat again, and then a date moves it.
+			expect((await h.app.tasks.update(t.id, { title: "Yoga" })).changed).toBe(true);
+			await h.app.tasks.reopen(t.id);
+			const r = await h.app.tasks.update(t.id, { scheduled: oct20 });
+			expect(r.reanchored).toEqual({ date: "2026-10-20", endCleared: false });
+			expect(task(h, t.id)).toMatchObject({ status: "open", recurrence: { anchor: "2026-10-20", endedAt: null } });
+		});
+
+		it("#124: a series that ended on its own, or ended but left open by a hand edit, refuses a new date too", async () => {
+			const h = await setup();
+			const t = (await h.app.tasks.create({ title: "Stretch", scheduled: { kind: "date", date: "2026-10-05" }, repeat: { rule: rule(), end: { kind: "count", count: 1 } } })).task;
+			await h.app.tasks.complete(t.id);
+			expect(task(h, t.id)).toMatchObject({ status: "completed", recurrence: { endedAt: NOW } });
+			await rejects(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), ENDED);
+			await h.app.store.run("Test setup", (tx) => tx.put("tasks", { ...task(h, t.id), status: "open", completedAt: null }), { undoable: false });
+			await rejects(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), ENDED);
+			expect(task(h, t.id).recurrence?.anchor).toBe("2026-10-05");
+		});
 	});
 
 	describe("subtasks, duplicate and trash", () => {
