@@ -12,7 +12,7 @@ Logwell keeps your tasks in one database file in your vault. This page explains 
 
 **Backups.** In `.obsidian/plugins/logwell/backups/`, with one folder for each database. They stay on this device.
 
-**This device.** Obsidian's local storage holds what belongs to one device, such as a running focus timer and the habit reminders already shown. It does not sync.
+**This device.** Obsidian's local storage holds what belongs to one device, such as a running focus timer, the habit reminders already shown and the new tasks TickTick sync sent but has not linked yet. It does not sync.
 
 ## How Logwell saves
 

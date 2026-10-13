@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TickTickApi } from "../../src/app/ports";
+import { type TickTickApi, TickTickError } from "../../src/app/ports";
 import { SyncService } from "../../src/app/SyncService";
 import type { Category, SyncLink, Task } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 import { DbSession, SYNC_CLOSE_WAIT_MS } from "../../src/obsidian/session";
 import { TickTickHttp } from "../../src/obsidian/tickTickHttp";
-import { LocalStorageTickTickDevice, SecretStorageTickTickSecret, TICKTICK_SECRET_ID } from "../../src/obsidian/tickTickPorts";
+import { LocalStorageTickTickDevice, LocalStorageTickTickPending, SecretStorageTickTickSecret, TICKTICK_SECRET_ID } from "../../src/obsidian/tickTickPorts";
 import { FakeTickTick } from "../app/fake-ticktick";
 import { FakeClock } from "../helpers";
 import { emptyDbText, makeTask } from "../persistence/fixtures";
@@ -132,6 +132,25 @@ describe("the session and the sync", () => {
 			void session.close();
 			// Synchronous up to the store close.
 			expect(storeClose).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("a restart", () => {
+		it("#122: a create whose answer was lost is remembered on this device, and after a restart its copy is linked, not imported", async () => {
+			const { fake, tt } = vault();
+			tt.fail("createTask", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500, maybePartial: true }), { applyFirst: true });
+			const first = await loadPlugin(fake, "A.cpbase");
+			await vi.waitFor(() => expect(fake.local.get("logwell-ticktick-pending-db-a")).toMatchObject({ v: 1, lists: { [WORK]: { [LOCAL]: null } } }));
+			await first.session!.sync.idle();
+			first.onunload();
+			const second = await loadPlugin(fake, "A.cpbase");
+			cleanup = () => second.onunload();
+			const state = () => second.session!.app.store.state;
+			await vi.waitFor(() => expect(state().syncLinks.get(`task:${LOCAL}`)).toBeDefined());
+			await second.session!.sync.idle();
+			expect([...state().tasks.values()].filter((t) => t.title === "Call the bank")).toHaveLength(1);
+			expect([...tt.tasks.values()].filter((t) => t.title === "Call the bank")).toHaveLength(1);
+			expect(fake.local.get("logwell-ticktick-pending-db-a") ?? null).toBeNull();
 		});
 	});
 
@@ -343,6 +362,23 @@ describe("the token and device ports", () => {
 			const port = new LocalStorageTickTickDevice(f.app, () => "db-1");
 			expect(port.isEnabled()).toBe(false);
 			expect(f.store.get("logwell-ticktick-device-db-1")).toBe("yes");
+		});
+
+		it("#122: LocalStorageTickTickPending keeps the waiting creates per database and ignores an unreadable value", () => {
+			const f = fakeLocal();
+			const port = new LocalStorageTickTickPending(f.app);
+			const pending = { v: 1 as const, lists: { work: { "task-1": { ttId: "tt-1", base: { title: "h" } }, "task-2": null } } };
+			port.save("db-1", pending);
+			expect([...f.store.keys()]).toEqual(["logwell-ticktick-pending-db-1"]);
+			expect(port.load("db-1")).toEqual(pending);
+			expect(port.load("db-2")).toBeNull();
+			port.save("db-1", null);
+			expect(f.store.size).toBe(0);
+			f.store.set("logwell-ticktick-pending-db-1", { v: 2 });
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			expect(port.load("db-1")).toBeNull();
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(f.store.get("logwell-ticktick-pending-db-1")).toEqual({ v: 2 });
 		});
 
 		it("with no known database it reads off and turning it on does nothing", () => {
