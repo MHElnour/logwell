@@ -205,6 +205,47 @@ describe("completing an occurrence", () => {
 	});
 });
 
+describe("a series that has ended but is still open (a hand-edited file or a sync)", () => {
+	/** Logwell never leaves a series ended and open, but loads one. */
+	const endedOpen = async (m: M7Mount, title: string) => {
+		const t = await create(m, title);
+		await m.h.app.store.run(
+			"Test setup",
+			(tx) => {
+				const cur = tx.get("tasks", t.id)!;
+				tx.put("tasks", { ...cur, recurrence: { ...cur.recurrence!, endedAt: "2026-09-30T10:00:00.000Z" } });
+			},
+			{ undoable: false },
+		);
+		return t;
+	};
+
+	it("#131: the checkbox completes it as a plain task, without an error", async () => {
+		const m = await mount();
+		const t = await endedOpen(m, "Weekly review");
+		const section = await showInbox(m);
+		await click(checkbox(rowFor(section, "Weekly review")));
+		expect(m.host.messages).toEqual([]);
+		expect(taskById(m, t.id).status).toBe("completed");
+		expect(m.h.app.store.undoLabel).toBe("Complete task");
+		expect([...m.h.app.store.state.occurrenceRecords.values()]).toEqual([]);
+	});
+
+	it("#131: its menu offers Complete without the repeat actions, and Complete completes it", async () => {
+		const m = await mount();
+		const t = await endedOpen(m, "Weekly review");
+		const section = await showInbox(m);
+		const menu = await contextMenu(m, rowFor(section, "Weekly review"));
+		const names = titles(menu);
+		expect(names).toContain("Complete");
+		for (const gone of ["Skip this occurrence", "Edit repeat…", "Stop repeating"]) expect(names).not.toContain(gone);
+		menuItem(menu, "Complete").run?.();
+		await settle();
+		expect(m.host.messages).toEqual([]);
+		expect(taskById(m, t.id).status).toBe("completed");
+	});
+});
+
 describe("Completed history rows (D7)", () => {
 	async function twoDone(m: M7Mount) {
 		const t = await create(m, "Weekly review");

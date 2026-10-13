@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { appHarness } from "./harness";
+import { buildList, type TaskView } from "../../src/app/views";
+import { emptyFilter } from "../../src/domain/queries";
+import { compareTasksBySortKey } from "../../src/domain/tasks";
+import { type AppHarness, appHarness } from "./harness";
 
 // TaskService.place.
 
@@ -212,6 +215,89 @@ describe("place", () => {
 			const keys = [below, c, a, b, above].map((id) => key(h, id));
 			expect(ascending(keys)).toBe(true);
 			expect(order(h)).toEqual(["Below", "T2", "T0", "T1", "Above"]);
+		});
+
+		/** The open rows of a view under Default, without groups. */
+		const rows = (h: AppHarness, view: TaskView) =>
+			buildList(h.app.store.state, view, h.app.queryContext(), emptyFilter(), "", undefined, { groupBy: "none" }).groups.flatMap((g) => g.entries.map((e) => e.task.title));
+		/** Every task in the shared manual order. */
+		const all = (h: AppHarness) => [...h.app.store.state.tasks.values()].sort(compareTasksBySortKey).map((t) => t.title);
+		const today = { kind: "date" as const, date: "2026-10-01" };
+
+		/** Work: A, U, B; Home: C, W, D. A, B, C and D are due today; U and W have no date and sit in the middle. */
+		async function twoLists() {
+			const h = await appHarness();
+			const work = (await h.app.categories.create("Work")).id;
+			const home = (await h.app.categories.create("Home")).id;
+			const id: Record<string, string> = {};
+			for (const [title, categoryId, scheduled] of [["A", work, today], ["B", work, today], ["U", work, null], ["C", home, today], ["D", home, today], ["W", home, null]] as const) {
+				id[title] = (await h.app.tasks.create({ title, categoryId, scheduled })).task.id;
+			}
+			await h.app.tasks.place(id.U!, [id.A!, id.U!, id.B!]);
+			await h.app.tasks.place(id.W!, [id.C!, id.W!, id.D!]);
+			const lists = { work: { kind: "category", id: work } as TaskView, home: { kind: "category", id: home } as TaskView };
+			expect(rows(h, lists.work)).toEqual(["A", "U", "B"]);
+			expect(rows(h, lists.home)).toEqual(["C", "W", "D"]);
+			return { h, id, lists };
+		}
+
+		/** The order of every two tasks other than `moved`, as "x<y" pairs. */
+		function pairs(titles: string[], moved: string): string[] {
+			const rest = titles.filter((t) => t !== moved);
+			return rest.flatMap((a, n) => rest.slice(n + 1).map((b) => `${a}<${b}`));
+		}
+
+		it("#107: a drag to the top of Today keeps an undated task of the dragged task's list in its place", async () => {
+			const h = await appHarness();
+			const work = (await h.app.categories.create("Work")).id;
+			const home = (await h.app.categories.create("Home")).id;
+			const a = (await h.app.tasks.create({ title: "A", categoryId: work, scheduled: today })).task.id;
+			const b = (await h.app.tasks.create({ title: "B", categoryId: work, scheduled: today })).task.id;
+			const u = (await h.app.tasks.create({ title: "U", categoryId: work })).task.id;
+			await h.app.tasks.place(u, [a, u, b]);
+			const c = (await h.app.tasks.create({ title: "C", categoryId: home, scheduled: today })).task.id;
+			expect(rows(h, { kind: "today" })).toEqual(["A", "C", "B"]);
+			const r = await h.app.tasks.place(b, [b, a, c]);
+			expect(r.changed).toBe(true);
+			expect(rows(h, { kind: "today" })).toEqual(["B", "A", "C"]);
+			expect(rows(h, { kind: "category", id: work })).toEqual(["B", "A", "U"]);
+			expect(rows(h, { kind: "category", id: home })).toEqual(["C"]);
+		});
+
+		it("#107: every drag in Today across two lists keeps the tasks that were not dragged in their order", async () => {
+			const { h } = await twoLists();
+			const start = rows(h, { kind: "today" });
+			expect([...start].sort()).toEqual(["A", "B", "C", "D"]);
+			for (const moved of start) {
+				for (let to = 0; to < start.length; to++) {
+					const { h, id, lists } = await twoLists();
+					const before = all(h);
+					const order = rows(h, { kind: "today" }).filter((t) => t !== moved);
+					order.splice(to, 0, moved);
+					await h.app.tasks.place(id[moved]!, order.map((t) => id[t]!));
+					expect(rows(h, { kind: "today" }), `${moved} to ${to}`).toEqual(order);
+					expect(pairs(all(h), moved), `${moved} to ${to}`).toEqual(pairs(before, moved));
+					expect(rows(h, lists.work).filter((t) => t !== moved)).toEqual(["A", "U", "B"].filter((t) => t !== moved));
+					expect(rows(h, lists.home).filter((t) => t !== moved)).toEqual(["C", "W", "D"].filter((t) => t !== moved));
+				}
+			}
+		});
+
+		it("#107: when two tasks outside the order share the key the drop needs, they get keys in the same order", async () => {
+			const { h, ids } = await setup();
+			const [a, b, c] = ids as [string, string, string];
+			const first = (await h.app.tasks.create({ title: "First" })).task.id;
+			const last = (await h.app.tasks.create({ title: "Last" })).task.id;
+			// All five share one key, so the creation order decides: T0, T1, T2, First, Last. The view shows T1, T2 and
+			// First (T0 and Last are of other lists), and First is dropped between T1 and T2: no key fits between T0 and Last.
+			await setKeys(h, { [a]: "M", [b]: "M", [c]: "M", [first]: "M", [last]: "M" });
+			expect(all(h)).toEqual(["T0", "T1", "T2", "First", "Last"]);
+			const r = await h.app.tasks.place(first, [b, first, c]);
+			expect(r.changed).toBe(true);
+			expect(all(h)).toEqual(["T0", "T1", "First", "T2", "Last"]);
+			expect(ascending([a, b, first, c, last].map((id) => key(h, id)))).toBe(true);
+			await h.app.store.undo();
+			expect([a, b, c, first, last].map((id) => key(h, id))).toEqual(["M", "M", "M", "M", "M"]);
 		});
 
 		it("undo restores every key", async () => {

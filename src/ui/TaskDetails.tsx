@@ -51,7 +51,8 @@ export function TaskDetails(props: {
 	const [addingTag, setAddingTag] = useState(false);
 	// "Edit repeat…" in a row menu opens this pane's Repeat picker (repeatActions.requestRepeatEdit).
 	const [repeatRequest, setRepeatRequest] = useState(0);
-	// Bumped when the date field refuses to clear a repeating task's schedule, so the field shows the date again.
+	// Bumped when the date field refuses to clear a repeating task's schedule, or a date write is refused, so the
+	// field shows the stored date again.
 	const [scheduleResets, setScheduleResets] = useState(0);
 	const rootRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
@@ -194,7 +195,9 @@ export function TaskDetails(props: {
 							setScheduleResets((n) => n + 1);
 							return;
 						}
-						void updateTask(host, task, { scheduled: spec });
+						void updateTask(host, task, { scheduled: spec }).then((ok) => {
+							if (!ok) setScheduleResets((n) => n + 1);
+						});
 					}}
 				/>
 				{/* A subtask does not repeat. */}

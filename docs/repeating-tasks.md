@@ -99,6 +99,8 @@ By default the schedule is fixed: "every Monday" stays on Mondays however late y
 
 Tick the checkbox, press Cmd+Enter (Ctrl+Enter) on the row, or choose **Complete** in the row menu. The task moves to its next date.
 
+A task whose repeat has ended but which is still open, after an edit of the database file or a sync, shows no repeat chip and completes like any other task, from its row, its menu or a task block.
+
 If you fall behind on a fixed schedule, completing marks the earliest missed date done and skips the others before today, and the notice says how many. A repeat that counts from completion never skips dates on its own.
 
 **Skip this occurrence** in the row menu records the date as skipped. Every notice has an Undo button.
@@ -111,7 +113,7 @@ If you fall behind on a fixed schedule, completing marks the earliest missed dat
 
 ## Move a repeating task to another day
 
-Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date.
+Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date. A repeat that has ended, after **Stop repeating** or at its end, cannot get a new date: reopen the task first.
 
 ## Review and reopen past occurrences
 

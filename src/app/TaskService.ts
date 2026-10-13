@@ -2,7 +2,7 @@ import { DomainError, isDomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
 import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, rewriteNotePath, sanitizeNoteName } from "../domain/notes";
-import { assertCanBecomeSubtask, compareTasksBySortKey, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
+import { assertCanBecomeSubtask, compareTasksBySortKey, isActiveSeries, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
 import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
 import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
 import {
@@ -403,6 +403,10 @@ export class TaskService {
 			const spec = normalizeSpec(patch.scheduled, warnings);
 			// The schedule of a repeating task is its series.
 			if (current.recurrence !== null) {
+				// An ended series repeats again only through Reopen: a new date would move a series that stays ended.
+				if (spec !== null && !isActiveSeries(current)) {
+					throw new DomainError("InvalidValue", "This repeat has ended. Reopen the task to change its date.");
+				}
 				const zone = this.settings.zone();
 				const records = recordsOfTask(tx, id);
 				const ws = this.settings.weekStart();
@@ -471,8 +475,8 @@ export class TaskService {
 	 * Puts `id` at its place in `order`, the full ordered list of its siblings after a drop
 	 * (all with the same parent); `id` must be in it. One run ("Move task"), so one undo entry. `id`
 	 * gets a key strictly between its neighbours. When the other keys in `order` are not strictly
-	 * ascending (equal keys from different lists), every task in `order` gets a new ascending key in
-	 * the same run, inside the open interval between the nearest other task keys below and above `order`. `patch` (e.g. a new `scheduled`) is applied in the same run.
+	 * ascending (equal keys from different lists), the tasks of `order` get new ascending keys in the
+	 * same run, each between the tasks outside `order` around it (`rekeyOrder`). `patch` (e.g. a new `scheduled`) is applied in the same run.
 	 * `changed` is false when nothing was written.
 	 */
 	place(id: ID, order: ID[], patch: TaskPatch = {}): Promise<TaskResult> {
@@ -492,14 +496,19 @@ export class TaskService {
 			// A category move of a lone task keeps the end-of-category key that `patched` gave it.
 			const movedAlone = order.length === 1 && next.categoryId !== current.categoryId;
 			if (!movedAlone && (!sorted || next.sortKey !== current.sortKey)) {
-				// Rebalancing stays inside (lo, hi): lo is the largest task key below the order's smallest key, hi the
-				// smallest above its largest, so the tasks keep their place relative to every other task in every view.
+				// Every task but `id` keeps its place relative to every other task in every view, those outside `order` too.
 				const inOrder = new Set(order);
-				const placed = rekeyOrder(tasks.map((t) => t.sortKey), i, tx.map("tasks").values(), (t) => inOrder.has(t.id));
-				order.forEach((oid, n) => rewritten.set(oid, placed[n]!));
+				const outside = [...tx.map("tasks").values()].filter((t) => !inOrder.has(t.id));
+				for (const [t, key] of rekeyOrder(tasks, i, outside, compareTasksBySortKey)) rewritten.set(t.id, key);
 			}
 			let result: Task = current;
 			let changed = false;
+			// A task outside `order` gets a key only when two of them share the key that `order` needs room in.
+			for (const [tid, sortKey] of rewritten) {
+				if (order.includes(tid)) continue;
+				tx.put("tasks", { ...requireTask(tx, tid), sortKey, modifiedAt: tx.now });
+				changed = true;
+			}
 			for (const t of tasks) {
 				const base = t.id === id ? next : t;
 				const sortKey = rewritten.get(t.id) ?? base.sortKey;
@@ -534,7 +543,7 @@ export class TaskService {
 		// A repeating task completes its occurrence (one entry point for the UI); its subtasks come back
 		// unchecked, so there is nothing to confirm. Decided before the run, because the run's label is.
 		const seen = this.store.state.tasks.get(id);
-		if (seen?.recurrence != null && seen.recurrence.endedAt === null && seen.status === "open") {
+		if (seen !== undefined && isActiveSeries(seen)) {
 			return this.store.run(COMPLETE_OCCURRENCE_LABEL, (tx): CompleteResult => {
 				const r = this.recurrence.completeIn(tx, id);
 				return { kind: "done", completed: 1, label: r.label, seriesEnded: r.seriesEnded };
@@ -545,7 +554,7 @@ export class TaskService {
 			// A repeat set by a write queued before this one; completing the whole task would end the
 			// series without its records. The caller completes the occurrence instead.
 			// A series already ended (`endedAt`) but left open by a hand edit or sync completes as a plain task.
-			if (task.recurrence !== null && task.recurrence.endedAt === null && isOpen(task)) {
+			if (isActiveSeries(task)) {
 				throw new DomainError("InvalidValue", "This task repeats now; complete it again.");
 			}
 			const openSubs = subtasksOf(tx.all("tasks"), id).filter(isOpen);

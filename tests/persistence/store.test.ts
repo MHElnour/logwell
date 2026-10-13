@@ -1556,3 +1556,66 @@ describe("edits waiting to be saved when the file turns unreadable", () => {
 		expect([...h.store.data.tasks.keys()].sort()).toEqual(["pending", "saved", "theirs"]);
 	});
 });
+
+describe("a version loaded over a fork is not reported missing later", () => {
+	function conflictPathOf(events: StoreEvent[]): string {
+		const e = events.find((x) => x.type === "conflict");
+		if (e?.type !== "conflict") throw new Error("no conflict event");
+		return e.path;
+	}
+
+	it("#116: after Keep theirs, the next open reports no lost revision and writes no new copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.keepTheirs(conflictPathOf(h.events));
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toEqual([]);
+		expect(s2.data.tasks.has("theirs")).toBe(true);
+	});
+
+	it("#116: with no choice made before quitting, the open copy is the only one", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toHaveLength(1);
+	});
+
+	it("#116: a revision lost while Logwell was closed is still reported", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		// A later save of ours is replaced while Logwell is closed.
+		const s2 = h.newStore();
+		await s2.open();
+		h.addTask(makeTask("later"), s2);
+		await h.saveNow(s2);
+		await s2.close();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-other"));
+		h.events.length = 0;
+
+		await h.newStore().open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(true);
+	});
+});
