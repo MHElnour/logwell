@@ -29,6 +29,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#136) When TickTick does not answer while you link a list, the notice now names the list, as a failed sync does.
 - (#126) In the Eisenhower matrix, a task whose deadline is today is now under **Today** even when its date is later, as it is in the Today view and the sidebar's Today count.
 - (#7) A new tag name can have at most 64 characters. Longer tags you already have keep working. The Tags heading in the sidebar now shows even before you have a tag.
 

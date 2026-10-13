@@ -207,7 +207,7 @@ describe("closing a session", () => {
 		const plugin = await loadPlugin(fake, A);
 		const session = plugin.session!;
 		const order: string[] = [];
-		vi.spyOn(session.app.tasks, "flushRenames").mockImplementation(() => void order.push("flushRenames"));
+		vi.spyOn(session.app.noteRenames, "flushRenames").mockImplementation(() => void order.push("flushRenames"));
 		const close = session.store.close.bind(session.store);
 		vi.spyOn(session.store, "close").mockImplementation(() => {
 			order.push("store.close");

@@ -61,7 +61,7 @@ describe("plugin lifecycle", () => {
 		const order: string[] = [];
 		const flush = vi.fn(() => Promise.resolve(void order.push("store.flush")));
 		const flushRenames = vi.fn(() => void order.push("flushRenames"));
-		plugin.session = { app: { tasks: { flushRenames } }, store: { flushBeforeQuit: flush } } as unknown as typeof plugin.session;
+		plugin.session = { app: { noteRenames: { flushRenames } }, store: { flushBeforeQuit: flush } } as unknown as typeof plugin.session;
 		const tasks: (() => Promise<unknown>)[] = [];
 		quit!.callback({ add: (fn: () => Promise<unknown>) => tasks.push(fn), addPromise: () => undefined });
 		expect(tasks).toHaveLength(1);
@@ -81,7 +81,7 @@ describe("plugin lifecycle", () => {
 		const saved: string[] = [];
 		const sessionOf = (name: string) =>
 			({
-				app: { tasks: { flushRenames: () => undefined } },
+				app: { noteRenames: { flushRenames: () => undefined } },
 				store: {
 					flushBeforeQuit: () =>
 						new Promise<void>((resolve) => {
@@ -122,7 +122,7 @@ describe("plugin lifecycle", () => {
 		const calls: unknown[][] = [];
 		const session = {
 			app: {
-				tasks: {
+				noteRenames: {
 					rewriteNotePaths: (...args: unknown[]) => {
 						calls.push(args);
 						return Promise.resolve(1);

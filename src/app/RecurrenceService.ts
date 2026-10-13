@@ -14,13 +14,13 @@ import {
 	ruleAt,
 	startRecurrence,
 } from "../domain/recurrence";
-import { compareSortKeys } from "../domain/sortKey";
 import { isActiveSeries, subtasksOf } from "../domain/tasks";
 import { isValidLocalDate, todayIn } from "../domain/time";
 import type { ID, LocalDate, OccurrenceRecord, Recurrence, RepeatEnd, RepeatRule, RepeatVersion, Task, WeekStart } from "../domain/types";
 import type { SettingsPort } from "./ports";
 import type { AppStore } from "./store";
 import type { Tx } from "./tx";
+import { recordsOfTask, requireTask } from "./txReads";
 import type { WriteResult } from "./writes";
 
 // Repeating tasks. The only writer of occurrence records and,
@@ -46,25 +46,12 @@ export interface RecurrenceResult extends WriteResult {
 	deadlineCleared: boolean;
 }
 
-export function requireTask(tx: Tx, id: ID): Task {
-	const t = tx.get("tasks", id);
-	if (t === undefined) throw new DomainError("NotFound", "The task no longer exists.");
-	return t;
-}
-
 /** A repeating task whose repeat still runs (`isActiveSeries`). */
 function requireActiveSeries(tx: Tx, id: ID): Task & { recurrence: Recurrence } {
 	const task = requireTask(tx, id);
 	if (task.recurrence === null) invalidValue("This task does not repeat.");
 	if (!isActiveSeries(task)) invalidValue("This repeat has ended.");
 	return task;
-}
-
-/** The records of one task, sorted by date (not by resolution; every engine reader is order-free). */
-export function recordsOfTask(tx: Tx, taskId: ID): OccurrenceRecord[] {
-	const out: OccurrenceRecord[] = [];
-	for (const r of tx.map("occurrenceRecords").values()) if (r.taskId === taskId) out.push(r);
-	return out.sort((a, b) => compareSortKeys(a.occurrenceDate, b.occurrenceDate));
 }
 
 /**

@@ -39,7 +39,7 @@ export class CategoryService {
 	constructor(
 		private readonly store: AppStore,
 		private readonly ids: IdGenerator,
-		/** The task index, for the synced-list cap a delete's move into Inbox obeys. */
+		/** The task index: the synced-list cap a delete's move into Inbox obeys, and a list's task count. */
 		private readonly lists: TaskIndex,
 	) {}
 
@@ -139,9 +139,8 @@ export class CategoryService {
 
 	/** Tasks (open and completed) that a delete would move, for the delete prompt. */
 	taskCount(id: ID): number {
-		let n = 0;
-		for (const t of this.store.state.tasks.values()) if (t.categoryId === id) n++;
-		return n;
+		const tasks = this.store.state.tasks;
+		return this.lists.tasksOf((tid) => tasks.get(tid), id).length;
 	}
 
 	/**
