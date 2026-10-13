@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { chipLabel } from "../../src/ui/quickadd/chipLabels";
-import { click, datePop, dateTool, fakePopoverLayout, formTasks, morePop, moreTool, mountApp, mountQuickForm, popDay, pressKey, settle, titleInput, typeInto } from "./app-helpers";
+import { click, datePop, dateTool, formTasks, morePop, moreTool, mountApp, mountQuickForm, popDay, pressKey, settle, titleInput, typeInto } from "./app-helpers";
 
 // The add bar (highlighting, manual pills, tools), the date popover and the more menu.
 // Real services and parser, a fake host. The harness clock is 2026-10-01T10:00Z (Thursday),
@@ -417,14 +417,6 @@ describe("more menu", () => {
 		expect(m.root.querySelector('.cp-pri-flags [aria-label="Medium priority"]')!.classList.contains("is-on")).toBe(true);
 	});
 
-	it("a manual priority then a typed token follows the replace rule (B4)", async () => {
-		const m = await mountQuickForm();
-		await click(moreTool(m.root));
-		await click(m.root.querySelector('.cp-pri-flags [aria-label="Low priority"]'));
-		await typeInto(titleInput(m.root), "Pay rent !1");
-		expect(m.root.querySelector('.cp-qa-chip[data-kind="priority"]')!.getAttribute("data-status")).toBe("suggestion");
-	});
-
 	it("lists List, Tags, Description note and Matrix quadrant rows, 44px rows with chevrons", async () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));
@@ -529,6 +521,10 @@ describe("token highlighting and chips", () => {
 		expect(byKind("cp-qa-tok-dur")?.textContent).toBe("for 45m");
 		expect(byKind("cp-qa-tok-cat")?.textContent).toBe("#Inbox");
 		expect(byKind("cp-qa-tok-pri-1")?.textContent).toBe("!1");
+		await typeInto(titleInput(m.root), "A !2");
+		expect(m.root.querySelector(".cp-qa-mirror mark.cp-qa-tok-pri-2")?.textContent).toBe("!2");
+		await typeInto(titleInput(m.root), "A !3");
+		expect(m.root.querySelector(".cp-qa-mirror mark.cp-qa-tok-pri-3")?.textContent).toBe("!3");
 	});
 
 	it("the highlight layer is one inline run, so spaces between highlights are kept", async () => {
@@ -540,14 +536,6 @@ describe("token highlighting and chips", () => {
 		expect(mirror.children).toHaveLength(1);
 		expect(mirror.children[0]!.classList.contains("cp-qa-mirror-text")).toBe(true);
 		expect(mirror.textContent).toBe(text);
-	});
-
-	it("priority levels 2 and 3 get their own classes", async () => {
-		const m = await mountQuickForm();
-		await typeInto(titleInput(m.root), "A !2");
-		expect(m.root.querySelector(".cp-qa-mirror mark.cp-qa-tok-pri-2")).not.toBeNull();
-		await typeInto(titleInput(m.root), "A !3");
-		expect(m.root.querySelector(".cp-qa-mirror mark.cp-qa-tok-pri-3")).not.toBeNull();
 	});
 
 	it("priority chip labels read 'High priority', 'Medium priority' and 'Low priority'", () => {
@@ -666,91 +654,5 @@ describe("Clear, Enter and Escape in the add bar", () => {
 		const back = m.root.querySelector<HTMLElement>(".cp-pop-back")!;
 		expect(back.hasAttribute("aria-label")).toBe(false);
 		expect(back.textContent).toContain("List");
-	});
-});
-
-// Popovers fit the space they have; the footer stays visible.
-describe("popover fit (short views, Quick Add modal, status bar)", () => {
-	afterEach(() => vi.restoreAllMocks());
-	const maxOf = (el: HTMLElement) => el.style.getPropertyValue("--cp-pop-max");
-
-	it("the date popover gets a max height from the space below the bar", async () => {
-		fakePopoverLayout({ barTop: 100, popHeight: 480, windowHeight: 500 });
-		const m = await mountQuickForm();
-		await click(dateTool(m.root));
-		expect(maxOf(datePop(m.root)!)).toBe(`${500 - 152 - 8 - 12}px`);
-		expect(datePop(m.root)!.classList.contains("is-above")).toBe(false);
-	});
-
-	it("stops above Obsidian's status bar", async () => {
-		fakePopoverLayout({ barTop: 100, popHeight: 480, windowHeight: 900, statusTop: 476 });
-		const m = await mountQuickForm();
-		const status = document.createElement("div");
-		status.className = "status-bar";
-		document.body.appendChild(status);
-		await click(dateTool(m.root));
-		expect(maxOf(datePop(m.root)!)).toBe(`${476 - 152 - 8 - 12}px`);
-	});
-
-	// Without the Popover API (this environment) the popover stays in place, so a clipping container
-	// still limits it. In the top layer only the window does (#85, popover.test.tsx).
-	it("stops at the bottom of a clipping container, like the Quick Add modal", async () => {
-		fakePopoverLayout({ barTop: 100, popHeight: 480, windowHeight: 900, clipBottom: 420 });
-		const m = await mountQuickForm();
-		const wrapper = document.createElement("div");
-		wrapper.className = "fake-clip";
-		// A clipping ancestor, as the modal is (no stylesheet is applied in this environment).
-		const real = window.getComputedStyle.bind(window);
-		vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) =>
-			el.classList.contains("fake-clip") ? ({ overflowY: "auto" } as CSSStyleDeclaration) : real(el, pseudo),
-		);
-		m.root.parentElement!.appendChild(wrapper);
-		wrapper.appendChild(m.root);
-		await click(dateTool(m.root));
-		expect(maxOf(datePop(m.root)!)).toBe(`${420 - 152 - 8 - 12}px`);
-	});
-
-	it("flips above the bar when that has more room", async () => {
-		fakePopoverLayout({ barTop: 600, popHeight: 480, windowHeight: 700 });
-		const m = await mountQuickForm();
-		await click(dateTool(m.root));
-		expect(datePop(m.root)!.classList.contains("is-above")).toBe(true);
-		expect(maxOf(datePop(m.root)!)).toBe(`${600 - 8 - 12}px`);
-	});
-
-	it("the more menu is constrained the same way", async () => {
-		fakePopoverLayout({ barTop: 100, popHeight: 400, windowHeight: 400 });
-		const m = await mountQuickForm();
-		await click(moreTool(m.root));
-		expect(maxOf(morePop(m.root)!)).toBe(`${400 - 152 - 8 - 12}px`);
-	});
-
-	it("without layout (nothing measurable) no limit is set", async () => {
-		const m = await mountQuickForm();
-		await click(dateTool(m.root));
-		expect(maxOf(datePop(m.root)!)).toBe("");
-	});
-
-	it("Clear and OK sit outside the scrolling body, so they stay visible", async () => {
-		const m = await mountQuickForm();
-		await click(dateTool(m.root));
-		const pop = datePop(m.root)!;
-		const body = pop.querySelector(".cp-pop-body")!;
-		expect(body).not.toBeNull();
-		expect(body.querySelector(".cp-quick")).not.toBeNull();
-		expect(body.querySelector(".cp-cal")).not.toBeNull();
-		const footer = pop.querySelector(".cp-pbtns")!;
-		expect(body.contains(footer)).toBe(false);
-		expect(footer.parentElement).toBe(pop);
-		expect(footer.querySelector(".cp-pop-ok")).not.toBeNull();
-		expect(footer.querySelector(".cp-pop-clear")).not.toBeNull();
-	});
-
-	it("the stylesheet caps the popover with the variable, scrolls the body and pins the footer", async () => {
-		const css = (await import("node:fs")).readFileSync("styles.css", "utf8");
-		expect(css).toMatch(/\.cp-pop,[^{]*\{[^}]*max-height:\s*min\(480px,\s*var\(--cp-pop-max,\s*480px\)\)/);
-		expect(css).toMatch(/\.cp-pop-body[^{]*\{[^}]*overflow-y:\s*auto/);
-		expect(css).toMatch(/\.cp-pop\.is-above[^{]*\{[^}]*bottom:/);
-		expect(css).toMatch(/\.cp-more-pop[^{]*\{[^}]*overflow-y:\s*auto/);
 	});
 });

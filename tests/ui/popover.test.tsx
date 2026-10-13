@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { alignPopover, applyPopoverFit, attachPopover, fitPopover } from "../../src/ui/quickadd/popoverFit";
-import { datePop, dateTool, fakePopoverLayout, morePop, moreTool, mountQuickForm, settle } from "./app-helpers";
+import { click, datePop, dateTool, fakePopoverLayout, morePop, moreTool, mountQuickForm, settle } from "./app-helpers";
+import { css } from "./styles-helpers";
 
 describe("the popover layer", () => {
 	// Issue #85: the date popover and the more menu were cut off by the Quick Add window and by short
@@ -187,17 +188,13 @@ describe("the popover layer", () => {
 	});
 
 	describe("#85: horizontal clamp", () => {
-		it("right-aligns to the anchor when it fits", () => {
-			expect(alignPopover({ anchorRight: 900, width: 336, viewportWidth: 1200 })).toBe(564);
-		});
-		it("never starts left of the 8 px margin", () => {
-			expect(alignPopover({ anchorRight: 200, width: 336, viewportWidth: 1200 })).toBe(8);
-		});
-		it("never ends right of the 8 px margin", () => {
-			expect(alignPopover({ anchorRight: 1300, width: 336, viewportWidth: 1200 })).toBe(1200 - 8 - 336);
-		});
-		it("a popover wider than the window starts at the margin", () => {
-			expect(alignPopover({ anchorRight: 300, width: 400, viewportWidth: 320 })).toBe(8);
+		it.each([
+			["right-aligns to the anchor when it fits", { anchorRight: 900, width: 336, viewportWidth: 1200 }, 564],
+			["never starts left of the 8 px margin", { anchorRight: 200, width: 336, viewportWidth: 1200 }, 8],
+			["never ends right of the 8 px margin", { anchorRight: 1300, width: 336, viewportWidth: 1200 }, 1200 - 8 - 336],
+			["a popover wider than the window starts at the margin", { anchorRight: 300, width: 400, viewportWidth: 320 }, 8],
+		])("%s", (_name, box, left) => {
+			expect(alignPopover(box)).toBe(left);
 		});
 	});
 
@@ -317,9 +314,45 @@ describe("the popover layer", () => {
 		});
 	});
 
+	describe("short views and the footer", () => {
+		it("the more menu is limited the same way as the date popover", async () => {
+			fakePopoverLayout({ barTop: 100, popHeight: 400, windowHeight: 400 });
+			const { root } = await mountQuickForm();
+			await click(moreTool(root));
+			expect(prop(morePop(root)!, "--cp-pop-max")).toBe(`${400 - 152 - 8 - 12}px`);
+		});
+
+		it("without layout (nothing measurable) no limit is set", async () => {
+			const { root } = await mountQuickForm();
+			await click(dateTool(root));
+			expect(prop(datePop(root)!, "--cp-pop-max")).toBe("");
+		});
+
+		it("Clear and OK sit outside the scrolling body, so they stay visible", async () => {
+			const { root } = await mountQuickForm();
+			await click(dateTool(root));
+			const pop = datePop(root)!;
+			const body = pop.querySelector(".cp-pop-body")!;
+			expect(body).not.toBeNull();
+			expect(body.querySelector(".cp-quick")).not.toBeNull();
+			expect(body.querySelector(".cp-cal")).not.toBeNull();
+			const footer = pop.querySelector(".cp-pbtns")!;
+			expect(body.contains(footer)).toBe(false);
+			expect(footer.parentElement).toBe(pop);
+			expect(footer.querySelector(".cp-pop-ok")).not.toBeNull();
+			expect(footer.querySelector(".cp-pop-clear")).not.toBeNull();
+		});
+	});
+
 	describe("#85: the stylesheet", () => {
+		it("caps the popover with the variable, scrolls the body and pins the footer", () => {
+			expect(css).toMatch(/\.cp-pop,[^{]*\{[^}]*max-height:\s*min\(480px,\s*var\(--cp-pop-max,\s*480px\)\)/);
+			expect(css).toMatch(/\.cp-pop-body[^{]*\{[^}]*overflow-y:\s*auto/);
+			expect(css).toMatch(/\.cp-pop\.is-above[^{]*\{[^}]*bottom:/);
+			expect(css).toMatch(/\.cp-more-pop[^{]*\{[^}]*overflow-y:\s*auto/);
+		});
+
 		it("resets the browser's popover styles and places a top-layer popover from the variables", async () => {
-			const css = (await import("node:fs")).readFileSync("styles.css", "utf8");
 			const rule = css.match(/\.checkpoint-view \.cp-pop\[popover\],\s*\.checkpoint-quick-add-modal \.cp-pop\[popover\]\s*\{([^}]*)\}/);
 			expect(rule).not.toBeNull();
 			const body = rule![1]!;
@@ -344,31 +377,14 @@ describe("the popover layer", () => {
 describe("fitPopover", () => {
 	const base = { anchorTop: 100, anchorBottom: 152, limitTop: 0, limitBottom: 1000, natural: 480 };
 
-	it("opens below with no constraint beyond the 480 px cap when there is room", () => {
-		expect(fitPopover(base)).toEqual({ above: false, maxHeight: 1000 - 152 - 8 - 12 });
-	});
-
-	it("limits the height to the space below the bar, minus the gap and a margin", () => {
-		expect(fitPopover({ ...base, limitBottom: 500 })).toEqual({ above: false, maxHeight: 500 - 152 - 8 - 12 });
-	});
-
-	it("flips above the bar when the space below is too small and above has more", () => {
-		const r = fitPopover({ ...base, anchorTop: 600, anchorBottom: 652, limitBottom: 700 });
-		expect(r.above).toBe(true);
-		expect(r.maxHeight).toBe(600 - 0 - 8 - 12);
-	});
-
-	it("stays below when above is no better", () => {
-		const r = fitPopover({ ...base, anchorTop: 60, anchorBottom: 112, limitBottom: 400 });
-		expect(r.above).toBe(false);
-		expect(r.maxHeight).toBe(400 - 112 - 8 - 12);
-	});
-
-	it("never goes under a minimum height, even with almost no space", () => {
-		expect(fitPopover({ ...base, anchorTop: 10, anchorBottom: 62, limitBottom: 80 }).maxHeight).toBe(160);
-	});
-
-	it("does not flip when the popover fits below", () => {
-		expect(fitPopover({ ...base, natural: 200, anchorTop: 600, anchorBottom: 652, limitBottom: 900 }).above).toBe(false);
+	it.each([
+		["opens below with no constraint beyond the 480 px cap when there is room", {}, { above: false, maxHeight: 1000 - 152 - 8 - 12 }],
+		["limits the height to the space below the bar, minus the gap and a margin", { limitBottom: 500 }, { above: false, maxHeight: 500 - 152 - 8 - 12 }],
+		["flips above the bar when the space below is too small and above has more", { anchorTop: 600, anchorBottom: 652, limitBottom: 700 }, { above: true, maxHeight: 600 - 0 - 8 - 12 }],
+		["stays below when above is no better", { anchorTop: 60, anchorBottom: 112, limitBottom: 400 }, { above: false, maxHeight: 400 - 112 - 8 - 12 }],
+		["never goes under a minimum height, even with almost no space", { anchorTop: 10, anchorBottom: 62, limitBottom: 80 }, { maxHeight: 160 }],
+		["does not flip when the popover fits below", { natural: 200, anchorTop: 600, anchorBottom: 652, limitBottom: 900 }, { above: false }],
+	])("%s", (_name, patch, fit) => {
+		expect(fitPopover({ ...base, ...patch })).toMatchObject(fit);
 	});
 });

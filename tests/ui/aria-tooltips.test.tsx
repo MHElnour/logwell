@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { INBOX_ID } from "../../src/domain/types";
 import { type AppMount, click, expectLabelsResolve, labelledBy, mountApp, obsidianElement, type ObsidianElement, settle, sidebarItem, strayAriaLabels } from "./app-helpers";
 import { openViewMenu, pickItem } from "./view-menu-helpers";
 import { Modal } from "obsidian";
 import { pickListIcon } from "../../src/obsidian/modals";
+import { css } from "./styles-helpers";
 
 describe("aria-label tooltips", () => {
 	// Regression: Obsidian shows a hover tooltip for ANY element that has an `aria-label`
@@ -212,7 +212,6 @@ describe("aria-label tooltips", () => {
 		});
 
 		it("the stylesheet hides .cp-sr-only visually, not with display:none", () => {
-			const css = readFileSync("styles.css", "utf8");
 			const rule = /\.checkpoint-view \.cp-sr-only[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
 			for (const decl of [
 				"position: absolute",
