@@ -45,7 +45,7 @@ If you have habits, they sit above the list. See [Habits](habits.md#habits-in-to
 
 The other views end with a collapsed group, such as **Completed · 3**, with the completed tasks the view showed while they were open. In **Today** that includes overdue tasks you completed today. Click the group to open it; **Show more** adds 20 tasks at a time. A completed subtask stays under its open parent.
 
-A task you complete stays a moment, then moves into the group. To hide the group in every view, open **View options** (the ⋯ button) and turn off **Show completed**.
+A task you complete stays a moment where it was, an overdue one under **Overdue** too, then moves into the group. To hide the group in every view, open **View options** (the ⋯ button) and turn off **Show completed**.
 
 ## Restore a deleted task
 
