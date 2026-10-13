@@ -20,9 +20,12 @@ export function assertUniqueSectionName(sections: Iterable<Section>, categoryId:
 	}
 }
 
-/** The sections of one list, ordered by sortKey (then id, for equal keys). */
+/** The order of a list's sections: by sortKey, then id for equal keys. */
+export function compareSections(a: Section, b: Section): number {
+	return compareSortKeys(a.sortKey, b.sortKey) || compareSortKeys(a.id, b.id);
+}
+
+/** The sections of one list, in their order (`compareSections`). */
 export function sectionsOfList(sections: Iterable<Section>, categoryId: ID): Section[] {
-	return [...sections]
-		.filter((s) => s.categoryId === categoryId)
-		.sort((a, b) => compareSortKeys(a.sortKey, b.sortKey) || compareSortKeys(a.id, b.id));
+	return [...sections].filter((s) => s.categoryId === categoryId).sort(compareSections);
 }

@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
-import { assertUniqueSectionName, requireSectionName, sectionsOfList } from "../domain/sections";
+import { assertUniqueSectionName, compareSections, requireSectionName, sectionsOfList } from "../domain/sections";
 import { categoryNameKey } from "../domain/tasks";
 import { keyAfter, rekeyOrder } from "../domain/sortKey";
 import type { ID, Section } from "../domain/types";
@@ -78,9 +78,8 @@ export class SectionService {
 
 	/**
 	 * Puts `id` at its place in `order` (sections of one list, `id` included). The key rules are those of
-	 * `TaskService.place`: `id` gets a key strictly between its neighbours; when the other keys are not
-	 * strictly ascending, all of `order` gets new ascending keys inside the interval of the neighbouring
-	 * sections outside `order`.
+	 * `TaskService.place` (`rekeyOrder`): `id` gets a key strictly between its neighbours; when the other keys
+	 * are not strictly ascending, `order` gets new ascending keys between the list's sections outside it.
 	 */
 	place(id: ID, order: ID[]): Promise<{ changed: boolean }> {
 		return this.store.run("Move section", (tx) => {
@@ -96,13 +95,13 @@ export class SectionService {
 			// Already in this order: nothing to write.
 			if (!keys.every((k, n) => n === 0 || keys[n - 1]! < k)) {
 				const inOrder = new Set(order);
-				const placed = rekeyOrder(keys, order.indexOf(id), tx.map("sections").values(), (s) => inOrder.has(s.id) || s.categoryId !== categoryId);
-				order.forEach((oid, n) => rewritten.set(oid, placed[n]!));
+				const outside = sectionsOfList(tx.map("sections").values(), categoryId).filter((s) => !inOrder.has(s.id));
+				for (const [s, key] of rekeyOrder(sections, order.indexOf(id), outside, compareSections)) rewritten.set(s.id, key);
 			}
 			let changed = false;
-			for (const s of sections) {
-				const sortKey = rewritten.get(s.id);
-				if (sortKey === undefined || sortKey === s.sortKey) continue;
+			for (const [sid, sortKey] of rewritten) {
+				const s = requireSection(tx, sid);
+				if (sortKey === s.sortKey) continue;
 				tx.put("sections", { ...s, sortKey, modifiedAt: tx.now });
 				changed = true;
 			}

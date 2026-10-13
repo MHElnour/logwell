@@ -55,29 +55,66 @@ export function keyAfter(keys: Iterable<string>): string {
 }
 
 /**
- * New keys for an ordered list whose item `i` was just put at its place. `keys` are the current keys, in
- * the new order. When the other keys are strictly ascending, only item `i` gets a key, strictly between
- * its neighbours. Otherwise every item gets a new ascending key inside the open interval between the
- * nearest keys outside the list below and above it: `candidates` are the other records that share the
- * order's key space, `inList` says which of them are the list itself. Items that keep their key come back
- * with it.
+ * New keys after `order[i]` was put at its place in `order`, records in their new order whose other records are
+ * in the key space's sort order. `outside` are the other records that share the key space (none of `order`), and
+ * `compare` is that sort order (`sortKey` first, then a tie-break). Returns each record whose key changes, with
+ * its new key. Every two records other than `order[i]` keep their order:
+ * - When the other keys of `order` are strictly ascending, only `order[i]` gets a key, strictly between its
+ *   neighbours.
+ * - Otherwise each run of `order` records that no outside record splits is rekeyed on its own, inside the keys of
+ *   the outside records around it: the run that `order[i]` joins (after `order[i - 1]`, or before `order[1]`),
+ *   and every run whose keys are not strictly ascending. Outside records keep their keys unless the two around a
+ *   run share one key, so no key fits between them: then the records that hold that key are rekeyed too, in order.
  */
-export function rekeyOrder<T extends { sortKey: string }>(keys: readonly string[], i: number, candidates: Iterable<T>, inList: (c: T) => boolean): string[] {
-	const others = keys.filter((_, n) => n !== i);
-	if (others.every((k, n) => n === 0 || others[n - 1]! < k)) {
-		const next = [...keys];
-		next[i] = keyBetween(i > 0 ? keys[i - 1]! : null, i < keys.length - 1 ? keys[i + 1]! : null);
-		return next;
+export function rekeyOrder<T extends { sortKey: string }>(order: readonly T[], i: number, outside: Iterable<T>, compare: (a: T, b: T) => number): Map<T, string> {
+	const moved = order[i]!;
+	const others = order.filter((_, n) => n !== i);
+	if (others.every((t, n) => n === 0 || others[n - 1]!.sortKey < t.sortKey)) {
+		return new Map([[moved, keyBetween(i > 0 ? order[i - 1]!.sortKey : null, i < order.length - 1 ? order[i + 1]!.sortKey : null)]]);
 	}
-	const minKey = keys.reduce((a, b) => (b < a ? b : a));
-	const maxKey = keys.reduce((a, b) => (b > a ? b : a));
-	let lo: string | null = null;
-	let hi: string | null = null;
-	for (const c of candidates) {
-		if (inList(c)) continue;
-		if (c.sortKey < minKey && (lo === null || c.sortKey > lo)) lo = c.sortKey;
-		if (c.sortKey > maxKey && (hi === null || c.sortKey < hi)) hi = c.sortKey;
+	// Every record in its order after the move: the outside ones by `compare`, each other record of `order` after
+	// the outside ones that sort before it, and `moved` next to its neighbour in `order`.
+	const fixed = [...outside].sort(compare);
+	const seq: T[] = [];
+	let f = 0;
+	for (const t of others) {
+		while (f < fixed.length && compare(fixed[f]!, t) < 0) seq.push(fixed[f++]!);
+		seq.push(t);
 	}
-	let key = lo;
-	return keys.map(() => (key = keyBetween(key, hi)));
+	while (f < fixed.length) seq.push(fixed[f++]!);
+	seq.splice(i > 0 ? seq.indexOf(order[i - 1]!) + 1 : seq.indexOf(order[1]!), 0, moved);
+
+	const keys = new Map<T, string>();
+	const keyOf = (t: T) => keys.get(t) ?? t.sortKey;
+	const before = (a: T, b: T) => (keys.has(a) || keys.has(b) ? keyOf(a) < keyOf(b) : compare(a, b) < 0);
+	const inOrder = new Set(order);
+	for (let start = 0; start < seq.length; ) {
+		if (!inOrder.has(seq[start]!)) {
+			start++;
+			continue;
+		}
+		let end = start;
+		while (end < seq.length && inOrder.has(seq[end]!)) end++;
+		let fits = (start === 0 || before(seq[start - 1]!, seq[start]!)) && (end === seq.length || before(seq[end - 1]!, seq[end]!));
+		for (let n = start; fits && n < end; n++) fits = seq[n] !== moved && (n === start || keyOf(seq[n - 1]!) < keyOf(seq[n]!));
+		if (fits) {
+			start = end;
+			continue;
+		}
+		let lo = start > 0 ? keyOf(seq[start - 1]!) : null;
+		let hi = end < seq.length ? keyOf(seq[end]!) : null;
+		if (lo !== null && hi !== null && lo >= hi) {
+			// No key between the two outside records: take in every record next to them that holds such a key.
+			const [low, high] = [hi, lo];
+			while (start > 0 && keyOf(seq[start - 1]!) >= low) start--;
+			while (end < seq.length && keyOf(seq[end]!) <= high) end++;
+			lo = start > 0 ? keyOf(seq[start - 1]!) : null;
+			hi = end < seq.length ? keyOf(seq[end]!) : null;
+		}
+		let key = lo;
+		for (let n = start; n < end; n++) keys.set(seq[n]!, (key = keyBetween(key, hi)));
+		start = end;
+	}
+	for (const [t, key] of keys) if (key === t.sortKey) keys.delete(t);
+	return keys;
 }
