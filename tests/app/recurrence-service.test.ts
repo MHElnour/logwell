@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { CheckpointApp } from "../../src/app/App";
 import { COMPLETE_OCCURRENCE_LABEL, EDIT_REPEAT_LABEL, END_REPEAT_LABEL, REOPEN_OCCURRENCE_LABEL, type RecurrenceResult, SKIP_OCCURRENCE_LABEL, STOP_REPEATING_LABEL } from "../../src/app/RecurrenceService";
-import { isDomainError } from "../../src/domain/errors";
-import { currentOccurrence, effectiveSchedule, indexOccurrenceRecords, occurrencesBetween, remainingCount, repeatEndProblem } from "../../src/domain/recurrence";
-import type { DateSpec, OccurrenceRecord, Recurrence, RepeatRule, Task, WeekStart } from "../../src/domain/types";
+import { currentOccurrence, effectiveSchedule, indexOccurrenceRecords, occurrencesBetween, remainingCount } from "../../src/domain/recurrence";
+import type { DateSpec, OccurrenceRecord, RepeatRule, Task, WeekStart } from "../../src/domain/types";
 import { rule } from "../domain/recurrence-fixtures";
 import { sequentialIds } from "../helpers";
-import { type AppHarness, FakeNotes, appHarness } from "./harness";
+import { type AppHarness, FakeNotes, appHarness, expectDomainError } from "./harness";
 
 // RecurrenceService. Europe/Berlin;
 // 2026-10-05 is a Monday. Every write is one run whose label is the store's undo label.
+// The next date after a completion or a skip is date maths of the domain (tests/domain/recurrence.test.ts): these
+// tests check what the services write for it (records, completedOn, endedAt, the label and Undo).
 
 const NOW = "2026-10-05T10:00:00.000Z";
 
@@ -47,16 +48,6 @@ async function labelledAndUndoable(h: AppHarness, write: () => Promise<Recurrenc
 	expect(snapshot(h.app.store.state.tasks)).toBe(tasksBefore);
 	expect(snapshot(h.app.store.state.occurrenceRecords)).toBe(recordsBefore);
 	return write();
-}
-
-async function rejects(p: Promise<unknown>, code: "InvalidValue" | "NotFound"): Promise<string> {
-	try {
-		await p;
-	} catch (err) {
-		expect(isDomainError(err, code)).toBe(true);
-		return (err as Error).message;
-	}
-	throw new Error("expected a DomainError");
 }
 
 describe("setRepeat: making a task repeat (D4, decision 9)", () => {
@@ -103,12 +94,12 @@ describe("setRepeat: making a task repeat (D4, decision 9)", () => {
 		const h = await setup();
 		const parent = await plainTask(h);
 		const sub = (await h.app.tasks.create({ title: "Pack", parentId: parent.id })).task;
-		expect(await rejects(h.app.recurrence.setRepeat(sub.id, rule()), "InvalidValue")).toBe("A subtask cannot repeat.");
-		await rejects(h.app.recurrence.setRepeat(parent.id, rule({ interval: 0 })), "InvalidValue");
-		await rejects(h.app.recurrence.setRepeat(parent.id, rule({ freq: "weekly", weekdays: ["MO"], afterCompletion: true })), "InvalidValue");
-		await rejects(h.app.recurrence.setRepeat(parent.id, rule(), undefined, { kind: "count", count: 0 }), "InvalidValue");
-		await rejects(h.app.recurrence.setRepeat(parent.id, rule(), "2026-02-30"), "InvalidValue");
-		await rejects(h.app.recurrence.setRepeat("missing", rule()), "NotFound");
+		expect(await expectDomainError(h.app.recurrence.setRepeat(sub.id, rule()), "InvalidValue")).toBe("A subtask cannot repeat.");
+		await expectDomainError(h.app.recurrence.setRepeat(parent.id, rule({ interval: 0 })), "InvalidValue");
+		await expectDomainError(h.app.recurrence.setRepeat(parent.id, rule({ freq: "weekly", weekdays: ["MO"], afterCompletion: true })), "InvalidValue");
+		await expectDomainError(h.app.recurrence.setRepeat(parent.id, rule(), undefined, { kind: "count", count: 0 }), "InvalidValue");
+		await expectDomainError(h.app.recurrence.setRepeat(parent.id, rule(), "2026-02-30"), "InvalidValue");
+		await expectDomainError(h.app.recurrence.setRepeat("missing", rule()), "NotFound");
 		expect(task(h, parent.id).recurrence).toBeNull();
 	});
 
@@ -304,36 +295,6 @@ describe("complete (REC-03, B20, decision 4)", () => {
 		expect(current(h, t.id)).toBe("2026-10-08");
 	});
 
-	it.each([
-		["early", "2026-10-10", "2026-10-13"],
-		["on time", "2026-10-05", "2026-10-08"],
-		["late", "2026-10-03", "2026-10-06"],
-	])("fixed mode, done %s: the schedule does not move (the next is the next generated date)", async (_when, anchor, next) => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3 }), anchor);
-		const r = await h.app.recurrence.complete(t.id);
-		expect(r).toMatchObject({ date: anchor, autoSkipped: 0 });
-		expect(records(h, t.id)).toEqual([{ taskId: t.id, occurrenceDate: anchor, status: "done", resolvedAt: NOW, auto: false, completedOn: "2026-10-05" }]);
-		expect(current(h, t.id)).toBe(next);
-	});
-
-	it("after completion, done early: completion day plus the interval (due Oct 10, done Oct 5 → Oct 8)", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-10");
-		await h.app.recurrence.complete(t.id);
-		expect(records(h, t.id)[0]).toMatchObject({ occurrenceDate: "2026-10-10", completedOn: "2026-10-05" });
-		expect(current(h, t.id)).toBe("2026-10-08");
-	});
-
-	it("after completion, done late: completion day plus the interval (due Oct 8, done Oct 10 → Oct 13)", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-08");
-		h.clock.set("2026-10-10T10:00:00.000Z");
-		await h.app.recurrence.complete(t.id);
-		expect(records(h, t.id)[0]).toMatchObject({ occurrenceDate: "2026-10-08", completedOn: "2026-10-10" });
-		expect(current(h, t.id)).toBe("2026-10-13");
-	});
-
 	it("after completion, the first occurrence done early then on time: the anchor stays (Oct 10 → Oct 8 → Oct 11)", async () => {
 		const h = await setup();
 		const t = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-10");
@@ -346,38 +307,14 @@ describe("complete (REC-03, B20, decision 4)", () => {
 		expect(task(h, t.id).recurrence?.anchoredAt).toBeUndefined();
 	});
 
-	it("after completion, done on time: the date plus the interval", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-05");
-		await h.app.recurrence.complete(t.id);
-		expect(current(h, t.id)).toBe("2026-10-08");
-	});
-
-	it("after completion, two early completions: a taken next date moves on by a whole interval", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-04");
-		await h.app.recurrence.complete(t.id); // Oct 4 done on Oct 5 → Oct 8
-		expect(current(h, t.id)).toBe("2026-10-08");
-		h.clock.set("2026-10-07T10:00:00.000Z");
-		await h.app.recurrence.complete(t.id); // Oct 8 done early on Oct 7 → Oct 10
-		expect(current(h, t.id)).toBe("2026-10-10");
-		await h.app.recurrence.complete(t.id); // Oct 10 done early on Oct 7 → Oct 10 is taken → Oct 13
-		expect(records(h, t.id).map((x) => [x.occurrenceDate, x.completedOn])).toEqual([
-			["2026-10-04", "2026-10-05"],
-			["2026-10-08", "2026-10-07"],
-			["2026-10-10", "2026-10-07"],
-		]);
-		expect(current(h, t.id)).toBe("2026-10-13");
-	});
-
 	it("refuses a task that does not repeat or an ended series", async () => {
 		const h = await setup();
 		const plain = await plainTask(h);
-		await rejects(h.app.recurrence.complete(plain.id), "InvalidValue");
+		await expectDomainError(h.app.recurrence.complete(plain.id), "InvalidValue");
 		const t = await repeatingTask(h, rule(), "2026-10-05");
 		await h.app.recurrence.stop(t.id);
-		await rejects(h.app.recurrence.complete(t.id), "InvalidValue");
-		await rejects(h.app.recurrence.skip(t.id), "InvalidValue");
+		await expectDomainError(h.app.recurrence.complete(t.id), "InvalidValue");
+		await expectDomainError(h.app.recurrence.skip(t.id), "InvalidValue");
 	});
 });
 
@@ -431,7 +368,7 @@ describe("reopen (B23)", () => {
 		await h.app.recurrence.complete(t.id); // Oct 1 done, Oct 2–4 skipped
 		h.clock.set("2026-10-05T11:00:00.000Z");
 		await h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-08" } });
-		expect(await rejects(h.app.recurrence.reopen(t.id, "2026-10-02"), "InvalidValue")).toBe("That occurrence is before the series' start date.");
+		expect(await expectDomainError(h.app.recurrence.reopen(t.id, "2026-10-02"), "InvalidValue")).toBe("That occurrence is before the series' start date.");
 		expect(records(h, t.id)).toHaveLength(4);
 		const ac = await repeatingTask(h, rule({ interval: 3, afterCompletion: true }), "2026-10-10");
 		await h.app.recurrence.complete(ac.id); // Oct 10 done Oct 5 → Oct 8, before the anchor
@@ -442,7 +379,7 @@ describe("reopen (B23)", () => {
 	it("refuses a date without a record", async () => {
 		const h = await setup();
 		const t = await repeatingTask(h, rule(), "2026-10-01");
-		await rejects(h.app.recurrence.reopen(t.id, "2026-10-01"), "NotFound");
+		await expectDomainError(h.app.recurrence.reopen(t.id, "2026-10-01"), "NotFound");
 	});
 
 	it("a series ended by its count opens again", async () => {
@@ -476,11 +413,11 @@ describe("stop", () => {
 		expect(records(h, t.id)).toHaveLength(1);
 		expect((await h.app.recurrence.stop(t.id)).wrote).toBe(false);
 		const plain = await plainTask(h);
-		await rejects(h.app.recurrence.stop(plain.id), "InvalidValue");
+		await expectDomainError(h.app.recurrence.stop(plain.id), "InvalidValue");
 	});
 });
 
-describe("sequences: after completion vs fixed (user decision, undo after each step)", () => {
+describe("sequences: after completion (user decision, undo after each step)", () => {
 	const at = (h: AppHarness, day: string) => h.clock.set(`${day}T10:00:00.000Z`);
 
 	/** Runs a step, checks the next date, undoes it (back to `before`), and runs it again. */
@@ -530,24 +467,6 @@ describe("sequences: after completion vs fixed (user decision, undo after each s
 		]);
 	});
 
-	it("fixed: done early keeps the schedule (Oct 10 done on Oct 5 → Oct 13)", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3 }), "2026-10-10");
-		await step(h, t.id, () => h.app.recurrence.complete(t.id), "2026-10-13", "2026-10-10");
-	});
-
-	it("fixed: missed Oct 10, 13, 16 and 19, completed on Oct 20 → Oct 10 done, the rest auto-skipped, next Oct 22", async () => {
-		const h = await setup();
-		const t = await repeatingTask(h, rule({ interval: 3 }), "2026-10-10");
-		at(h, "2026-10-20");
-		await step(h, t.id, () => h.app.recurrence.complete(t.id), "2026-10-22", "2026-10-10");
-		expect(records(h, t.id).map((x) => [x.occurrenceDate, x.status, x.auto, x.completedOn])).toEqual([
-			["2026-10-10", "done", false, "2026-10-20"],
-			["2026-10-13", "skipped", true, null],
-			["2026-10-16", "skipped", true, null],
-			["2026-10-19", "skipped", true, null],
-		]);
-	});
 });
 
 describe("endExhaustedSeries (the open and hourly sweep)", () => {
@@ -623,32 +542,9 @@ describe("endExhaustedSeries (the open and hourly sweep)", () => {
 });
 
 describe("the repeating branches of TaskService", () => {
-	// The recurring branches of TaskService. Europe/Berlin;
-	// 2026-10-05 is a Monday.
+	// The recurring branches of TaskService.
 
-	const NOW = "2026-10-05T10:00:00.000Z";
 	const SETTINGS = { zone: () => "Europe/Berlin", noteFolder: () => "Task notes", upcomingDays: () => 14, weekStart: () => "MO" as WeekStart, eveningTime: () => "20:00" };
-
-	async function setup(): Promise<AppHarness> {
-		const h = await appHarness();
-		h.clock.set(NOW);
-		return h;
-	}
-
-	const task = (h: AppHarness, id: string): Task => h.app.store.state.tasks.get(id)!;
-	const records = (h: AppHarness, id: string): OccurrenceRecord[] => [...(indexOccurrenceRecords(h.app.store.state.occurrenceRecords).get(id) ?? [])];
-	const current = (h: AppHarness, id: string): string | null => currentOccurrence(task(h, id), records(h, id), "2026-10-05", "MO");
-
-	async function rejects(p: Promise<unknown>, message?: string): Promise<void> {
-		try {
-			await p;
-		} catch (err) {
-			expect(isDomainError(err, "InvalidValue")).toBe(true);
-			if (message !== undefined) expect((err as Error).message).toBe(message);
-			return;
-		}
-		throw new Error("expected InvalidValue");
-	}
 
 	async function daily(h: AppHarness, anchor = "2026-10-01"): Promise<Task> {
 		return (await h.app.tasks.create({ title: "Stretch", scheduled: { kind: "date", date: anchor }, repeat: { rule: rule() } })).task;
@@ -685,11 +581,11 @@ describe("the repeating branches of TaskService", () => {
 
 		it("refuses a deadline, a parent or an invalid rule together with repeat", async () => {
 			const h = await setup();
-			await rejects(h.app.tasks.create({ title: "x", deadline: { kind: "date", date: "2026-10-20" }, repeat: { rule: rule() } }), "A repeating task has no deadline.");
+			await expectDomainError(h.app.tasks.create({ title: "x", deadline: { kind: "date", date: "2026-10-20" }, repeat: { rule: rule() } }), "InvalidValue", "A repeating task has no deadline.");
 			const parent = (await h.app.tasks.create({ title: "Parent" })).task;
-			await rejects(h.app.tasks.create({ title: "x", parentId: parent.id, repeat: { rule: rule() } }), "A subtask cannot repeat.");
-			await rejects(h.app.tasks.create({ title: "x", repeat: { rule: rule({ interval: 0 }) } }));
-			await rejects(h.app.tasks.create({ title: "x", repeat: { rule: rule(), end: { kind: "count", count: -1 } } }));
+			await expectDomainError(h.app.tasks.create({ title: "x", parentId: parent.id, repeat: { rule: rule() } }), "InvalidValue", "A subtask cannot repeat.");
+			await expectDomainError(h.app.tasks.create({ title: "x", repeat: { rule: rule({ interval: 0 }) } }), "InvalidValue");
+			await expectDomainError(h.app.tasks.create({ title: "x", repeat: { rule: rule(), end: { kind: "count", count: -1 } } }), "InvalidValue");
 		});
 	});
 
@@ -736,7 +632,7 @@ describe("the repeating branches of TaskService", () => {
 		it("a deadline is refused", async () => {
 			const h = await setup();
 			const t = await daily(h);
-			await rejects(h.app.tasks.update(t.id, { deadline: { kind: "date", date: "2026-10-20" } }), "A repeating task has no deadline.");
+			await expectDomainError(h.app.tasks.update(t.id, { deadline: { kind: "date", date: "2026-10-20" } }), "InvalidValue", "A repeating task has no deadline.");
 			expect((await h.app.tasks.update(t.id, { deadline: null })).changed).toBe(false);
 		});
 
@@ -850,9 +746,9 @@ describe("the repeating branches of TaskService", () => {
 			const stopped = task(h, t.id);
 			const label = h.app.store.undoLabel;
 			const oct20 = { kind: "date" as const, date: "2026-10-20" };
-			await rejects(h.app.tasks.update(t.id, { scheduled: oct20 }), ENDED);
-			await rejects(h.app.tasks.update(t.id, { title: "Yoga", scheduled: oct20 }), ENDED);
-			await rejects(h.app.tasks.place(t.id, [t.id], { scheduled: oct20 }), ENDED);
+			await expectDomainError(h.app.tasks.update(t.id, { scheduled: oct20 }), "InvalidValue", ENDED);
+			await expectDomainError(h.app.tasks.update(t.id, { title: "Yoga", scheduled: oct20 }), "InvalidValue", ENDED);
+			await expectDomainError(h.app.tasks.place(t.id, [t.id], { scheduled: oct20 }), "InvalidValue", ENDED);
 			expect(task(h, t.id)).toBe(stopped);
 			expect(h.app.store.undoLabel).toBe(label);
 			// Other fields still change; Reopen makes it repeat again, and then a date moves it.
@@ -868,9 +764,9 @@ describe("the repeating branches of TaskService", () => {
 			const t = (await h.app.tasks.create({ title: "Stretch", scheduled: { kind: "date", date: "2026-10-05" }, repeat: { rule: rule(), end: { kind: "count", count: 1 } } })).task;
 			await h.app.tasks.complete(t.id);
 			expect(task(h, t.id)).toMatchObject({ status: "completed", recurrence: { endedAt: NOW } });
-			await rejects(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), ENDED);
+			await expectDomainError(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), "InvalidValue", ENDED);
 			await h.app.store.run("Test setup", (tx) => tx.put("tasks", { ...task(h, t.id), status: "open", completedAt: null }), { undoable: false });
-			await rejects(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), ENDED);
+			await expectDomainError(h.app.tasks.update(t.id, { scheduled: { kind: "date", date: "2026-10-20" } }), "InvalidValue", ENDED);
 			expect(task(h, t.id).recurrence?.anchor).toBe("2026-10-05");
 		});
 	});
@@ -880,7 +776,7 @@ describe("the repeating branches of TaskService", () => {
 			const h = await setup();
 			const t = await daily(h);
 			const parent = (await h.app.tasks.create({ title: "Parent" })).task;
-			await rejects(h.app.tasks.setParent(t.id, parent.id), "A repeating task cannot be a subtask.");
+			await expectDomainError(h.app.tasks.setParent(t.id, parent.id), "InvalidValue", "A repeating task cannot be a subtask.");
 			const sub = (await h.app.tasks.create({ title: "Sub", parentId: t.id })).task;
 			expect(sub.parentId).toBe(t.id);
 		});
@@ -968,7 +864,7 @@ describe("the repeating branches of TaskService", () => {
 			const repeat = h.app.recurrence.setRepeat(t.id, rule());
 			const complete = h.app.tasks.complete(t.id);
 			await repeat;
-			await rejects(complete, "This task repeats now; complete it again.");
+			await expectDomainError(complete, "InvalidValue", "This task repeats now; complete it again.");
 			expect(task(h, t.id)).toMatchObject({ status: "open", recurrence: { endedAt: null } });
 			expect(records(h, t.id)).toEqual([]);
 		});
@@ -1115,65 +1011,23 @@ describe("the repeating branches of TaskService", () => {
 describe("an end before the start is refused", () => {
 	// Repeating tasks rule 19 (#12): an end before the start is refused. A series whose end comes before its first
 	// occurrence would be ended (completed, without Undo) by the hourly sweep right after it is written, so every writer
-	// refuses it: Quick Add's create, the picker's setRepeat, and the picker itself. Europe/Berlin; 2026-10-05 is a Monday.
+	// refuses it: Quick Add's create, the picker's setRepeat, and the picker itself (the check itself, repeatEndProblem,
+	// is in tests/domain/recurrence.test.ts). Europe/Berlin; 2026-10-05 is a Monday.
 
-	const NOW = "2026-10-05T10:00:00.000Z";
 	const ENDS_BEFORE = "The repeat ends before its first date.";
 	const friday: RepeatRule = rule({ freq: "weekly", weekdays: ["FR"] });
-
-	async function setup(): Promise<AppHarness> {
-		const h = await appHarness();
-		h.clock.set(NOW);
-		return h;
-	}
-
-	async function refused(p: Promise<unknown>, message: string): Promise<void> {
-		try {
-			await p;
-		} catch (err) {
-			expect(isDomainError(err, "InvalidValue")).toBe(true);
-			expect((err as Error).message).toBe(message);
-			return;
-		}
-		throw new Error("expected InvalidValue");
-	}
-
-	const series = (anchor: string, r: RepeatRule): Pick<Recurrence, "anchor" | "versions"> => ({ anchor, versions: [{ effectiveFrom: anchor, rule: r }] });
-
-	describe("repeatEndProblem: one check for the picker, Quick Add and the services", () => {
-		it("#12: accepts never, a count of 1 to 999 and a date on or after the first occurrence", () => {
-			expect(repeatEndProblem({ kind: "never" }, series("2026-10-05", rule()))).toBeNull();
-			expect(repeatEndProblem({ kind: "count", count: 1 })).toBeNull();
-			expect(repeatEndProblem({ kind: "count", count: 999 })).toBeNull();
-			expect(repeatEndProblem({ kind: "date", date: "2026-10-05" }, series("2026-10-05", rule()))).toBeNull();
-			expect(repeatEndProblem({ kind: "date", date: "2026-10-09" }, series("2026-10-05", friday))).toBeNull();
-			expect(repeatEndProblem({ kind: "date", date: "2026-12-01" })).toBeNull();
-		});
-
-		it("#12: refuses a count out of range, a date that is not one, a date before the anchor or before the first occurrence", () => {
-			expect(repeatEndProblem({ kind: "count", count: 0 })).toBe("End after 1 to 999 times.");
-			expect(repeatEndProblem({ kind: "count", count: 1.5 })).toBe("End after 1 to 999 times.");
-			expect(repeatEndProblem({ kind: "count", count: 1000 })).toBe("End after 1 to 999 times.");
-			expect(repeatEndProblem({ kind: "date", date: "2026-02-30" })).toBe("The end date is not valid.");
-			expect(repeatEndProblem({ kind: "date", date: "2026-10-04" }, series("2026-10-05", rule()))).toBe(ENDS_BEFORE);
-			// Every Friday from Monday Oct 5, ending Wednesday Oct 7: no occurrence at all.
-			expect(repeatEndProblem({ kind: "date", date: "2026-10-07" }, series("2026-10-05", friday))).toBe(ENDS_BEFORE);
-			// Every 15th from Oct 5, ending Oct 14.
-			expect(repeatEndProblem({ kind: "date", date: "2026-10-14" }, series("2026-10-05", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } })))).toBe(ENDS_BEFORE);
-		});
-	});
 
 	describe("TaskService.create refuses a repeat that ends before its first date", () => {
 		it("#12: an end date before the typed date writes nothing", async () => {
 			const h = await setup();
 			const before = h.app.store.state.tasks.size;
-			await refused(h.app.tasks.create({ title: "Pills", scheduled: { kind: "date", date: "2026-10-20" }, repeat: { rule: rule(), end: { kind: "date", date: "2026-10-19" } } }), ENDS_BEFORE);
+			await expectDomainError(h.app.tasks.create({ title: "Pills", scheduled: { kind: "date", date: "2026-10-20" }, repeat: { rule: rule(), end: { kind: "date", date: "2026-10-19" } } }), "InvalidValue", ENDS_BEFORE);
 			expect(h.app.store.state.tasks.size).toBe(before);
 		});
 
 		it("#12: without a date the anchor is today: an end yesterday is refused, today is accepted and survives the sweep", async () => {
 			const h = await setup();
-			await refused(h.app.tasks.create({ title: "Pills", repeat: { rule: rule(), end: { kind: "date", date: "2026-10-04" } } }), ENDS_BEFORE);
+			await expectDomainError(h.app.tasks.create({ title: "Pills", repeat: { rule: rule(), end: { kind: "date", date: "2026-10-04" } } }), "InvalidValue", ENDS_BEFORE);
 			const { task } = await h.app.tasks.create({ title: "Pills", repeat: { rule: rule(), end: { kind: "date", date: "2026-10-05" } } });
 			expect(task.recurrence).toMatchObject({ anchor: "2026-10-05", end: { kind: "date", date: "2026-10-05" }, endedAt: null });
 			await h.app.recurrence.endExhaustedSeries();
@@ -1183,9 +1037,10 @@ describe("an end before the start is refused", () => {
 		it("#12: an end on or after the anchor but before the first occurrence is refused (every Friday until Wednesday)", async () => {
 			const h = await setup();
 			const before = h.app.store.state.tasks.size;
-			await refused(h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-07" } } }), ENDS_BEFORE);
-			await refused(
+			await expectDomainError(h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-07" } } }), "InvalidValue", ENDS_BEFORE);
+			await expectDomainError(
 				h.app.tasks.create({ title: "Pay", repeat: { rule: rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }), end: { kind: "date", date: "2026-10-14" } } }),
+				"InvalidValue",
 				ENDS_BEFORE,
 			);
 			expect(h.app.store.state.tasks.size).toBe(before);
@@ -1196,7 +1051,7 @@ describe("an end before the start is refused", () => {
 		it("#12: a timed date anchors on its own wall date", async () => {
 			const h = await setup();
 			const scheduled = { kind: "datetime" as const, local: "2026-10-08T06:45", tz: "Europe/Berlin" };
-			await refused(h.app.tasks.create({ title: "Run", scheduled, repeat: { rule: rule(), end: { kind: "date", date: "2026-10-07" } } }), ENDS_BEFORE);
+			await expectDomainError(h.app.tasks.create({ title: "Run", scheduled, repeat: { rule: rule(), end: { kind: "date", date: "2026-10-07" } } }), "InvalidValue", ENDS_BEFORE);
 			const { task } = await h.app.tasks.create({ title: "Run", scheduled, repeat: { rule: rule(), end: { kind: "date", date: "2026-10-08" } } });
 			expect(task.recurrence?.anchor).toBe("2026-10-08");
 		});
@@ -1206,7 +1061,7 @@ describe("an end before the start is refused", () => {
 		it("#12: making a dated task repeat with an end before its date is refused; the task stays as it was and the sweep leaves it", async () => {
 			const h = await setup();
 			const { task } = await h.app.tasks.create({ title: "Plain", scheduled: { kind: "date", date: "2026-10-20" } });
-			await refused(h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-15" }), ENDS_BEFORE);
+			await expectDomainError(h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-15" }), "InvalidValue", ENDS_BEFORE);
 			expect(h.app.store.state.tasks.get(task.id)).toMatchObject({ recurrence: null, status: "open", scheduled: { kind: "date", date: "2026-10-20" } });
 			await h.app.recurrence.endExhaustedSeries();
 			expect(h.app.store.state.tasks.get(task.id)?.status).toBe("open");
@@ -1215,14 +1070,14 @@ describe("an end before the start is refused", () => {
 		it("#12: making a task repeat every Friday until Wednesday is refused", async () => {
 			const h = await setup();
 			const { task } = await h.app.tasks.create({ title: "Gym", scheduled: { kind: "date", date: "2026-10-05" } });
-			await refused(h.app.recurrence.setRepeat(task.id, friday, undefined, { kind: "date", date: "2026-10-07" }), ENDS_BEFORE);
+			await expectDomainError(h.app.recurrence.setRepeat(task.id, friday, undefined, { kind: "date", date: "2026-10-07" }), "InvalidValue", ENDS_BEFORE);
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence).toBeNull();
 		});
 
 		it("#12: a new end before an existing series' first occurrence is refused; one after it is kept", async () => {
 			const h = await setup();
 			const { task } = await h.app.tasks.create({ title: "Pills", scheduled: { kind: "date", date: "2026-10-05" }, repeat: { rule: rule() } });
-			await refused(h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-01" }), ENDS_BEFORE);
+			await expectDomainError(h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-01" }), "InvalidValue", ENDS_BEFORE);
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence?.end).toEqual({ kind: "never" });
 			await h.app.recurrence.setRepeat(task.id, rule(), undefined, { kind: "date", date: "2026-10-10" });
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence?.end).toEqual({ kind: "date", date: "2026-10-10" });
@@ -1232,7 +1087,7 @@ describe("an end before the start is refused", () => {
 			const h = await setup();
 			// Every Monday from Monday Oct 5, ending Oct 20; changed today to monthly on the 25th: no date before Oct 20.
 			const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: rule({ freq: "weekly", weekdays: ["MO"] }), end: { kind: "date", date: "2026-10-20" } } });
-			await refused(h.app.recurrence.setRepeat(task.id, rule({ freq: "monthly", monthly: { kind: "day", day: 25 } })), ENDS_BEFORE);
+			await expectDomainError(h.app.recurrence.setRepeat(task.id, rule({ freq: "monthly", monthly: { kind: "day", day: 25 } })), "InvalidValue", ENDS_BEFORE);
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence?.versions).toHaveLength(1);
 			await h.app.recurrence.setRepeat(task.id, rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }));
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence?.versions.at(-1)?.rule.monthly).toEqual({ kind: "day", day: 15 });
@@ -1248,7 +1103,7 @@ describe("an end before the start is refused", () => {
 			await h.app.recurrence.setRepeat(task.id, rule({ interval: 2 }));
 			await h.app.recurrence.setRepeat(task.id, rule({ interval: 3 }), undefined, { kind: "count", count: 1500 });
 			expect(h.app.store.state.tasks.get(task.id)?.recurrence?.end).toEqual({ kind: "count", count: 1500 });
-			await refused(h.app.recurrence.setRepeat(task.id, rule({ interval: 3 }), undefined, { kind: "count", count: 2000 }), "End after 1 to 999 times.");
+			await expectDomainError(h.app.recurrence.setRepeat(task.id, rule({ interval: 3 }), undefined, { kind: "count", count: 2000 }), "InvalidValue", "End after 1 to 999 times.");
 		});
 	});
 
