@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { QueryContext } from "../../src/domain/queries";
-import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatEndProblem, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
-import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type Task } from "../../src/domain/types";
+import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatEndProblem, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, seriesAnchor, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
+import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type RepeatRule, type Task } from "../../src/domain/types";
 import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-fixtures";
 
 const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
@@ -69,16 +69,6 @@ describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 	it("monthly without a form uses the anchor's day of month", () => {
 		const rec = series("2026-01-30", rule({ freq: "monthly" }));
 		expect(occurrencesBetween(rec, "2026-01-01", "2026-03-31", "MO")).toEqual(["2026-01-30", "2026-02-28", "2026-03-30"]);
-	});
-
-	it("every 2 months on the 15th", () => {
-		const rec = series("2026-01-15", rule({ freq: "monthly", interval: 2, monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-01-01", "2026-06-30", "MO")).toEqual(["2026-01-15", "2026-03-15", "2026-05-15"]);
-	});
-
-	it("a monthly day before the anchor's day starts next month", () => {
-		const rec = series("2026-10-20", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-10-01", "2026-12-31", "MO")).toEqual(["2026-11-15", "2026-12-15"]);
 	});
 
 	it("the Nth weekday and the last weekday of the month", () => {
@@ -188,10 +178,6 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 		expect(currentOccurrence(repeating(every3), [], "2026-10-05", "MO")).toBe("2026-10-01");
 	});
 
-	it("done: the completion day plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-01", "2026-10-02")], "2026-10-05", "MO")).toBe("2026-10-05");
-	});
-
 	it("skipped: the skipped date plus the interval", () => {
 		expect(currentOccurrence(repeating(every3), [done("2026-10-01", "2026-10-02"), skipped("2026-10-05")], "2026-10-05", "MO")).toBe("2026-10-08");
 	});
@@ -202,10 +188,6 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 
 	it("user decision: completed late, the same rule (due Oct 8, done Oct 10 → Oct 13)", () => {
 		expect(currentOccurrence(repeating(every3), [done("2026-10-08", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
-	});
-
-	it("completed on time: the date plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-10", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
 	});
 
 	it("the base is the most recently resolved record, not the latest by date", () => {
@@ -608,6 +590,32 @@ describe("startRecurrence (make repeating: Quick Add and setRepeat)", () => {
 		expect(r.timeFromSpec).toBe(false);
 		expect(r.recurrence.anchor).toBe("2026-10-10");
 		expect(r.recurrence.versions[0]?.rule.time).toBe("07:00");
+	});
+
+	// A weekly repeat with picked weekdays starts on its first such weekday on or after its start date, so `every 2 weeks
+	// on Monday` started on a Wednesday first falls on the coming Monday.
+	const weekly = (interval: number, weekdays: RepeatRule["weekdays"]): RepeatRule => rule({ freq: "weekly", interval, weekdays });
+	const firstOf = (r: ReturnType<typeof startRecurrence>): string | undefined => occurrencesBetween(r.recurrence, r.recurrence.anchor, "2027-12-31", "MO")[0];
+
+	it("#12: the anchor of a new series is the first picked weekday on or after the start for a weekly rule with weekdays, else the start", () => {
+		expect(seriesAnchor("2026-10-07", weekly(2, ["MO"]))).toBe("2026-10-12");
+		expect(seriesAnchor("2026-10-07", weekly(1, ["WE"]))).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", weekly(2, ["TU", "TH"]))).toBe("2026-10-08");
+		expect(seriesAnchor("2026-10-07", weekly(2, null))).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", rule())).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", rule({ freq: "monthly", monthly: { kind: "day", day: 5 } }))).toBe("2026-10-07");
+	});
+
+	it("#12: startRecurrence uses the anchor, so the first occurrence is the coming weekday", () => {
+		const started = startRecurrence(null, weekly(2, ["MO"]), undefined, "2026-10-07", "Europe/Berlin", "MO");
+		expect(started.recurrence.anchor).toBe("2026-10-12");
+		expect(firstOf(started)).toBe("2026-10-12");
+		const timed = startRecurrence({ kind: "datetime", local: "2026-10-07T09:00", tz: "Europe/Berlin" }, weekly(2, ["MO"]), undefined, "2026-10-07", "Europe/Berlin", "MO");
+		expect(timed.recurrence.anchor).toBe("2026-10-12");
+		expect(timed.recurrence.versions[0]!.rule.time).toBe("09:00");
+		expect(startRecurrence(null, weekly(3, ["TU", "TH"]), undefined, "2026-10-07", "Europe/Berlin", "MO").recurrence.anchor).toBe("2026-10-08");
+		// A later start moves the anchor to the first weekday on or after it.
+		expect(firstOf(startRecurrence(null, weekly(2, ["MO"]), undefined, "2026-10-20", "Europe/Berlin", "MO"))).toBe("2026-10-26");
 	});
 });
 

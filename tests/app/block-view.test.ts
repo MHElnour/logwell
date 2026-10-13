@@ -59,6 +59,27 @@ describe("the views a block opens", () => {
 			expect((await view("tag: Calls\ndue: today", async (h) => void (await h.app.tags.create("Calls")))).view).toEqual({ kind: "tag", key: "calls" });
 		});
 
+		it("a child tag by its own name opens that tag, in any casing; a parent and the full path still open theirs", async () => {
+			const withHome = async (h: Awaited<ReturnType<typeof appHarness>>) => {
+				await h.app.tags.create("Home/Calls");
+				await h.app.tags.create("Home/Garden");
+			};
+			for (const source of ["tag: calls", "tag: @Calls", "tag: home/calls"]) expect((await view(source, withHome)).view, source).toEqual({ kind: "tag", key: "home/calls" });
+			expect((await view("tag: home", withHome)).view).toEqual({ kind: "tag", key: "home" });
+		});
+
+		it("a list name follows the list-name rule: loose spelling, an ambiguous name opens no view", async () => {
+			let work = "";
+			const lists = async (h: Awaited<ReturnType<typeof appHarness>>) => {
+				await h.app.categories.create("Home work");
+				await h.app.categories.create("Home-work");
+				work = (await h.app.categories.create("Work")).id;
+			};
+			expect((await view("list: WorK", lists)).view).toEqual({ kind: "category", id: work });
+			expect((await view("list: homework", lists)).view).toBeNull();
+			expect((await view("list: wrok", lists)).view).toBeNull();
+		});
+
 		it("priority, quadrant, linked and empty filters open no view", async () => {
 			for (const source of ["priority: high", "quadrant: 1", "linked: this note", ""]) expect((await view(source)).view).toBeNull();
 		});

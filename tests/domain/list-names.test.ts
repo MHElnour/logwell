@@ -3,7 +3,6 @@ import { runBlockQuery } from "../../src/domain/blockQuery";
 import { resolveListName } from "../../src/domain/tasks";
 import type { Category } from "../../src/domain/types";
 import { parseBlockQuery } from "../../src/parsing/blockQuery";
-import { blockOpenView } from "../../src/app/blockView";
 import { parseQuickAdd } from "../../src/parsing";
 import { makeCtx } from "../parsing/helpers";
 
@@ -82,14 +81,6 @@ describe("task block list filter", () => {
 
 	it("an unknown list keeps its message", () => {
 		expect(run("list: Wrok", [WORK])).toEqual({ kind: "error", message: "No list named “Wrok”." });
-	});
-
-	it("the block's Open in Logwell view follows the same rule", () => {
-		const cats = state([SPACED, DASHED, WORK]).categories;
-		expect(blockOpenView({ list: "work" }, { categories: cats, tags: new Map() })).toEqual({ kind: "category", id: "work" });
-		expect(blockOpenView({ list: "homework" }, { categories: cats, tags: new Map() })).toBeNull();
-		expect(blockOpenView({ list: "wrok" }, { categories: cats, tags: new Map() })).toBeNull();
-		expect(blockOpenView({ list: "WorK" }, { categories: new Map([[WORK.id, WORK], [INBOX.id, INBOX]]), tags: new Map() })).toEqual({ kind: "category", id: "work" });
 	});
 });
 
