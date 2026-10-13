@@ -5,7 +5,7 @@ import { currentOccurrence, describeRule, indexOccurrenceRecords } from "../doma
 import { compareSortKeys } from "../domain/sortKey";
 import { tagDisplayPath } from "../domain/tags";
 import { formatLatin } from "../domain/time";
-import type { Task, WeekStart } from "../domain/types";
+import type { Section, Task, WeekStart } from "../domain/types";
 import { type LoadResult, loadText } from "../persistence/CpbaseStore";
 import { serializeRecord } from "../persistence/serializer";
 import {
@@ -374,6 +374,42 @@ export function mergeCollections(current: DbData, incoming: DbData, now: string)
 		if (entry.deletedAt >= lastEdit) for (const t of live) merged.tasks.delete(t.id);
 		else merged.trash.delete(entry.batchId);
 	}
+	mergeSameNameSections(current, merged);
 	repairReferences(merged, now, []);
 	return merged;
+}
+
+/**
+ * A section from the backup that is not here, whose list here already has a
+ * section of that name (one deleted and created again), is not added: its tasks,
+ * live and in Trash, go to the section of that name here. A list never gets two
+ * sections of one name from a merge, and no task loses its section.
+ */
+function mergeSameNameSections(current: DbData, merged: ReturnType<typeof emptyCollections>): void {
+	const keyOf = (s: Section): string => `${s.categoryId}\u0000${s.nameKey}`;
+	const byKey = new Map<string, string>();
+	for (const s of merged.sections.values()) if (current.sections.has(s.id) && !byKey.has(keyOf(s))) byKey.set(keyOf(s), s.id);
+	const moved = new Map<string, string>();
+	for (const s of [...merged.sections.values()]) {
+		if (current.sections.has(s.id)) continue;
+		const here = byKey.get(keyOf(s));
+		if (here === undefined) byKey.set(keyOf(s), s.id);
+		else {
+			merged.sections.delete(s.id);
+			moved.set(s.id, here);
+		}
+	}
+	if (moved.size === 0) return;
+	const remap = (t: Task): Task => {
+		const to = t.sectionId === null ? undefined : moved.get(t.sectionId);
+		return to === undefined ? t : { ...t, sectionId: to };
+	};
+	for (const [id, t] of merged.tasks) {
+		const next = remap(t);
+		if (next !== t) merged.tasks.set(id, next);
+	}
+	for (const [id, e] of merged.trash) {
+		const tasks = e.tasks.map(remap);
+		if (tasks.some((t, i) => t !== e.tasks[i])) merged.trash.set(id, { ...e, tasks });
+	}
 }

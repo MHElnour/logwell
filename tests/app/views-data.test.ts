@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { exportFileName, mergeCollections } from "../../src/app/DataService";
-import { buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
+import { buildBoard, buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
+import { matrixQuadrants } from "../../src/domain/matrix";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { serializeDb } from "../../src/persistence/serializer";
 import { DB_PATH, descendant, emptyDbText, load, makeTask, withTask } from "../persistence/fixtures";
@@ -55,6 +56,42 @@ describe("views, export and import", () => {
 			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 2, upcoming: 1 });
 			expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed).toEqual([]);
 			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Done"]);
+		});
+
+		it("#125: a held overdue task completed a moment ago stays in Overdue, in the list and on the board", async () => {
+			const h = await appHarness();
+			const t = h.app.tasks;
+			const late = (await t.create({ title: "Late", scheduled: { kind: "date", date: "2026-09-29" } })).task;
+			await t.create({ title: "Lunch", scheduled: { kind: "date", date: TODAY } });
+			await t.complete(late.id);
+			const state = h.app.store.state;
+			const ctx = h.app.queryContext();
+			const held = new Set([late.id]);
+			const groups = buildList(state, { kind: "today" }, ctx, emptyFilter(), "", held).groups;
+			expect(groups.map((g) => [g.key, g.entries.map((e) => e.task.title)])).toEqual([
+				["overdue", ["Late"]],
+				["today", ["Lunch"]],
+			]);
+			const columns = buildBoard(state, { kind: "today" }, ctx, emptyFilter(), "", held);
+			expect(columns.map((c) => [c.id, c.cards.map((card) => card.entry.task.title)])).toEqual([
+				["overdue", ["Late"]],
+				["today", ["Lunch"]],
+			]);
+			// Once the hold ends it leaves the rows for the Completed group, and the Overdue column goes.
+			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups.map((g) => g.key)).toEqual(["today"]);
+			expect(buildBoard(state, { kind: "today" }, ctx, emptyFilter(), "").map((c) => c.id)).toEqual(["today"]);
+		});
+
+		it("#126: a task dated tomorrow with a deadline today is due today in the Today view, the sidebar count and the matrix", async () => {
+			const h = await appHarness();
+			const task = (await h.app.tasks.create({ title: "Report", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } })).task;
+			const state = h.app.store.state;
+			const ctx = h.app.queryContext();
+			const today = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups;
+			expect(today.map((g) => [g.key, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
+			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 1, upcoming: 0 });
+			const matrix = matrixQuadrants([task], state.tasks, ctx).neither;
+			expect(matrix.map((g) => [g.id, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
 		});
 
 		it("SUB-07: a scheduled subtask shows on its own date with the parent's title", async () => {
@@ -340,6 +377,30 @@ describe("views, export and import", () => {
 			const merged = mergeCollections(h.app.store.state, before.data, h.app.store.now());
 			expect(merged.tasks.has(a.id)).toBe(false);
 			expect(merged.trash.size).toBe(1);
+		});
+
+		it("#104: merge keeps one section per name: a section deleted and created again here takes the backup's tasks", async () => {
+			const h = await appHarness();
+			const work = await h.app.categories.create("Work", "💼");
+			const old = await h.app.sections.create(work.id, "Doing");
+			const kept = (await h.app.tasks.create({ title: "Kept", categoryId: work.id, sectionId: old.id })).task;
+			const purged = (await h.app.tasks.create({ title: "Purged", categoryId: work.id, sectionId: old.id })).task;
+			const backup = h.app.data.exportJson();
+			h.clock.advance(1000);
+			await h.app.tasks.delete(purged.id);
+			await h.app.tasks.emptyTrash();
+			await h.app.sections.delete(old.id);
+			const doing = await h.app.sections.create(work.id, "doing");
+
+			const preview = h.app.data.previewImport(backup);
+			if (!preview.ok) throw new Error(preview.message);
+			expect(preview.preview.changes.some((c) => c.collection === "sections")).toBe(false);
+			await h.app.data.importMerge(preview.preview);
+			const sections = [...h.app.store.state.sections.values()].filter((s) => s.categoryId === work.id);
+			expect(sections.map((s) => s.id)).toEqual([doing.id]);
+			expect(h.app.store.state.tasks.get(purged.id)?.sectionId).toBe(doing.id);
+			// The newer local edit (moved to No section when Doing was deleted) still wins.
+			expect(h.app.store.state.tasks.get(kept.id)?.sectionId).toBeNull();
 		});
 	});
 
