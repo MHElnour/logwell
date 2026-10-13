@@ -1717,3 +1717,42 @@ describe("a handler of the reload that throws", () => {
 		expect(saved.tasks.get("t1")?.categoryId).toBe("inbox");
 	});
 });
+
+describe("the last save before the app quits", () => {
+	it("#117: a write that fails keeps the edits as a conflict copy, and a later close adds no second copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		await h.store.flushBeforeQuit();
+		const kept = h.events.find((e) => e.type === "pending-saved-as-conflict");
+		if (kept?.type !== "pending-saved-as-conflict") throw new Error("the edits were not kept");
+		expect(h.fs.files.get(kept.path)).toContain('"id":"pending"');
+
+		// Unload may still close the store; its save fails again.
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		await h.store.close();
+		expect(await h.store.listConflicts()).toHaveLength(1);
+	});
+
+	it("#117: a save that succeeds keeps no copy, and nothing pending writes nothing", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		await h.store.flushBeforeQuit();
+		expect(load(h.dbText()).tasks.has("pending")).toBe(true);
+		await h.store.flushBeforeQuit();
+		expect(h.events.some((e) => e.type === "pending-saved-as-conflict" || e.type === "edits-lost")).toBe(false);
+		expect(await h.store.listConflicts()).toEqual([]);
+	});
+
+	it("#117: when the copy cannot be written either, it says the edits are lost", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		h.fs.failNextWrite((p) => p.includes("/conflicts/"));
+		await expect(h.store.flushBeforeQuit()).resolves.toBeUndefined();
+		expect(h.events.some((e) => e.type === "edits-lost")).toBe(true);
+	});
+});

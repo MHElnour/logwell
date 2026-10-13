@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#117) Fixed edits made right before quitting Obsidian being lost when the last save failed, for example while a sync tool held the file: they are now kept as a conflict copy, as when a database closes. A database being switched to or from when Obsidian quits is saved too.
 - (#118) Fixed an error in one part of Logwell, such as a view or a task block, making a saved change report a failure and leaving the other views out of date. The error is now shown on its own, and a change made outside Obsidian still shows its conflict notice and saves its repairs.
 - (#106) Fixed the details pane keeping the Custom repeat editor open, filled in with the previous task's rule, after you selected another task; **Done** then gave that rule to the new task. Selecting another task now closes the repeat picker and empties the Add tag box.
 - (#130) Fixed text typed in Quick Add while the previous task was still being saved being wiped when the save finished. It now stays in the field for the next task.
