@@ -749,13 +749,18 @@ export class CpbaseStore {
 			this.readOnly = null;
 			this.emit({ type: "writable" });
 		}
-		this.emit({ type: "loaded", cause: "external" });
+		// The conflict copy is announced before anything that redraws the views, and
+		// a repaired file is saved even when a handler of the reload throws.
 		if (conflictPath !== null) this.emit({ type: "conflict", path: conflictPath });
 		if (result.migratedFrom !== null) this.emit({ type: "migrated", from: result.migratedFrom, to: CURRENT_SCHEMA_VERSION });
 		if (result.issues.length > 0) this.emit({ type: "repaired", issues: result.issues });
-		if (this.needsFullWrite) {
-			await this.backupBeforeRewrite(result, text);
-			await this.saveNow();
+		try {
+			this.emit({ type: "loaded", cause: "external" });
+		} finally {
+			if (this.needsFullWrite) {
+				await this.backupBeforeRewrite(result, text);
+				await this.saveNow();
+			}
 		}
 	}
 
