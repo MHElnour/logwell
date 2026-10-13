@@ -225,3 +225,30 @@ describe("the sidebar's + uses the dialog", () => {
 		expect(m.h.app.store.state.categories.size).toBe(before);
 	});
 });
+
+describe("the list menu's Move up and Move down", () => {
+	const mounted: CalMount[] = [];
+	afterEach(() => {
+		for (const m of mounted.splice(0)) m.unmount();
+	});
+	const menuOf = (m: CalMount, name: string) => {
+		const item = [...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(name))!;
+		item.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+		return m.host.menus.at(-1)!;
+	};
+	const moves = (menu: ReturnType<typeof menuOf>) =>
+		menu.flatMap((i) => (i !== "separator" && i.title.startsWith("Move ") ? [`${i.title}${i.disabled === true ? " (off)" : ""}`] : []));
+
+	it("#129: the Inbox offers neither; the first list cannot move up and the last cannot move down", async () => {
+		const m = await mountBoard();
+		mounted.push(m);
+		await m.h.app.categories.create("A");
+		await m.h.app.categories.create("B");
+		await m.h.app.categories.create("C");
+		await settle();
+		expect(moves(menuOf(m, "Inbox"))).toEqual([]);
+		expect(moves(menuOf(m, "A"))).toEqual(["Move up (off)", "Move down"]);
+		expect(moves(menuOf(m, "B"))).toEqual(["Move up", "Move down"]);
+		expect(moves(menuOf(m, "C"))).toEqual(["Move up", "Move down (off)"]);
+	});
+});

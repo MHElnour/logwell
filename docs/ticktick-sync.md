@@ -87,7 +87,7 @@ Changes to different fields both apply. If you change the same field on both sid
 
 ## Limits
 
-- A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused. TickTick can still bring tasks in.
+- A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused, and so is deleting a list whose open tasks would take a synced Inbox past it. TickTick can still bring tasks in.
 - TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
 - After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs, a few dozen per sync beyond the first 200, and tasks deleted in TickTick wait until about five minutes after that burst.
 
