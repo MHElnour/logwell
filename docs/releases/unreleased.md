@@ -29,6 +29,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#126) In the Eisenhower matrix, a task whose deadline is today is now under **Today** even when its date is later, as it is in the Today view and the sidebar's Today count.
 - (#7) A new tag name can have at most 64 characters. Longer tags you already have keep working. The Tags heading in the sidebar now shows even before you have a tag.
 
 - (#11) Tags now show just their own name, like `@calls`, wherever they appear outside the sidebar tree. Two older tags that share a name still show their full paths, and the message for a name that is already used no longer names a parent.
