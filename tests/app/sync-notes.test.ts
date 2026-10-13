@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TICKTICK_LINKS_LABEL } from "../../src/app/SyncService";
+import { TICKTICK_LINKS_LABEL } from "../../src/app/syncModel";
 import { readNote } from "../../src/domain/ticktick/noteText";
 import { MERGE_MARKER } from "../../src/domain/textMerge";
 import { syncLinkId } from "../../src/domain/types";
@@ -240,7 +240,7 @@ describe("keeping a sync-created note and TickTick in step (SYNC-09)", () => {
 	it("a renamed note is followed (NOTE-06)", async () => {
 		const { s, ttId, path } = await withNote();
 		s.h.notes.rename(path, "Travel/Rome trip.md");
-		await s.h.app.tasks.rewriteNotePaths(path, "Travel/Rome trip.md", false);
+		await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Rome trip.md", false);
 		s.tt.edit(ttId, { content: "Renamed and edited" });
 		await run(s);
 		expect(s.h.notes.files.get("Travel/Rome trip.md")).toBe("Renamed and edited\n");
@@ -605,7 +605,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 			if (p === path && s.h.notes.exists(path)) {
 				s.h.notes.rename(path, "Travel/Trip.md");
 				s.sync.isSyncNoteEdit(path);
-				await s.h.app.tasks.rewriteNotePaths(path, "Travel/Trip.md", false);
+				await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Trip.md", false);
 			}
 			return read(p);
 		};
@@ -634,7 +634,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		const { s, ttId, path } = await withNote("one");
 		s.h.notes.rename(path, "Travel/Trip.md");
 		s.sync.isSyncNoteEdit(path);
-		await s.h.app.tasks.rewriteNotePaths(path, "Travel/Trip.md", false);
+		await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Trip.md", false);
 		s.tt.edit(ttId, { content: "two" });
 		await run(s);
 		expect(s.h.notes.files.get("Travel/Trip.md")).toBe("two\n");
@@ -790,7 +790,7 @@ describe("description note bookkeeping (SYNC-09)", () => {
 		s.tt.add(s.projectId, { title: "Trip", content: "Pack" });
 		await run(s);
 		expect(s.h.app.store.undoLabel).toBe(before);
-		const { SYNC_OWN_LABELS } = await import("../../src/app/SyncService");
+		const { SYNC_OWN_LABELS } = await import("../../src/app/syncModel");
 		expect(labels.length).toBeGreaterThan(0);
 		expect(labels.every((l) => SYNC_OWN_LABELS.has(l))).toBe(true);
 	});

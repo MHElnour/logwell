@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { LOOKUP_MAX, SyncService, TICKTICK_KEEP_LABEL, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL, TICKTICK_TRASH_LABEL } from "../../src/app/SyncService";
+import { SyncService } from "../../src/app/SyncService";
+import { LOOKUP_MAX, TICKTICK_KEEP_LABEL, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL, TICKTICK_TRASH_LABEL } from "../../src/app/syncModel";
 import { isDomainError } from "../../src/domain/errors";
 import { type Category, INBOX_ID, type SyncLink, syncLinkId, type Task } from "../../src/domain/types";
 import { linkedList, syncHarness, type SyncHarness } from "./sync-harness";
@@ -41,6 +42,19 @@ describe("first sync", () => {
 			const plan = await s.sync.planFirstSync(list.id, p.id);
 			expect(plan).toMatchObject({ toLogwell: 1, toTickTick: 2 });
 			// A preview writes nothing.
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+		});
+
+		it("#136: a preview whose TickTick read fails is a failed result naming the list, as a failed first sync is", async () => {
+			const s = await syncHarness();
+			const list = await s.h.app.categories.create("Work");
+			const p = s.tt.addProject("Work");
+			s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+			const plan = await s.sync.planFirstSync(list.id, p.id);
+			expect(plan).toMatchObject({ ok: false, error: { kind: "server", listId: list.id, listName: "Work" } });
+			s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+			const first = await s.sync.applyFirstSync(list.id, p.id);
+			expect(first.error).toEqual("error" in plan ? plan.error : null);
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 

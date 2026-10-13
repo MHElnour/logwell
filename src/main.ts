@@ -87,7 +87,7 @@ export default class CheckpointPlugin extends Plugin {
 			this.app.workspace.on("quit", (tasks) =>
 				tasks.add(async () => {
 					try {
-						this.session?.app.tasks.flushRenames();
+						this.session?.app.noteRenames.flushRenames();
 					} catch (err) {
 						showError(err);
 					}
@@ -306,13 +306,13 @@ export default class CheckpointPlugin extends Plugin {
 	forwardRename(oldPath: string, newPath: string, isFolder: boolean): void {
 		if (this.session !== null && !this.openingNow) {
 			// Exact match for files, prefix rewrite for folders. Idempotent.
-			void this.session.app.tasks.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
+			void this.session.app.noteRenames.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 			return;
 		}
 		// The database a switch is closing takes it too: once closed it never hears of it. A rename that
 		// arrives after its store closed waits in its rename queue for its next open.
 		const closing = this.closingSession;
-		if (closing !== null) void closing.app.tasks.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
+		if (closing !== null) void closing.app.noteRenames.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 		if (this.openingNow) this.renamesDuringOpen.push({ oldPath, newPath, isFolder });
 	}
 
@@ -323,7 +323,7 @@ export default class CheckpointPlugin extends Plugin {
 		while (this.renamesDuringOpen.length > 0) {
 			const pending = this.renamesDuringOpen;
 			this.renamesDuringOpen = [];
-			for (const r of pending) await session.app.tasks.rewriteNotePaths(r.oldPath, r.newPath, r.isFolder);
+			for (const r of pending) await session.app.noteRenames.rewriteNotePaths(r.oldPath, r.newPath, r.isFolder);
 		}
 	}
 

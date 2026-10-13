@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { describe, expect, it, vi } from "vitest";
 import { TickTickError } from "../../src/app/ports";
-import { LOOKUP_MAX, type SyncResult } from "../../src/app/SyncService";
+import { LOOKUP_MAX, type SyncResult } from "../../src/app/syncModel";
 import { TICKTICK_COMPLETED_MAX, type TtTask } from "../../src/domain/ticktick/types";
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
