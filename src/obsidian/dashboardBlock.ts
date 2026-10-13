@@ -14,7 +14,7 @@ import { accentClass } from "../ui/accent";
 import { completeBlockTask } from "../ui/blockActions";
 import { type BlockBody, DashboardBlock, NO_DATABASE_TEXT } from "../ui/DashboardBlock";
 import type { UiHost } from "../ui/host";
-import { sameEntry } from "../ui/rowMemo";
+import { sameEntry, sameSyncMark } from "../ui/rowMemo";
 import type { BlockRowOps } from "../ui/TaskRow";
 
 // The `logwell` code block. A block is a MarkdownRenderChild: Obsidian creates it for each block in a note
@@ -26,7 +26,8 @@ import type { BlockRowOps } from "../ui/TaskRow";
 //  - One interval (TICK_MS) while a block is loaded, so a day that rolls over redraws "due: today" or "scheduled: today" with no change.
 //    It only asks each block whether the day, the zone or the week changed; nothing else moves on a tick.
 //  - A change that cannot alter a block is skipped: a habit; a task change that no filter of the block accepts, before
-//    or after, and that is neither a shown task, nor its parent, nor its subtask. The rest redraw after REFRESH_MS,
+//    or after, and that is neither a shown task, nor its parent, nor its subtask; a change of the sync links that
+//    leaves the "Not synced" mark of every shown row as it was. The rest redraw after REFRESH_MS,
 //    one redraw per burst. A block's own checkbox redraws at once. A redraw that finds the same rows draws nothing.
 //  - A block that is not shown (a collapsed callout, a background tab) does not draw: it is marked dirty and draws
 //    when its IntersectionObserver reports it again. Without an observer, or outside the document for good (a print
@@ -116,9 +117,17 @@ function sameLists(a: SeenState, b: SeenState): boolean {
 	return a.categories === b.categories && a.sections === b.sections && a.tags === b.tags && a.occurrenceRecords === b.occurrenceRecords && a.focusSessions === b.focusSessions;
 }
 
-/** Whether the collections a block reads (tasks and those of `sameLists`) are the same objects. */
+/** Whether the collections a block reads (tasks and those of `sameLists`) are the same objects. The sync links are compared by `sameSyncMarks`. */
 function sameData(a: SeenState, b: SeenState): boolean {
 	return a === b || (a.tasks === b.tasks && sameLists(a, b));
+}
+
+/**
+ * Whether every shown row has the same "Not synced" mark in both states. Compared by the mark, not by the links: a
+ * sync rewrites the links of a list (their `modifiedAt`), and that must not redraw the block.
+ */
+function sameSyncMarks(a: SeenState, b: SeenState, list: SeenList): boolean {
+	return a.syncLinks === b.syncLinks || list.entries.every((entry) => sameSyncMark(a, b, entry.task));
 }
 
 /** The same rows, with the same subtask counts. */
@@ -399,6 +408,8 @@ class DashboardBlockChild extends MarkdownRenderChild {
 		if (ctx.today !== seen.today || ctx.zone !== seen.zone || ctx.weekStart !== seen.weekStart || ctx.upcomingDays !== seen.upcomingDays) return true;
 		if (seen.sourcePath !== this.ctx.sourcePath) return true;
 		const state = session.app.store.state;
+		// The links decide a row's "Not synced" mark (a list linked or unlinked, a task kept in Logwell only).
+		if (seen.list !== null && !sameSyncMarks(seen.state, state, seen.list)) return true;
 		if (sameData(seen.state, state)) return false;
 		if (changes === undefined) return true;
 		let tasks = false;
@@ -461,9 +472,10 @@ class DashboardBlockChild extends MarkdownRenderChild {
 		const a = previous.state;
 		const b = next.state;
 		if (a === null || b === null) return false;
-		// What a row reads besides its task: its list, its tags, its focus totals, its occurrences. Rows may read only
-		// categories, tags and focus totals from `state`; anything else a row reads must be added to this comparison.
-		if (!sameLists(a, b)) return false;
+		// What a row reads besides its task: its list, its tags, its focus totals, its occurrences, its "Not synced" mark.
+		// Rows may read only categories, tags, focus totals and sync links from `state`; anything else a row reads must be
+		// added to this comparison.
+		if (!sameLists(a, b) || !sameSyncMarks(a, b, previous.list)) return false;
 		return sameRows(previous.list, next.list);
 	}
 
