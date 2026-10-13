@@ -84,7 +84,7 @@ Changes to different fields both apply. A TickTick change Logwell cannot take, s
 
 - A task you delete in Logwell, or move to a list that is not linked, is deleted in TickTick. A task you restore from the Trash is sent again.
 - A task completed or marked won't do in TickTick is completed in Logwell.
-- A task gone from TickTick goes to the Logwell Trash. Its subtasks that are still in TickTick, or were never sent there, stay as top-level tasks. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
+- A task gone from TickTick goes to the Logwell Trash. Its subtasks that are still in TickTick, or were never sent there, stay as top-level tasks. A task TickTick leaves out of a list but still has, unchanged since the last sync, is not treated as deleted. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
 - For 5 or more in one list, or a TickTick list that comes back empty, a window asks. It lists only tasks Logwell checked and could not find. While a list still has tasks to check, nothing moves without asking, and an emptied list asks only once every task is checked. **Move to Trash** moves them, with Undo. **Keep** keeps them in Logwell only, marked **Not synced**; for an emptied list, it unlinks the list. Closing the window decides nothing.
 
 ## Limits
