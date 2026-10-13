@@ -873,8 +873,11 @@ export class SyncService {
 					try {
 						const tt = await this.api.getTask(projectId, link.ttId);
 						lookedUp.set(link.ttId, tt);
-						// Completed or won't do; or open under another linked project: moved there after its pull.
-						verdict = statusFromTt(tt.status) === "completed" || projectId !== link.ttProjectId ? "found" : "gone";
+						// Completed or won't do; or open under another linked project: moved there after its pull. Open under its
+						// own project, it is gone only when TickTick changed it since the last sync (a delete gives it a new
+						// etag; the answer has no deleted flag): unchanged, the pull left it out and it is still there.
+						const changed = tt.etag === undefined || tt.etag !== link.etag;
+						verdict = statusFromTt(tt.status) === "completed" || projectId !== link.ttProjectId || !changed ? "found" : "gone";
 						if (verdict === "found") seen.set(tt.id, tt);
 						break;
 					} catch (err) {
@@ -1379,7 +1382,12 @@ export class SyncService {
 		if (conflict) {
 			const now = tx.get("tasks", t.id) ?? t;
 			const section = sectionOf(tt);
-			attempt(() => this.tasks.createIn(tx, taskInputFromTt(tx, tt, zone, tags, `${ttTitle(tt.title)} (TickTick)`, now.categoryId, null, section ?? null)));
+			attempt(() => {
+				const { task } = this.tasks.createIn(tx, taskInputFromTt(tx, tt, zone, tags, `${ttTitle(tt.title)} (TickTick)`, now.categoryId, null, section ?? null));
+				// TickTick's version as it is there: completed or won't do there is completed here, and a completed task is
+				// never created in TickTick.
+				if (statusFromTt(tt.status) === "completed") this.tasks.completeOneIn(tx, task.id);
+			});
 		}
 		return written;
 	}

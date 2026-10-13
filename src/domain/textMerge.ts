@@ -86,16 +86,27 @@ function overlaps(gs: number, ge: number, s: number, e: number): boolean {
 	return s < ge && gs < e;
 }
 
-/** One side's lines for `base[start, end)`. */
-function sideVersion(base: readonly string[], side: readonly string[], hunks: readonly SideHunk[], start: number, end: number): string[] {
-	const out: string[] = [];
+/** One side's lines for `base[start, end)`, and for each line whether that side wrote it (else it is a base line it kept). */
+interface SideLines {
+	lines: string[];
+	written: boolean[];
+}
+
+function sideVersion(base: readonly string[], side: readonly string[], hunks: readonly SideHunk[], start: number, end: number): SideLines {
+	const lines: string[] = [];
+	const written: boolean[] = [];
+	const push = (xs: readonly string[], own: boolean) => {
+		lines.push(...xs);
+		for (let i = 0; i < xs.length; i++) written.push(own);
+	};
 	let pos = start;
 	for (const h of hunks) {
-		out.push(...base.slice(pos, h.aStart), ...side.slice(h.bStart, h.bEnd));
+		push(base.slice(pos, h.aStart), false);
+		push(side.slice(h.bStart, h.bEnd), true);
 		pos = h.aEnd;
 	}
-	out.push(...base.slice(pos, end));
-	return out;
+	push(base.slice(pos, end), false);
+	return { lines, written };
 }
 
 function endsWith(lines: readonly string[], tail: readonly string[]): boolean {
@@ -114,19 +125,22 @@ export function markConflict(marker = MERGE_MARKER): ConflictResolver {
 
 /**
  * One overlapping passage. Lines both versions start or end with are shared; when one version is then only an
- * extension of the other (A,B against A,B,C), the longer one is taken. Otherwise the differing middle goes to
- * `resolve`. A middle that already ends with `marker` and TickTick's lines (an earlier merge whose base could not be
- * saved) is not resolved again.
+ * extension of the other (A,B against A,B,C), the lines the longer one wrote are taken, and the base lines it only
+ * kept go, since the other side deleted them. Otherwise the differing middle goes to `resolve`. A middle that already
+ * ends with `marker` and TickTick's lines (an earlier merge whose base could not be saved) is not resolved again.
  */
-function resolvePassage(vo: readonly string[], vt: readonly string[], vb: readonly string[], resolve: ConflictResolver, marker: string | null): string[] {
+function resolvePassage(so: SideLines, st: SideLines, vb: readonly string[], resolve: ConflictResolver, marker: string | null): string[] {
+	const vo = so.lines;
+	const vt = st.lines;
 	const { head, tail } = commonEnds(vo, vt);
 	const mo = vo.slice(head, vo.length - tail);
 	const mt = vt.slice(head, vt.length - tail);
 	const shared = head + tail > 0;
+	const writtenBy = (s: SideLines, mid: readonly string[]) => mid.filter((_, i) => s.written[head + i]);
 	let middle: string[];
 	if (mo.length === 0 && mt.length === 0) middle = [];
-	else if (shared && mt.length === 0) middle = mo;
-	else if (shared && mo.length === 0) middle = mt;
+	else if (shared && mt.length === 0) middle = writtenBy(so, mo);
+	else if (shared && mo.length === 0) middle = writtenBy(st, mt);
 	else if (marker !== null && endsWith(mo, [marker, ...mt])) middle = mo;
 	else middle = resolve(mo, mt, vb);
 	return [...vo.slice(0, head), ...middle, ...vo.slice(vo.length - tail)];
@@ -167,8 +181,8 @@ export function mergeLines(
 		const other = g.hunks.filter((h) => !h.ours);
 		const vo = sideVersion(base, ours, mine, g.start, g.end);
 		const vt = sideVersion(base, theirs, other, g.start, g.end);
-		if (other.length === 0) out.push(...vo);
-		else if (mine.length === 0) out.push(...vt);
+		if (other.length === 0) out.push(...vo.lines);
+		else if (mine.length === 0) out.push(...vt.lines);
 		else out.push(...resolvePassage(vo, vt, base.slice(g.start, g.end), resolve, marker));
 	}
 	out.push(...base.slice(pos));

@@ -64,6 +64,7 @@ Turn on **Create notes from TickTick descriptions**. A synced task with a TickTi
 - Your edits to the note go up about 5 seconds later, without the frontmatter. Links go up as their text; embeds stay in Obsidian.
 - A change in TickTick changes only the lines it touched. Your links, embeds and layout stay.
 - A checklist comes down as tick boxes, such as `- [ ] Buy groceries`, which you can move anywhere in the note. Ticking, adding or removing one changes TickTick too.
+- A line deleted on one side and left alone on the other stays deleted, even when both sides made the same change next to it.
 - If both sides changed the same lines, your lines come first, then a line `From TickTick:` and TickTick's version. Delete the one you don't want.
 
 Sync writes only the notes it created, and never deletes or renames them. If you delete or unlink one, sync stops writing it and makes no other. A note you link yourself is never read, changed or sent.
@@ -78,13 +79,13 @@ A sync cannot be undone. While the database is read-only, sync waits.
 
 ## Change a task on both sides
 
-Changes to different fields both apply. A TickTick change Logwell cannot take, such as a column of the list you just moved the task out of, is skipped, and the task's other TickTick changes still apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other.
+Changes to different fields both apply. A TickTick change Logwell cannot take, such as a column of the list you just moved the task out of, is skipped, and the task's other TickTick changes still apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other. If TickTick's version was completed, the separate task is completed too and stays in Logwell only.
 
 ## Delete and complete tasks
 
 - A task you delete in Logwell, or move to a list that is not linked, is deleted in TickTick. A task you restore from the Trash is sent again.
 - A task completed or marked won't do in TickTick is completed in Logwell.
-- A task gone from TickTick goes to the Logwell Trash. Its subtasks that are still in TickTick, or were never sent there, stay as top-level tasks. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
+- A task gone from TickTick goes to the Logwell Trash. Its subtasks that are still in TickTick, or were never sent there, stay as top-level tasks. A task TickTick leaves out of a list but still has, unchanged since the last sync, is not treated as deleted. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
 - For 5 or more in one list, or a TickTick list that comes back empty, a window asks. It lists only tasks Logwell checked and could not find. While a list still has tasks to check, nothing moves without asking, and an emptied list asks only once every task is checked. **Move to Trash** moves them, with Undo. **Keep** keeps them in Logwell only, marked **Not synced**; for an emptied list, it unlinks the list. Closing the window decides nothing.
 
 ## Limits

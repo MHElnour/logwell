@@ -145,15 +145,18 @@ export function useCalDnd(host: UiHost, ctx: CalendarContext, getRoot: () => HTM
 			},
 			onMove: move,
 			onDrop: (p, origin) => {
-				const r = resolve(src, p, origin, scrollTop0);
+				const { host: h } = live.current;
+				// The task as it is now (a sync or another device may have changed it during the drag). One deleted, or
+				// one that started repeating, does not move: a series never drags.
+				const task = h.app.store.state.tasks.get(id);
+				const r = task === undefined || task.recurrence !== null ? NONE : resolve({ ...src, task }, p, origin, scrollTop0);
 				endScroll();
 				clear();
-				if (r.patch === null) return;
-				const { host: h } = live.current;
+				if (task === undefined || r.patch === null) return;
 				// Only a real change gets an Undo notice: for a drop that resolves to the current value
 				// (a DST gap) nothing is written, and Undo would revert an unrelated earlier command.
 				const mark = h.app.store.undoMark();
-				void writeTask(h, src.task, r.patch).then((outcome) => {
+				void writeTask(h, task, r.patch).then((outcome) => {
 					if (outcome === "changed") h.notifyUndo(r.message, "Edit task", mark);
 				});
 			},
