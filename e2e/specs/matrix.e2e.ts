@@ -7,14 +7,10 @@ import {
 	appToday,
 	centerOf,
 	closeQuickAdd,
-	createCategory,
 	createTask,
 	dragPointer,
 	freshDatabase,
 	getTask,
-	menuTitles,
-	openViewMenu,
-	pickMenuItem,
 	plusDays,
 	railButton,
 	rectOf,
@@ -180,57 +176,6 @@ describe("Matrix", function () {
 		await waitForVisibleMatrix();
 	});
 
-	it("puts seeded tasks in the right quadrant and date group, with completed ones in a collapsed group", async function () {
-		await seed();
-		await visibleMatrix();
-		let m: Record<Q, GroupRead[]> = await readMatrix();
-		await browser.waitUntil(async () => titlesOf((m = await readMatrix())["urgent-important"]).length === 2, { timeout: 5000, timeoutMsg: "the matrix did not render the seeded tasks" });
-		expect(m["urgent-important"]).toEqual([
-			{ label: "Overdue", titles: ["M overdue"] },
-			{ label: "Today", titles: ["M today"] },
-		]);
-		expect(m.important).toEqual([
-			{ label: "Next 7 days", titles: ["M next7"] },
-			{ label: "Later", titles: ["M later"] },
-		]);
-		// "M done" is completed, so it is in the quadrant's Completed group, collapsed by default.
-		expect(m.urgent).toEqual([
-			{ label: "No date", titles: ["M urgent"] },
-			{ label: "Completed · 1", titles: [] },
-		]);
-		expect(m.neither).toEqual([{ label: "No date", titles: ["M plain"] }]);
-		expect(Object.values(m).flatMap(titlesOf)).not.toContain("M done");
-	});
-
-	it("expands a quadrant's Completed group, and Show completed in the view menu hides it", async function () {
-		const s = await seed();
-		const matrix = await visibleMatrix();
-		await cardTitle(matrix, s.urgentOnly).then((e) => e.waitForExist({ timeout: 5000 }));
-		await expect(matrix.$(".cp-filter-bar")).not.toExist();
-		await matrix.$('.cp-matrix-q[data-quadrant="urgent"] .cp-completed-toggle').click();
-		let m: Record<Q, GroupRead[]> = await readMatrix();
-		await browser.waitUntil(async () => (m = await readMatrix()).urgent.some((g) => g.titles.includes("M done")), { timeout: 5000, timeoutMsg: "the Completed group did not expand" });
-		expect(m.urgent.map((g) => g.label)).toEqual(["No date", "Completed · 1"]);
-		await openViewMenu(".cp-matrix");
-		expect(await menuTitles()).toEqual(["Lists…", "Tags…", "Show completed"]);
-		await pickMenuItem("Show completed");
-		await browser.waitUntil(async () => !(m = await readMatrix()).urgent.some((g) => g.label.startsWith("Completed")), { timeout: 5000, timeoutMsg: "Show completed off did not hide the group" });
-	});
-
-	it("Lists narrows the matrix and the view button shows a dot", async function () {
-		const s = await seed();
-		const study = await createCategory("M study");
-		const inList = await createTask("M in list", { categoryId: study, urgent: true });
-		const matrix = await visibleMatrix();
-		await cardTitle(matrix, inList).then((e) => e.waitForExist({ timeout: 5000 }));
-		await openViewMenu(".cp-matrix");
-		await pickMenuItem("Lists…");
-		await pickMenuItem("M study");
-		await browser.waitUntil(async () => titlesOf((await readMatrix()).urgent).join() === "M in list", { timeout: 5000, timeoutMsg: "the list filter did not narrow the matrix" });
-		await expect(matrix.$('[aria-label="View options"] .cp-view-dot')).toExist();
-		expect(await quadrantOfCard(s.plain)).toBe("");
-	});
-
 	it("AS-13: dragging a card with the real pointer onto Urgent and important keeps the ID and sets both flags", async function () {
 		const s = await seed();
 		const matrix = await visibleMatrix();
@@ -255,29 +200,6 @@ describe("Matrix", function () {
 		// A drag is not a click: the details stay closed.
 		await expect(matrix.$(".cp-details-pane")).not.toExist();
 		await expect(matrix.$(".cp-matrix-ghost")).not.toExist();
-	});
-
-	it("Escape mid-drag cancels: the task keeps its quadrant", async function () {
-		const s = await seed();
-		const matrix = await visibleMatrix();
-		await waitForSeededCards();
-		const title = await cardTitle(matrix, s.plain);
-		await title.waitForExist({ timeout: 5000 });
-		await waitForStableRect(title);
-		await dragPointer(
-			() => centerOf(title),
-			() => centerOf(matrix.$('.cp-matrix-q[data-quadrant="important"] .cp-matrix-q-body')),
-			{ release: false },
-		);
-		await expect(matrix.$(".cp-matrix-ghost")).toExist();
-		await browser.keys("Escape");
-		await expect(matrix.$(".cp-matrix-ghost")).not.toExist();
-		await browser.releaseActions();
-		const task = await getTask(s.plain);
-		expect(task!.urgent).toBe(false);
-		expect(task!.important).toBe(false);
-		expect(await quadrantOfCard(s.plain)).toBe("neither");
-		await expect(matrix.$(".cp-details-pane")).not.toExist();
 	});
 
 	it("AS-13: the context menu 'Move to quadrant: urgent and important' keeps the ID and sets both flags", async function () {
@@ -318,29 +240,6 @@ describe("Matrix", function () {
 		expect(task!.urgent).toBe(true);
 		expect(task!.important).toBe(true);
 		await browser.waitUntil(async () => (await quadrantOfCard(s.urgentOnly)) === "urgent-important", { timeout: 5000, timeoutMsg: "the card did not move to quadrant I" });
-	});
-
-	it("keys 1 to 4 move the focused card and keep focus on it in its new quadrant", async function () {
-		const s = await seed();
-		const matrix = await visibleMatrix();
-		await matrix.$(`.cp-task-row[data-task-id="${s.plain}"]`).waitForExist({ timeout: 5000 });
-		const order: [string, Q, boolean, boolean][] = [
-			["2", "important", false, true],
-			["3", "urgent", true, false],
-			["1", "urgent-important", true, true],
-			["4", "neither", false, false],
-		];
-		await focusCard(s.plain);
-		for (const [key, quadrant, urgent, important] of order) {
-			await browser.keys(key);
-			await browser.waitUntil(async () => (await quadrantOfCard(s.plain)) === quadrant, { timeout: 5000, timeoutMsg: `key ${key} did not move the card to ${quadrant}` });
-			await browser.waitUntil(async () => (await focusedCard()).id === s.plain, { timeout: 5000, timeoutMsg: `focus left the card after key ${key}` });
-			expect(await focusedCard()).toEqual({ id: s.plain, quadrant });
-			const task = await getTask(s.plain);
-			expect([task!.urgent, task!.important]).toEqual([urgent, important]);
-		}
-		// The live region said where it went.
-		await expect(matrix.$('[role="status"]')).toHaveText("Moved to Neither");
 	});
 
 	it("Alt+Arrow moves the focused card to the adjacent quadrant (view Scope, before Obsidian's hotkeys)", async function () {

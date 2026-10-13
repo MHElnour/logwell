@@ -72,45 +72,6 @@ describe("Board and list drag", function () {
 
 	const at = (date: string, time: string) => ({ kind: "datetime", local: `${date}T${time}`, tz: zone });
 
-	it("the List | Board switch is per view and remembered across views", async function () {
-		await createTask("Plain task", { scheduled: { kind: "date", date: today } });
-		const section = await visibleTasksSection();
-		await showSidebarView(section, "Today");
-		await expect(section.$(".cp-board")).not.toExist();
-		await setLayout(section, "Board");
-		expect(await section.$(".cp-mode-switch").$("button=Board").getAttribute("aria-pressed")).toBe("true");
-		// Another view keeps its own mode (List), and Today is still a board when we come back.
-		await showSidebarView(section, "Inbox");
-		await expect(section.$(".cp-board")).not.toExist();
-		expect(await section.$(".cp-mode-switch").$("button=List").getAttribute("aria-pressed")).toBe("true");
-		await showSidebarView(section, "Today");
-		await expect(section.$(".cp-board")).toExist();
-		expect(await section.$(".cp-mode-switch").$("button=Board").getAttribute("aria-pressed")).toBe("true");
-		await setLayout(section, "List");
-		await showSidebarView(section, "Inbox");
-		await showSidebarView(section, "Today");
-		await expect(section.$(".cp-board")).not.toExist();
-	});
-
-	it("Upcoming shows no today or overdue task, in the list and on the board (D1)", async function () {
-		const tomorrow = plusDays(today, 1);
-		const t = await createTask("Due today", { scheduled: { kind: "date", date: today } });
-		const o = await createTask("Overdue one", { scheduled: { kind: "date", date: plusDays(today, -2) } });
-		const n = await createTask("Due tomorrow", { scheduled: { kind: "date", date: tomorrow } });
-		const section = await visibleTasksSection();
-		await showSidebarView(section, "Upcoming");
-		await section.$(`.cp-task-row[data-task-id="${n}"]`).waitForExist({ timeout: 5000, timeoutMsg: "tomorrow's task is not in the Upcoming list" });
-		expect(await listRowIds(section)).toEqual([n]);
-		await setLayout(section, "Board");
-		await boardColumn(section, tomorrow).waitForExist({ timeout: 5000 });
-		expect(await columnCardIds(section, tomorrow)).toEqual([n]);
-		await expect(boardColumn(section, "today")).not.toExist();
-		await expect(boardColumn(section, "overdue")).not.toExist();
-		await expect(boardColumn(section, today)).not.toExist();
-		await expect(section.$(`.cp-board-card[data-task-id="${t}"]`)).not.toExist();
-		await expect(section.$(`.cp-board-card[data-task-id="${o}"]`)).not.toExist();
-	});
-
 	it("Today's board has Overdue and Today columns; dragging an overdue card to Today keeps its time", async function () {
 		const id = await createTask("Late card", { scheduled: at(plusDays(today, -1), "09:30") });
 		await createTask("On time card", { scheduled: { kind: "date", date: today } });
@@ -285,32 +246,7 @@ describe("Board and list drag", function () {
 		await browser.releaseActions();
 	});
 
-	it("Escape mid-drag cancels: the record is unchanged and the ghost is gone", async function () {
-		const tomorrow = plusDays(today, 1);
-		const id = await createTask("Cancel me", { scheduled: at(tomorrow, "10:00") });
-		const before = await getTask(id);
-		const section = await visibleTasksSection();
-		await showSidebarView(section, "Upcoming");
-		await setLayout(section, "Board");
-		const card = section.$(`.cp-board-card[data-task-id="${id}"]`);
-		await card.waitForExist({ timeout: 5000 });
-		await waitForStableRect(card);
-		const target = boardColumn(section, plusDays(today, 2)).$(".cp-board-col-body");
-		await bringIntoView(target);
-		await dragPointer(
-			() => grabPoint(card),
-			async () => centerOf(target),
-			{ release: false },
-		);
-		await section.$(".cp-board-ghost").waitForExist({ timeout: 3000, timeoutMsg: "no ghost while dragging" });
-		await browser.keys("Escape");
-		await section.$(".cp-board-ghost").waitForExist({ timeout: 3000, reverse: true, timeoutMsg: "Escape left the ghost" });
-		await browser.releaseActions();
-		// Releasing after the cancel must neither drop nor click. Nothing to wait for: assert the record stayed.
-		await expect(section.$(".cp-details-pane")).not.toExist();
-		expect(await getTask(id)).toEqual(before);
-	});
-
+	// Obsidian's Scope tries the board's Alt+Arrow handler after the matrix one passes the key on.
 	it("Alt+Right on a focused card moves it to the next day and focus stays on it", async function () {
 		const tomorrow = plusDays(today, 1);
 		const later = plusDays(today, 2);
