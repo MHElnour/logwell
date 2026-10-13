@@ -1,32 +1,12 @@
 // @vitest-environment happy-dom
-import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ACCENTS, DEFAULT_SETTINGS, sanitizeSettings } from "../../src/app/settings";
-import { AppRoot } from "../../src/ui/AppRoot";
 import { accentClass } from "../../src/ui/accent";
 import { ICON, categoryIcon } from "../../src/ui/icons";
-import { mountApp } from "./quick-add.helpers";
+import { mountApp, settle } from "./app-helpers";
 
 // Design tokens' markup hooks, rail and sidebar, accent, empty states.
 
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
-
-const mounted: { unmount: () => void }[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
-async function mount() {
-	const m = await mountApp();
-	mounted.push(m);
-	return m;
-}
-const settle = async () => {
-	for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
-};
 const iconOf = (el: Element | null) => el?.querySelector("[data-icon]")?.getAttribute("data-icon");
 
 describe("accent setting", () => {
@@ -45,13 +25,12 @@ describe("accent setting", () => {
 	});
 
 	it("puts the accent class on the app container and follows a change", async () => {
-		const { host, root } = await mount();
+		const { host, root, rerender } = await mountApp();
 		const app = () => root.querySelector(".cp-app")!;
 		expect(app().classList.contains("cp-theme")).toBe(true);
 		expect(app().classList.contains("cp-accent-theme")).toBe(true);
 		host.settings = () => ({ ...DEFAULT_SETTINGS, accent: "green" });
-		render(<AppRoot host={host} initialSection={null} handle={() => undefined} />, root);
-		await settle();
+		await rerender();
 		expect(app().classList.contains("cp-accent-green")).toBe(true);
 		expect(app().classList.contains("cp-accent-theme")).toBe(false);
 	});
@@ -59,7 +38,7 @@ describe("accent setting", () => {
 
 describe("rail", () => {
 	it("shows only the built sections with the spec icons and labels", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const buttons = [...root.querySelectorAll<HTMLElement>(".cp-rail button")];
 		expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "Data"]);
 		expect(buttons.map(iconOf)).toEqual([ICON.railTasks, ICON.railCalendar, ICON.railFocus, ICON.railHabits, ICON.railMatrix, ICON.railSearch, ICON.railData]);
@@ -71,7 +50,7 @@ describe("rail", () => {
 	});
 
 	it("puts Data last, at the bottom, after a flexible spacer (mockup .rail-spacer)", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const rail = root.querySelector<HTMLElement>(".cp-rail")!;
 		const kids = [...rail.children] as HTMLElement[];
 		expect(kids.map((k) => k.getAttribute("aria-label") ?? k.className)).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "cp-rail-spacer", "Data"]);
@@ -84,7 +63,7 @@ describe("rail", () => {
 	});
 
 	it("Data keeps its active state after the spacer", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		root.querySelector<HTMLElement>('.cp-rail [aria-label="Data"]')!.click();
 		await settle();
 		const data = root.querySelector<HTMLElement>('.cp-rail [aria-label="Data"]')!;
@@ -95,7 +74,7 @@ describe("rail", () => {
 
 describe("sidebar", () => {
 	it("the ☰ button collapses the sidebar on a wide view and brings it back", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const tasks = root.querySelector<HTMLElement>(".cp-tasks")!;
 		const toggle = root.querySelector<HTMLButtonElement>(".cp-sidebar-toggle")!;
 		expect(toggle.getAttribute("aria-label")).toBe("Hide lists");
@@ -115,7 +94,7 @@ describe("sidebar", () => {
 	});
 
 	it("uses the spec icons for the fixed entries", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const item = (text: string) => [...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(text))!;
 		expect(iconOf(item("Today"))).toBe("sun");
 		expect(iconOf(item("Upcoming"))).toBe("calendar-days");
@@ -125,7 +104,7 @@ describe("sidebar", () => {
 	});
 
 	it("marks the active item and gives counts a tabular class", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const active = root.querySelectorAll(".cp-sidebar-item.is-active");
 		expect(active.length).toBe(1);
 		expect(active[0]!.getAttribute("aria-current")).toBe("page");
@@ -133,7 +112,7 @@ describe("sidebar", () => {
 	});
 
 	it("section header has a labelled add button", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const head = root.querySelector(".cp-sidebar-heading")!;
 		expect(head.textContent).toContain("Lists");
 		const add = head.querySelector("button")!;
@@ -143,7 +122,7 @@ describe("sidebar", () => {
 	});
 
 	it("renders category icons: lucide name, legacy emoji, default list", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		await h.app.categories.create("Study", "book-open");
 		await h.app.categories.create("Fun", "🎮");
 		await h.app.categories.create("Plain", null);
@@ -163,7 +142,7 @@ describe("sidebar", () => {
 	});
 
 	it("shows a colored dot for tags", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		const t = await h.app.tags.create("urgent");
 		await h.app.tags.setColor(t.key, "red");
 		await settle();
@@ -173,7 +152,7 @@ describe("sidebar", () => {
 
 describe("empty states", () => {
 	it("render a large icon and one line in the trash and in search", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const trash = [...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Trash"))!;
 		trash.click();
 		await settle();
@@ -190,7 +169,7 @@ describe("empty states", () => {
 	});
 
 	it("render in an empty task list", async () => {
-		const { root } = await mount();
+		const { root } = await mountApp();
 		const e = root.querySelector<HTMLElement>(".cp-tasks .cp-empty-state")!;
 		expect(e.querySelector(".cp-empty-icon")).not.toBeNull();
 		expect(e.querySelector(".cp-empty-text")).not.toBeNull();
@@ -199,7 +178,7 @@ describe("empty states", () => {
 
 describe("main header", () => {
 	it("search header carries the title and a result count pill once a query is typed", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		await h.app.tasks.create({ title: "Alpha beta" });
 		root.querySelector<HTMLElement>('.cp-rail [aria-label="Search"]')!.click();
 		await settle();
@@ -217,7 +196,7 @@ describe("undo shortcut", () => {
 	const ctrlZ = (el: Element) => el.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
 
 	it("undoes from the list but ignores events inside popovers and the add bar", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		await h.app.tasks.create({ title: "Undoable" });
 		await settle();
 		const dateTool = root.querySelector<HTMLElement>('.cp-qa-tool[data-tool="date"]')!;
@@ -237,7 +216,7 @@ describe("undo shortcut", () => {
 
 describe("Today groups", () => {
 	it("renders Overdue and Today headings with tone classes and counts", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		await h.app.tasks.create({ title: "Late", scheduled: { kind: "date", date: "2026-09-29" } });
 		await h.app.tasks.create({ title: "Now", scheduled: { kind: "date", date: "2026-10-01" } });
 		await settle();
@@ -250,7 +229,7 @@ describe("Today groups", () => {
 
 describe("legacy category icons", () => {
 	it("falls back to the list icon when setIcon renders nothing", async () => {
-		const { h, root } = await mount();
+		const { h, root } = await mountApp();
 		await h.app.categories.create("Old", "unknown-thing");
 		await h.app.categories.create("Fine", "briefcase");
 		await settle();

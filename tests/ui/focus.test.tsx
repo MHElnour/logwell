@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
 import { useFocus } from "../../src/ui/hooks";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { type AppMount, click, menuItem, mountApp, settle } from "./app-helpers";
 import type { MenuSpec } from "../../src/ui/host";
-import { menuItem } from "./app-helpers";
 import { makeReadOnly } from "../app/harness";
 import { stepFor } from "../../src/ui/focus/Controls";
 
@@ -14,25 +13,14 @@ describe("Focus page", () => {
 	// The clock is the harness FakeClock (2026-10-01T10:00Z; Europe/Berlin
 	// shows 12:00); the host's per-second tick is done by hand.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
 	const cfg = (rounds = 1, focusSec = 60): FocusSetConfig => ({ rounds, focusSec, breakSec: 60, longBreakSec: 60 });
 
-	async function mount(): Promise<CalMount> {
-		const m = await mountCal();
-		mounted.push(m);
-		return m;
-	}
-
-	async function openFocus(m: CalMount): Promise<HTMLElement> {
+	async function openFocus(m: AppMount): Promise<HTMLElement> {
 		await click(m.root.querySelector('.cp-rail [aria-label="Focus"]'));
 		return m.root.querySelector<HTMLElement>(".cp-focus")!;
 	}
 
-	async function tickFor(m: CalMount, seconds: number): Promise<void> {
+	async function tickFor(m: AppMount, seconds: number): Promise<void> {
 		for (let i = 0; i < seconds; i++) {
 			m.h.clock.advance(1000);
 			await m.h.app.focus.tick();
@@ -42,7 +30,7 @@ describe("Focus page", () => {
 
 	const buttons = (el: ParentNode) => [...el.querySelectorAll<HTMLButtonElement>("button")];
 	const buttonByText = (el: ParentNode, text: string) => buttons(el).find((b) => b.textContent?.trim() === text);
-	async function press(el: ParentNode, text: string): Promise<void> {
+	async function pressButton(el: ParentNode, text: string): Promise<void> {
 		const b = buttonByText(el, text);
 		if (b === undefined) throw new Error(`no button "${text}"`);
 		await click(b);
@@ -61,14 +49,14 @@ describe("Focus page", () => {
 	const text = (el: ParentNode, sel: string) => el.querySelector(sel)?.textContent?.trim();
 
 	/** Runs a complete 1-round set of one minute on a task and returns after the record is written. */
-	async function finishedRound(m: CalMount, taskId: string | null): Promise<void> {
+	async function finishedRound(m: AppMount, taskId: string | null): Promise<void> {
 		await m.h.app.focus.start(cfg(), taskId);
 		await tickFor(m, 60);
 	}
 
 	describe("the rail and the page", () => {
 		it("has a Focus entry after Calendar that shows the page", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const labels = [...m.root.querySelectorAll(".cp-rail button")].map((b) => b.getAttribute("aria-label"));
 			expect(labels.indexOf("Focus")).toBe(labels.indexOf("Calendar") + 1);
 			expect(m.root.querySelector(".cp-rail [aria-label='Focus'] [data-icon]")?.getAttribute("data-icon")).toBe("target");
@@ -79,7 +67,7 @@ describe("Focus page", () => {
 		});
 
 		it("shows the idle ring with the remembered set values", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
 			expect(text(page, ".cp-focus-time")).toBe("25:00");
 			expect(text(page, ".cp-focus-phase")).toBe("Ready");
@@ -91,17 +79,17 @@ describe("Focus page", () => {
 
 	describe("running a set", () => {
 		it("Start is a user gesture: it calls focusGesture once", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const gesture = vi.spyOn(m.host, "focusGesture");
 			const page = await openFocus(m);
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			expect(gesture).toHaveBeenCalledTimes(1);
 		});
 
 		it("Start begins a set: the ring counts down, the settings lock and the controls change", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			expect(m.h.app.focus.timer()).not.toBeNull();
 			expect(text(page, ".cp-focus-time")).toBe("25:00");
 			await tickFor(m, 5);
@@ -118,42 +106,42 @@ describe("Focus page", () => {
 		});
 
 		it("Pause freezes the ring and Resume continues it", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			await tickFor(m, 10);
-			await press(page, "Pause");
+			await pressButton(page, "Pause");
 			expect(m.h.app.focus.timer()?.state).toBe("paused");
 			m.h.clock.advance(30_000);
 			await settle();
 			expect(text(page, ".cp-focus-time")).toBe("24:50");
-			await press(page, "Resume");
+			await pressButton(page, "Resume");
 			expect(m.h.app.focus.timer()?.state).toBe("running");
 			await tickFor(m, 5);
 			expect(text(page, ".cp-focus-time")).toBe("24:45");
 		});
 
 		it("Finish moves a focus to its break; the label says Short break, and Skip break starts the next round", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.start(cfg(2, 600), null);
 			const page = await openFocus(m);
 			await tickFor(m, 70);
-			await press(page, "Finish");
+			await pressButton(page, "Finish");
 			expect(text(page, ".cp-focus-phase")).toBe("Short break");
 			expect(m.h.app.store.state.focusSessions.size).toBe(1);
 			// In a break the left control says what it skips.
 			expect(buttonByText(page, "Skip break")).toBeDefined();
 			expect(buttonByText(page, "Skip")).toBeUndefined();
-			await press(page, "Skip break");
+			await pressButton(page, "Skip break");
 			expect(m.h.app.focus.timer()).toMatchObject({ phase: "focus", round: 2 });
 		});
 
 		it("Stop ends the set and saves the focus", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			await tickFor(m, 120);
-			await press(page, "Stop");
+			await pressButton(page, "Stop");
 			expect(m.h.app.focus.timer()).toBeNull();
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.status).toBe("stopped");
 			expect(buttonByText(page, "Start")).toBeDefined();
@@ -163,7 +151,7 @@ describe("Focus page", () => {
 		});
 
 		it("shows the dots and the long-break phase", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.start({ rounds: 5, focusSec: 60, breakSec: 60, longBreakSec: 120 }, null);
 			const page = await openFocus(m);
 			expect(page.querySelectorAll(".cp-focus-dot").length).toBe(5);
@@ -179,7 +167,7 @@ describe("Focus page", () => {
 		});
 
 		it("a finished set shows the summary and Start for another", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
 			await m.h.app.focus.start(cfg(1, 60), null);
 			await tickFor(m, 60);
@@ -196,7 +184,7 @@ describe("Focus page", () => {
 
 	describe("set settings (POM-01)", () => {
 		it("saves a change through setFocusConfig, clamped to the range", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const set = vi.fn(async () => undefined);
 			m.host.setFocusConfig = set;
 			const page = await openFocus(m);
@@ -210,12 +198,12 @@ describe("Focus page", () => {
 			expect(step(page, "Increase rounds").getAttribute("aria-disabled")).toBe("true");
 			await click(step(page, "Increase focus"));
 			expect(set).toHaveBeenLastCalledWith({ rounds: 8, focusSec: 1800, breakSec: 300, longBreakSec: 900 });
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			expect(m.h.app.focus.timer()?.config).toEqual({ rounds: 8, focusSec: 1800, breakSec: 300, longBreakSec: 900 });
 		});
 
 		it("steps by 5 minutes, and by 1 near the bottom of the range", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const set = vi.fn(async () => undefined);
 			m.host.setFocusConfig = set;
 			const page = await openFocus(m);
@@ -231,7 +219,7 @@ describe("Focus page", () => {
 		});
 
 		it("starts on the chosen task (POM-10: also none)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
 			await settle();
 			const page = await openFocus(m);
@@ -240,12 +228,12 @@ describe("Focus page", () => {
 			pick.value = task.id;
 			pick.dispatchEvent(new Event("change", { bubbles: true }));
 			await settle();
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			expect(m.h.app.focus.timer()?.taskId).toBe(task.id);
 		});
 
 		it("changing the task during a focus goes through startFocus (Split or Reassign), during a break it reassigns", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = (await m.h.app.tasks.create({ title: "A" })).task;
 			const b = (await m.h.app.tasks.create({ title: "B" })).task;
 			await m.h.app.focus.start(cfg(2, 60), a.id);
@@ -268,7 +256,7 @@ describe("Focus page", () => {
 		});
 
 		it("a cancelled change puts the picker back on the running task (B2)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = (await m.h.app.tasks.create({ title: "A" })).task;
 			const b = (await m.h.app.tasks.create({ title: "B" })).task;
 			await m.h.app.focus.start(cfg(2, 60), a.id);
@@ -283,7 +271,7 @@ describe("Focus page", () => {
 		});
 
 		it("choosing No task during a focus goes through startFocus(null) too (B2)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = (await m.h.app.tasks.create({ title: "A" })).task;
 			await m.h.app.focus.start(cfg(2, 60), a.id);
 			const startFocus = vi.fn(async () => undefined);
@@ -301,7 +289,7 @@ describe("Focus page", () => {
 
 	describe("steppers (B6)", () => {
 		it("one click commits once, and quick clicks on two fields build on each other", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const setConfig = vi.fn(async () => undefined);
 			m.host.setFocusConfig = setConfig;
 			const page = await openFocus(m);
@@ -317,7 +305,7 @@ describe("Focus page", () => {
 		});
 
 		it("each setting is a labelled group and the buttons have labels", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
 			const groups = [...page.querySelectorAll<HTMLElement>(".cp-focus-settings [role='group']")];
 			expect(groups.map((g) => g.querySelector(".cp-focus-field-label")?.textContent)).toEqual(["Rounds", "Focus", "Break", "Long break"]);
@@ -331,7 +319,7 @@ describe("Focus page", () => {
 
 	describe("selected task (B3)", () => {
 		it("the handle reports the selection of the section on screen, null when nothing is selected", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const t = (await m.h.app.tasks.create({ title: "Pick me", scheduled: { kind: "date", date: "2026-10-01" } })).task;
 			await settle();
 			expect(m.handle.current!.selectedTaskId()).toBeNull();
@@ -346,7 +334,7 @@ describe("Focus page", () => {
 
 	describe("accessibility", () => {
 		it("announces phase changes only, never every second", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.start(cfg(2, 60), null);
 			const page = await openFocus(m);
 			const live = page.querySelector<HTMLElement>('[role="status"][aria-live="polite"]')!;
@@ -368,7 +356,7 @@ describe("Focus page", () => {
 		});
 
 		it("every icon button has an aria-label and container labels use aria-labelledby", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			const page = await openFocus(m);
 			for (const b of page.querySelectorAll<HTMLButtonElement>("button.cp-icon-button")) {
@@ -380,7 +368,7 @@ describe("Focus page", () => {
 
 	describe("recovery banner (B31, AS-12)", () => {
 		/** Starts a ten-minute focus, "closes the app" after 30 s and reopens it ten minutes later. */
-		async function interrupted(m: CalMount): Promise<void> {
+		async function interrupted(m: AppMount): Promise<void> {
 			await m.h.app.focus.open("db");
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
@@ -389,35 +377,35 @@ describe("Focus page", () => {
 		}
 
 		it("shows Resume, Finish and Discard calling resolveRecovery", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await interrupted(m);
 			const page = await openFocus(m);
 			const banner = page.querySelector<HTMLElement>(".cp-focus-banner")!;
 			expect(banner).not.toBeNull();
 			expect(banner.textContent).toContain("10m");
 			const spy = vi.spyOn(m.h.app.focus, "resolveRecovery");
-			await press(banner, "Finish and save");
+			await pressButton(banner, "Finish and save");
 			expect(spy).toHaveBeenCalledWith("finish");
 			await settle();
 			expect(page.querySelector(".cp-focus-banner")).toBeNull();
 		});
 
 		it("Discard asks first", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await interrupted(m);
 			const page = await openFocus(m);
 			const spy = vi.spyOn(m.h.app.focus, "resolveRecovery");
-			await press(page.querySelector<HTMLElement>(".cp-focus-banner")!, "Discard");
+			await pressButton(page.querySelector<HTMLElement>(".cp-focus-banner")!, "Discard");
 			expect(spy).not.toHaveBeenCalled(); // the fake host's choose() answers null (cancelled)
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
-			await press(page.querySelector<HTMLElement>(".cp-focus-banner")!, "Discard");
+			await pressButton(page.querySelector<HTMLElement>(".cp-focus-banner")!, "Discard");
 			expect(spy).toHaveBeenCalledWith("discard");
 		});
 	});
 
 	describe("overview and history (D10, POM-09, POM-10)", () => {
 		it("shows today's and all-time counts and focus time", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
@@ -428,7 +416,7 @@ describe("Focus page", () => {
 		});
 
 		it("groups by day, newest first, then by set, with range, task, time and status", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
 			await finishedRound(m, task.id);
 			m.h.clock.advance(24 * 3600_000);
@@ -455,7 +443,7 @@ describe("Focus page", () => {
 		});
 
 		it("shows the live title, and the saved title with (deleted) once the task is in Trash", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Old name" })).task;
 			await finishedRound(m, task.id);
 			await m.h.app.tasks.update(task.id, { title: "New name" });
@@ -469,7 +457,7 @@ describe("Focus page", () => {
 		});
 
 		it("Include and Exclude a pending gap call includeGap", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.open("db");
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
@@ -481,16 +469,16 @@ describe("Focus page", () => {
 			const gap = page.querySelector<HTMLElement>(".cp-focus-gap")!;
 			expect(gap.textContent).toContain("+5m unobserved, not counted");
 			const spy = vi.spyOn(m.h.app.focus, "includeGap");
-			await press(gap, "Include");
+			await pressButton(gap, "Include");
 			expect(spy).toHaveBeenCalledWith(expect.any(String), 0, true);
 			await settle();
 			expect(text(page, ".cp-focus-round-time")).toBe("5m");
-			await press(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Exclude");
+			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Exclude");
 			expect(spy).toHaveBeenLastCalledWith(expect.any(String), 0, false);
 		});
 
 		it("Include and Exclude show an Undo notice labelled as the store write", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.open("db");
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
@@ -500,19 +488,19 @@ describe("Focus page", () => {
 			await settle();
 			const page = await openFocus(m);
 			const notify = vi.spyOn(m.host as unknown as { notifyUndo(message: string, label: string): void }, "notifyUndo");
-			await press(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Include");
+			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Include");
 			await settle();
 			expect(notify).toHaveBeenCalledTimes(1);
 			expect(notify.mock.calls[0]![1]).toBe("Edit focus record");
 			expect(m.h.app.store.undoLabel).toBe("Edit focus record");
-			await press(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Exclude");
+			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Exclude");
 			await settle();
 			expect(notify).toHaveBeenCalledTimes(2);
 			expect(notify.mock.calls[1]![1]).toBe(m.h.app.store.undoLabel);
 		});
 
 		it("the round menu offers Assign to task… when there is no task (POM-10)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Later task" })).task;
 			await finishedRound(m, null);
 			await settle();
@@ -534,13 +522,13 @@ describe("Focus page", () => {
 
 	describe("focus record tree (P2)", () => {
 		/** A finished 2-round set of 60 s rounds on a task. */
-		async function twoRounds(m: CalMount, taskId: string | null): Promise<void> {
+		async function twoRounds(m: AppMount, taskId: string | null): Promise<void> {
 			await m.h.app.focus.start(cfg(2, 60), taskId);
 			await tickFor(m, 60 + 60 + 60);
 		}
 
 		it("a set shows its rounds as a tree: a heading, the task once, rounds with dots", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Complete the long lesson on type hints" })).task;
 			await twoRounds(m, task.id);
 			const page = await openFocus(m);
@@ -559,7 +547,7 @@ describe("Focus page", () => {
 		});
 
 		it("a set folds with its heading button (aria-expanded), per view", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await twoRounds(m, null);
 			const page = await openFocus(m);
 			const head = page.querySelector<HTMLButtonElement>(".cp-focus-set-head")!;
@@ -576,7 +564,7 @@ describe("Focus page", () => {
 		});
 
 		it("rounds with different tasks show their own task and the heading shows none", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = (await m.h.app.tasks.create({ title: "Task A" })).task;
 			const b = (await m.h.app.tasks.create({ title: "Task B" })).task;
 			await m.h.app.focus.start(cfg(1, 120), a.id);
@@ -595,7 +583,7 @@ describe("Focus page", () => {
 		});
 
 		it("a record without a set id shows as a set of its own", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			const rec = [...m.h.app.store.state.focusSessions.values()][0]!;
 			const { setId: _s, setRounds: _r, ...old } = rec;
@@ -607,11 +595,11 @@ describe("Focus page", () => {
 		});
 
 		it("the running set reads in progress; a finished early round says so with the half dot", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			await tickFor(m, 120);
-			await press(page, "Finish");
+			await pressButton(page, "Finish");
 			const set = page.querySelector(".cp-focus-set")!;
 			expect(text(set, ".cp-focus-set-meta")).toMatch(/· in progress$/);
 			expect(text(set, ".cp-focus-round-status em")).toBe("Finished early");
@@ -620,7 +608,7 @@ describe("Focus page", () => {
 		});
 
 		it("recovered and stopped rounds get their own dots", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.open("db");
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
@@ -634,7 +622,7 @@ describe("Focus page", () => {
 		});
 
 		it("the legend lists four dots", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			const page = await openFocus(m);
 			const legend = [...page.querySelectorAll(".cp-focus-legend span")].map((e) => [e.textContent, e.querySelector("i")?.className]);
@@ -647,7 +635,7 @@ describe("Focus page", () => {
 		});
 
 		it("shows 50 rounds, whole sets only, and Show more adds the next page", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			const proto = [...m.h.app.store.state.focusSessions.values()][0]!;
 			await m.h.app.store.run("Edit focus record", (tx) => {
@@ -656,26 +644,26 @@ describe("Focus page", () => {
 			await settle();
 			const page = await openFocus(m);
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(50);
-			await press(page, "Show more");
+			await pressButton(page, "Show more");
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(55);
 			expect(page.querySelector(".cp-focus-more")).toBeNull();
 		});
 	});
 
 	describe("round menu (P4)", () => {
-		async function withTask(m: CalMount) {
+		async function withTask(m: AppMount) {
 			const task = (await m.h.app.tasks.create({ title: "Menu task" })).task;
 			await finishedRound(m, task.id);
 			await settle();
 			return task;
 		}
-		const openMenu = async (page: HTMLElement, m: CalMount) => {
+		const openMenu = async (page: HTMLElement, m: AppMount) => {
 			await click(page.querySelector(".cp-focus-rec .cp-icon-button"));
 			return m.host.menus.at(-1)!;
 		};
 
 		it("with a task: Change task…, Remove task, then Delete record in warning style", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await withTask(m);
 			const page = await openFocus(m);
 			const menu = await openMenu(page, m);
@@ -685,7 +673,7 @@ describe("Focus page", () => {
 		});
 
 		it("Change task… picks another task", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await withTask(m);
 			const other = (await m.h.app.tasks.create({ title: "Other" })).task;
 			const page = await openFocus(m);
@@ -698,7 +686,7 @@ describe("Focus page", () => {
 		});
 
 		it("Remove task clears the task", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await withTask(m);
 			const page = await openFocus(m);
 			menuItem(await openMenu(page, m), "Remove task").run();
@@ -710,7 +698,7 @@ describe("Focus page", () => {
 		type Notify = { notifyUndo(message: string, label: string): void };
 
 		it("Change task and Remove task show an Undo notice labelled as the store write", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await withTask(m);
 			const other = (await m.h.app.tasks.create({ title: "Other" })).task;
 			const notify = vi.spyOn(m.host as unknown as Notify, "notifyUndo");
@@ -731,7 +719,7 @@ describe("Focus page", () => {
 		});
 
 		it("Delete record removes it and the Undo notice carries the store's label; Undo brings it back", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await withTask(m);
 			const notify = vi.spyOn(m.host as unknown as { notifyUndo(message: string, label: string): void }, "notifyUndo");
 			const page = await openFocus(m);
@@ -752,7 +740,7 @@ describe("Focus page", () => {
 
 	describe("round menu while read-only (P4)", () => {
 		it("offers no round actions", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
@@ -767,14 +755,14 @@ describe("Focus page", () => {
 
 	describe("Finish (P5)", () => {
 		it("shows beside Stop during a focus round only, and moves to the break with a completed record", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const page = await openFocus(m);
 			expect(buttonByText(page, "Finish")).toBeUndefined();
-			await press(page, "Start");
+			await pressButton(page, "Start");
 			await tickFor(m, 120);
 			const names = [...page.querySelectorAll(".cp-focus-controls .cp-focus-ctl-cap")].map((e) => e.textContent);
 			expect(names).toEqual(["Finish", "Pause", "Stop"]);
-			await press(page, "Finish");
+			await pressButton(page, "Finish");
 			expect(m.h.app.focus.timer()?.phase).toBe("short-break");
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.status).toBe("completed");
 			expect(buttonByText(page, "Finish")).toBeUndefined();
@@ -783,7 +771,7 @@ describe("Focus page", () => {
 		});
 
 		it("is hidden while the recovery banner waits", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.focus.start(cfg(1, 600), null);
 			await tickFor(m, 30);
 			m.h.clock.advance(5 * 60_000);
@@ -795,7 +783,7 @@ describe("Focus page", () => {
 
 	describe("task entry points (D8, D9)", () => {
 		it("the details Focus button starts focus and shows the task's total", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Deep work", scheduled: { kind: "date", date: "2026-10-01" } })).task;
 			await settle();
 			const startFocus = vi.fn(async () => undefined);
@@ -813,7 +801,7 @@ describe("Focus page", () => {
 		});
 
 		it("a row shows a focus chip once the task has focus time, computing the totals once per state", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const one = (await m.h.app.tasks.create({ title: "Chip task", scheduled: { kind: "date", date: "2026-10-01" } })).task;
 			await m.h.app.tasks.create({ title: "Plain task", scheduled: { kind: "date", date: "2026-10-01" } });
 			await settle();
@@ -827,7 +815,7 @@ describe("Focus page", () => {
 		});
 
 		it("the row menu has Start focus", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Menu task", scheduled: { kind: "date", date: "2026-10-01" } })).task;
 			await settle();
 			const startFocus = vi.fn(async () => undefined);
@@ -841,7 +829,7 @@ describe("Focus page", () => {
 
 	describe("useFocus", () => {
 		it("unsubscribes from the bus when the component unmounts", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const offs: ReturnType<typeof vi.fn>[] = [];
 			const bus = m.h.app.focus.bus;
 			const original = bus.on.bind(bus);

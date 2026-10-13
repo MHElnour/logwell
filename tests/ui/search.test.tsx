@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
+import { describe, expect, it } from "vitest";
+import { type AppMount, click, mountApp, settle, typeInto } from "./app-helpers";
 import { input as habitInput } from "./habits-helpers";
 
 // Search's "Also search description notes" reads linked notes only while Search is shown: when the query or
@@ -8,10 +8,6 @@ import { input as habitInput } from "./habits-helpers";
 // in the vault (that note only), and once when Search is shown again. Results never use an earlier query's matches.
 // Spec: App shell and views rule 24.
 
-const mounted: CalMount[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
 
 /** Past the 300 ms typing delay and the scan that follows it. */
 const afterDelay = async () => {
@@ -19,25 +15,20 @@ const afterDelay = async () => {
 	await settle();
 };
 
-const resultTitles = (m: CalMount) => [...m.root.querySelectorAll(".cp-search .cp-task-row")].map((r) => r.textContent ?? "");
-const searchBox = (m: CalMount) => m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;
+const resultTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-search .cp-task-row")].map((r) => r.textContent ?? "");
+const searchBox = (m: AppMount) => m.root.querySelector<HTMLInputElement>('.cp-search-box input[type="search"]')!;
 
-async function type(m: CalMount, text: string) {
-	const box = searchBox(m);
-	box.value = text;
-	box.dispatchEvent(new Event("input", { bubbles: true }));
-	await settle();
-}
+const type = (m: AppMount, text: string) => typeInto(searchBox(m), text);
 
-async function openSearch(m: CalMount) {
+async function openSearch(m: AppMount) {
 	await click(m.root.querySelector('.cp-rail [aria-label="Search"]'));
 }
-async function openTasks(m: CalMount) {
+async function openTasks(m: AppMount) {
 	await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
 }
 
 /** Makes every note read wait until it is released, so a scan can be held half way. Reads are still recorded in `reads`. */
-function holdReads(m: CalMount) {
+function holdReads(m: AppMount) {
 	const notes = m.h.notes;
 	const waiting: (() => void)[] = [];
 	let holding = true;
@@ -68,8 +59,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Alpha links a.md (has the needle), Beta links b.md (does not), Gamma has no note. Search is open with the toggle on. */
 async function setup() {
-	const m = await mountCal();
-	mounted.push(m);
+	const m = await mountApp();
 	m.h.notes.files.set("a.md", "text with the needle inside");
 	m.h.notes.files.set("b.md", "other stuff");
 	m.h.notes.files.set("c.md", "another needle");

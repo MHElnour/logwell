@@ -4,29 +4,20 @@ import type { DateSpec } from "../../src/domain/types";
 import { LABEL_PEEK_PX } from "../../src/ui/calendar/geometry";
 import { ICON } from "../../src/ui/icons";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
-import { byLabel, cal, type CalMount, cell, click, entries, entry, entryName, mountCal, openCalendar, press, settle, title, weekDates } from "./calendar-helpers";
+import { type AppMount, at, byLabel, click, day, dragTo, expectLabelsResolve, keydown, mountApp, q, recordNotices, settle, strayAriaLabels } from "./app-helpers";
+import { cal, cell, entries, entry, entryName, openCalendar, stubWeek, title, weekDates } from "./calendar-helpers";
 import { fmtMin, monthTitle, shiftAnchor, weekTitle } from "../../src/ui/calendar/format";
-import { q } from "./repeat-helpers";
 
 describe("calendar section", () => {
 	// The calendar section. Needs the real src/domain/calendar.ts.
 
-	const mounted: CalMount[] = [];
 	afterEach(() => {
 		vi.useRealTimers();
-		for (const m of mounted.splice(0)) m.unmount();
 	});
-	async function mount(settings: Parameters<typeof mountCal>[0] = {}) {
-		const m = await mountCal(settings);
-		mounted.push(m);
-		return m;
-	}
 
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const at = (date: string, time: string): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz: "Europe/Berlin" });
 	const iconOf = (el: Element | null) => el?.querySelector("[data-icon]")?.getAttribute("data-icon");
 
-	async function seed(m: CalMount) {
+	async function seed(m: AppMount) {
 		const T = m.h.app.tasks;
 		await T.create({ title: "Dentist", scheduled: day("2026-10-01") });
 		await T.create({ title: "Standup", scheduled: at("2026-10-01", "19:00"), plannedDurationMin: 45 });
@@ -45,7 +36,7 @@ describe("calendar section", () => {
 
 	describe("rail and section state", () => {
 		it("puts Calendar after Tasks and before Matrix and Search, with the calendar icon", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const rail = [...m.root.querySelectorAll<HTMLElement>(".cp-rail > *")];
 			expect(rail.map((k) => k.getAttribute("aria-label") ?? k.className)).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "cp-rail-spacer", "Data"]);
 			const button = byLabel(m.root, "Calendar")!;
@@ -55,7 +46,7 @@ describe("calendar section", () => {
 		});
 
 		it("shows the calendar section only when its rail button is active", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const section = () => cal(m.root).closest<HTMLElement>(".cp-section")!;
 			expect(section().hidden).toBe(true);
 			await openCalendar(m);
@@ -66,14 +57,14 @@ describe("calendar section", () => {
 		});
 
 		it("opens from the app handle (the open-calendar command)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			m.handle.current!.showSection("calendar");
 			await settle();
 			expect(cal(m.root).closest<HTMLElement>(".cp-section")!.hidden).toBe(false);
 		});
 
 		it("keeps mode, anchor, selection and the unscheduled drawer while switching sections", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Next week"));
@@ -96,7 +87,7 @@ describe("calendar section", () => {
 		});
 
 		it("keeps the view menu choices while switching sections", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			let menu = await openViewMenu(m, cal(m.root));
 			expect(checkedOf(menu, "Show completed")).toBe(false);
@@ -110,7 +101,7 @@ describe("calendar section", () => {
 
 	describe("header navigation", () => {
 		it("title and buttons: week mode", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			expect(title(m.root)).toBe("Sep 28 – Oct 4, 2026");
 			for (const label of ["Previous week", "Next week", "Today"]) {
@@ -130,7 +121,7 @@ describe("calendar section", () => {
 		});
 
 		it("rapid clicks are not lost", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const next = byLabel(cal(m.root), "Next week")!;
 			next.click();
@@ -141,7 +132,7 @@ describe("calendar section", () => {
 		});
 
 		it("month mode: October 2026, then November and back, Today returns", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			await click(modeButton(m.root, "Month"));
 			expect(title(m.root)).toBe("October 2026");
@@ -155,7 +146,7 @@ describe("calendar section", () => {
 		});
 
 		it("month navigation crosses a year boundary", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			await click(modeButton(m.root, "Month"));
 			for (let i = 0; i < 3; i++) await click(byLabel(cal(m.root), "Next month"));
@@ -165,7 +156,7 @@ describe("calendar section", () => {
 		});
 
 		it("week titles name both years when the week crosses New Year", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			m.h.clock.set("2026-12-30T10:00:00Z");
 			await m.rerender();
 			await openCalendar(m);
@@ -178,7 +169,7 @@ describe("calendar section", () => {
 			["SU", "2026-09-27", "Sep 27 – Oct 3, 2026", "Sun"],
 			["SA", "2026-09-26", "Sep 26 – Oct 2, 2026", "Sat"],
 		] as const)("week start %s", async (weekStart, first, expected, dow) => {
-			const m = await mount({ weekStart });
+			const m = await mountApp({ weekStart });
 			await openCalendar(m);
 			expect(title(m.root)).toBe(expected);
 			const dates = weekDates(m.root);
@@ -204,7 +195,7 @@ describe("calendar section", () => {
 			["SU", "Sun", "2026-09-27", "2026-11-01"],
 			["SA", "Sat", "2026-09-26", "2026-10-31"],
 		] as const)("month mode with week start %s: header, prev, next and Today", async (weekStart, dow, octFirst, novFirst) => {
-			const m = await mount({ weekStart });
+			const m = await mountApp({ weekStart });
 			await openCalendar(m);
 			await click(modeButton(m.root, "Month"));
 			const firstDate = () => cal(m.root).querySelector(".cp-cal-cell")!.getAttribute("data-date");
@@ -229,7 +220,7 @@ describe("calendar section", () => {
 
 	describe("week view", () => {
 		it("lays out seven columns, today's header, the all-day row and 24 hour rows", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			expect(weekDates(m.root)).toEqual(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"]);
 			const heads = [...cal(m.root).querySelectorAll<HTMLElement>(".cp-cal-dayhead")];
@@ -245,7 +236,7 @@ describe("calendar section", () => {
 		});
 
 		it("places date-only, timed, no-duration, deadline, past and missed entries", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			const r = m.root;
@@ -286,7 +277,7 @@ describe("calendar section", () => {
 		});
 
 		it("hides completed entries by default and shows them struck through with Show completed", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			expect(entries(cal(m.root), "Done")).toHaveLength(0);
@@ -300,7 +291,7 @@ describe("calendar section", () => {
 		});
 
 		it("the view menu offers Lists, Tags and Show completed, and no date or status filter", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			expect(cal(m.root).querySelector(".cp-filter-bar")).toBeNull();
 			const menu = await openViewMenu(m, cal(m.root));
@@ -311,7 +302,7 @@ describe("calendar section", () => {
 		});
 
 		it("Lists narrows the calendar (category) and the button shows a dot", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const study = await m.h.app.categories.create("Study", null);
 			await m.h.app.tasks.create({ title: "Essay", categoryId: study.id, scheduled: day("2026-10-02") });
 			await m.h.app.tasks.create({ title: "Chore", scheduled: day("2026-10-02") });
@@ -333,7 +324,7 @@ describe("calendar section", () => {
 		});
 
 		it("Tags narrows the calendar", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tags.create("focus", "red");
 			await m.h.app.tasks.create({ title: "Tagged", tagKeys: ["focus"], scheduled: day("2026-10-02") });
 			await m.h.app.tasks.create({ title: "Plain", scheduled: day("2026-10-02") });
@@ -346,7 +337,7 @@ describe("calendar section", () => {
 		});
 
 		it("the Lists menu stays reachable from the keyboard: the ⋯ button is a focusable button", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const btn = viewButton(cal(m.root))!;
 			expect(btn.tagName).toBe("BUTTON");
@@ -356,7 +347,7 @@ describe("calendar section", () => {
 		});
 
 		it("blocks and pills take the list color, or the accent when the list has none", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const study = await m.h.app.categories.create("Study", null);
 			await m.h.app.categories.setColor(study.id, "purple");
 			await m.h.app.tasks.create({ title: "Essay", categoryId: study.id, scheduled: at("2026-10-02", "10:00"), plannedDurationMin: 60 });
@@ -368,7 +359,7 @@ describe("calendar section", () => {
 		});
 
 		it("overlapping blocks share the day in columns", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "A", scheduled: at("2026-10-02", "14:00"), plannedDurationMin: 60 });
 			await m.h.app.tasks.create({ title: "B", scheduled: at("2026-10-02", "14:30"), plannedDurationMin: 60 });
 			await openCalendar(m);
@@ -381,7 +372,7 @@ describe("calendar section", () => {
 		});
 
 		it("splits a block that crosses midnight into two entries", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Late night", scheduled: at("2026-10-02", "23:30"), plannedDurationMin: 60 });
 			await openCalendar(m);
 			const first = entry(cell(m.root, "daycol", "2026-10-02"), "Late night");
@@ -396,7 +387,7 @@ describe("calendar section", () => {
 		});
 
 		it("a task in another zone is shown in the display zone (B19)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({
 				title: "Overseas",
 				scheduled: { kind: "datetime", local: "2026-10-02T09:00", tz: "America/New_York" },
@@ -408,7 +399,7 @@ describe("calendar section", () => {
 		});
 
 		it("marks the skipped hour on the spring-forward day and the repeated hour on the fall-back day (D1)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			m.h.clock.set("2026-03-29T10:00:00Z");
 			await m.rerender();
 			await openCalendar(m);
@@ -433,7 +424,7 @@ describe("calendar section", () => {
 
 		it("draws the now line in today's column only, and it follows the clock each minute (D6)", async () => {
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const lines = cal(m.root).querySelectorAll<HTMLElement>(".cp-cal-now");
 			expect(lines).toHaveLength(1);
@@ -449,7 +440,7 @@ describe("calendar section", () => {
 
 		it("a timed entry turns past once its end passes", async () => {
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Soon", scheduled: at("2026-10-01", "13:00"), plannedDurationMin: 30 });
 			await openCalendar(m);
 			expect(entry(cal(m.root), "Soon").classList.contains("is-past")).toBe(false);
@@ -465,7 +456,7 @@ describe("calendar section", () => {
 
 		it("clears its timers on unmount", async () => {
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			expect(vi.getTimerCount()).toBeGreaterThan(0);
 			vi.advanceTimersByTime(60_000); // the aligned timeout has fired and started the interval
@@ -476,7 +467,7 @@ describe("calendar section", () => {
 
 		it("aligns the tick to the next minute boundary, then ticks every minute (D6)", async () => {
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-			const m = await mount();
+			const m = await mountApp();
 			m.h.clock.set("2026-10-01T10:00:20Z");
 			await m.rerender();
 			const hidden = vi.getTimerCount();
@@ -500,7 +491,7 @@ describe("calendar section", () => {
 
 		it("pauses the tick while the section is hidden and resumes with an immediate update", async () => {
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-			const m = await mount();
+			const m = await mountApp();
 			const hidden = vi.getTimerCount();
 			await openCalendar(m);
 			vi.advanceTimersByTime(60_000);
@@ -518,7 +509,7 @@ describe("calendar section", () => {
 		});
 
 		it("does no layout work while hidden and catches up when shown", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Early bird", scheduled: day("2026-10-01") });
 			// Never shown: the calendar did not even lay out the task.
 			expect(entries(cal(m.root), "Early bird")).toHaveLength(0);
@@ -535,15 +526,13 @@ describe("calendar section", () => {
 
 
 		it("scrolls to 07:00, or one hour before now when that is later, when first shown (D6)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const scroller = () => cal(m.root).querySelector<HTMLElement>(".cp-cal-scroller")!;
 			expect(scroller().scrollTop).toBe(11 * 48 - LABEL_PEEK_PX); // now 12:00 in Berlin
 			m.unmount();
-			mounted.pop();
 
-			const early = await mountCal();
-			mounted.push(early);
+			const early = await mountApp();
 			early.h.clock.set("2026-10-01T03:00:00Z"); // 05:00 in Berlin
 			await early.rerender();
 			await openCalendar(early);
@@ -551,7 +540,7 @@ describe("calendar section", () => {
 		});
 
 		it("keeps the scroll position while another section is shown", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const scroller = () => cal(m.root).querySelector<HTMLElement>(".cp-cal-scroller")!;
 			scroller().scrollTop = 200;
@@ -565,13 +554,13 @@ describe("calendar section", () => {
 	});
 
 	describe("month view", () => {
-		async function openMonth(m: CalMount) {
+		async function openMonth(m: AppMount) {
 			await openCalendar(m);
 			await click(modeButton(m.root, "Month"));
 		}
 
 		it("renders whole weeks with a weekday header, faint outside days and today marked", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openMonth(m);
 			expect([...cal(m.root).querySelectorAll(".cp-cal-month-head > *")].map((e) => e.textContent)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 			const cells = [...cal(m.root).querySelectorAll<HTMLElement>(".cp-cal-cell")];
@@ -588,7 +577,7 @@ describe("calendar section", () => {
 		});
 
 		it("shows the count, three titles and +k more; the day number and +k more open that week", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (const [i, t] of ["09:00", "10:00", "11:00", "12:00", "13:00"].entries()) {
 				await m.h.app.tasks.create({ title: `Task ${i + 1}`, scheduled: at("2026-10-14", t), plannedDurationMin: 30 });
 			}
@@ -617,7 +606,7 @@ describe("calendar section", () => {
 		});
 
 		it("a cell with at most three entries has no +k more and no count above zero when empty", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Solo", scheduled: day("2026-10-02") });
 			await openMonth(m);
 			expect(cell(m.root, "cell", "2026-10-02").querySelector(".cp-cal-more")).toBeNull();
@@ -626,7 +615,7 @@ describe("calendar section", () => {
 		});
 
 		it("entries are buttons that open the details", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Solo", scheduled: day("2026-10-02") });
 			await openMonth(m);
 			const b = entry(cell(m.root, "cell", "2026-10-02"), "Solo");
@@ -638,7 +627,7 @@ describe("calendar section", () => {
 
 	describe("entries, details and the unscheduled drawer", () => {
 		it("Enter, Space and click on an entry select the task and open the shared details", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			const details = () => cal(m.root).querySelector<HTMLTextAreaElement>(".cp-details-title")?.value;
@@ -646,12 +635,12 @@ describe("calendar section", () => {
 
 			const standup = entry(cal(m.root), "Standup");
 			expect(standup.tagName).toBe("BUTTON");
-			expect(press(standup, "Enter")).toBe(false);
+			expect(keydown(standup, "Enter").defaultPrevented).toBe(true);
 			await settle();
 			expect(details()).toBe("Standup");
 			expect(entry(cal(m.root), "Standup").classList.contains("is-selected")).toBe(true);
 
-			expect(press(entry(cal(m.root), "Dentist"), " ")).toBe(false);
+			expect(keydown(entry(cal(m.root), "Dentist"), " ").defaultPrevented).toBe(true);
 			await settle();
 			expect(details()).toBe("Dentist");
 
@@ -664,7 +653,7 @@ describe("calendar section", () => {
 		});
 
 		it("rescheduling in the details moves the same task's block (CAL-09, AS-10)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const { task } = await m.h.app.tasks.create({ title: "Standup", scheduled: at("2026-10-01", "19:00"), plannedDurationMin: 45 });
 			await openCalendar(m);
 			await click(entry(cal(m.root), "Standup"));
@@ -685,7 +674,7 @@ describe("calendar section", () => {
 		});
 
 		it("completing a task from the details removes it from the open calendar (AS-10)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const { task } = await m.h.app.tasks.create({ title: "Standup", scheduled: day("2026-10-01") });
 			await openCalendar(m);
 			expect(entries(cal(m.root), "Standup")).toHaveLength(1);
@@ -699,7 +688,7 @@ describe("calendar section", () => {
 		});
 
 		it("the unscheduled drawer lists open tasks without a schedule and opens their details", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Someday" });
 			await m.h.app.tasks.create({ title: "Planned", scheduled: day("2026-10-02") });
 			const done = await m.h.app.tasks.create({ title: "Finished" });
@@ -721,7 +710,7 @@ describe("calendar section", () => {
 		});
 
 		it("has a visible close button that closes the drawer and returns focus to the toggle", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			const toggle = byLabel(cal(m.root), "Unscheduled")!;
 			await click(toggle);
@@ -735,7 +724,7 @@ describe("calendar section", () => {
 		});
 
 		it("Escape inside the drawer closes it, keeps the calendar open and does not leak the key", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Someday" });
 			await openCalendar(m);
 			const toggle = byLabel(cal(m.root), "Unscheduled")!;
@@ -743,7 +732,7 @@ describe("calendar section", () => {
 			const row = cal(m.root).querySelector<HTMLElement>(".cp-cal-unscheduled .cp-task-row")!;
 			const seen: string[] = [];
 			m.root.addEventListener("keydown", (e) => seen.push(e.key));
-			expect(press(row, "Escape")).toBe(false);
+			expect(keydown(row, "Escape").defaultPrevented).toBe(true);
 			await settle();
 			expect(cal(m.root).querySelector(".cp-cal-unscheduled")).toBeNull();
 			expect(seen).toEqual([]);
@@ -752,7 +741,7 @@ describe("calendar section", () => {
 		});
 
 		it("closing the details brings the unscheduled drawer back (it only hides while details are open)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Someday" });
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Unscheduled"));
@@ -798,7 +787,7 @@ describe("calendar section", () => {
 			});
 			vi.stubGlobal("ResizeObserver", FakeRO);
 			try {
-				const m = await mount();
+				const m = await mountApp();
 				await openCalendar(m);
 				expect(cal(m.root).style.getPropertyValue("--cp-cal-drawer-top")).toBe("100px");
 				// The header wraps onto a second line: the observer fires and the offset follows.
@@ -816,7 +805,7 @@ describe("calendar section", () => {
 		});
 
 		it("shows a friendly line when nothing is unscheduled", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Unscheduled"));
 			expect(cal(m.root).querySelector(".cp-cal-unscheduled .cp-empty-text")).not.toBeNull();
@@ -829,13 +818,13 @@ describe("calendar section", () => {
 		// 2026-10-25 at 03:00 (to 02:00). The visible range is the real elapsed one, not wall arithmetic.
 		const berlin = (date: string, time: string): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz: "Europe/Berlin" });
 		async function dstMount(now: string) {
-			const m = await mount();
+			const m = await mountApp();
 			m.h.clock.set(now);
 			await m.rerender();
 			return m;
 		}
 		/** The anchor was set at mount time; Today jumps to the week of the new clock. */
-		async function show(m: CalMount) {
+		async function show(m: AppMount) {
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Today"));
 		}
@@ -897,7 +886,7 @@ describe("calendar section", () => {
 
 	describe("accessible names (D7)", () => {
 		it("names every kind of entry with title, date, time and flags", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			const nameIn = (container: HTMLElement, text: string) => entryName(entry(container, text));
@@ -912,7 +901,7 @@ describe("calendar section", () => {
 		});
 
 		it("DOM order: the all-day row left to right, then each day's blocks by start", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Mon all-day", scheduled: day("2026-09-28") });
 			await m.h.app.tasks.create({ title: "Wed all-day", scheduled: day("2026-09-30") });
 			await m.h.app.tasks.create({ title: "Tue late", scheduled: at("2026-09-29", "15:00"), plannedDurationMin: 30 });
@@ -924,39 +913,22 @@ describe("calendar section", () => {
 		});
 
 		it("containers carry no aria-label and every aria-labelledby resolves (week, month, drawer)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Unscheduled"));
-			const allowed = ["button", "input", "select", "textarea", "a", '[role="img"]'];
-			const stray = (root: ParentNode) =>
-				[...root.querySelectorAll<HTMLElement>("[aria-label]")]
-					.filter((el) => !allowed.some((sel) => el.matches(sel)))
-					.map((el) => `<${el.tagName.toLowerCase()} class="${el.className}" aria-label="${el.getAttribute("aria-label")}">`);
-			const resolves = (root: ParentNode) => {
-				const ids = [...document.querySelectorAll("[id]")].map((e) => e.id);
-				expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
-				for (const el of root.querySelectorAll("[aria-labelledby]")) {
-					const text = (el.getAttribute("aria-labelledby") ?? "")
-						.split(/\s+/)
-						.map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
-						.join(" ")
-						.trim();
-					expect(text, `unresolved aria-labelledby on <${el.tagName.toLowerCase()} class="${el.className}">`).not.toBe("");
-				}
-			};
 			expect(cal(m.root).querySelectorAll("[aria-labelledby]").length).toBeGreaterThan(0);
-			expect(stray(cal(m.root))).toEqual([]);
-			resolves(cal(m.root));
+			expect(strayAriaLabels(cal(m.root))).toEqual([]);
+			expectLabelsResolve(cal(m.root));
 			await click(modeButton(m.root, "Month"));
 			await click(entry(cal(m.root), "Dentist"));
-			expect(stray(cal(m.root))).toEqual([]);
-			resolves(cal(m.root));
-			expect(stray(m.root)).toEqual([]);
+			expect(strayAriaLabels(cal(m.root))).toEqual([]);
+			expectLabelsResolve(cal(m.root));
+			expect(strayAriaLabels(m.root)).toEqual([]);
 		});
 
 		it("icon buttons in the header have ARIA labels and the mode toggle is labelled", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await openCalendar(m);
 			for (const b of buttons(m.root)) {
 				expect(b.getAttribute("aria-label") !== null || (b.textContent ?? "").trim() !== "", `unnamed button ${b.className}`).toBe(true);
@@ -974,13 +946,13 @@ describe("calendar section", () => {
 		const moreBtn = (el: HTMLElement) => el.querySelector<HTMLButtonElement>(".cp-cal-allday-more");
 		const lessBtn = (el: HTMLElement) => el.querySelector<HTMLButtonElement>(".cp-cal-allday-less");
 
-		async function six(m: CalMount) {
+		async function six(m: AppMount) {
 			for (let i = 1; i <= 6; i++) await m.h.app.tasks.create({ title: `Chore ${i}`, scheduled: day("2026-10-01") });
 			await settle();
 		}
 
 		it("shows at most three entries per cell and a real +k more button with an accessible name", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			const c = dayCell(m.root);
@@ -996,7 +968,7 @@ describe("calendar section", () => {
 		});
 
 		it("shows exactly three entries without a control", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (let i = 1; i <= 3; i++) await m.h.app.tasks.create({ title: `Chore ${i}`, scheduled: day("2026-10-01") });
 			await openCalendar(m);
 			expect(names(dayCell(m.root))).toHaveLength(3);
@@ -1005,7 +977,7 @@ describe("calendar section", () => {
 		});
 
 		it("counts deadline flags as entries (dates first, then deadlines)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Date 1", scheduled: day("2026-10-02") });
 			await m.h.app.tasks.create({ title: "Date 2", scheduled: day("2026-10-02") });
 			await m.h.app.tasks.create({ title: "Flag 1", deadline: day("2026-10-02") });
@@ -1019,14 +991,14 @@ describe("calendar section", () => {
 		});
 
 		it("uses the singular for one hidden item", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (let i = 1; i <= 4; i++) await m.h.app.tasks.create({ title: `Chore ${i}`, scheduled: day("2026-10-01") });
 			await openCalendar(m);
 			expect(moreBtn(dayCell(m.root))!.getAttribute("aria-label")).toBe("Show 1 more all-day item");
 		});
 
 		it("expands the whole row on click, shows every entry and a Show less control, and collapses again", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await m.h.app.tasks.create({ title: "Other 1", scheduled: day("2026-10-02") });
 			await openCalendar(m);
@@ -1054,7 +1026,7 @@ describe("calendar section", () => {
 		});
 
 		it("expands every overflowing cell at once", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			for (let i = 1; i <= 5; i++) await m.h.app.tasks.create({ title: `Late ${i}`, scheduled: day("2026-10-03") });
 			await openCalendar(m);
@@ -1066,7 +1038,7 @@ describe("calendar section", () => {
 		});
 
 		it("keeps the keyboard in place: focus moves to the Show less control and back to +k more", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			const more = moreBtn(dayCell(m.root))!;
@@ -1080,7 +1052,7 @@ describe("calendar section", () => {
 		});
 
 		it("an expanded entry opens the details like any other", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			await click(moreBtn(dayCell(m.root)));
@@ -1089,7 +1061,7 @@ describe("calendar section", () => {
 		});
 
 		it("keeps the expanded state across section and mode switches, and starts collapsed", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			expect(allday(m.root).classList.contains("is-expanded")).toBe(false);
@@ -1105,7 +1077,7 @@ describe("calendar section", () => {
 		});
 
 		it("keeps the expanded state when the week changes and the new week has fewer entries", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			await click(moreBtn(dayCell(m.root)));
@@ -1116,7 +1088,7 @@ describe("calendar section", () => {
 		});
 
 		it("the month view keeps its own three-title limit", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await six(m);
 			await openCalendar(m);
 			await click(modeButton(m.root, "Month"));
@@ -1126,14 +1098,14 @@ describe("calendar section", () => {
 	});
 
 	describe("short timed blocks", () => {
-		async function block(m: CalMount, title: string, time: string, minutes?: number) {
+		async function block(m: AppMount, title: string, time: string, minutes?: number) {
 			await m.h.app.tasks.create({ title, scheduled: at("2026-10-02", time), ...(minutes === undefined ? {} : { plannedDurationMin: minutes }) });
 			await openCalendar(m);
 			return entry(cell(m.root, "daycol", "2026-10-02"), title);
 		}
 
 		it("marks blocks shorter than 45 minutes as single-line", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Ten", scheduled: at("2026-10-02", "08:00"), plannedDurationMin: 10 });
 			await m.h.app.tasks.create({ title: "Thirty", scheduled: at("2026-10-02", "09:00"), plannedDurationMin: 30 });
 			await m.h.app.tasks.create({ title: "Forty four", scheduled: at("2026-10-02", "10:00"), plannedDurationMin: 44 });
@@ -1146,7 +1118,7 @@ describe("calendar section", () => {
 		});
 
 		it("treats a no-duration block (30 min on the grid) as short and keeps its text", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const b = await block(m, "Quick", "09:00");
 			expect(b.classList.contains("is-short")).toBe(true);
 			expect(b.querySelector(".cp-cal-noduration")?.textContent).toBe("no duration");
@@ -1154,7 +1126,7 @@ describe("calendar section", () => {
 		});
 
 		it("uses the visible length, so the short piece of a block split at midnight is single-line", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Night", scheduled: at("2026-10-02", "23:30"), plannedDurationMin: 90 });
 			await openCalendar(m);
 			expect(entry(cell(m.root, "daycol", "2026-10-02"), "Night").classList.contains("is-short")).toBe(true);
@@ -1162,7 +1134,7 @@ describe("calendar section", () => {
 		});
 
 		it("leaves the accessible name and the time text unchanged", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const b = await block(m, "Brief", "09:00", 20);
 			expect(entryName(b)).toBe("Brief, Fri Oct 2, 09:00–09:20");
 			expect(b.querySelector(".cp-cal-entry-time")?.textContent).toBe("09:00–09:20");
@@ -1170,7 +1142,7 @@ describe("calendar section", () => {
 		});
 
 		it("does not mark all-day or month entries", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Day", scheduled: day("2026-10-02") });
 			await openCalendar(m);
 			expect(cal(m.root).querySelector(".cp-cal-allday .is-short")).toBeNull();
@@ -1211,61 +1183,25 @@ describe("repeating tasks on the calendar", () => {
 	// Repeating tasks on the calendar. The clock is Thursday 2026-10-01,
 	// so the visible week is Mon 2026-09-28 to Sun 2026-10-04. "Weekly review" repeats every Friday from 2026-10-02.
 
-	const mounted: CalMount[] = [];
 	afterEach(() => {
 		vi.useRealTimers();
-		for (const m of mounted.splice(0)) m.unmount();
 	});
-	async function mount() {
-		const m = await mountCal();
-		mounted.push(m);
-		return m;
-	}
 
 	const rule = { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } as const;
 	const timedRule = { ...rule, time: "09:00", tz: "Europe/Berlin" } as const;
 
-	async function seed(m: CalMount, r: typeof rule | typeof timedRule = rule) {
+	async function seed(m: AppMount, r: typeof rule | typeof timedRule = rule) {
 		const task = (await m.h.app.tasks.create({ title: "Weekly review", scheduled: { kind: "date", date: "2026-10-02" }, repeat: { rule: r } } as never)).task;
 		await m.h.app.tasks.create({ title: "Dentist", scheduled: { kind: "date", date: "2026-10-01" } });
 		await settle();
 		return task;
 	}
 
-	const rect = (left: number, top: number, right: number, bottom: number) =>
-		({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
-
-	function stubWeek(root: HTMLElement) {
-		const w = cal(root);
-		w.querySelectorAll<HTMLElement>(".cp-cal-daycol").forEach((c, i) => (c.getBoundingClientRect = () => rect(100 * i, 0, 100 * i + 100, 1152)));
-		w.querySelectorAll<HTMLElement>(".cp-cal-allday-cell").forEach((c, i) => (c.getBoundingClientRect = () => rect(100 * i, -100, 100 * i + 100, -50)));
-		const scroller = w.querySelector<HTMLElement>(".cp-cal-scroller");
-		if (scroller !== null) scroller.getBoundingClientRect = () => rect(0, -1000, 700, 2000);
-		const sticky = w.querySelector<HTMLElement>(".cp-cal-sticky");
-		if (sticky !== null) sticky.getBoundingClientRect = () => rect(0, -1000, 700, -50);
-	}
-
-	function ptr(type: string, x: number, y: number): Event {
-		const ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
-		Object.defineProperty(ev, "pointerId", { value: 1 });
-		Object.defineProperty(ev, "pointerType", { value: "mouse" });
-		return ev;
-	}
-
-	async function drag(el: Element, from: { x: number; y: number }, to: { x: number; y: number }) {
-		el.dispatchEvent(ptr("pointerdown", from.x, from.y));
-		el.dispatchEvent(ptr("pointermove", from.x + 6, from.y + 6));
-		el.dispatchEvent(ptr("pointermove", to.x, to.y));
-		await settle();
-		el.dispatchEvent(ptr("pointerup", to.x, to.y));
-		await settle();
-	}
-
 	const classes = (el: Element) => [...el.classList];
 
 	describe("week view", () => {
 		it("draws the current occurrence solid with the repeat icon before the title, and says it repeats", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			const e = entry(cal(m.root), "Weekly review");
@@ -1282,7 +1218,7 @@ describe("repeating tasks on the calendar", () => {
 		});
 
 		it("draws the next weeks' occurrences faded with a dashed edge (is-future) and names them", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			await click(byLabel(cal(m.root), "Next week"));
@@ -1293,7 +1229,7 @@ describe("repeating tasks on the calendar", () => {
 		});
 
 		it("a done occurrence is struck through like a completed task", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const t = await seed(m);
 			await m.h.app.recurrence.complete(t.id);
 			await openCalendar(m);
@@ -1307,7 +1243,7 @@ describe("repeating tasks on the calendar", () => {
 		});
 
 		it("a timed series draws blocks with the icon too, and they cannot be resized or moved", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m, timedRule);
 			await openCalendar(m);
 			stubWeek(m.root);
@@ -1321,20 +1257,14 @@ describe("repeating tasks on the calendar", () => {
 
 	describe("no drag (decision 5)", () => {
 		it("pressing and dragging an all-day occurrence changes nothing and starts no drag", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const t = await seed(m);
 			await openCalendar(m);
 			stubWeek(m.root);
 			const before = JSON.stringify(m.h.app.store.state.tasks.get(t.id));
-			const notices: string[] = [];
-			Object.assign(m.host, {
-				notifyUndo: (msg: string, label: string, mark: number) => {
-					notices.push(msg);
-					m.host.bindUndo(label, mark);
-				},
-			});
+			const notices = recordNotices(m.host);
 			const e = entry(cal(m.root), "Weekly review");
-			await drag(e, { x: 450, y: -75 }, { x: 50, y: -75 });
+			await dragTo(e, { x: 450, y: -75 }, { x: 50, y: -75 });
 			expect(cal(m.root).classList.contains("is-dragging")).toBe(false);
 			expect(e.classList.contains("is-dragging")).toBe(false);
 			expect(cal(m.root).querySelector(".cp-cal-ghost")).toBeNull();
@@ -1343,30 +1273,30 @@ describe("repeating tasks on the calendar", () => {
 		});
 
 		it("a timed occurrence is not moved either", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const t = await seed(m, timedRule);
 			await openCalendar(m);
 			stubWeek(m.root);
 			const before = JSON.stringify(m.h.app.store.state.tasks.get(t.id));
 			const block = entry(cal(m.root), "Weekly review", ".cp-cal-daycol");
-			await drag(block, { x: 450, y: 450 }, { x: 150, y: 600 });
+			await dragTo(block, { x: 450, y: 450 }, { x: 150, y: 600 });
 			expect(cal(m.root).classList.contains("is-dragging")).toBe(false);
 			expect(JSON.stringify(m.h.app.store.state.tasks.get(t.id))).toBe(before);
 		});
 
 		it("a plain task still moves (the guard is only for series)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			stubWeek(m.root);
 			const e = entry(cal(m.root), "Dentist");
-			await drag(e, { x: 350, y: -75 }, { x: 50, y: -75 });
+			await dragTo(e, { x: 350, y: -75 }, { x: 50, y: -75 });
 			const dentist = [...m.h.app.store.state.tasks.values()].find((t) => t.title === "Dentist")!;
 			expect(dentist.scheduled).toEqual({ kind: "date", date: "2026-09-28" });
 		});
 
 		it("opens the details pane on a click, as for any task", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			await click(entry(cal(m.root), "Weekly review"));
@@ -1377,7 +1307,7 @@ describe("repeating tasks on the calendar", () => {
 
 	describe("month view", () => {
 		it("shows every Friday: the first solid, the later ones faded; a week click shows them again", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openCalendar(m);
 			await click([...cal(m.root).querySelectorAll<HTMLButtonElement>(".cp-cal-mode button")].find((b) => b.textContent?.trim() === "Month"));
@@ -1395,7 +1325,7 @@ describe("repeating tasks on the calendar", () => {
 
 	describe("the Unscheduled drawer", () => {
 		it("lists open tasks without a date and never a repeating task", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await m.h.app.tasks.create({ title: "Someday" });
 			await openCalendar(m);

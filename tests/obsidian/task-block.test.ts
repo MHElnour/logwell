@@ -9,8 +9,7 @@ import { BLOCK_LANGUAGE, type BlockEnv, type BlockSession, DETACHED_DRAW_MS, NOT
 import { collectionsOf } from "../../src/persistence/schema";
 import { type AppHarness, appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
-import { settle } from "../ui/calendar-helpers";
-import { U1Host } from "../ui/app-helpers";
+import { settle, U1Host } from "../ui/app-helpers";
 
 // The `logwell` code block processor. The environment (database session, task opening) is a fake; the
 // element's `win`, `doc` and `isShown` are Obsidian's additions to HTMLElement, defined here over happy-dom.

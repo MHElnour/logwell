@@ -1,49 +1,41 @@
 // @vitest-environment happy-dom
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { byLabel, cal, type CalMount, click, entries, mountCal, openCalendar, settle } from "./calendar-helpers";
-import { mountHabits, openHabits, q, qa, rowOf, seedMockup } from "./habits-helpers";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type AppMount, byLabel, click, day, mountApp, q, qa, settle, tasksEl, unmountAll } from "./app-helpers";
+import { cal, entries, openCalendar } from "./calendar-helpers";
+import { mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
-import type { DateSpec } from "../../src/domain/types";
 import { LINGER_MS } from "../../src/ui/useLingering";
 import { card, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, titlesIn } from "./matrix-helpers";
 
 describe("the view menu and the Completed group", () => {
 	// The ⋯ view menu in Tasks and the Completed group. Today is 2026-10-01 (Europe/Berlin).
 
-	const mounted: CalMount[] = [];
 	// Fake timers (Date stays real: the harness has its own clock): the 450 ms hold is stepped, not slept.
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 	});
 	afterEach(async () => {
-		for (const m of mounted.splice(0)) m.unmount();
+		unmountAll();
 		// Run what the unmounts left queued (Preact's effect flush) while the fake timers still own it.
 		await vi.runOnlyPendingTimersAsync();
 		vi.useRealTimers();
 	});
-	async function mount() {
-		const m = await mountCal();
-		mounted.push(m);
-		return m;
-	}
 
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const tasksEl = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-tasks")!;
-	const rowTitles = (m: CalMount) => [...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row .cp-task-title")].map((e) => e.textContent.trim());
-	const toggle = (m: CalMount) => tasksEl(m).querySelector<HTMLButtonElement>(".cp-completed-toggle");
+	const rowTitles = (m: AppMount) => [...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row .cp-task-title")].map((e) => e.textContent.trim());
+	const toggle = (m: AppMount) => tasksEl(m).querySelector<HTMLButtonElement>(".cp-completed-toggle");
 	const waitLinger = async () => {
 		await vi.advanceTimersByTimeAsync(LINGER_MS + 80);
 		await settle();
 	};
-	async function openView(m: CalMount, name: string) {
+	async function openView(m: AppMount, name: string) {
 		await click([...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(name)));
 	}
-	const rowOf = (m: CalMount, title: string) => [...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row")].find((r) => r.textContent.includes(title))!;
-	const checkbox = (m: CalMount, title: string) => rowOf(m, title).querySelector<HTMLInputElement>(".cp-task-checkbox")!;
+	const rowOf = (m: AppMount, title: string) => [...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row")].find((r) => r.textContent.includes(title))!;
+	const checkbox = (m: AppMount, title: string) => rowOf(m, title).querySelector<HTMLInputElement>(".cp-task-checkbox")!;
 
 	describe("Tasks view menu", () => {
 		it("replaces the filter bar with a ⋯ button that has a label, is a button and opens the menu", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			expect(tasksEl(m).querySelector(".cp-filter-bar")).toBeNull();
 			const btn = tasksEl(m).querySelector<HTMLButtonElement>('[aria-label="View options"]')!;
 			expect(btn.tagName).toBe("BUTTON");
@@ -56,7 +48,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("every Tasks view has the menu, except the Trash", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (const name of ["Upcoming", "Inbox", "Completed"]) {
 				await openView(m, name);
 				expect(tasksEl(m).querySelector('[aria-label="View options"]'), name).not.toBeNull();
@@ -68,7 +60,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("sorts by priority and by date from the menu, and checks the choice", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			await T.create({ title: "Late", priority: 0, scheduled: day("2026-10-09") });
 			await T.create({ title: "Soon", priority: 3, scheduled: day("2026-10-02") });
@@ -87,7 +79,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("the sort applies to every view", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "A", priority: 0, scheduled: day("2026-10-01") });
 			await m.h.app.tasks.create({ title: "B", priority: 1, scheduled: day("2026-10-01") });
 			await pickItem(m, await openViewMenu(m, tasksEl(m)), "Sort: by priority");
@@ -99,7 +91,7 @@ describe("the view menu and the Completed group", () => {
 
 	describe("Completed group (spec §7)", () => {
 		it("is last, collapsed by default and labelled with the count", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			await T.create({ title: "Open one" });
 			const a = await T.create({ title: "Done A" });
@@ -125,7 +117,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("each view remembers its own expanded state across section switches", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			const a = await T.create({ title: "Done A" });
 			await T.complete(a.task.id);
@@ -143,7 +135,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("shows 20 at a time with a Show more button", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (let i = 0; i < 45; i++) {
 				const t = await m.h.app.tasks.create({ title: `Done ${String(i).padStart(2, "0")}` });
 				m.h.clock.advance(1000);
@@ -164,7 +156,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		describe("Show more starts again at 20", () => {
-			const done = async (m: CalMount, n: number, categoryId?: string) => {
+			const done = async (m: AppMount, n: number, categoryId?: string) => {
 				for (let i = 0; i < n; i++) {
 					const t = await m.h.app.tasks.create({ title: `Done ${String(i).padStart(2, "0")}`, categoryId });
 					m.h.clock.advance(1000);
@@ -172,10 +164,10 @@ describe("the view menu and the Completed group", () => {
 				}
 				await waitLinger();
 			};
-			const more = (m: CalMount) => tasksEl(m).querySelector<HTMLButtonElement>(".cp-completed-more");
+			const more = (m: AppMount) => tasksEl(m).querySelector<HTMLButtonElement>(".cp-completed-more");
 
 			it("when the group is collapsed and opened again", async () => {
-				const m = await mount();
+				const m = await mountApp();
 				await done(m, 45);
 				await openView(m, "Inbox");
 				await click(toggle(m));
@@ -187,7 +179,7 @@ describe("the view menu and the Completed group", () => {
 			});
 
 			it("when the filter changes", async () => {
-				const m = await mount();
+				const m = await mountApp();
 				await done(m, 45);
 				await openView(m, "Inbox");
 				await click(toggle(m));
@@ -198,7 +190,7 @@ describe("the view menu and the Completed group", () => {
 			});
 
 			it("when the view changes", async () => {
-				const m = await mount();
+				const m = await mountApp();
 				await done(m, 45);
 				await openView(m, "Inbox");
 				await click(toggle(m));
@@ -211,7 +203,7 @@ describe("the view menu and the Completed group", () => {
 			});
 
 			it("in the matrix: on collapse and on a filter change", async () => {
-				const m = await mount();
+				const m = await mountApp();
 				const study = await m.h.app.categories.create("Study", null);
 				await done(m, 25, study.id);
 				await openMatrix(m);
@@ -233,7 +225,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("Show completed off hides the group, on brings it back", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = await m.h.app.tasks.create({ title: "Done A" });
 			await m.h.app.tasks.complete(a.task.id);
 			await waitLinger();
@@ -248,7 +240,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("a view with only completed tasks still shows its empty text above the group", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = await m.h.app.tasks.create({ title: "Done A" });
 			await m.h.app.tasks.complete(a.task.id);
 			await waitLinger();
@@ -258,7 +250,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("follows the membership rules per view", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			const study = await m.h.app.categories.create("Study", null);
 			await m.h.app.tags.create("mytag", "red");
@@ -290,7 +282,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("a completed subtask of an open parent stays under it; of a completed parent it goes to the group", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			const p = await T.create({ title: "Parent" });
 			const s1 = await T.create({ title: "Sub one", parentId: p.task.id });
@@ -313,7 +305,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("completing keeps the row in place for the check animation, then moves it; reopening moves it back (AS-10)", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Ship it", scheduled: day("2026-10-01") });
 			await m.h.app.tasks.create({ title: "Other", scheduled: day("2026-10-01") });
 			await settle();
@@ -346,7 +338,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("a task completed before a view is shown never lingers", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = await m.h.app.tasks.create({ title: "A", scheduled: day("2026-10-01") });
 			await m.h.app.tasks.create({ title: "B", scheduled: day("2026-10-01") });
 			await openMatrix(m);
@@ -357,7 +349,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("arrow keys still move across the visible rows, including an expanded Completed group", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const T = m.h.app.tasks;
 			await T.create({ title: "Open one" });
 			const a = await T.create({ title: "Done A" });
@@ -373,7 +365,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("a matrix quadrant's Completed group is a named group with an aria-expanded button and no container aria-label", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const a = await m.h.app.tasks.create({ title: "Done A", urgent: true });
 			await m.h.app.tasks.complete(a.task.id);
 			await openMatrix(m);
@@ -385,7 +377,7 @@ describe("the view menu and the Completed group", () => {
 		});
 
 		it("Search keeps the full filter bar", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await click(byLabel(m.root, "Search"));
 			const search = m.root.querySelector<HTMLElement>(".cp-search")!;
 			expect(search.querySelector(".cp-filter-bar")).not.toBeNull();
@@ -401,32 +393,11 @@ describe("section state written with an updater", () => {
 	// Section state is written with an updater, never by spreading the `ui` object a render captured: a
 	// menu that stays open past a later change must not bring back what that change replaced.
 
-	const proto = HTMLElement.prototype as unknown as { createDiv?: (o: { cls: string }) => HTMLElement };
-	const ownCreateDiv = proto.createDiv;
-	beforeAll(() => {
-		proto.createDiv = function (this: HTMLElement, o) {
-			const el = this.ownerDocument.createElement("div");
-			el.className = o.cls;
-			this.appendChild(el);
-			return el;
-		};
-	});
-	afterAll(() => {
-		proto.createDiv = ownCreateDiv;
-	});
-
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
-	const tasksEl = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-tasks")!;
-	const selected = (m: CalMount) =>
+	const selected = (m: AppMount) =>
 		[...tasksEl(m).querySelectorAll<HTMLElement>(".cp-task-row.is-selected")].map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
 
 	async function twoTasks() {
-		const m = await mountCal();
-		mounted.push(m);
+		const m = await mountApp();
 		const work = await m.h.app.categories.create("Work");
 		const a = (await m.h.app.tasks.create({ title: "Alpha", categoryId: work.id })).task;
 		const b = (await m.h.app.tasks.create({ title: "Beta", categoryId: work.id })).task;
@@ -453,8 +424,7 @@ describe("section state written with an updater", () => {
 
 	describe("Search results opening a list", () => {
 		it("keeps what another change wrote to the Tasks state in the same turn", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const work = await m.h.app.categories.create("Work");
 			const x = (await m.h.app.tasks.create({ title: "Target", categoryId: work.id })).task;
 			const typeIn = async (selector: string, text: string) => {
@@ -479,7 +449,6 @@ describe("section state written with an updater", () => {
 	describe("Habits page after the selection changed", () => {
 		it("a week strip pick in the same turn keeps the habit that was selected meanwhile", async () => {
 			const m = await mountHabits();
-			mounted.push(m);
 			const habits = await seedMockup(m.h);
 			await m.rerender();
 			const el = await openHabits(m);
@@ -499,19 +468,17 @@ describe("the Lists… loop", () => {
 	// "Lists…" and "Tags…" show their menu again after a pick. The loop must end when the
 	// menu is dismissed, when the section is hidden and when it unmounts.
 
-	const mounted: CalMount[] = [];
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 	});
 	afterEach(async () => {
-		for (const m of mounted.splice(0)) m.unmount();
+		unmountAll();
 		// Run what the unmounts left queued (Preact's effect flush) while the fake timers still own it.
 		await vi.runOnlyPendingTimersAsync();
 		vi.useRealTimers();
 	});
 	async function mountWithCategory() {
-		const m = await mountCal();
-		mounted.push(m);
+		const m = await mountApp();
 		await m.h.app.categories.create("Study", null);
 		await openCalendar(m);
 		return m;
