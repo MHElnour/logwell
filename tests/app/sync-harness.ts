@@ -1,9 +1,11 @@
+import { expect } from "vitest";
 import { MemoryTickTickPending } from "../../src/app/ports";
 import { SyncService } from "../../src/app/SyncService";
+import type { TtTaskCreate } from "../../src/domain/ticktick/types";
 import type { ID, SyncLink, SyncLinkKind, Task } from "../../src/domain/types";
 import { syncLinkId } from "../../src/domain/types";
 import { FakeTickTick } from "./fake-ticktick";
-import { type AppHarness, appHarness } from "./harness";
+import { type AppHarness, appHarness, makeReadOnly, makeWritable } from "./harness";
 
 // A real app store, a fake TickTick and the sync engine between them.
 
@@ -91,4 +93,54 @@ export async function linkedList(s: SyncHarness, name = "Work"): Promise<{ listI
 	if (!r.ok) throw new Error(`first sync failed: ${r.error?.message}`);
 	s.tick();
 	return { listId: list.id, projectId: project.id };
+}
+
+/** A synced task and where it lives on both sides. */
+export type SyncedTask = SyncHarness & { listId: string; projectId: string; id: string; ttId: string };
+
+/** A linked list "Work" holding one task, synced: "Call the bank" unless named otherwise. */
+export async function oneSyncedTask(title = "Call the bank"): Promise<SyncedTask> {
+	const s = await syncHarness();
+	const { listId, projectId } = await linkedList(s);
+	const { task } = await s.h.app.tasks.create({ title, categoryId: listId });
+	await s.sync.sync();
+	s.tick();
+	return Object.assign(s, { listId, projectId, id: task.id, ttId: s.ttIdOf(title) });
+}
+
+/**
+ * A create TickTick answered whose link was never written: the store turns read-only right after the answer, then
+ * the file is repaired (`saved`, the database before that sync) and the store is writable again, with no link.
+ */
+export async function failedLink(title = "Buy milk"): Promise<SyncedTask & { saved: string }> {
+	const s = await syncHarness();
+	const { listId, projectId } = await linkedList(s);
+	const { task } = await s.h.app.tasks.create({ title, categoryId: listId });
+	await s.h.saveNow();
+	const saved = s.h.dbText();
+	const create = s.tt.createTask.bind(s.tt);
+	s.tt.createTask = async (input: TtTaskCreate) => {
+		const made = await create(input);
+		await makeReadOnly(s.h);
+		return made;
+	};
+	await expect(s.sync.sync()).rejects.toThrow();
+	s.tt.createTask = create;
+	await makeWritable(s.h, saved);
+	s.tick();
+	return Object.assign(s, { listId, projectId, id: task.id, ttId: s.tt.findByTitle(title)!.id, saved });
+}
+
+/** The task writes sent to TickTick so far: creates, updates and batches. */
+export const pushes = (s: SyncHarness): number => s.tt.count("batchTasks") + s.tt.count("updateTask") + s.tt.count("createTask");
+
+const READS = new Set(["listProjects", "getProjectData", "listCompleted", "filterTasks", "getTask", "listTags"]);
+
+/** The next sync, a minute later, succeeds and sends nothing to TickTick: it only reads. */
+export async function quiet(s: SyncHarness): Promise<void> {
+	s.tick();
+	const from = s.tt.calls.length;
+	const r = await s.sync.sync();
+	expect(r.ok).toBe(true);
+	expect(s.tt.calls.slice(from).filter((c) => !READS.has(c.split(":")[0]!))).toEqual([]);
 }

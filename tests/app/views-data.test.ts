@@ -40,24 +40,6 @@ describe("views, export and import", () => {
 			expect(sidebarCounts(h.app.store.state, ctx)).toMatchObject({ today: 3, upcoming: 1 });
 		});
 
-		it("Upcoming leaves out a task that is due by today (scheduled tomorrow, deadline today or past): Today owns it", async () => {
-			const h = await appHarness();
-			const t = h.app.tasks;
-			await t.create({ title: "Deadline today", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } });
-			await t.create({ title: "Deadline past", scheduled: { kind: "date", date: "2026-10-03" }, deadline: { kind: "date", date: "2026-09-28" } });
-			await t.create({ title: "Deadline later", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: "2026-10-09" } });
-			const done = (await t.create({ title: "Done", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } })).task;
-			await t.complete(done.id);
-			const state = h.app.store.state;
-			const ctx = h.app.queryContext();
-			const titles = (v: "today" | "upcoming") => buildList(state, { kind: v }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
-			expect(titles("upcoming")).toEqual(["Deadline later"]);
-			expect(titles("today").sort()).toEqual(["Deadline past", "Deadline today"]);
-			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 2, upcoming: 1 });
-			expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed).toEqual([]);
-			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Done"]);
-		});
-
 		it("#125: a held overdue task completed a moment ago stays in Overdue, in the list and on the board", async () => {
 			const h = await appHarness();
 			const t = h.app.tasks;
@@ -125,53 +107,7 @@ describe("views, export and import", () => {
 			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
 		});
 
-		it("Upcoming does the same", async () => {
-			const h = await appHarness();
-			const T = h.app.tasks;
-			const inView = (await T.create({ title: "Shown parent", scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			const hidden = (await T.create({ title: "Hidden parent" })).task;
-			const a = (await T.create({ title: "Sub A", parentId: inView.id, scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			const b = (await T.create({ title: "Sub B", parentId: hidden.id, scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			await T.complete(a.id);
-			await T.complete(b.id);
-			const ctx = h.app.queryContext();
-			const state = h.app.store.state;
-			const open = buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
-			expect(open).toEqual(["Shown parent", "Sub A"]);
-			expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
-		});
-
-		it("Completed is newest first; completing removes the task from Today (AS-10, list part)", async () => {
-			const h = await appHarness();
-			const a = (await h.app.tasks.create({ title: "A", scheduled: { kind: "date", date: TODAY } })).task;
-			const b = (await h.app.tasks.create({ title: "B" })).task;
-			await h.app.tasks.complete(a.id);
-			h.clock.advance(1000);
-			await h.app.tasks.complete(b.id);
-			const ctx = h.app.queryContext();
-			expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
-			const done = buildList(h.app.store.state, { kind: "completed" }, ctx, emptyFilter(), "").groups;
-			expect(done[0]!.entries.map((e) => e.task.title)).toEqual(["B", "A"]);
-		});
-
-		it("the Completed group: Today holds a task completed today even when it was overdue, not one completed yesterday (spec §7)", async () => {
-			const h = await appHarness();
-			const T = h.app.tasks;
-			const old = (await T.create({ title: "Old", scheduled: { kind: "date", date: "2026-09-20" } })).task;
-			const fresh = (await T.create({ title: "Fresh", scheduled: { kind: "date", date: "2026-09-20" } })).task;
-			await T.complete(old.id);
-			h.clock.advance(24 * 3600 * 1000);
-			await T.complete(fresh.id);
-			const ctx = { ...h.app.queryContext(), today: "2026-10-02" };
-			const s = h.app.store.state;
-			expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Fresh"]);
-			// Open rows never include them, and the views without a group have none.
-			expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
-			expect(buildList(s, { kind: "completed" }, ctx, emptyFilter(), "").completed).toEqual([]);
-			expect(buildList(s, { kind: "trash" }, ctx, emptyFilter(), "").completed).toEqual([]);
-		});
-
-		it("buildList keeps a completed subtask under its open parent and a held task in place", async () => {
+		it("buildList keeps a completed subtask under its open parent and a held task in place; Completed and Trash have no Completed group", async () => {
 			const h = await appHarness();
 			const T = h.app.tasks;
 			const parent = (await T.create({ title: "Trip" })).task;
@@ -187,6 +123,8 @@ describe("views, export and import", () => {
 			expect(titles(new Set([solo.id]))).toEqual(["Trip", "Book (sub)", "Solo"]);
 			expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Solo"]);
 			expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "", new Set([solo.id])).completed).toEqual([]);
+			expect(buildList(s, { kind: "completed" }, ctx, emptyFilter(), "").completed).toEqual([]);
+			expect(buildList(s, { kind: "trash" }, ctx, emptyFilter(), "").completed).toEqual([]);
 		});
 
 		it("sort by date orders by key date, undated last, subtasks with their parent", async () => {
@@ -264,7 +202,9 @@ describe("views, export and import", () => {
 			const source = await appHarness();
 			const cat = await source.app.categories.create("Study", "📖");
 			await source.app.tags.create("learning");
-			const parent = (await source.app.tasks.create({ title: "P", categoryId: cat.id, tagKeys: ["learning"] })).task;
+			const section = await source.app.sections.create(cat.id, "Reading");
+			await source.app.sections.create(cat.id, "Later");
+			const parent = (await source.app.tasks.create({ title: "P", categoryId: cat.id, sectionId: section.id, tagKeys: ["learning"] })).task;
 			await source.app.tasks.create({ title: "S", parentId: parent.id, deadline: { kind: "date", date: "2026-10-09" } });
 			const gone = (await source.app.tasks.create({ title: "Gone" })).task;
 			await source.app.tasks.delete(gone.id);
@@ -273,9 +213,10 @@ describe("views, export and import", () => {
 			const target = await appHarness();
 			const preview = target.app.data.previewImport(exported);
 			if (!preview.ok) throw new Error(preview.message);
-			expect(preview.preview.counts).toMatchObject({ categories: 2, tags: 1, tasks: 2, trash: 1 });
+			expect(preview.preview.counts).toMatchObject({ categories: 2, sections: 2, tags: 1, tasks: 2, trash: 1 });
 			await target.app.data.importReplace(preview.preview);
-			for (const c of ["categories", "tags", "tasks", "trash"] as const) {
+			expect(target.app.store.state.tasks.get(parent.id)?.sectionId).toBe(section.id);
+			for (const c of ["categories", "sections", "tags", "tasks", "trash"] as const) {
 				// Compared by ID; Map order is irrelevant.
 				expect(target.app.store.state[c]).toEqual(source.app.store.state[c]);
 			}

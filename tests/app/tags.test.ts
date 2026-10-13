@@ -332,12 +332,18 @@ describe("unique tag names", () => {
 			expect(h.app.tags.list()).toHaveLength(0);
 		});
 
-		it("still returns an existing key, the parent made with a child too", async () => {
+		it("B16: still returns an existing tag in any casing or with a leading @, the parent made with a child too; the first display name stays", async () => {
 			const h = await appHarness();
+			const learning = await h.app.tags.create("Learning");
+			expect(await h.app.tags.create("@learning")).toBe(learning);
+			expect(await h.app.tags.create("LEARNING")).toBe(learning);
+			expect(learning.displayName).toBe("Learning");
+			expect(h.app.tags.resolve("LEARNING")).toBe("learning");
 			await h.app.tags.create("Home/Calls");
 			const home = h.app.store.state.tags.get("home");
 			expect((await h.app.tags.create("HOME/calls")).key).toBe("home/calls");
 			expect(await h.app.tags.create("Home")).toBe(home);
+			expect(h.app.store.state.tags.size).toBe(3);
 			expect((await h.app.tags.create("home/garden")).key).toBe("home/garden");
 		});
 	});
@@ -355,13 +361,6 @@ describe("unique tag names", () => {
 			const h = await appHarness();
 			await expect(h.app.tasks.create({ title: "x", newTags: ["home/calls", "work/calls"] })).rejects.toMatchObject({ code: "InvalidTag" });
 			expect(h.app.tags.list()).toHaveLength(0);
-		});
-
-		it("an existing key is reused", async () => {
-			const h = await appHarness();
-			await h.app.tags.create("home/calls");
-			const { task } = await h.app.tasks.create({ title: "x", newTags: ["Home/Calls"] });
-			expect(task.tagKeys).toEqual(["home/calls"]);
 		});
 	});
 
@@ -449,14 +448,6 @@ describe("New tag", () => {
 			const h = await seeded();
 			await expect(h.app.tags.add("Garden", "gone", null)).rejects.toMatchObject({ code: "NotFound", message: "The parent tag no longer exists." });
 			await expect(h.app.tags.add("Garden", "home/calls", null)).rejects.toMatchObject({ code: "InvalidTag" });
-		});
-
-		it("the plain create keeps its label and stays lenient for an existing key", async () => {
-			const h = await seeded();
-			const tag = await h.app.tags.create("ERRANDS");
-			expect(tag.displayName).toBe("Errands");
-			await h.app.tags.create("Fresh");
-			expect(h.app.store.undoLabel).toBe(CREATE_TAG_LABEL);
 		});
 	});
 });
@@ -744,16 +735,6 @@ describe("tag views include child tags", () => {
 });
 
 describe("tags (TAG-01..04)", () => {
-	it("B16: @Learning resolves to the existing learning tag; display name comes from the first creation", async () => {
-		const h = await appHarness();
-		const first = await h.app.tags.create("Learning");
-		const again = await h.app.tags.create("@learning");
-		expect(again).toBe(first);
-		expect(first.displayName).toBe("Learning");
-		expect(h.app.store.state.tags.size).toBe(1);
-		expect(h.app.tags.resolve("LEARNING")).toBe("learning");
-	});
-
 	it("TAG-01: a task stores a set of tag keys; delete removes the key everywhere", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("a");
@@ -809,12 +790,13 @@ describe("B2 / TAG-02: newTags on create", () => {
 		expect(h.app.store.canUndo).toBe(false);
 	});
 
-	it("resolves existing keys case-insensitively without duplicating (B16)", async () => {
+	it("resolves existing keys case-insensitively without duplicating, a child's too (B16)", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Work");
-		const { task } = await h.app.tasks.create({ title: "x", newTags: ["WORK", "work"], tagKeys: ["work"] });
-		expect(task.tagKeys).toEqual(["work"]);
-		expect(h.app.store.state.tags.size).toBe(1);
+		await h.app.tags.create("home/calls");
+		const { task } = await h.app.tasks.create({ title: "x", newTags: ["WORK", "work", "Home/Calls"], tagKeys: ["work"] });
+		expect(task.tagKeys).toEqual(["work", "home/calls"]);
+		expect(h.app.store.state.tags.size).toBe(3);
 		expect(h.app.store.state.tags.get("work")?.displayName).toBe("Work");
 	});
 

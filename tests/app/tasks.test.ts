@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isDomainError } from "../../src/domain/errors";
 import { INBOX_ID, syncLinkId } from "../../src/domain/types";
 import { rule } from "../domain/recurrence-fixtures";
 import { settle } from "../helpers";
-import { appHarness } from "./harness";
+import { appHarness, expectDomainError } from "./harness";
 
 describe("tasks (TASK-01..06)", () => {
 	it("AS-01 / TASK-01 / B1: a title alone creates one task in Inbox and no note", async () => {
@@ -246,7 +245,7 @@ describe("trash and undo (TASK-05)", () => {
 		expect([...h.app.store.state.occurrenceRecords.values()]).toEqual(history);
 	});
 
-	it("undo refuses when the record changed since", async () => {
+	it("one undo reverts only the newest edit; a note-path rewrite that matched no task is no undo step", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "A" });
 		await h.app.tasks.update(task.id, { title: "B" });
@@ -274,11 +273,6 @@ describe("trash and undo (TASK-05)", () => {
 		h.fs.files.set("Checkpoint.cpbase", "{broken");
 		await h.store.handleExternalChange();
 		await settle();
-		try {
-			await h.app.tasks.create({ title: "x" });
-			expect.unreachable();
-		} catch (err) {
-			expect(isDomainError(err, "ReadOnly")).toBe(true);
-		}
+		await expectDomainError(h.app.tasks.create({ title: "x" }), "ReadOnly");
 	});
 });

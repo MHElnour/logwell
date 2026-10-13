@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QueryContext } from "../../src/domain/queries";
-import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, seriesAnchor, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
+import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatEndProblem, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, seriesAnchor, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
 import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type RepeatRule, type Task } from "../../src/domain/types";
 import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-fixtures";
 
@@ -530,6 +530,33 @@ describe("repeatRuleProblem and normalizeRepeatRule", () => {
 	it("normalizes: weekdays in Monday-first order without repeats, unused fields null", () => {
 		expect(normalizeRepeatRule(rule({ freq: "weekly", weekdays: ["FR", "MO", "FR"] })).weekdays).toEqual(["MO", "FR"]);
 		expect(normalizeRepeatRule(rule({ freq: "daily", weekdays: ["MO"], monthly: { kind: "lastDay" } }))).toEqual(rule());
+	});
+});
+
+describe("repeatEndProblem: one check for the picker, Quick Add and the services", () => {
+	// 2026-10-05 is a Monday. The services' refusals are in tests/app/recurrence-service.test.ts.
+	const ENDS_BEFORE = "The repeat ends before its first date.";
+	const friday = rule({ freq: "weekly", weekdays: ["FR"] });
+
+	it("#12: accepts never, a count of 1 to 999 and a date on or after the first occurrence", () => {
+		expect(repeatEndProblem({ kind: "never" }, series("2026-10-05", rule()))).toBeNull();
+		expect(repeatEndProblem({ kind: "count", count: 1 })).toBeNull();
+		expect(repeatEndProblem({ kind: "count", count: 999 })).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-05" }, series("2026-10-05", rule()))).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-09" }, series("2026-10-05", friday))).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-12-01" })).toBeNull();
+	});
+
+	it("#12: refuses a count out of range, a date that is not one, a date before the anchor or before the first occurrence", () => {
+		expect(repeatEndProblem({ kind: "count", count: 0 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "count", count: 1.5 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "count", count: 1000 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "date", date: "2026-02-30" })).toBe("The end date is not valid.");
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-04" }, series("2026-10-05", rule()))).toBe(ENDS_BEFORE);
+		// Every Friday from Monday Oct 5, ending Wednesday Oct 7: no occurrence at all.
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-07" }, series("2026-10-05", friday))).toBe(ENDS_BEFORE);
+		// Every 15th from Oct 5, ending Oct 14.
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-14" }, series("2026-10-05", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } })))).toBe(ENDS_BEFORE);
 	});
 });
 

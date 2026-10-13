@@ -620,13 +620,13 @@ describe("description notes (NOTE-01..10)", () => {
 		for (const path of h.fs.files.keys()) expect(h.fs.files.get(path)).not.toContain("SECRET-BODY-TEXT");
 	});
 
-	it("NOTE-02 / B45: create names the note from the sanitized title and avoids collisions", async () => {
+	// The free name for a taken one ("Plan ab (2)") is picked by the vault: "creates a note with its text at a free
+	// name" in tests/obsidian/ticktick-vault-notes.test.ts.
+	it("NOTE-02 / B45: create names the note from the sanitized title in the note folder and links the path it got", async () => {
 		const h = await appHarness();
-		h.notes.files.set("Task notes/Plan ab.md", "existing");
 		const { task } = await h.app.tasks.create({ title: "Plan: a/b" });
 		const path = await h.app.tasks.createDescriptionNote(task.id);
-		expect(path).toBe("Task notes/Plan ab (2).md");
-		expect(h.notes.files.get("Task notes/Plan ab.md")).toBe("existing");
+		expect(path).toBe("Task notes/Plan ab.md");
 		expect(h.app.store.state.tasks.get(task.id)?.descriptionNote?.path).toBe(path);
 	});
 

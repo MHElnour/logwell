@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DELETE_LIST_LABEL } from "../../src/app/CategoryService";
 import { mergeCollections } from "../../src/app/DataService";
-import { buildBoard, buildList } from "../../src/app/views";
-import { isDomainError } from "../../src/domain/errors";
+import { buildBoard } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
-import { type AppHarness, appHarness, makeReadOnly } from "./harness";
+import { type AppHarness, appHarness, expectDomainError, makeReadOnly } from "./harness";
 import { makeTask } from "../persistence/fixtures";
 
 describe("sections", () => {
@@ -21,13 +20,6 @@ describe("sections", () => {
 	}
 
 	const task = (h: AppHarness, id: string) => h.app.store.state.tasks.get(id)!;
-	const rejects = async (p: Promise<unknown>, code?: string) => {
-		const err = await p.then(
-			() => null,
-			(e: unknown) => e,
-		);
-		expect(isDomainError(err, code as never)).toBe(true);
-	};
 
 	describe("SectionService (D5)", () => {
 		it("creates trimmed sections in order and lists them per list", async () => {
@@ -42,11 +34,11 @@ describe("sections", () => {
 
 		it("rejects empty and duplicate names (case-insensitive) on create and rename", async () => {
 			const { h, list, s1, s2 } = await setup();
-			await rejects(h.app.sections.create(list.id, "   "), "InvalidValue");
-			await rejects(h.app.sections.create(list.id, "TODO"), "DuplicateName");
-			await rejects(h.app.sections.rename(s2.id, " todo "), "DuplicateName");
-			await rejects(h.app.sections.rename(s2.id, ""), "InvalidValue");
-			await rejects(h.app.sections.create("missing", "X"), "NotFound");
+			await expectDomainError(h.app.sections.create(list.id, "   "), "InvalidValue");
+			await expectDomainError(h.app.sections.create(list.id, "TODO"), "DuplicateName");
+			await expectDomainError(h.app.sections.rename(s2.id, " todo "), "DuplicateName");
+			await expectDomainError(h.app.sections.rename(s2.id, ""), "InvalidValue");
+			await expectDomainError(h.app.sections.create("missing", "X"), "NotFound");
 			// Renaming to its own name in another case is fine.
 			const r = await h.app.sections.rename(s1.id, "TODO");
 			expect(r).toMatchObject({ name: "TODO", nameKey: "todo" });
@@ -93,18 +85,18 @@ describe("sections", () => {
 			const keys = [s3, s1, s2].map((s) => h.app.store.state.sections.get(s.id)!.sortKey);
 			expect(keys[0]! < keys[1]! && keys[1]! < keys[2]!).toBe(true);
 			const o = await h.app.sections.create(other.id, "Other");
-			await rejects(h.app.sections.place(s1.id, [s1.id, o.id]), "InvalidValue");
-			await rejects(h.app.sections.place(s1.id, [s2.id]), "InvalidValue");
-			await rejects(h.app.sections.place(s1.id, [s1.id, s1.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id, o.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s2.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id, s1.id]), "InvalidValue");
 		});
 
 		it("every mutation throws while the database is read-only", async () => {
 			const { h, list, s1 } = await setup();
 			await makeReadOnly(h);
-			await rejects(h.app.sections.create(list.id, "X"), "ReadOnly");
-			await rejects(h.app.sections.rename(s1.id, "X"), "ReadOnly");
-			await rejects(h.app.sections.delete(s1.id), "ReadOnly");
-			await rejects(h.app.sections.place(s1.id, [s1.id]), "ReadOnly");
+			await expectDomainError(h.app.sections.create(list.id, "X"), "ReadOnly");
+			await expectDomainError(h.app.sections.rename(s1.id, "X"), "ReadOnly");
+			await expectDomainError(h.app.sections.delete(s1.id), "ReadOnly");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id]), "ReadOnly");
 		});
 	});
 
@@ -119,9 +111,9 @@ describe("sections", () => {
 
 		it("create rejects a section of another list", async () => {
 			const { h, other, s1 } = await setup();
-			await rejects(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.create({ title: "X", sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: "missing" }), "NotFound");
+			await expectDomainError(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.create({ title: "X", sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: "missing" }), "NotFound");
 		});
 
 		it("setParent gives the task its new parent's section; making it top-level keeps its section", async () => {
@@ -169,11 +161,11 @@ describe("sections", () => {
 			const o = await h.app.sections.create(other.id, "Mine");
 			const p = (await h.app.tasks.create({ title: "P", categoryId: list.id })).task;
 			const sub = (await h.app.tasks.create({ title: "S", parentId: p.id })).task;
-			await rejects(h.app.tasks.update(p.id, { sectionId: o.id }), "InvalidValue");
-			await rejects(h.app.tasks.place(p.id, [p.id], { sectionId: o.id }), "InvalidValue");
-			await rejects(h.app.tasks.update(sub.id, { sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.place(sub.id, [sub.id], { sectionId: s2.id }), "InvalidValue");
-			await rejects(h.app.tasks.update(p.id, { sectionId: "missing" }), "NotFound");
+			await expectDomainError(h.app.tasks.update(p.id, { sectionId: o.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.place(p.id, [p.id], { sectionId: o.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.update(sub.id, { sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.place(sub.id, [sub.id], { sectionId: s2.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.update(p.id, { sectionId: "missing" }), "NotFound");
 			expect(task(h, p.id).sectionId).toBeNull();
 			expect(task(h, sub.id).sectionId).toBeNull();
 		});
@@ -245,26 +237,8 @@ describe("sections", () => {
 		});
 	});
 
-	describe("D7 grouping and D6 board", () => {
-		it("an Inbox or list view returns No section first, then each section by sortKey, empty ones included", async () => {
-			const { h, list, s1, s2 } = await setup();
-			await h.app.tasks.create({ title: "Loose", categoryId: list.id });
-			const a = (await h.app.tasks.create({ title: "In doing", categoryId: list.id, sectionId: s2.id })).task;
-			await h.app.tasks.create({ title: "Its sub", parentId: a.id });
-			await h.app.tasks.create({ title: "Inbox task" });
-			const ctx = h.app.queryContext();
-			const groups = buildList(h.app.store.state, { kind: "category", id: list.id }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
-			expect(groups.map((g) => [g.section, g.entries.map((e) => e.task.title)])).toEqual([
-				[{ id: null, name: "No section" }, ["Loose"]],
-				[{ id: s1.id, name: "Todo" }, []],
-				[{ id: s2.id, name: "Doing" }, ["In doing", "Its sub"]],
-			]);
-			const inbox = buildList(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
-			expect(inbox.map((g) => [g.section, g.entries.length])).toEqual([[{ id: null, name: "No section" }, 1]]);
-			// Other views are untouched.
-			expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups.every((g) => g.section === undefined)).toBe(true);
-		});
-
+	// Grouping a list by section (D7) is in group-by.test.ts.
+	describe("D6 board", () => {
 		it("the board has a No section column, then a column per section, each with its own completed group", async () => {
 			const { h, list, s1, s2 } = await setup();
 			const a = (await h.app.tasks.create({ title: "A", categoryId: list.id, sectionId: s1.id })).task;
@@ -286,20 +260,8 @@ describe("sections", () => {
 		});
 	});
 
+	// Replace all reproducing the sections is EXP-01 in views-data.test.ts.
 	describe("D8 export and import", () => {
-		it("Replace all reproduces the sections and the task section ids", async () => {
-			const { h, list, s1 } = await setup();
-			await h.app.tasks.create({ title: "T", categoryId: list.id, sectionId: s1.id });
-			const exported = h.app.data.exportJson();
-			const target = await appHarness();
-			const preview = target.app.data.previewImport(exported);
-			if (!preview.ok) throw new Error(preview.message);
-			expect(preview.preview.counts.sections).toBe(2);
-			await target.app.data.importReplace(preview.preview);
-			expect(target.app.store.state.sections).toEqual(h.app.store.state.sections);
-			expect(target.app.store.state.tasks).toEqual(h.app.store.state.tasks);
-		});
-
 		it("a merge import adds sections by id and keeps valid section ids", async () => {
 			const { h, list, s1 } = await setup();
 			const t = (await h.app.tasks.create({ title: "T", categoryId: list.id, sectionId: s1.id })).task;
@@ -346,7 +308,7 @@ describe("sections", () => {
 			expect(h.app.store.undoLabel).toBe("Create list");
 			await h.app.store.undo();
 			expect(h.app.store.state.categories.has(none.id)).toBe(false);
-			await rejects(h.app.categories.create("Bad", null, "mauve" as never), "InvalidValue");
+			await expectDomainError(h.app.categories.create("Bad", null, "mauve" as never), "InvalidValue");
 		});
 	});
 });

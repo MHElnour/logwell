@@ -150,7 +150,8 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		["250 within 10 s after 3 days", 250, 10 * SECOND, 3 * DAY],
 		["250 within 60 s after 30 days", 250, 60 * SECOND, 30 * DAY],
 		["200 over 2 s after 1 day", 200, 2 * SECOND, DAY],
-		...[1, 7, 14, 30, 60].map((d): [string, number, number, number] => [`2000 over 12 h after ${d} days`, 2000, 12 * HOUR, d * DAY]),
+		// A short gap and a long one: the gap only sets the window's length.
+		...[1, 60].map((d): [string, number, number, number] => [`2000 over 12 h after ${d} days`, 2000, 12 * HOUR, d * DAY]),
 	];
 	for (const [name, n, span, gap] of bursts) {
 		it(`catches up: ${name}`, async () => {
@@ -161,22 +162,24 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		});
 	}
 
-	for (const order of ["newest", "oldest"] as const) {
-		for (const bounds of ["inclusive", "exclusive"] as const) {
-			it(`230 completed at one instant: the cut read is applied and the rest looked up (${order}, ${bounds} bounds)`, async () => {
-				const s = await sameInstant(230);
-				s.tt.completedOrder = order;
-				s.tt.completedBounds = { start: bounds, end: bounds };
-				const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt!;
-				const getTask = s.tt.count("getTask");
-				const r = await s.sync.sync();
-				expect(r.error).toBeNull();
-				expect(r.needsConfirmation).toEqual([]);
-				expect(completedIn(s, s.lists[0]!)).toBe(230);
-				expect(s.tt.count("getTask") - getTask).toBe(230 - TICKTICK_COMPLETED_MAX);
-				expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt! > pulledAt).toBe(true);
-			});
-		}
+	// Each cut order and each bound type once: the two settings are independent of each other.
+	for (const [order, bounds] of [
+		["newest", "inclusive"],
+		["oldest", "exclusive"],
+	] as const) {
+		it(`230 completed at one instant: the cut read is applied and the rest looked up (${order}, ${bounds} bounds)`, async () => {
+			const s = await sameInstant(230);
+			s.tt.completedOrder = order;
+			s.tt.completedBounds = { start: bounds, end: bounds };
+			const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt!;
+			const getTask = s.tt.count("getTask");
+			const r = await s.sync.sync();
+			expect(r.error).toBeNull();
+			expect(r.needsConfirmation).toEqual([]);
+			expect(completedIn(s, s.lists[0]!)).toBe(230);
+			expect(s.tt.count("getTask") - getTask).toBe(230 - TICKTICK_COMPLETED_MAX);
+			expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt! > pulledAt).toBe(true);
+		});
 	}
 
 	it("Logwell completes 250 subtasks while 60 other tasks are deleted in TickTick: no Trash verdict until the window is whole", async () => {
@@ -210,30 +213,23 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(trashed(s)).toHaveLength(60);
 	});
 
-	it("260 completed in TickTick at one instant: 250 at the first sync, the rest at the next, never a confirmation", async () => {
-		const s = await imported(["Work", 262]);
+	it.each([
+		["260", "the rest at the next", 260, [250, 260, 260, 260]],
+		["400", "50 more each sync", 400, [250, 300, 350, 400]],
+	])("%s completed in TickTick at one instant: 250 at the first sync, %s, never a confirmation; the rest of the pull applies", async (_, _rest, n, want) => {
+		const s = await imported(["Work", n + 2]);
 		const list = s.lists[0]!;
-		completeOver(s, list.ttIds.slice(0, 260), 0);
+		completeOver(s, list.ttIds.slice(0, n), 0);
+		// An edit of a task that stays open: a cut window never stops the rest of the pull.
+		s.tt.edit(list.ttIds[n]!, { priority: 5 });
 		const done: number[] = [];
 		await syncsAfterBurst(s, ({ r, trash }) => {
 			expect(r.needsConfirmation).toEqual([]);
 			expect(trash).toEqual([]);
+			expect(s.task(`Work bill ${n}`).priority).toBe(1);
 			done.push(completedIn(s, list));
 		});
-		expect(done).toEqual([250, 260, 260, 260]);
-	});
-
-	it("400 completed in TickTick at one instant: 50 more each sync after the first 250, never a confirmation", async () => {
-		const s = await imported(["Work", 402]);
-		const list = s.lists[0]!;
-		completeOver(s, list.ttIds.slice(0, 400), 0);
-		const done: number[] = [];
-		await syncsAfterBurst(s, ({ r, trash }) => {
-			expect(r.needsConfirmation).toEqual([]);
-			expect(trash).toEqual([]);
-			done.push(completedIn(s, list));
-		});
-		expect(done).toEqual([250, 300, 350, 400]);
+		expect(done).toEqual(want);
 	});
 
 	it("a cut in one list holds the Trash verdicts of every list until the window is whole", async () => {
@@ -333,7 +329,10 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		const list = s.lists[0]!;
 		for (const id of list.ttIds.slice(0, 80)) s.tt.remove(id);
 		s.tick();
+		const lookups = s.tt.count("getTask");
 		const first = await s.sync.sync();
+		expect(s.tt.count("getTask") - lookups).toBe(LOOKUP_MAX);
+		expect(trashed(s)).toEqual([]);
 		expect(first.needsConfirmation).toHaveLength(1);
 		expect(first.needsConfirmation[0]).toMatchObject({ listId: list.listId, reason: "many" });
 		expect(first.needsConfirmation[0]!.tasks).toHaveLength(LOOKUP_MAX);
@@ -539,21 +538,29 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect(trashed(s)).toEqual([]);
 	});
 
-	it("a 429 on a completed read stops the sync, writing nothing; the next sync catches up", async () => {
-		const s = await twoBusyLists();
+	it("a 429 on a completed read stops the sync with rate-limited, writing nothing; the next sync catches up", async () => {
+		const s = await imported(["Work", 450]);
+		completeOver(s, s.lists[0]!.ttIds, 2 * HOUR);
+		s.tick();
 		const state = s.h.app.store.state;
+		const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt;
 		let reads = 0;
+		// The third read is a split's: the window was already being narrowed.
 		s.tt.onCall = (m) => {
-			if (m === "listCompleted" && ++reads === 20) throw new TickTickError("rate-limited", "TickTick: too many requests (HTTP 429)", { status: 429, retryAfterSec: 30 });
+			if (m === "listCompleted" && ++reads === 3) {
+				throw new TickTickError("rate-limited", "TickTick: too many requests (HTTP 429)", { status: 429, retryAfterSec: 30 });
+			}
 		};
 		const r = await s.sync.sync();
-		expect(r.error).toMatchObject({ kind: "rate-limited" });
+		expect(r.ok).toBe(false);
+		expect(r.error).toMatchObject({ listId: s.lists[0]!.listId, kind: "rate-limited", retryAfterSec: 30 });
+		expect(reads).toBe(3);
 		expect(s.h.app.store.state).toBe(state);
+		expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt).toBe(pulledAt);
+		expect(completedIn(s, s.lists[0]!)).toBe(0);
 		s.tt.onCall = null;
-		s.tick(60_000);
-		const next = await s.sync.sync();
-		expect(next.error).toBeNull();
-		expect(s.lists.reduce((n, l) => n + completedIn(s, l), 0)).toBeGreaterThan(0);
+		s.tick();
+		await expectCatchUp(s);
 	});
 
 	it("a 429 during the lookups keeps the tasks found gone: the next sync looks up only the rest", async () => {
@@ -652,26 +659,5 @@ describe("a completed-tasks window over TickTick's 200 (issue #38, TickTick sync
 		expect((await s.sync.sync()).ok).toBe(true);
 		expect(readsOf(s, list, calls)).toBe(1);
 		expect(readsOf(s, s.lists[1]!, calls)).toBe(1);
-	});
-
-	it("a 429 on the third read stops with rate-limited, writing nothing", async () => {
-		const s = await imported(["Work", 450]);
-		completeOver(s, s.lists[0]!.ttIds, 2 * HOUR);
-		s.tick();
-		const state = s.h.app.store.state;
-		const pulledAt = s.link("list", s.lists[0]!.listId)!.lastPulledAt;
-		let reads = 0;
-		s.tt.onCall = (m) => {
-			if (m === "listCompleted" && ++reads === 3) {
-				throw new TickTickError("rate-limited", "TickTick: too many requests (HTTP 429)", { status: 429, retryAfterSec: 30 });
-			}
-		};
-		const r = await s.sync.sync();
-		expect(r.ok).toBe(false);
-		expect(r.error).toMatchObject({ listId: s.lists[0]!.listId, kind: "rate-limited", retryAfterSec: 30 });
-		expect(reads).toBe(3);
-		expect(s.h.app.store.state).toBe(state);
-		expect(s.link("list", s.lists[0]!.listId)!.lastPulledAt).toBe(pulledAt);
-		expect(completedIn(s, s.lists[0]!)).toBe(0);
 	});
 });

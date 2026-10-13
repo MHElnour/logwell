@@ -15,14 +15,13 @@ import {
 import type { SettingsPort } from "../../src/app/ports";
 import type { Tx } from "../../src/app/tx";
 import { globalSearch } from "../../src/app/views";
-import { isDomainError } from "../../src/domain/errors";
 import { checkReminders, emptyReminderState } from "../../src/domain/habitReminders";
 import { type HabitIndex, type HabitInput, indexCheckins, progressOn, streaks } from "../../src/domain/habits";
 import { emptyFilter } from "../../src/domain/queries";
 import type { Checkin, WeekStart } from "../../src/domain/types";
 import { harness } from "../persistence/fixtures";
 import { sequentialIds } from "../helpers";
-import { FakeNotes, makeReadOnly } from "./harness";
+import { expectDomainError, FakeNotes, makeReadOnly } from "./harness";
 
 // HabitService.
 // Europe/Berlin; 2026-10-14 is a Wednesday.
@@ -63,13 +62,7 @@ const input = (patch: Partial<HabitInput> = {}): HabitInput => ({
 const binary = (patch: Partial<HabitInput> = {}) => input({ name: "Meditate", goal: { type: "binary", target: 1, unit: null, period: "day" }, ...patch });
 const count = (patch: Partial<HabitInput> = {}) => input({ name: "Water", goal: { type: "count", target: 8, unit: "glasses", period: "day" }, ...patch });
 
-async function refused(p: Promise<unknown>, code: "InvalidValue" | "NotFound" | "ReadOnly" = "InvalidValue"): Promise<void> {
-	const err = await p.then(
-		() => null,
-		(e: unknown) => e,
-	);
-	expect(isDomainError(err, code), String(err)).toBe(true);
-}
+const refused = (p: Promise<unknown>, code: "InvalidValue" | "NotFound" | "ReadOnly" = "InvalidValue") => expectDomainError(p, code);
 
 const active = (app: CheckpointApp, habitId: string): Checkin[] => app.habits.index().active(habitId);
 
@@ -99,8 +92,7 @@ describe("habit lifecycle (D9)", () => {
 
 	it("refuses invalid input with the dialog's message and writes nothing", async () => {
 		const { app } = await setup();
-		const err = await app.habits.create(input({ name: " " })).catch((e: unknown) => e);
-		expect(isDomainError(err, "InvalidValue") && err.message).toBe("Enter a name.");
+		await expectDomainError(app.habits.create(input({ name: " " })), "InvalidValue", "Enter a name.");
 		await refused(app.habits.create(input({ color: "teal" as never })));
 		await refused(app.habits.create(input({ timeOfDay: "noon" as never })));
 		await refused(app.habits.create(input({ icon: "Not an icon!" })));
@@ -353,8 +345,7 @@ describe("check-in dates, kept reminders and zero values", () => {
 		const m = await app.habits.create(binary());
 		const state = app.store.state;
 		for (const date of ["2026-10-00", "2026-02-30", "14.10.2026", ""]) {
-			const err = await app.habits.add(r.id, date, 20).catch((e: unknown) => e);
-			expect(isDomainError(err, "InvalidValue") && err.message).toBe("That date is not valid.");
+			await expectDomainError(app.habits.add(r.id, date, 20), "InvalidValue", "That date is not valid.");
 			await refused(app.habits.toggle(m.id, date));
 			await refused(app.habits.toggle(m.id, date, true));
 		}

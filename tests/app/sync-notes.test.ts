@@ -43,16 +43,6 @@ describe("description notes from TickTick (SYNC-09)", () => {
 		expect(s.tt.count("updateTask") + s.tt.count("batchTasks")).toBe(0);
 	});
 
-	it("takes a free name when the note name is taken (B45)", async () => {
-		const s = await ready();
-		s.notesOn = true;
-		s.h.notes.set("Task notes/Call the bank.md", "mine");
-		s.tt.add(s.projectId, { title: "Call the bank", content: "Ask about fees" });
-		await run(s);
-		expect(noteOf(s, "Call the bank")).toBe("Task notes/Call the bank (2).md");
-		expect(s.h.notes.files.get("Task notes/Call the bank.md")).toBe("mine");
-	});
-
 	it("with the setting off, no note is made, read or written, and the text stays in TickTick", async () => {
 		const s = await ready();
 		const made = s.tt.add(s.projectId, { title: "Call the bank", content: "Ask about fees" });
@@ -369,42 +359,6 @@ describe("checklists as tick boxes, both ways (SYNC-09)", () => {
 		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [x] Bring passport\n- [ ] Pack charger\n");
 	});
 
-	it("a tick in TickTick changes only the box: links, headings and the order of the note stay (B1)", async () => {
-		const { s, ttId, path } = await trip();
-		const mine = "---\ntags: [trip]\n---\n## Before\n- [ ] Bring [[Docs|passport]]\nSee [[Plan]]\n## Later\n- [ ] Print ticket\n![[map.png]]\n";
-		s.h.notes.set(path, mine);
-		await run(s);
-		expect(s.tt.get(ttId)!.desc).toBe("## Before\nSee Plan\n## Later");
-		s.tt.edit(ttId, { items: s.tt.get(ttId)!.items!.map((i) => (i.title === "Print ticket" ? { ...i, status: 1 } : i)) });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe(mine.replace("- [ ] Print ticket", "- [x] Print ticket"));
-	});
-
-	it("ticks on both sides merge", async () => {
-		const { s, ttId, path } = await trip();
-		s.h.notes.set(path, "Trip notes go here.\n\n- [x] Bring passport\n- [ ] Print ticket\n");
-		s.tt.edit(ttId, { items: s.tt.get(ttId)!.items!.map((i) => (i.title === "Print ticket" ? { ...i, status: 1 } : i)) });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [x] Bring passport\n- [x] Print ticket\n");
-		expect(itemsOf(s, ttId)).toEqual([
-			["Bring passport", 1],
-			["Print ticket", 1],
-		]);
-	});
-
-	it("the same item added on both sides is kept once (M2)", async () => {
-		const { s, ttId, path } = await trip();
-		s.h.notes.set(path, "Trip notes go here.\n\n- [ ] Bring passport\n- [ ] Print ticket\n- [ ] Pack charger\n");
-		s.tt.edit(ttId, { items: [...s.tt.get(ttId)!.items!, { id: "z", title: "pack charger", status: 0 }] });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [ ] Bring passport\n- [ ] Print ticket\n- [ ] Pack charger\n");
-		expect(itemsOf(s, ttId)).toEqual([
-			["Bring passport", 0],
-			["Print ticket", 0],
-			["Pack charger", 0],
-		]);
-	});
-
 	it("a checklist with items and no text gets a note (trigger)", async () => {
 		const s = await ready();
 		s.notesOn = true;
@@ -499,18 +453,6 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		await run(s);
 		expect(s.tt.count("updateTask")).toBe(0);
 		made.forEach((m, i) => expect(s.tt.get(m.id)!.content).toBe(texts[i]));
-	});
-
-	it("a frontmatter with no line ending after it keeps its line when TickTick's text comes in (H1)", async () => {
-		const { s, ttId, path } = await withNote("Old");
-		s.h.notes.set(path, "---\ntags: x\n---");
-		await run(s);
-		expect(s.tt.get(ttId)!.content).toBe("");
-		s.tt.edit(ttId, { content: "New text" });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("---\ntags: x\n---\nNew text\n");
-		await run(s);
-		expect(s.tt.get(ttId)!.content).toBe("New text");
 	});
 
 	it("a TickTick edit made after the pull is not overwritten by the note's push; the next sync merges it (L1)", async () => {

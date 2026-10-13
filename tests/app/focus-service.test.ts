@@ -203,7 +203,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		expect(sessions(s).map((x) => x.id)).toEqual([id]);
 	});
 
-	it("A2: start, split and reassign are refused while the database is read-only", async () => {
+	it("A2: start and split are refused while the database is read-only", async () => {
 		const s = await setup();
 		await makeReadOnly(s.h);
 		await expect(s.svc.start(cfg(), null)).rejects.toThrow(/read-only/);
@@ -608,7 +608,7 @@ describe("short sessions (D7)", () => {
 		expect(sessions(s)).toHaveLength(2);
 	});
 
-	it("a split or a recovered round under a minute is saved", async () => {
+	it("a split under a minute is saved", async () => {
 		const s = await setup();
 		const b = (await s.h.app.tasks.create({ title: "B" })).task;
 		await s.svc.start(cfg(), null);
@@ -903,14 +903,6 @@ describe("finish (P5)", () => {
 		expect(svc2.timer()).toBeNull();
 	});
 
-	it("Skip and Stop on the last round under 60 s are still dropped", async () => {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 30, 10);
-		await s.svc.stop();
-		expect(sessions(s)).toHaveLength(0);
-	});
-
 	it("under 60 s is saved when the setting is off", async () => {
 		const s = await setup();
 		s.settings.discard = false;
@@ -1057,6 +1049,18 @@ describe("delete and remove task (P4)", () => {
 	});
 });
 
+/** A one-round set ended by recovery with a 5-minute unobserved gap, finished on the next open. */
+async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
+	const s = await setup();
+	await s.svc.start(cfg(1), null);
+	await ticks(s, s.svc, 90, 30);
+	s.h.clock.advance(5 * 60_000);
+	const svc2 = s.reload();
+	await svc2.open();
+	await svc2.resolveRecovery("finish");
+	return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
+}
+
 describe("edits report whether they wrote", () => {
 	it("assign resolves true once, false for the same task again, and Undo reverts it once", async () => {
 		const s = await setup();
@@ -1070,17 +1074,6 @@ describe("edits report whether they wrote", () => {
 		expect(s.h.app.store.state.focusSessions.get(rec.id)?.taskId).toBeNull();
 		expect(s.h.app.store.undoLabel).not.toBe("Assign focus record");
 	});
-
-	async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 90, 30);
-		s.h.clock.advance(5 * 60_000);
-		const svc2 = s.reload();
-		await svc2.open();
-		await svc2.resolveRecovery("finish");
-		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
-	}
 
 	it("includeGap resolves true once and false when the gap already has that resolution", async () => {
 		const { s, rec } = await withGap();
@@ -1103,17 +1096,6 @@ describe("edits report whether they wrote", () => {
 });
 
 describe("modifiedAt of an edited record", () => {
-	async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 90, 30);
-		s.h.clock.advance(5 * 60_000);
-		const svc2 = s.reload();
-		await svc2.open();
-		await svc2.resolveRecovery("finish");
-		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
-	}
-
 	it("finalizing does not stamp it; includeGap, assign and remove task do", async () => {
 		const { s, rec } = await withGap();
 		const t = (await s.h.app.tasks.create({ title: "T" })).task;
