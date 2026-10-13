@@ -8,15 +8,16 @@ import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
 import { U1Host } from "../ui/app-helpers";
-import { CI_SLACK, LISTS, LOG, TASKS, countBigPasses, median, tally, taskId } from "./view-edit-fixture";
+import { countBigPasses, median, perfLog, tally } from "./measure";
+import { LISTS, TASKS, taskId } from "./view-edit-fixture";
 
 // Issue 75: a task block's redraw makes no pass over every task of its own. The query is the only pass
 // (blockQuery.ts); the subtask counts of the shown parents come from the task index, also for a completed parent the
 // block still holds. Parents are every tenth task (i % 10 = 7), each followed by its one subtask (i % 10 = 8); every
 // 500th task is high priority, so a list holds 10 high-priority parents and the vault 100 (under the 150 rows above
-// which a list is windowed, and happy-dom has no layout to window by).
+// which a list is windowed, and happy-dom has no layout to window by). The pass counts are the checks; the times from the
+// command to the DOM are logged (CHECKPOINT_PERF_LOG=1).
 
-const SAFETY_NET_MS = 50 * CI_SLACK;
 const RUNS = 5;
 
 beforeAll(() => {
@@ -94,6 +95,8 @@ const badge = (el: HTMLElement, title: string) =>
 		?.textContent.replace(/\s/g, "");
 /** The source file of each full pass in the pass list (`<name> <file>:<line>:<col>`), without repeats. */
 const files = (passes: string[]) => [...new Set(passes.map((p) => (p.split(" ")[1] ?? "").replace(/:\d+:\d+$/, "")))].sort();
+/** The passes of `passes` made by neither the command (src/app/tx.ts) nor a block's query (src/domain/blockQuery.ts). */
+const ownPasses = (passes: string[]) => files(passes).filter((f) => !f.endsWith("src/app/tx.ts") && !f.endsWith("src/domain/blockQuery.ts"));
 const FAKE: NonNullable<Parameters<typeof vi.useFakeTimers>[0]> = { toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] };
 
 describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
@@ -114,18 +117,14 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 				await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
 				ms.push(performance.now() - start);
 			});
-			if (LOG && run === 0) process.stderr.write(`issue-75: one rename, two blocks: passes ${tally(edit.passes)}\n`);
+			if (run === 0) perfLog(`issue-75: one rename, two blocks: passes ${tally(edit.passes)}`);
 			// The command (src/app/tx.ts) and one query per block (src/domain/blockQuery.ts); no pass of the block's own.
-			expect(
-				files(edit.passes).filter((f) => !f.endsWith("src/app/tx.ts") && !f.endsWith("src/domain/blockQuery.ts")),
-				tally(edit.passes),
-			).toEqual([]);
+			expect(ownPasses(edit.passes), tally(edit.passes)).toEqual([]);
 			expect(titles(small)).toContain(`Renamed ${run}`);
 			expect(titles(wide)).toContain(`Renamed ${run}`);
 		}
 		expect(h.app.tasks.lists.rebuilds).toBe(rebuilds);
-		if (LOG) process.stderr.write(`issue-75: command to DOM, two blocks, median ${median(ms).toFixed(1)} ms\n`);
-		expect(median(ms)).toBeLessThan(SAFETY_NET_MS);
+		perfLog(`issue-75: command to DOM, two blocks, median ${median(ms).toFixed(1)} ms`);
 		cleanup();
 	}, 120_000);
 
@@ -147,7 +146,7 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 			await h.app.tasks.complete(parent);
 			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
 		});
-		if (LOG) process.stderr.write(`issue-75: completing a held parent: passes ${tally(completing.passes)}\n`);
+		perfLog(`issue-75: completing a held parent: passes ${tally(completing.passes)}`);
 		expect(titles(el)).toContain(title);
 		expect(badge(el, title)).toBe("1/1");
 		expect(files(completing.passes).filter((f) => f.includes("src/ui/") || f.includes("src/obsidian/")), tally(completing.passes)).toEqual([]);
@@ -155,7 +154,7 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 		cleanup();
 	}, 120_000);
 
-	it(`ten blocks affected by one rename redraw within ${SAFETY_NET_MS} ms`, async () => {
+	it("ten blocks affected by one rename redraw with no pass of their own", async () => {
 		const { h, block, cleanup } = await setup();
 		const els: HTMLElement[] = [];
 		// Ten list blocks, of which only the one of list 3 shows the renamed task, and nine vault-wide blocks that show it too.
@@ -170,8 +169,14 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 			ms.push(performance.now() - start);
 			expect(els.filter((e) => titles(e).includes(`Renamed ${run}`))).toHaveLength(10);
 		}
-		if (LOG) process.stderr.write(`issue-75: one rename, ten affected blocks, median ${median(ms).toFixed(1)} ms\n`);
-		expect(median(ms)).toBeLessThan(SAFETY_NET_MS);
+		// One more rename, untimed (the counter reads a stack trace per pass), to count the passes.
+		const edit = await countBigPasses(async () => {
+			await h.app.tasks.update(shownParent(3), { title: `Renamed ${RUNS}` });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+		});
+		expect(els.filter((e) => titles(e).includes(`Renamed ${RUNS}`))).toHaveLength(10);
+		expect(ownPasses(edit.passes), tally(edit.passes)).toEqual([]);
+		perfLog(`issue-75: one rename, ten affected blocks, median ${median(ms).toFixed(1)} ms; passes ${tally(edit.passes)}`);
 		cleanup();
 	}, 120_000);
 });
