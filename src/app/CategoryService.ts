@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
-import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
+import { keyAfter, rekeyOrder } from "../domain/sortKey";
 import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
@@ -15,28 +15,37 @@ import {
 	tagDisplayPath,
 	tagDisplaySegments,
 	tagLeaf,
+	tagNameClashMessage,
 	tagPath,
 } from "../domain/tags";
-import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
+import {
+	assertUniqueCategoryName,
+	categoryNameKey,
+	compareCategories,
+	listsInSidebarOrder,
+	requireCategoryName,
+	requireColor,
+	requireIconName,
+} from "../domain/tasks";
 import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { AppStore } from "./store";
+import type { TaskIndex } from "./taskIndex";
 import type { Tx } from "./tx";
 import type { WriteResult } from "./writes";
 
 // Categories (lists) and tags.
 
-function sortedCategories(categories: Iterable<Category>): Category[] {
-	return [...categories].sort((a, b) => compareSortKeys(a.sortKey, b.sortKey));
-}
-
 export class CategoryService {
 	constructor(
 		private readonly store: AppStore,
 		private readonly ids: IdGenerator,
+		/** The task index, for the synced-list cap a delete's move into Inbox obeys. */
+		private readonly lists: TaskIndex,
 	) {}
 
+	/** The lists in sidebar order, Inbox first. */
 	list(): Category[] {
-		return sortedCategories(this.store.state.categories.values());
+		return listsInSidebarOrder(this.store.state.categories.values());
 	}
 
 	/** Explicit creation from list management only. */
@@ -111,18 +120,20 @@ export class CategoryService {
 		});
 	}
 
-	/** Moves a category one place up or down in the sidebar. */
+	/**
+	 * Moves a list one place up or down among the lists after the Inbox, which stays first. The Inbox does not move,
+	 * and neither does a list at either end: nothing is written. Lists that share a key get new ascending ones.
+	 */
 	move(id: ID, direction: -1 | 1): Promise<void> {
 		return this.store.run("Reorder categories", (tx) => {
-			const list = sortedCategories(tx.all("categories"));
-			const i = list.findIndex((c) => c.id === id);
-			const current = list[i];
-			if (current === undefined) return;
+			const order = listsInSidebarOrder(tx.all("categories")).filter((c) => c.id !== INBOX_ID);
+			const i = order.findIndex((c) => c.id === id);
 			const target = i + direction;
-			if (target < 0 || target >= list.length) return;
-			const lo = direction < 0 ? (list[target - 1]?.sortKey ?? null) : (list[target]?.sortKey ?? null);
-			const hi = direction < 0 ? (list[target]?.sortKey ?? null) : (list[target + 1]?.sortKey ?? null);
-			tx.put("categories", { ...current, sortKey: keyBetween(lo, hi), modifiedAt: tx.now });
+			if (i < 0 || target < 0 || target >= order.length) return;
+			[order[i], order[target]] = [order[target]!, order[i]!];
+			for (const [c, sortKey] of rekeyOrder(order, target, [], compareCategories)) {
+				if (sortKey !== c.sortKey) tx.put("categories", { ...c, sortKey, modifiedAt: tx.now });
+			}
 		});
 	}
 
@@ -133,7 +144,10 @@ export class CategoryService {
 		return n;
 	}
 
-	/** Tasks move to Inbox in the same write; undo restores both. */
+	/**
+	 * Tasks move to Inbox in the same write; undo restores both. Refused when the move would take a synced Inbox past
+	 * its open-task cap.
+	 */
 	delete(id: ID): Promise<number> {
 		return this.store.run("Delete category", (tx) => {
 			if (id === INBOX_ID) throw new DomainError("InboxProtected", "The Inbox cannot be deleted.");
@@ -147,6 +161,7 @@ export class CategoryService {
 			}
 			for (const s of tx.all("sections")) if (s.categoryId === id) tx.remove("sections", s.id);
 			tx.remove("categories", id);
+			this.lists.assertSyncedRoom(tx);
 			return moved;
 		});
 	}
@@ -342,7 +357,8 @@ export class TagService {
 
 	/**
 	 * Removes the tag and its key from every task, including tasks in Trash, in one write. Its child tags move to the
-	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). `tasks` counts
+	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). A child whose
+	 * name is already a top-level tag (two tags of one name from an older file) refuses the delete, as a rename would. `tasks` counts
 	 * the live tasks changed; `moves` lists the children moved; `wrote` is false when there was nothing to remove (the
 	 * tag was already gone and unused).
 	 */
@@ -352,8 +368,14 @@ export class TagService {
 			const keyMoves = new Map<string, string | null>([[key, null]]);
 			const moves: TagMove[] = [];
 			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
+			const tags = tx.map("tags");
+			// The tag each top-level key goes to; a child never lands on another tag (two tags are never merged).
+			const holders = new Map<string, string>();
 			for (const t of children.sort((a, b) => (a.key < b.key ? -1 : 1))) {
 				const to = tagLeaf(t.key);
+				const holder = to !== key && tags.has(to) ? to : holders.get(to);
+				if (holder !== undefined) throw new DomainError("InvalidTag", tagNameClashMessage(tags, holder));
+				holders.set(to, t.key);
 				keyMoves.set(t.key, to);
 				moves.push({ from: t.key, to });
 			}

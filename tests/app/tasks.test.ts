@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isDomainError } from "../../src/domain/errors";
-import { INBOX_ID } from "../../src/domain/types";
+import { INBOX_ID, syncLinkId } from "../../src/domain/types";
+import { rule } from "../domain/recurrence-fixtures";
 import { settle } from "../helpers";
 import { appHarness } from "./harness";
 
@@ -170,6 +171,7 @@ describe("subtasks (SUB-01..07, AS-09)", () => {
 });
 
 describe("trash and undo (TASK-05)", () => {
+	const dailyRule = rule();
 	it("delete can be undone, then purge removes records but never notes (AS-05, NOTE-08)", async () => {
 		const h = await appHarness();
 		h.notes.files.set("Plan v2.md", "body text");
@@ -196,6 +198,32 @@ describe("trash and undo (TASK-05)", () => {
 		h.clock.advance(2 * 24 * 3600 * 1000);
 		expect(await h.app.tasks.purgeExpired()).toBe(1);
 		expect(h.app.store.state.trash.size).toBe(1);
+	});
+
+	it("#138: a restore and a new delete queued before the hourly purge leave the task's history and TickTick link alone", async () => {
+		const h = await appHarness();
+		const { task } = await h.app.tasks.create({ title: "Stretch", scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: dailyRule } });
+		await h.app.tasks.complete(task.id);
+		const link = { kind: "task" as const, logwellId: task.id, ttId: "tt-1", ttProjectId: "p-1", etag: "e1", base: { title: "x" }, noteBySync: false, lastPulledAt: null, modifiedAt: "2026-10-01T10:00:00.000Z" };
+		await h.app.store.run("Test setup", (tx) => tx.put("syncLinks", link), { undoable: false });
+		const history = [...h.app.store.state.occurrenceRecords.values()];
+		expect(history).toHaveLength(1);
+		const old = await h.app.tasks.delete(task.id);
+		h.clock.advance(31 * 24 * 3600 * 1000);
+		// Queued in this order: the purge reads the Trash after the other two are queued but before they run.
+		const restored = h.app.tasks.restore(old.batchId);
+		const deleted = h.app.tasks.delete(task.id);
+		const purged = h.app.tasks.purgeExpired();
+		await restored;
+		const again = await deleted;
+		expect(await purged).toBe(0);
+		expect([...h.app.store.state.trash.keys()]).toEqual([again.batchId]);
+		expect([...h.app.store.state.occurrenceRecords.values()]).toEqual(history);
+		expect(h.app.store.state.syncLinks.get(syncLinkId("task", task.id))?.pendingDelete).toBeUndefined();
+		// Restored from the new entry, the task comes back with its history.
+		await h.app.tasks.restore(again.batchId);
+		expect(h.app.store.state.tasks.get(task.id)?.recurrence).not.toBeNull();
+		expect([...h.app.store.state.occurrenceRecords.values()]).toEqual(history);
 	});
 
 	it("undo refuses when the record changed since", async () => {

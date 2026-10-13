@@ -27,13 +27,13 @@ When the Logwell view is narrow, the quadrants stack in one column.
 Each quadrant groups its tasks by date, in this order:
 
 - **Overdue**: the date or deadline has passed.
-- **Today**
+- **Today**: the date or deadline is today, as in the **Today** view.
 - **Next 7 days**: tomorrow up to six days after today. With **Today**, it covers the same seven days as the **Next 7 days** list filter and task blocks.
 - **Later**
 - **No date**
 - **Completed**: collapsed until you click it, newest first. Click **Show more** to see more rows.
 
-A task's group comes from its date, or from its deadline when it has no date. A repeating task uses its current date. Inside a group, tasks with a date come first, earliest first, and the rest follow in the order you created them.
+Otherwise a task's group comes from its date, or from its deadline when it has no date. A repeating task uses its current date. Inside a group, tasks with a date come first, earliest first, and the rest follow in the order you created them.
 
 Empty groups are hidden. A quadrant with no tasks says "No tasks".
 

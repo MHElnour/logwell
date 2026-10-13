@@ -67,7 +67,7 @@ export class CheckpointApp {
 		this.store = new AppStore(host, clock);
 		this.recurrence = new RecurrenceService(this.store, settings, clock);
 		this.tasks = new TaskService(this.store, ids, settings, notes, renames, undefined, this.recurrence);
-		this.categories = new CategoryService(this.store, ids);
+		this.categories = new CategoryService(this.store, ids, this.tasks.lists);
 		this.sections = new SectionService(this.store, ids);
 		this.tags = new TagService(this.store);
 		this.data = new DataService(this.store);

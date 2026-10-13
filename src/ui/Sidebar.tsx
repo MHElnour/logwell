@@ -387,26 +387,33 @@ export function Sidebar(props: {
 	}, [openKey]);
 	const tree = useMemo(() => tagTree(state.tags.values(), counts.tags), [state.tags, counts.tags]);
 
-	const categoryMenu = (c: Category) => (e: MouseEvent) =>
-		host.showMenu(e, [
+	const categoryMenu = (c: Category) => (e: MouseEvent) => {
+		const items: MenuSpec = [
 			{ title: "Edit", icon: "pencil", run: () => void editCategory(host, c) },
 			{ title: "Change icon…", icon: "smile-plus", run: () => void changeIcon(host, c) },
 			{ title: "Change color…", icon: "palette", run: () => changeColor(host, c, e) },
 			...tickTickMenuItems(host, state, c),
-			{ title: "Move up", icon: "arrow-up", run: () => void host.app.categories.move(c.id, -1) },
-			{ title: "Move down", icon: "arrow-down", run: () => void host.app.categories.move(c.id, 1) },
-			...(c.isInbox
-				? []
-				: [
-						"separator" as const,
-						{
-							title: "Delete",
-							icon: "trash-2",
-							warning: true,
-							run: () => void deleteCategory(host, c, () => is({ kind: "category", id: c.id }) && toInbox()),
-						},
-					]),
-		]);
+		];
+		if (c.isInbox) {
+			// The Inbox stays first and cannot be deleted: no Move or Delete items.
+			if (items.at(-1) === "separator") items.pop();
+		} else {
+			// Lists move among the lists after the Inbox, never past either end.
+			const place = categories.findIndex((x) => x.id === c.id);
+			items.push(
+				{ title: "Move up", icon: "arrow-up", disabled: place <= 0, run: () => void host.app.categories.move(c.id, -1) },
+				{ title: "Move down", icon: "arrow-down", disabled: place === categories.length - 1, run: () => void host.app.categories.move(c.id, 1) },
+				"separator",
+				{
+					title: "Delete",
+					icon: "trash-2",
+					warning: true,
+					run: () => void deleteCategory(host, c, () => is({ kind: "category", id: c.id }) && toInbox()),
+				},
+			);
+		}
+		host.showMenu(e, items);
+	};
 
 	// After an edit or a delete: an open tag view at or under a moved key follows to the new one (the latest view,
 	// since the dialog stays open across renders); a view whose tag is gone goes to Inbox.

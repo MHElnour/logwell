@@ -603,6 +603,26 @@ describe("deleting a parent tag", () => {
 			expect(h.app.store.undoLabel).not.toBe(DELETE_TAG);
 		});
 
+		it("#127: refuses to delete a parent whose child would land on an existing tag, as a rename would, and writes nothing", async () => {
+			const h = await seeded();
+			// Two tags of one name, side by side in a file from an older version.
+			await h.app.store.run("Seed", (tx) => tx.put("tags", { key: "calls", displayName: "Calls", color: "red", createdAt: "2020-01-01T00:00:00.000Z", modifiedAt: JAN }));
+			await h.app.tasks.create({ title: "Call the bank", tagKeys: ["calls"] });
+			const state = h.app.store.state;
+			const label = h.app.store.undoLabel;
+			await expect(h.app.tags.delete("home")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Calls" is already used by another tag.' });
+			expect(h.app.store.state).toBe(state);
+			expect(h.app.store.undoLabel).toBe(label);
+			// Two children of one parent that would land on one key (deeper keys from an older file) are refused too.
+			await h.app.store.run("Seed", (tx) => {
+				for (const [key, displayName] of [["work", "Work"], ["work/desk", "Work/Desk"], ["work/old/desk", "Work/Old/Desk"]]) {
+					tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: JAN, modifiedAt: JAN });
+				}
+			});
+			await expect(h.app.tags.delete("work")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Desk" is already used by another tag.' });
+			expect(h.app.store.state.tags.has("work/desk")).toBe(true);
+		});
+
 		it("a leaf delete moves nothing", async () => {
 			const h = await seeded();
 			const r = await h.app.tags.delete("errands");
