@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#121) Fixed the "(TickTick)" copy made when a task was changed on both sides coming back as open work in Logwell and in TickTick when you had completed the task in TickTick. The copy is now completed, like TickTick's version, and stays in Logwell only.
 - (#120) Fixed a date you cleared in TickTick coming back when the task had a different date and deadline in Logwell: the sync removed only the deadline and sent the date back to TickTick. Clearing the date in TickTick now clears both in Logwell.
 - (#119) Fixed a task deleted in TickTick taking all its Logwell subtasks to the Trash with it, including ones still in TickTick and ones you had just added, and the next sync then deleting those subtasks in TickTick. Only the tasks gone from TickTick go to the Trash now; the other subtasks stay as top-level tasks, on both sides.
 - (#109) Fixed a subtask you moved to another synced list in TickTick being moved back to its old list by the next sync, and no longer a subtask on either side. It now stays in the list you moved it to, as a top-level task, in Logwell and in TickTick.
