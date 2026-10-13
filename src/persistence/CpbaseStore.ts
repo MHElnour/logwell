@@ -216,6 +216,8 @@ export class CpbaseStore {
 	 * Restore backup writes them.
 	 */
 	private unsavedCopy: string | null = null;
+	/** The conflict copy a final save kept pending edits in, and the commit count it holds. */
+	private keptPending: { path: string; commits: number } | null = null;
 
 	constructor(private readonly deps: StoreDeps) {}
 
@@ -506,6 +508,16 @@ export class CpbaseStore {
 	flush(): Promise<void> {
 		this.clearTimers();
 		return this.enqueue(() => this.saveNow());
+	}
+
+	/**
+	 * The last save before the app quits: like close(), edits that cannot be
+	 * written are kept as a conflict copy, since no retry may run. The store stays
+	 * open (a quit can be cancelled). Never rejects.
+	 */
+	flushBeforeQuit(): Promise<void> {
+		this.clearTimers();
+		return this.enqueue(() => this.saveOrKeepPending());
 	}
 
 	private nextMeta(prev: DbMeta): DbMeta {
@@ -913,32 +925,41 @@ export class CpbaseStore {
 	async close(): Promise<void> {
 		this.closed = true;
 		this.clearTimers();
-		await this.enqueue(async () => {
+		await this.enqueue(() => this.saveOrKeepPending());
+	}
+
+	/** Saves what is pending; what cannot be saved is kept as a conflict copy. Never rejects. */
+	private async saveOrKeepPending(): Promise<void> {
+		try {
+			await this.saveNow();
+		} catch (err) {
+			// For example the conflict copy of a concurrent external change could not be written.
+			this.emit({ type: "save-error", message: `Saving failed: ${err instanceof Error ? err.message : String(err)}` });
+		}
+		// Changes are still pending: the file was deleted (a save never recreates
+		// a missing file) or could not be written. Keep them as a conflict copy
+		// rather than dropping them when the session ends. This does not depend on
+		// what the file holds now: a sync tool may have recreated it right after
+		// the failed save.
+		if (this.unsavedCopy !== null) {
+			// Edits kept when the file turned unreadable never reached a file: say where they are.
+			this.emit({ type: "pending-saved-as-conflict", path: this.unsavedCopy });
+		} else if (this.current !== null && this.isDirty && this.backups !== null) {
+			// A copy kept by an earlier final save that holds every commit is not written twice.
+			if (this.keptPending?.commits === this.commits) {
+				this.emit({ type: "pending-saved-as-conflict", path: this.keptPending.path });
+				return;
+			}
 			try {
-				await this.saveNow();
+				const path = await this.writeConflictCopy();
+				this.keptPending = { path, commits: this.commits };
+				this.emit({ type: "pending-saved-as-conflict", path });
 			} catch (err) {
-				// For example the conflict copy of a concurrent external change could not be written.
-				this.emit({ type: "save-error", message: `Saving failed: ${err instanceof Error ? err.message : String(err)}` });
+				// This must never reject: a session switch and the quit wait for it.
+				// Say plainly that the edits are gone instead. Not a save error: no
+				// further attempt follows.
+				this.emit({ type: "edits-lost", message: err instanceof Error ? err.message : String(err) });
 			}
-			// Changes are still pending: the file was deleted (a save never recreates
-			// a missing file) or could not be written. Keep them as a conflict copy
-			// rather than dropping them when the session ends. This does not depend on
-			// what the file holds now: a sync tool may have recreated it right after
-			// the failed save.
-			if (this.unsavedCopy !== null) {
-				// Edits kept when the file turned unreadable never reached a file: say where they are.
-				this.emit({ type: "pending-saved-as-conflict", path: this.unsavedCopy });
-			} else if (this.current !== null && this.isDirty && this.backups !== null) {
-				try {
-					const path = await this.writeConflictCopy();
-					this.emit({ type: "pending-saved-as-conflict", path });
-				} catch (err) {
-					// close() must never reject: a session switch waits for it. Say
-					// plainly that the edits are gone instead. Not a save error: a closed
-					// store makes no further attempt.
-					this.emit({ type: "edits-lost", message: err instanceof Error ? err.message : String(err) });
-				}
-			}
-		});
+		}
 	}
 }

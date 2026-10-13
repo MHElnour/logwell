@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#117) Fixed edits made right before quitting Obsidian being lost when the last save failed, for example while a sync tool held the file: they are now kept as a conflict copy, as when a database closes. A database being switched to or from when Obsidian quits is saved too.
 - (#118) Fixed an error in one part of Logwell, such as a view or a task block, making a saved change report a failure and leaving the other views out of date. The error is now shown on its own, and a change made outside Obsidian still shows its conflict notice and saves its repairs.
 - (#104) Fixed two sections with the same name in a list making every open take a backup and save the database again, and two devices rewriting each other's file over and over. The duplicate is now named in a notice and the file is left as it is. A reload after a change from another device that does repair records now says so. **Merge by ID** no longer adds a backup's section next to one of the same name: its tasks go to the section you have.
 - (#139) Fixed a false conflict copy and Keep mine / Keep theirs notice on another device after a save reported an error but reached the file anyway: the retried save now continues from the version that landed.
