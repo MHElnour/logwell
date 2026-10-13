@@ -9,6 +9,8 @@ You can type a new task in two places. Both read your text the same way.
 - **The add bar** at the top of a list view. Press Enter to add the task; the bar stays for the next one. The view fills in defaults: in Today the task gets today's date, in a list it goes into that list, and in a tag view it gets that tag.
 - **The Quick add task window.** Open it with the command **Quick add task** or the plus button in the list header. Enter adds the task and closes the window, unless **Keep quick add open after saving** is on.
 
+Text you type while a task is still being saved stays in the field for the next task, and the window stays open with it.
+
 The **Add subtask** bar in the details pane reads text the same way. See [Tasks](tasks.md).
 
 <picture>
