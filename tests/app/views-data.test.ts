@@ -341,6 +341,30 @@ describe("views, export and import", () => {
 			expect(merged.tasks.has(a.id)).toBe(false);
 			expect(merged.trash.size).toBe(1);
 		});
+
+		it("#104: merge keeps one section per name: a section deleted and created again here takes the backup's tasks", async () => {
+			const h = await appHarness();
+			const work = await h.app.categories.create("Work", "💼");
+			const old = await h.app.sections.create(work.id, "Doing");
+			const kept = (await h.app.tasks.create({ title: "Kept", categoryId: work.id, sectionId: old.id })).task;
+			const purged = (await h.app.tasks.create({ title: "Purged", categoryId: work.id, sectionId: old.id })).task;
+			const backup = h.app.data.exportJson();
+			h.clock.advance(1000);
+			await h.app.tasks.delete(purged.id);
+			await h.app.tasks.emptyTrash();
+			await h.app.sections.delete(old.id);
+			const doing = await h.app.sections.create(work.id, "doing");
+
+			const preview = h.app.data.previewImport(backup);
+			if (!preview.ok) throw new Error(preview.message);
+			expect(preview.preview.changes.some((c) => c.collection === "sections")).toBe(false);
+			await h.app.data.importMerge(preview.preview);
+			const sections = [...h.app.store.state.sections.values()].filter((s) => s.categoryId === work.id);
+			expect(sections.map((s) => s.id)).toEqual([doing.id]);
+			expect(h.app.store.state.tasks.get(purged.id)?.sectionId).toBe(doing.id);
+			// The newer local edit (moved to No section when Doing was deleted) still wins.
+			expect(h.app.store.state.tasks.get(kept.id)?.sectionId).toBeNull();
+		});
 	});
 
 	describe("import: the preview is what gets applied", () => {

@@ -1646,3 +1646,53 @@ describe("the retry after a write that threw but landed", () => {
 		expect(other.data.meta.revision).toBe(retried.revision);
 	});
 });
+
+describe("two sections with one name in a list", () => {
+	function withSections(text: string, ...names: string[]): string {
+		const data = load(text);
+		const sections = new Map(data.sections);
+		names.forEach((name, i) => {
+			const id = `sec-${i + 1}`;
+			sections.set(id, { id, categoryId: "inbox", name, nameKey: name.toLowerCase(), sortKey: `V${i}`, createdAt: data.meta.writtenAt, modifiedAt: data.meta.writtenAt });
+		});
+		return serializeDb({ ...data, sections });
+	}
+
+	it("#104: opening reports the duplicate but never rewrites the file or takes a backup", async () => {
+		const text = withSections(emptyDbText(), "Doing", "Doing");
+		const h = harness(text);
+		for (const store of [h.store, h.newStore()]) {
+			await store.open();
+			await store.close();
+		}
+		expect(h.dbText()).toBe(text);
+		expect([...h.fs.files.keys()].some((p) => p.includes("/pre-repair-"))).toBe(false);
+		expect(h.events.some((e) => e.type === "repaired")).toBe(false);
+		const noticed = h.events.filter((e) => e.type === "noticed");
+		expect(noticed).toHaveLength(2);
+		expect(noticed[0]?.type === "noticed" && noticed[0].notes.join(" ")).toContain('Section "Doing" has the same name');
+	});
+
+	it("#104: an outside change that still has the duplicate is reloaded without a rewrite", async () => {
+		const h = harness();
+		await h.store.open();
+		const incoming = withSections(descendant(h.dbText(), (d) => d, "r-remote"), "Doing", "Doing");
+		h.fs.files.set(DB_PATH, incoming);
+		await h.store.handleExternalChange();
+		expect(h.store.data.sections.size).toBe(2);
+		expect(h.dbText()).toBe(incoming);
+		h.scheduler.advance(SAVE_MAX_DELAY_MS);
+		await settle();
+		expect(h.dbText()).toBe(incoming);
+	});
+
+	it("#104: an outside change that is repaired on reload says so", async () => {
+		const h = harness();
+		await h.store.open();
+		h.events.length = 0;
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("t1", { categoryId: "missing" })).next, "r-remote"));
+		await h.store.handleExternalChange();
+		const repaired = h.events.find((e) => e.type === "repaired");
+		expect(repaired?.type === "repaired" && repaired.issues.join(" ")).toContain("Task t1");
+	});
+});
