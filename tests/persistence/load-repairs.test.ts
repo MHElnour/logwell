@@ -173,7 +173,7 @@ describe("sections", () => {
 			expect(ok(loadText(serializeDb(r.data), NOW)).issues).toEqual([]);
 		});
 
-		it("duplicate nameKeys within a list stay as they are, with an issue", () => {
+		it("duplicate nameKeys within a list stay as they are, with a note and no issue (#104)", () => {
 			const r = ok(
 				loadMutated((raw) => {
 					const w = raw.sections.find((s) => s.id === WEEK1)!;
@@ -181,7 +181,8 @@ describe("sections", () => {
 				}),
 			);
 			expect(r.data.sections.has("dup-sec")).toBe(true);
-			expect(r.issues.some((i) => i.includes("same name"))).toBe(true);
+			expect(r.issues).toEqual([]);
+			expect(r.notes.some((i) => i.includes("same name"))).toBe(true);
 		});
 
 		it("a valid file produces no issues and repaired data round-trips", () => {

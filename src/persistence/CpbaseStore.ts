@@ -72,6 +72,8 @@ export type StoreEvent =
 	| { type: "edits-lost"; message: string }
 	| { type: "lost-revision"; revision: string; path: string | null }
 	| { type: "repaired"; issues: string[] }
+	/** Problems found on open and left as they are (nothing is written for them). */
+	| { type: "noticed"; notes: string[] }
 	| { type: "migrated"; from: number; to: number }
 	| { type: "saved"; revision: string }
 	| { type: "save-error"; message: string };
@@ -89,7 +91,7 @@ export interface StoreDeps {
 }
 
 export type LoadResult =
-	| { kind: "ok"; data: DbData; issues: string[]; migratedFrom: number | null }
+	| { kind: "ok"; data: DbData; issues: string[]; notes: string[]; migratedFrom: number | null }
 	| { kind: "newer"; version: number; data: DbData | null }
 	| { kind: "failed"; failure: LoadFailure; detail: string };
 
@@ -116,11 +118,11 @@ export function loadText(text: string, now: string, migrations: readonly Migrati
 			}
 			case "current": {
 				const v = validateDb(parsed.raw, now);
-				return { kind: "ok", data: v.data, issues: v.issues, migratedFrom: null };
+				return { kind: "ok", data: v.data, issues: v.issues, notes: v.notes, migratedFrom: null };
 			}
 			case "migrate": {
 				const v = validateDb(runMigrations(parsed.raw, plan.steps), now);
-				return { kind: "ok", data: v.data, issues: v.issues, migratedFrom: plan.from };
+				return { kind: "ok", data: v.data, issues: v.issues, notes: v.notes, migratedFrom: plan.from };
 			}
 		}
 	} catch (err) {
@@ -199,6 +201,12 @@ export class CpbaseStore {
 	 * deliberate rollback. Cleared on success and on an external reload.
 	 */
 	private readonly attempted = new Set<string>();
+	/**
+	 * The header of the newest write attempt that threw. It may have landed and
+	 * been synced, so the retry continues from it and keeps it in history.
+	 * Cleared with `attempted`.
+	 */
+	private thrownMeta: DbMeta | null = null;
 	private lastSnapshotAt: number | null = null;
 	private closed = false;
 	/**
@@ -299,6 +307,7 @@ export class CpbaseStore {
 					this.needsFullWrite = true;
 					this.emit({ type: "repaired", issues: result.issues });
 				}
+				if (result.notes.length > 0) this.emit({ type: "noticed", notes: result.notes });
 				await this.checkLostRevision();
 				if (this.needsFullWrite) await this.saveNow();
 				// The session-start snapshot is not forced: it is skipped when unchanged.
@@ -534,7 +543,7 @@ export class CpbaseStore {
 		this.pendingOps = [];
 		this.needsFullWrite = false;
 
-		const prev = this.current.meta;
+		const prev = this.thrownMeta ?? this.current.meta;
 		const meta = this.nextMeta(prev);
 		const content = serializeDb({ ...this.current, meta }, this.cache);
 		let journalOk = true;
@@ -559,6 +568,7 @@ export class CpbaseStore {
 			result = await this.deps.file.write(content, (text) => this.isOnDisk(text));
 		} catch (err) {
 			requeue();
+			this.thrownMeta = meta;
 			this.emit({ type: "save-error", message: err instanceof Error ? err.message : String(err) });
 			this.scheduleRetry();
 			return;
@@ -589,6 +599,7 @@ export class CpbaseStore {
 		}
 		this.casFailures = 0;
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.current = { ...this.current, meta };
 		this.disk = { revision: meta.revision };
 		if (snapshotFirst && journalOk) this.journalStale = false;
@@ -729,6 +740,7 @@ export class CpbaseStore {
 		this.replaceData(incoming);
 		this.disk = diskStateOf(text);
 		this.attempted.clear();
+		this.thrownMeta = null;
 		this.unsavedCopy = null;
 		// Our version is kept as the conflict copy, so the loaded one is this
 		// device's base from now on: the next open does not report ours as lost.
@@ -740,6 +752,7 @@ export class CpbaseStore {
 		this.emit({ type: "loaded", cause: "external" });
 		if (conflictPath !== null) this.emit({ type: "conflict", path: conflictPath });
 		if (result.migratedFrom !== null) this.emit({ type: "migrated", from: result.migratedFrom, to: CURRENT_SCHEMA_VERSION });
+		if (result.issues.length > 0) this.emit({ type: "repaired", issues: result.issues });
 		if (this.needsFullWrite) {
 			await this.backupBeforeRewrite(result, text);
 			await this.saveNow();
