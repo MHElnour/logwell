@@ -732,6 +732,42 @@ describe("the picker with series, panes and the calendar", () => {
 			expect(section.querySelector(".cp-details .cp-repeat-pop")).toBeNull();
 			expect(hasRepeatEditRequest(t.id)).toBe(false);
 		});
+
+		it("#106: selecting another task closes the Custom repeat editor, so its draft is never written to that task", async () => {
+			const m = await mount();
+			await create(m, "Alpha", { repeat: { rule: { ...weeklyFriday.rule, interval: 3 } } });
+			const b = await create(m, "Bravo", { repeat: { rule: { ...weeklyFriday.rule, freq: "daily", weekdays: null } } });
+			const section = await showInbox(m);
+			await click(rowFor(section, "Alpha"));
+			await click(q(section, ".cp-details .cp-due-chip"));
+			await click(q(section, ".cp-details .cp-repeat-button"));
+			await click(q(section, '.cp-details [data-preset="custom"]'));
+			expect(section.querySelector(".cp-details .cp-repeat-custom")).not.toBeNull();
+			const rule = taskById(m, b.id).recurrence;
+			await click(rowFor(section, "Bravo"));
+			expect(q<HTMLInputElement>(section, ".cp-details .cp-details-title").value).toBe("Bravo");
+			expect(section.querySelector(".cp-details .cp-repeat-pop")).toBeNull();
+			expect(section.querySelector(".cp-details .cp-repeat-button")?.textContent).toContain("every day");
+			expect(taskById(m, b.id).recurrence).toBe(rule);
+		});
+
+		it("#106: a picker opened by Edit repeat… does not open again for another task, nor when coming back", async () => {
+			const m = await mount();
+			await create(m, "Alpha");
+			await create(m, "Bravo");
+			const section = await showInbox(m);
+			menuItem(await contextMenu(m, rowFor(section, "Alpha")), "Edit repeat…").run();
+			await settle();
+			expect(section.querySelector(".cp-details .cp-repeat-pop")).not.toBeNull();
+			await click(rowFor(section, "Bravo"));
+			expect(section.querySelector(".cp-details .cp-repeat-pop")).toBeNull();
+			await click(rowFor(section, "Alpha"));
+			expect(section.querySelector(".cp-details .cp-repeat-pop")).toBeNull();
+			menuItem(await contextMenu(m, rowFor(section, "Bravo")), "Edit repeat…").run();
+			await settle();
+			expect(q<HTMLInputElement>(section, ".cp-details .cp-details-title").value).toBe("Bravo");
+			expect(section.querySelector(".cp-details .cp-repeat-pop")).not.toBeNull();
+		});
 	});
 
 	describe("the details picker names the current occurrence", () => {

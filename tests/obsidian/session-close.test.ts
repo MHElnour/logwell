@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { emptyDbText } from "../persistence/fixtures";
+import { descendant, emptyDbText } from "../persistence/fixtures";
 import { type FakeApp, fakeApp, loadPlugin } from "./fake-vault";
 import { CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 
@@ -177,5 +177,29 @@ describe("'Open conflict view' when the database file is missing", () => {
 		expect(setActive).not.toHaveBeenCalled();
 		expect(notices.list).toHaveLength(1);
 		expect(notices.list[0]!.message).toContain("backups/db-a/conflicts");
+	});
+});
+
+describe("a change listener that throws", () => {
+	it("#118: the write still succeeds, the other listeners run, the error is shown, and an outside change still offers Keep mine", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		const session = plugin.session!;
+		const failure = new Error("a view failed");
+		session.app.store.bus.on("changed", () => {
+			throw failure;
+		});
+		const seen: string[] = [];
+		session.app.store.bus.on("changed", (e) => seen.push(e.label));
+
+		await expect(session.app.tasks.create({ title: "Mine" })).resolves.toBeDefined();
+		expect(seen).toHaveLength(1);
+		expect(notices.errors).toEqual([failure]);
+
+		// The file changes outside Obsidian while that edit waits to be saved.
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => d, "r-theirs000001"));
+		await session.store.handleExternalChange();
+		expect(notices.list.some((n) => n.labels.includes("Keep mine") && n.labels.includes("Keep theirs"))).toBe(true);
+		expect(seen).toHaveLength(2);
 	});
 });

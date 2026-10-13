@@ -84,6 +84,20 @@ describe("edits (SYNC-07)", () => {
 		expect(s.link("task", s.id)?.etag).toBe(s.tt.get(s.ttId)?.etag);
 	});
 
+	it("#108: keeps the other values TickTick changed when one of them is refused", async () => {
+		const s = await oneTask();
+		const home = await linkedList(s, "Home");
+		await s.h.app.tasks.update(s.id, { categoryId: home.listId });
+		// A column of the list the task just left in Logwell: refused there.
+		const doing = s.tt.addColumn(s.projectId, "Doing");
+		s.tt.edit(s.ttId, { title: "Call the bank now", priority: 5, columnId: doing.id });
+		const r = await s.sync.sync();
+		expect(r.ok).toBe(true);
+		expect(s.h.app.store.state.tasks.get(s.id)).toMatchObject({ title: "Call the bank now", priority: 1, categoryId: home.listId, sectionId: null });
+		expect(s.tt.get(s.ttId)).toMatchObject({ title: "Call the bank now", priority: 5, projectId: home.projectId });
+		expect(s.tasks("Call the bank now (TickTick)")).toHaveLength(0);
+	});
+
 	it("moves the date that was sent: the deadline, and the schedule when equal (SYNC-05)", async () => {
 		const s = await oneTask();
 		await s.h.app.tasks.update(s.id, { scheduled: { kind: "date", date: "2026-10-05" }, deadline: { kind: "date", date: "2026-10-09" } });
@@ -182,6 +196,47 @@ describe("lists, sections and subtasks (SYNC-04)", () => {
 		expect(s.tt.count("moveTasks")).toBe(1);
 		expect(s.tt.get(s.ttId)?.projectId).toBe(s.projectId);
 		expect(s.link("task", s.id)?.ttProjectId).toBe(s.projectId);
+	});
+
+	it.each([
+		["takes it out of its parent", { parentId: "" }],
+		["still names its old parent", {}],
+	])("#109: a subtask moved to another linked list in TickTick that %s stays there as a top-level task", async (_, patch) => {
+		const s = await oneTask();
+		const home = await linkedList(s, "Home");
+		const sub = await s.h.app.tasks.create({ title: "Find the account number", parentId: s.id });
+		await s.sync.sync();
+		s.tick();
+		const subTt = s.ttIdOf("Find the account number");
+		s.tt.moveTo(subTt, home.projectId);
+		s.tt.edit(subTt, patch);
+		const r = await s.sync.sync();
+		expect(r.ok).toBe(true);
+		expect(s.h.app.store.state.tasks.get(sub.task.id)).toMatchObject({ categoryId: home.listId, parentId: null });
+		expect(s.h.app.store.state.tasks.get(s.id)?.categoryId).toBe(s.listId);
+		expect(s.tt.get(subTt)?.projectId).toBe(home.projectId);
+		expect(s.tt.get(subTt)?.parentId ?? "").toBe("");
+		expect(s.link("task", sub.task.id)?.ttProjectId).toBe(home.projectId);
+		// Settled: the next sync moves nothing.
+		s.tick();
+		await s.sync.sync();
+		expect(s.tt.count("moveTasks")).toBe(0);
+		expect(s.tt.get(subTt)?.projectId).toBe(home.projectId);
+	});
+
+	it("#109: a subtask given another parent in Logwell keeps it when TickTick moves it to another list", async () => {
+		const s = await oneTask();
+		const home = await linkedList(s, "Home");
+		const other = await s.h.app.tasks.create({ title: "Pay rent", categoryId: s.listId });
+		const sub = await s.h.app.tasks.create({ title: "Find the account number", parentId: s.id });
+		await s.sync.sync();
+		s.tick();
+		const subTt = s.ttIdOf("Find the account number");
+		await s.h.app.tasks.setParent(sub.task.id, other.task.id);
+		s.tt.moveTo(subTt, home.projectId);
+		await s.sync.sync();
+		expect(s.h.app.store.state.tasks.get(sub.task.id)).toMatchObject({ categoryId: s.listId, parentId: other.task.id });
+		expect(s.tt.get(subTt)).toMatchObject({ projectId: s.projectId, parentId: s.ttIdOf("Pay rent") });
 	});
 
 	it("creates a Logwell section for a new column and pushes a Logwell section as a column", async () => {

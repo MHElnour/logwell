@@ -16,7 +16,7 @@ Logwell keeps your tasks in one database file in your vault. This page explains 
 
 ## How Logwell saves
 
-Logwell saves a moment after you stop editing, and at the latest a couple of seconds later. It also saves when the window loses focus or is hidden, and when Obsidian quits. If a save fails, see [Troubleshooting](troubleshooting.md#a-notice-says-the-database-could-not-be-saved).
+Logwell saves a moment after you stop editing, and at the latest a couple of seconds later. It also saves when the window loses focus or is hidden, and when Obsidian quits. If the last save before Obsidian quits or a database closes fails, your changes are kept as a conflict copy. If a save fails, see [Troubleshooting](troubleshooting.md#a-notice-says-the-database-could-not-be-saved).
 
 To take back a change, see [Undo](tasks.md#undo).
 

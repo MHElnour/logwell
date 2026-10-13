@@ -317,8 +317,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// after an `every …` it cannot build they apply nothing.
 	const built = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d) && (d.chip.status === "applied" || d.chip.status === "choice"));
 	// Start and end parts belong to the typed repeat only when typed after it, to one picked by hand anywhere: before the
-	// first typed repeat that stays they read as without a repeat (Repeating tasks rule 19).
-	const partsFrom = typed ? Math.min(...keptRepeats.map((d) => d.chip.span.end)) : ctx.manual.has("recurrence") ? 0 : input.length + 1;
+	// first typed repeat that stays they read as without a repeat (Repeating tasks rule 19). Never picked by hand is no
+	// repeat: `until Dec 1` is then a deadline, as on a task that does not repeat.
+	const picked = ctx.manual.has("recurrence") && ctx.pickedNever !== true;
+	const partsFrom = typed ? Math.min(...keptRepeats.map((d) => d.chip.span.end)) : picked ? 0 : input.length + 1;
 	const isPart = (c: DateCandidate): boolean => c.span.start >= partsFrom;
 	// Under a weekly form `on` names days: `every week on Oct 12` is no start.
 	const typedRule = keptRepeats.length === 1 ? (keptRepeats[0]!.chip.rule ?? keptRepeats[0]!.chip.alternatives?.[0]?.rule) : undefined;

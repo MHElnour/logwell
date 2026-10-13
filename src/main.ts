@@ -81,6 +81,8 @@ export default class CheckpointPlugin extends Plugin {
 		this.registerDomEvent(document, "visibilitychange", () => void this.session?.store.flush());
 		this.registerDomEvent(window, "blur", () => void this.session?.store.flush());
 		// Quitting does not always unload plugins first; Obsidian waits for these tasks.
+		// A database being closed or opened by a switch is saved too. What cannot be
+		// written is kept as a conflict copy, since no retry runs after the quit.
 		this.registerEvent(
 			this.app.workspace.on("quit", (tasks) =>
 				tasks.add(async () => {
@@ -89,7 +91,8 @@ export default class CheckpointPlugin extends Plugin {
 					} catch (err) {
 						showError(err);
 					}
-					await this.session?.store.flush();
+					const sessions = new Set([this.session, this.closingSession, this.openingSession]);
+					await Promise.all([...sessions].filter((s) => s !== null).map((s) => s.store.flushBeforeQuit()));
 				}),
 			),
 		);

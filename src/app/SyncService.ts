@@ -1,7 +1,7 @@
 import { DomainError, isDomainError } from "../domain/errors";
 import { compareSortKeys, keyBetween } from "../domain/sortKey";
 import { TagNames, normalizeTagKey, tagDisplayPath, tagNamesOf, tagPath } from "../domain/tags";
-import { categoryNameKey, requireTitle } from "../domain/tasks";
+import { categoryNameKey, requireTitle, subtasksOf } from "../domain/tasks";
 import {
 	type SyncFields,
 	dateFromTt,
@@ -577,12 +577,8 @@ export class SyncService {
 		return this.serial(async () => {
 			let wrote = false;
 			await this.store.run(TICKTICK_TRASH_LABEL, (tx) => {
-				for (const id of taskIds) {
-					const t = tx.get("tasks", id);
-					if (t === undefined || t.categoryId !== listId) continue;
-					this.tasks.deleteIn(tx, id);
-					wrote = true;
-				}
+				const gone = taskIds.filter((id) => tx.get("tasks", id)?.categoryId === listId);
+				wrote = this.trashGoneIn(tx, new Set(gone)) > 0;
 			});
 			await this.store.run(
 				TICKTICK_LINKS_LABEL,
@@ -1253,17 +1249,32 @@ export class SyncService {
 				plan.needsConfirmation.push({ listId, reason: emptied ? "emptied" : "many", tasks: group.map((t) => ({ id: t.id, title: t.title })) });
 				continue;
 			}
-			for (const t of group) {
-				if (tx.get("tasks", t.id) !== undefined) {
-					this.tasks.deleteIn(tx, t.id);
-					plan.written++;
-				}
-				plan.removeLinks.add(syncLinkId("task", t.id));
-			}
+			plan.written += this.trashGoneIn(tx, new Set(group.map((t) => t.id)));
+			for (const t of group) plan.removeLinks.add(syncLinkId("task", t.id));
 		}
 		// `finish` is pure: whether this command writes anything, for the result and its Undo notice.
 		plan.wrote = tx.finish().ops.length > 0;
 		return plan;
+	}
+
+	/**
+	 * Moves tasks gone from TickTick to Trash, each with its subtasks that are gone too. A subtask that is not gone
+	 * (alive in TickTick, or never sent) stays, as a top-level task: in Trash it would be deleted in TickTick by the next
+	 * sync. Returns the tasks written.
+	 */
+	private trashGoneIn(tx: Tx, gone: ReadonlySet<ID>): number {
+		let written = 0;
+		for (const id of gone) {
+			if (tx.get("tasks", id) === undefined) continue;
+			for (const sub of subtasksOf(tx.all("tasks"), id)) {
+				if (gone.has(sub.id)) continue;
+				this.tasks.setParentIn(tx, sub.id, null);
+				written++;
+			}
+			this.tasks.deleteIn(tx, id);
+			written++;
+		}
+		return written;
 	}
 
 	/** An unlinked, open Logwell task of the list whose create may have reached TickTick, by title. */
@@ -1310,43 +1321,58 @@ export class SyncService {
 		}
 		const homeList = listOfProject.get(link.ttProjectId ?? "")!.listId;
 		const ttList = listOfProject.get(tt.projectId)?.listId ?? homeList;
-		const pullList = ttList !== homeList && t.categoryId === homeList && t.parentId === null;
+		// Moved to another linked list in TickTick and still in its list here: TickTick's list wins. A subtask leaves its
+		// parent for it (a subtask shares its parent's list), whether TickTick names no parent or still the old one,
+		// unless its parent changed here since the last sync.
+		const pullList = ttList !== homeList && t.categoryId === homeList && (t.parentId === null || ours.parent === link.base.parent);
 		let written = 0;
-		const attempt = (write: () => void): void => {
+		/** Runs one pulled write; false when Logwell's rules refuse it. */
+		const applies = (write: () => void): boolean => {
 			try {
 				write();
-				written++;
+				return true;
 			} catch (err) {
 				// A pulled value Logwell's rules refuse stays Logwell's; the push sends it back up.
 				if (!isDomainError(err)) throw err;
+				return false;
 			}
 		};
+		const attempt = (write: () => void): void => {
+			if (applies(write)) written++;
+		};
 
-		const patch: TaskPatch = {};
-		if (pullList) patch.categoryId = ttList;
-		if (pull.has("title")) patch.title = ttTitle(tt.title);
-		if (pull.has("priority")) patch.priority = priorityFromTt(tt.priority);
-		if (pull.has("date")) Object.assign(patch, pulledDatePatch(t, dateFromTt(tt, zone)));
-		if (pull.has("section") && t.parentId === null) {
+		// The parent first, so a subtask that leaves its parent can follow TickTick's list.
+		const parent = pull.has("parent") ? parentOf(tt) : undefined;
+		if (parent !== undefined) attempt(() => this.tasks.setParentIn(tx, t.id, parent));
+		else if (pullList && t.parentId !== null) attempt(() => this.tasks.setParentIn(tx, t.id, null));
+		const topLevel = (tx.get("tasks", t.id) ?? t).parentId === null;
+
+		// One patch per pulled value, the list first so a column of the new list follows it: a value Logwell's rules
+		// refuse (a column of a list the task left) is skipped, never the others with it. The task counts as one write.
+		const patches: TaskPatch[] = [];
+		if (pullList) patches.push({ categoryId: ttList });
+		if (pull.has("title")) patches.push({ title: ttTitle(tt.title) });
+		if (pull.has("priority")) patches.push({ priority: priorityFromTt(tt.priority) });
+		if (pull.has("date")) patches.push(pulledDatePatch(t, dateFromTt(tt, zone)));
+		if (pull.has("section") && topLevel) {
 			const section = sectionOf(tt);
-			if (section !== undefined) patch.sectionId = section;
+			if (section !== undefined) patches.push({ sectionId: section });
 		}
 		if (pull.has("tags")) {
 			const pulled = tags.keysOf(tt);
 			// A tag that does not sync stays.
 			const keep = t.tagKeys.filter((k) => !isSyncedTag(tags.names, k) || pulled.includes(k));
 			const next = [...keep, ...pulled.filter((k) => !keep.includes(k))];
-			if (next.length !== t.tagKeys.length || next.some((k, i) => k !== t.tagKeys[i])) patch.tagKeys = next;
+			if (next.length !== t.tagKeys.length || next.some((k, i) => k !== t.tagKeys[i])) patches.push({ tagKeys: next });
 		}
-		if (Object.keys(patch).length > 0) {
-			attempt(() => {
-				if (!this.tasks.updateIn(tx, t.id, patch).changed) written--;
+		let patched = false;
+		for (const patch of patches) {
+			if (Object.keys(patch).length === 0) continue;
+			applies(() => {
+				if (this.tasks.updateIn(tx, t.id, patch).changed) patched = true;
 			});
 		}
-		if (pull.has("parent")) {
-			const parent = parentOf(tt);
-			if (parent !== undefined) attempt(() => this.tasks.setParentIn(tx, t.id, parent));
-		}
+		if (patched) written++;
 		if (pull.has("status")) {
 			attempt(() => (statusFromTt(tt.status) === "completed" ? this.tasks.completeOneIn(tx, t.id) : this.tasks.reopenIn(tx, t.id)));
 		}

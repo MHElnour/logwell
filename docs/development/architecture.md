@@ -37,7 +37,7 @@ flowchart TD
 
 `CheckpointApp` (`src/app/App.ts`) is the composition root of the app layer: one `AppStore` and every service, plus `queryContext()`, the context every view reads. A view whose file is not the active database shows **Make active** instead of the app.
 
-Closing a session stops the TickTick sync, lets a focus write finish, applies the note renames still queued and closes the store, which saves what is pending. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there.
+Closing a session stops the TickTick sync, lets a focus write finish, applies the note renames still queued and closes the store, which saves what is pending. When Obsidian quits, the plugin's quit task saves the open session and any session a switch is closing or opening with `CpbaseStore.flushBeforeQuit`; like `close`, it keeps what cannot be written as a conflict copy. A database switch first waits for a TickTick request in flight, at most `SYNC_CLOSE_WAIT_MS` (`DbSession.settleSync`); plugin unload does not wait, so closing stays synchronous there.
 
 ## A change
 
@@ -68,7 +68,7 @@ The `CommandQueue` (`src/app/events.ts`) runs one command at a time, in order. A
 
 Records are immutable: a change is a fresh object, and only the collections a command touched get a fresh map. Views and the serializer rely on that identity. `CpbaseStore.commit` swaps the state in memory at once and schedules the save, so views never wait for the file.
 
-The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, sent on the `EventBus` from `src/app/events.ts`). It carries the label and the change list: each record written, before and after. A reload or a full replace carries no list, which means anything may differ.
+The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, sent on the `EventBus` from `src/app/events.ts`). It carries the label and the change list: each record written, before and after. A reload or a full replace carries no list, which means anything may differ. A listener that throws never fails the command or stops the other listeners: `EventBus.onListenerError` gets the error, and the session shows it with `showError`.
 
 Listeners use the list to narrow their work: the task index (`src/app/taskIndex.ts`), the task block (`src/obsidian/dashboardBlock.ts`) and the TickTick scheduler.
 
