@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#108) Fixed a TickTick sync dropping everything changed in TickTick on a task, such as a new title and priority, when one of the changes could not apply in Logwell, like a column of the list you had just moved the task out of. The sync then sent the old values back to TickTick. Each change now applies on its own, and only the one Logwell cannot take is skipped.
 - (#117) Fixed edits made right before quitting Obsidian being lost when the last save failed, for example while a sync tool held the file: they are now kept as a conflict copy, as when a database closes. A database being switched to or from when Obsidian quits is saved too.
 - (#118) Fixed an error in one part of Logwell, such as a view or a task block, making a saved change report a failure and leaving the other views out of date. The error is now shown on its own, and a change made outside Obsidian still shows its conflict notice and saves its repairs.
 - (#106) Fixed the details pane keeping the Custom repeat editor open, filled in with the previous task's rule, after you selected another task; **Done** then gave that rule to the new task. Selecting another task now closes the repeat picker and empties the Add tag box.

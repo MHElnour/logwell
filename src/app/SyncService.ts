@@ -1312,37 +1312,47 @@ export class SyncService {
 		const ttList = listOfProject.get(tt.projectId)?.listId ?? homeList;
 		const pullList = ttList !== homeList && t.categoryId === homeList && t.parentId === null;
 		let written = 0;
-		const attempt = (write: () => void): void => {
+		/** Runs one pulled write; false when Logwell's rules refuse it. */
+		const applies = (write: () => void): boolean => {
 			try {
 				write();
-				written++;
+				return true;
 			} catch (err) {
 				// A pulled value Logwell's rules refuse stays Logwell's; the push sends it back up.
 				if (!isDomainError(err)) throw err;
+				return false;
 			}
 		};
+		const attempt = (write: () => void): void => {
+			if (applies(write)) written++;
+		};
 
-		const patch: TaskPatch = {};
-		if (pullList) patch.categoryId = ttList;
-		if (pull.has("title")) patch.title = ttTitle(tt.title);
-		if (pull.has("priority")) patch.priority = priorityFromTt(tt.priority);
-		if (pull.has("date")) Object.assign(patch, pulledDatePatch(t, dateFromTt(tt, zone)));
+		// One patch per pulled value, the list first so a column of the new list follows it: a value Logwell's rules
+		// refuse (a column of a list the task left) is skipped, never the others with it. The task counts as one write.
+		const patches: TaskPatch[] = [];
+		if (pullList) patches.push({ categoryId: ttList });
+		if (pull.has("title")) patches.push({ title: ttTitle(tt.title) });
+		if (pull.has("priority")) patches.push({ priority: priorityFromTt(tt.priority) });
+		if (pull.has("date")) patches.push(pulledDatePatch(t, dateFromTt(tt, zone)));
 		if (pull.has("section") && t.parentId === null) {
 			const section = sectionOf(tt);
-			if (section !== undefined) patch.sectionId = section;
+			if (section !== undefined) patches.push({ sectionId: section });
 		}
 		if (pull.has("tags")) {
 			const pulled = tags.keysOf(tt);
 			// A tag that does not sync stays.
 			const keep = t.tagKeys.filter((k) => !isSyncedTag(tags.names, k) || pulled.includes(k));
 			const next = [...keep, ...pulled.filter((k) => !keep.includes(k))];
-			if (next.length !== t.tagKeys.length || next.some((k, i) => k !== t.tagKeys[i])) patch.tagKeys = next;
+			if (next.length !== t.tagKeys.length || next.some((k, i) => k !== t.tagKeys[i])) patches.push({ tagKeys: next });
 		}
-		if (Object.keys(patch).length > 0) {
-			attempt(() => {
-				if (!this.tasks.updateIn(tx, t.id, patch).changed) written--;
+		let patched = false;
+		for (const patch of patches) {
+			if (Object.keys(patch).length === 0) continue;
+			applies(() => {
+				if (this.tasks.updateIn(tx, t.id, patch).changed) patched = true;
 			});
 		}
+		if (patched) written++;
 		if (pull.has("parent")) {
 			const parent = parentOf(tt);
 			if (parent !== undefined) attempt(() => this.tasks.setParentIn(tx, t.id, parent));

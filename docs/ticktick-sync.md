@@ -76,7 +76,7 @@ A sync cannot be undone. While the database is read-only, sync waits.
 
 ## Change a task on both sides
 
-Changes to different fields both apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other.
+Changes to different fields both apply. A TickTick change Logwell cannot take, such as a column of the list you just moved the task out of, is skipped, and the task's other TickTick changes still apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other.
 
 ## Delete and complete tasks
 
