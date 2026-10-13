@@ -9,7 +9,40 @@ import type { DateSpec, Instant, LocalDate, LocalDateTime, WeekStart } from "./t
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const LOCAL_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 /** Luxon format of a LocalDateTime wall time. */
-export const LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm";
+const LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm";
+
+// Luxon writes numbers in the device language's digits ("٢٠٢٦" on an Arabic (Egypt) device) unless told otherwise.
+const LATIN_DIGITS = { numberingSystem: "latn" } as const;
+
+/**
+ * `dt` in a Luxon format, written with the digits 0 to 9 whatever language the device is set to (#100). Every format
+ * with numbers goes through it: a stored or compared value would no longer read as a date, a shown one would mix scripts.
+ * A `utcDay` or `NAME_LOCALE` date needs none: its English locale writes 0 to 9.
+ */
+export function formatLatin(dt: DateTime, format: string): string {
+	return dt.toFormat(format, LATIN_DIGITS);
+}
+
+/** The wall time of `dt` as a LocalDateTime, "2026-10-12T10:00". */
+export function wallTimeOf(dt: DateTime): LocalDateTime {
+	return formatLatin(dt, LOCAL_FORMAT);
+}
+
+const DECIMAL_DIGIT_RE = /\p{Nd}/u;
+const OTHER_DIGITS_RE = /(?![0-9])\p{Nd}/gu;
+
+/**
+ * `text` with the digits of other scripts ("٥", "۵", "৫") as 0 to 9, and nothing else changed. Unicode encodes each
+ * script's digits as one run from 0 to 9, so a digit's value is its place in its run.
+ */
+export function latinDigits(text: string): string {
+	return text.replace(OTHER_DIGITS_RE, (digit) => {
+		const code = digit.codePointAt(0) ?? 0;
+		let place = 0;
+		while (DECIMAL_DIGIT_RE.test(String.fromCodePoint(code - place - 1))) place++;
+		return String(place % 10);
+	});
+}
 
 // Luxon's IANAZone.isValidZone builds an Intl.DateTimeFormat on every call (187 ms for 50,000 tasks at load).
 // A zone name is either known to Intl or not for the life of the process, so the answer is cached.
@@ -122,7 +155,7 @@ export interface ResolvedWallTime {
 export function resolveWallTime(local: LocalDateTime, tz: string): ResolvedWallTime {
 	const dt = DateTime.fromISO(local, { zone: tz });
 	if (!dt.isValid) throw new RangeError(`Invalid wall time ${local} in ${tz}`);
-	const roundTrip = dt.toFormat(LOCAL_FORMAT);
+	const roundTrip = wallTimeOf(dt);
 	if (roundTrip !== local) {
 		return { local: roundTrip, warning: "dst-gap" };
 	}
@@ -211,7 +244,7 @@ function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: str
 		if (known !== undefined) return known;
 	}
 	const dt = wallTimeToDateTime(spec.local, spec.tz).setZone(displayZone);
-	const result: Converted = { date: dt.toISODate() ?? spec.local.slice(0, 10), local: dt.toFormat(LOCAL_FORMAT) };
+	const result: Converted = { date: dt.toISODate() ?? spec.local.slice(0, 10), local: wallTimeOf(dt) };
 	if (cacheable) {
 		if (conversions.size >= CONVERSION_CACHE_MAX) conversions.clear();
 		conversions.set(key, result);

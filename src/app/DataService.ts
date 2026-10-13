@@ -4,6 +4,7 @@ import { focusedSec } from "../domain/focus";
 import { currentOccurrence, describeRule, indexOccurrenceRecords } from "../domain/recurrence";
 import { compareSortKeys } from "../domain/sortKey";
 import { tagDisplayPath } from "../domain/tags";
+import { formatLatin } from "../domain/time";
 import type { Task, WeekStart } from "../domain/types";
 import { type LoadResult, loadText } from "../persistence/CpbaseStore";
 import { serializeRecord } from "../persistence/serializer";
@@ -103,7 +104,7 @@ export function toCsv(header: readonly string[], rows: readonly (readonly string
 /** "Logwell export 2026-10-05 1430": the folder of one export, named by the local time in `zone`. */
 export function exportFolderName(date: Date, zone: string): string {
 	const dt = DateTime.fromJSDate(date, { zone });
-	return `Logwell export ${(dt.isValid ? dt : DateTime.fromJSDate(date)).toFormat("yyyy-MM-dd HHmm")}`;
+	return `Logwell export ${formatLatin(dt.isValid ? dt : DateTime.fromJSDate(date), "yyyy-MM-dd HHmm")}`;
 }
 
 const bool = (b: boolean): string => (b ? "true" : "false");

@@ -1,7 +1,7 @@
 import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
-import { LOCAL_FORMAT, addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
+import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
 import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
@@ -498,7 +498,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
 	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).
 	const ref = zoneNow.setZone("system", { keepLocalTime: true }).toJSDate();
-	const clock: Clock = { env, ref, refWall: wallOf(DateTime.fromJSDate(ref)), zoneNowWall: wallOf(zoneNow), today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
+	const clock: Clock = { env, ref, refWall: wallOf(DateTime.fromJSDate(ref)), zoneNowWall: wallOf(zoneNow), today: todayOf(zoneNow), nowLocal: wallTimeOf(zoneNow), todayWeekday: zoneNow.weekday % 7 };
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
