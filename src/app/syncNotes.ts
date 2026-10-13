@@ -71,6 +71,26 @@ interface Pairing {
 	ttId: string;
 }
 
+/**
+ * Errors the vault threw while the note step read, wrote or created a note: the only ones it turns into a warning
+ * that skips that note. Any other error (a bug) fails the sync like anywhere else.
+ */
+const vaultErrors = new WeakSet<Error>();
+
+/** Runs one vault call, marking what it throws as a vault error. */
+async function fromVault<T>(call: () => Promise<T>): Promise<T> {
+	try {
+		return await call();
+	} catch (err) {
+		if (err instanceof Error) vaultErrors.add(err);
+		throw err;
+	}
+}
+
+function isVaultError(err: unknown): err is Error {
+	return err instanceof Error && vaultErrors.has(err);
+}
+
 /** A link's fields without the note's items, for a write that sets the note fields anew. */
 function withoutItems(link: SyncLink): SyncLink {
 	const { noteItems: _items, ...rest } = link;
@@ -198,7 +218,7 @@ export class SyncNotes {
 				}
 				let note = this.seen.get(w.id);
 				if (note === undefined || note.path !== w.path || note.mtime !== mtime || note.checklist !== checklist) {
-					const text = note !== undefined && note.path === w.path && note.mtime === mtime ? note.text : await port.read(w.path);
+					const text = note !== undefined && note.path === w.path && note.mtime === mtime ? note.text : await fromVault(() => port.read(w.path));
 					if (text === null) {
 						if (ownsNote(this.store, w.id, w.path)) detach.push({ id: w.id, path: w.path });
 						this.forget(w.id);
@@ -219,7 +239,7 @@ export class SyncNotes {
 					if (stopped()) break;
 					// The user may have unlinked the note, or linked another, while the sync read it.
 					if (!ownsNote(this.store, w.id, w.path)) continue;
-					if (!(await port.replaceText(w.path, note.text, next))) {
+					if (!(await fromVault(() => port.replaceText(w.path, note.text, next)))) {
 						// Edited since it was read: kept as it is, merged by the next sync.
 						this.forget(w.id);
 						continue;
@@ -232,7 +252,7 @@ export class SyncNotes {
 				}
 				if (!sameDoc(merged, theirs)) pushes.push({ logwellId: w.id, ttId: w.tt.id, doc: merged, pulled: theirs, checklist, path: w.path });
 			} catch (err) {
-				if (!(err instanceof Error)) throw err;
+				if (!isVaultError(err)) throw err;
 				console.debug("Logwell: a TickTick description note could not be synced.", err.message);
 				this.forget(w.id);
 				warn();
@@ -263,13 +283,13 @@ export class SyncNotes {
 					let path = this.made.get(c.id);
 					if (path !== undefined && !port.exists(path)) path = undefined;
 					if (path === undefined) {
-						path = await port.createNote(this.deps.folder(), sanitizeNoteName(c.title), content);
+						path = await fromVault(() => port.createNote(this.deps.folder(), sanitizeNoteName(c.title), content));
 						this.made.set(c.id, path);
 						this.remember(c.id, path, port.modifiedAt(path), content, c.checklist);
 					}
 					made.push({ id: c.id, path, base: storedBase(c.doc, c.checklist) });
 				} catch (err) {
-					if (!(err instanceof Error)) throw err;
+					if (!isVaultError(err)) throw err;
 					console.debug("Logwell: a TickTick description note could not be created.", err.message);
 					warn();
 				}

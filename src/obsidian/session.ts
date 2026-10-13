@@ -4,6 +4,7 @@ import type { OpenResult } from "../app/FocusService";
 import type { TickTickApi } from "../app/ports";
 import { type SyncFailure, SyncService } from "../app/SyncService";
 import { displayZone } from "../app/settings";
+import { isDomainError } from "../domain/errors";
 import { randomId, systemClock } from "../domain/ports";
 import { BackupStore, dbBackupRoot } from "../persistence/backups";
 import { CpbaseStore, type StoreEvent } from "../persistence/CpbaseStore";
@@ -199,6 +200,20 @@ export class DbSession {
 	}
 
 	/**
+	 * The hourly Trash purge and end-of-series sweep. Never rejects. A refusal because the file turned
+	 * read-only after the check waits for the next hour, as a read-only file does before it; any other
+	 * failure is shown.
+	 */
+	async hourlyCleanup(): Promise<void> {
+		try {
+			await this.app.tasks.purgeExpired();
+			await this.app.recurrence.endExhaustedSeries();
+		} catch (err) {
+			if (!isDomainError(err, "ReadOnly")) showError(err, "Could not purge the Trash or end finished repeats");
+		}
+	}
+
+	/**
 	 * Starts the TickTick schedule, with the pull "when Obsidian opens". The plugin calls it once it keeps
 	 * this session as the open one, so a session still opening at unload, or one whose open failed, never syncs. A
 	 * setting changed (the plugin emits "session"): the pull interval may differ.
@@ -354,6 +369,10 @@ export class DbSession {
 				break;
 			case "migrated":
 				actionNotice(`The database was upgraded from schema ${e.from} to ${e.to}. A backup was taken first.`, []);
+				break;
+			case "backup-error":
+				// Only the backup failed: the database file is as saved, so no save is retried.
+				actionNotice(`A backup of the database could not be written: ${e.message} The database file is not affected; the next save tries the backup again.`, []);
 				break;
 			case "save-error":
 				// A closing store makes no further attempt, so never promise one.

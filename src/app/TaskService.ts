@@ -229,6 +229,12 @@ function detachSyncNote(tx: Tx, taskId: ID): void {
 	tx.put("syncLinks", { ...rest, noteBySync: false, noteBase: "", modifiedAt: tx.now });
 }
 
+/** A rename that failed with no caller to tell, worded for the user. */
+function renameFailure({ oldPath, newPath }: NoteRename, err: unknown): Error {
+	const reason = err instanceof Error ? err.message : String(err);
+	return new Error(`Could not follow the note rename from ${oldPath} to ${newPath}: ${reason} Tasks linked to that note may need to be relinked.`, { cause: err });
+}
+
 /** A queued rename and, while its caller still waits, how to report its count. */
 interface QueuedRename extends NoteRename {
 	settle?: { resolve(count: number): void; reject(err: unknown): void };
@@ -961,7 +967,9 @@ export class TaskService {
 				}
 				this.pendingRenames.splice(this.pendingRenames.indexOf(next), 1);
 				if (failure === null) next.settle?.resolve(count);
-				else next.settle?.reject(failure.err);
+				else if (next.settle !== undefined) next.settle.reject(failure.err);
+				// A rename reloaded from this device has no caller waiting: the session's error channel says it.
+				else this.store.bus.onListenerError(renameFailure(next, failure.err));
 			}
 		} finally {
 			this.draining = false;

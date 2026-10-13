@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#134) Fixed some failures showing nothing: creating a database, the hourly Trash cleanup, saving the new path of a moved database, a description note preview that cannot be read and a focus timer that cannot be saved on this device now each say what failed. A failed backup no longer says the database could not be saved.
 - (#114) Fixed the "Not synced" mark in a task block not changing when a list was linked with TickTick or unlinked, or when you chose **Keep** for tasks missing in TickTick, even after a reload. The block now updates the mark as Logwell's own lists do.
 - (#110) Fixed deleting a list synced with TickTick leaving it linked: its tasks never synced again from the Inbox, their TickTick copies stayed where they were, and its TickTick list could not be linked to another list. Deleting a synced list now unlinks it, and its tasks follow the Inbox: the next sync moves them to the Inbox's TickTick list when the Inbox syncs, and deletes them in TickTick when it does not. A list deleted this way with an earlier version is unlinked at the next sync.
 - (#113) Fixed a note renamed or moved while Logwell was switching to another database keeping its old path in the database being closed, which broke the task's link to its note for good. The closing database now follows the rename too.

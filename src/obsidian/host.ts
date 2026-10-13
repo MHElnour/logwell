@@ -83,8 +83,8 @@ export class ViewHost implements UiHost {
 		new Notice(message);
 	}
 
-	error(err: unknown): void {
-		showError(err);
+	error(err: unknown, context?: string): void {
+		showError(err, context);
 	}
 
 	notifyUndo(message: string, label: string, mark: number): void {
@@ -200,9 +200,16 @@ export class ViewHost implements UiHost {
 		}
 		// Rendered with the view's child component, never the plugin.
 		const child = view.addChild(new Component());
-		const content = await obsidian.vault.cachedRead(file);
 		const box = createDiv();
-		await MarkdownRenderer.render(obsidian, content, box, file.path, child);
+		let rendered = false;
+		try {
+			const content = await obsidian.vault.cachedRead(file);
+			await MarkdownRenderer.render(obsidian, content, box, file.path, child);
+			rendered = true;
+		} finally {
+			// A read or render that threw leaves no child behind.
+			if (!rendered) view.removeChild(child);
+		}
 		if (el.dataset.cpRenderToken !== token) {
 			// A newer render of this element started meanwhile.
 			view.removeChild(child);
