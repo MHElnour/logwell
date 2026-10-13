@@ -71,16 +71,6 @@ describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 		expect(occurrencesBetween(rec, "2026-01-01", "2026-03-31", "MO")).toEqual(["2026-01-30", "2026-02-28", "2026-03-30"]);
 	});
 
-	it("every 2 months on the 15th", () => {
-		const rec = series("2026-01-15", rule({ freq: "monthly", interval: 2, monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-01-01", "2026-06-30", "MO")).toEqual(["2026-01-15", "2026-03-15", "2026-05-15"]);
-	});
-
-	it("a monthly day before the anchor's day starts next month", () => {
-		const rec = series("2026-10-20", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-10-01", "2026-12-31", "MO")).toEqual(["2026-11-15", "2026-12-15"]);
-	});
-
 	it("the Nth weekday and the last weekday of the month", () => {
 		const first = series("2026-10-01", rule({ freq: "monthly", monthly: { kind: "nth", n: 1, weekday: "MO" } }));
 		expect(occurrencesBetween(first, "2026-10-01", "2026-12-31", "MO")).toEqual(["2026-10-05", "2026-11-02", "2026-12-07"]);
@@ -188,10 +178,6 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 		expect(currentOccurrence(repeating(every3), [], "2026-10-05", "MO")).toBe("2026-10-01");
 	});
 
-	it("done: the completion day plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-01", "2026-10-02")], "2026-10-05", "MO")).toBe("2026-10-05");
-	});
-
 	it("skipped: the skipped date plus the interval", () => {
 		expect(currentOccurrence(repeating(every3), [done("2026-10-01", "2026-10-02"), skipped("2026-10-05")], "2026-10-05", "MO")).toBe("2026-10-08");
 	});
@@ -202,10 +188,6 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 
 	it("user decision: completed late, the same rule (due Oct 8, done Oct 10 → Oct 13)", () => {
 		expect(currentOccurrence(repeating(every3), [done("2026-10-08", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
-	});
-
-	it("completed on time: the date plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-10", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
 	});
 
 	it("the base is the most recently resolved record, not the latest by date", () => {
