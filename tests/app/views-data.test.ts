@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { exportFileName, mergeCollections } from "../../src/app/DataService";
 import { buildBoard, buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
+import { matrixQuadrants } from "../../src/domain/matrix";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { serializeDb } from "../../src/persistence/serializer";
 import { DB_PATH, descendant, emptyDbText, load, makeTask, withTask } from "../persistence/fixtures";
@@ -79,6 +80,18 @@ describe("views, export and import", () => {
 			// Once the hold ends it leaves the rows for the Completed group, and the Overdue column goes.
 			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups.map((g) => g.key)).toEqual(["today"]);
 			expect(buildBoard(state, { kind: "today" }, ctx, emptyFilter(), "").map((c) => c.id)).toEqual(["today"]);
+		});
+
+		it("#126: a task dated tomorrow with a deadline today is due today in the Today view, the sidebar count and the matrix", async () => {
+			const h = await appHarness();
+			const task = (await h.app.tasks.create({ title: "Report", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } })).task;
+			const state = h.app.store.state;
+			const ctx = h.app.queryContext();
+			const today = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups;
+			expect(today.map((g) => [g.key, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
+			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 1, upcoming: 0 });
+			const matrix = matrixQuadrants([task], state.tasks, ctx).neither;
+			expect(matrix.map((g) => [g.id, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
 		});
 
 		it("SUB-07: a scheduled subtask shows on its own date with the parent's title", async () => {
