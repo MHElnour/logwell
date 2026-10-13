@@ -152,20 +152,6 @@ export async function allTasks(): Promise<Record<string, unknown>[]> {
 	});
 }
 
-export async function categoryCount(): Promise<number> {
-	return browser.executeObsidian(({ plugins }) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return (plugins as any).logwell.session.app.store.state.categories.size as number;
-	});
-}
-
-export async function tagKeys(): Promise<string[]> {
-	return browser.executeObsidian(({ plugins }) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return [...(plugins as any).logwell.session.app.store.state.tags.keys()] as string[];
-	});
-}
-
 /** Creates a category through the app service and returns its ID. */
 export async function createCategory(name: string): Promise<string> {
 	return browser.executeObsidian(async ({ plugins }, n) => {
@@ -173,21 +159,6 @@ export async function createCategory(name: string): Promise<string> {
 		const c = await (plugins as any).logwell.session.app.categories.create(n);
 		return c.id as string;
 	}, name);
-}
-
-/** Sets a date input in the open Quick Add modal the way typing would (WebDriver cannot type into date inputs reliably). */
-export async function setModalDate(index: number, value: string): Promise<void> {
-	await browser.execute(
-		(i, v) => {
-			const inputs = document.querySelectorAll<HTMLInputElement>('.checkpoint-quick-add-modal .cp-quick-add-fields input[type="date"]');
-			const input = inputs[i];
-			if (input === undefined) throw new Error("no date input");
-			input.value = v;
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-		},
-		index,
-		value,
-	);
 }
 
 // -- Tasks section and settings helpers ---------------------------------------------------------------------------
@@ -243,19 +214,6 @@ export async function setPluginSetting(key: string, value: unknown): Promise<voi
 		value,
 	);
 	await browser.pause(300);
-}
-
-/** The element that has focus, described by tag, aria-label and class (for assertions). */
-export async function focusedElement(): Promise<{ tag: string; label: string | null; cls: string; date: string | null }> {
-	return browser.execute(() => {
-		const el = document.activeElement as HTMLElement | null;
-		return {
-			tag: el?.tagName.toLowerCase() ?? "",
-			label: el?.getAttribute("aria-label") ?? null,
-			cls: el?.className ?? "",
-			date: el?.getAttribute("data-date") ?? null,
-		};
-	});
 }
 
 /** The platform's Mod key as WebDriver names it. */
@@ -615,18 +573,6 @@ export async function sectionsOf(categoryId: string): Promise<{ id: string; name
 	}, categoryId);
 }
 
-/** Opens the context menu of a task row or board card with a real right click. */
-export async function openTaskContextMenu(section: WebdriverIO.Element, taskId: string): Promise<void> {
-	const target = section.$(`.cp-board-item[data-task-id="${taskId}"], .cp-task-row[data-task-id="${taskId}"]`);
-	await target.waitForExist({ timeout: 5000, timeoutMsg: `no row or card for ${taskId}` });
-	// A floating notice (an undo notice from the last step) can cover the target and take the click.
-	await closeNotices();
-	await browser.execute((e) => (e as unknown as HTMLElement).scrollIntoView({ block: "nearest", inline: "nearest" }), await target.getElement());
-	await waitForStableRect(target);
-	await target.click({ button: "right" });
-	await browser.waitUntil(async () => (await menuTitles()).length > 0, { timeout: 5000, timeoutMsg: "the context menu did not open" });
-}
-
 // -- Group-by helpers --------------------------------------------------------------------------
 
 /** Opens the view menu, then "Group by…", and picks one option (List mode). */
@@ -676,15 +622,6 @@ export async function createHabit(seed: HabitSeed): Promise<string> {
 	}, seed);
 }
 
-/** The stored habit, or null. */
-export async function getHabit(id: string): Promise<Record<string, unknown> | null> {
-	return browser.executeObsidian(({ plugins }, habitId) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const habit = (plugins as any).logwell.session.app.store.state.habits.get(habitId);
-		return habit === undefined ? null : JSON.parse(JSON.stringify(habit));
-	}, id);
-}
-
 /** The active check-ins of a habit as `{ date, value }`, oldest first. */
 export async function habitCheckins(id: string): Promise<{ date: string; value: number }[]> {
 	return browser.executeObsidian(({ plugins }, habitId) => {
@@ -719,64 +656,9 @@ export function habitRow(scope: WebdriverIO.Element, name: string): ChainablePro
 
 // -- Recurrence helpers -----------------------------------------------------------------------
 
-/** Moves the plugin clock by `seconds` (negative goes back), keeping the original for `restoreClock`. */
-export async function shiftClock(seconds: number): Promise<void> {
-	await browser.executeObsidian(({ plugins }, secs) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const app = (plugins as any).logwell.session.app;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const w = window as any;
-		w.__cpClock ??= { original: app.clock.now, offset: 0 };
-		const state = w.__cpClock;
-		state.offset += secs * 1000;
-		app.clock.now = () => new Date(state.original.call(app.clock).getTime() + state.offset);
-	}, seconds);
-}
-
-/** Puts the real clock back after `shiftClock`. */
-export async function restoreClock(): Promise<void> {
-	await browser.executeObsidian(({ plugins }) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const app = (plugins as any).logwell?.session?.app;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const w = window as any;
-		if (app !== undefined && w.__cpClock !== undefined) app.clock.now = w.__cpClock.original;
-		delete w.__cpClock;
-	});
-}
-
-/** Escapes any modal a failed test left open (bounded), so it cannot block the next test. */
-export async function closeOpenModals(): Promise<void> {
-	for (let i = 0; i < 3; i++) {
-		const open = await browser.execute(() => document.querySelectorAll(".modal-container").length);
-		if (open === 0) break;
-		await browser.keys("Escape");
-		await browser.pause(150);
-	}
-}
-
-/** Clicks a button of the open modal by its text with the DOM, so a floating notice cannot cover it. */
-export async function clickModalButton(text: string): Promise<void> {
-	await browser.waitUntil(
-		() =>
-			browser.execute((t) => {
-				const button = Array.from(document.querySelectorAll<HTMLElement>(".modal button")).find((b) => b.textContent?.trim() === t);
-				if (button === undefined) return false;
-				button.click();
-				return true;
-			}, text),
-		{ timeout: 5000, timeoutMsg: `no modal button "${text}"` },
-	);
-}
-
 /** The texts of the notices on screen. */
 export async function noticeTexts(): Promise<string[]> {
 	return browser.execute(() => Array.from(document.querySelectorAll<HTMLElement>(".notice")).map((n) => n.textContent ?? ""));
-}
-
-/** Removes every notice on screen, so a floating notice cannot cover the header control clicked next. */
-export async function closeNotices(): Promise<void> {
-	await browser.execute(() => document.querySelectorAll(".notice").forEach((n) => n.remove()));
 }
 
 /** Waits for a notice whose text contains `text` and returns the whole text. */
@@ -807,17 +689,8 @@ export async function clickUndoNotice(): Promise<void> {
 	);
 }
 
-/** The label of the command the store would undo next. */
-export async function undoLabel(): Promise<string | null> {
-	return browser.executeObsidian(({ plugins }) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return (plugins as any).logwell.session.app.store.undoLabel as string | null;
-	});
-}
-
-/** The rule of the examples: every day, or every week on the anchor's weekday. */
+/** The rule of the examples: every day. */
 export const DAILY_RULE = { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } as const;
-export const WEEKLY_RULE = { ...DAILY_RULE, freq: "weekly" } as const;
 
 /** Creates a repeating task through the app service (the anchor is its `scheduled` date, else today) and returns its ID. */
 export async function createRepeating(
@@ -827,42 +700,6 @@ export async function createRepeating(
 	end?: Record<string, unknown>,
 ): Promise<string> {
 	return createTask(title, { ...extra, repeat: end === undefined ? { rule } : { rule, end } });
-}
-
-export interface OccurrenceRead {
-	date: string;
-	status: string;
-	auto: boolean;
-}
-
-/** The occurrence records of one task, oldest first. */
-export async function occurrenceRecords(taskId: string): Promise<OccurrenceRead[]> {
-	return browser.executeObsidian(({ plugins }, id) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const all = [...(plugins as any).logwell.session.app.store.state.occurrenceRecords.values()] as { taskId: string; occurrenceDate: string; status: string; auto: boolean }[];
-		return all
-			.filter((r) => r.taskId === id)
-			.map((r) => ({ date: r.occurrenceDate, status: r.status, auto: r.auto }))
-			.sort((a, b) => (a.date < b.date ? -1 : 1));
-	}, taskId);
-}
-
-/** Clicks a row's checkbox with the DOM (a floating notice cannot cover it); `occurrence` picks a Completed history row. */
-export async function clickRowCheckbox(section: WebdriverIO.Element, taskId: string, occurrence?: string): Promise<void> {
-	const root = await section.getElement();
-	const found = await browser.execute(
-		(el, id, date) => {
-			const selector = date == null ? `.cp-task-row[data-task-id="${id}"]:not([data-occurrence])` : `.cp-task-row[data-task-id="${id}"][data-occurrence="${date}"]`;
-			const box = (el as unknown as HTMLElement).querySelector<HTMLElement>(`${selector} .cp-task-checkbox`);
-			if (box === null) return false;
-			box.click();
-			return true;
-		},
-		root,
-		taskId,
-		occurrence,
-	);
-	if (!found) throw new Error(`no checkbox for ${taskId}${occurrence === undefined ? "" : ` on ${occurrence}`}`);
 }
 
 /** Clicks with the DOM, so a floating notice cannot cover the target. */

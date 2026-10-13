@@ -9,7 +9,7 @@ import {
 import type { MenuSpec } from "../../src/ui/host";
 import { LINGER_MS } from "../../src/ui/useLingering";
 import { openBoard } from "./board-helpers";
-import { type M7Mount, FRIDAY, click, lastNotice, mountM7, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
+import { type M7Mount, FRIDAY, click, lastNotice, mountM7, openDetails, q, rowFor, rowsFor, settle, showInbox, taskById, weeklyFriday } from "./repeat-helpers";
 import { menuItem } from "./app-helpers";
 
 // Repeating tasks in rows, cards and menus. The clock is Thursday
@@ -304,5 +304,34 @@ describe("Completed history rows (D7)", () => {
 		await click(rowsFor(section, "Weekly review").find((r) => r.dataset.occurrence === FRIDAY));
 		expect(q(section, ".cp-details .cp-details-title")).not.toBeNull();
 		expect(taskById(m, t.id).title).toBe("Weekly review");
+	});
+
+	it("a weekly series done on three weeks keeps its three done rows when its rule is edited in the details", async () => {
+		const m = await mount();
+		const t = await create(m, "Weekly review", { scheduled: { kind: "date", date: "2026-10-01" } });
+		// Done on its day three weeks running: Thursday Oct 1, 8 and 15.
+		await m.h.app.recurrence.complete(t.id);
+		m.h.clock.set("2026-10-08T10:00:00Z");
+		await m.h.app.recurrence.complete(t.id);
+		m.h.clock.set("2026-10-15T10:00:00Z");
+		await m.h.app.recurrence.complete(t.id);
+		await m.rerender();
+		const records = () =>
+			[...m.h.app.store.state.occurrenceRecords.values()]
+				.filter((r) => r.taskId === t.id)
+				.map((r) => `${r.occurrenceDate}:${r.status}`)
+				.sort();
+		const done = ["2026-10-01:done", "2026-10-08:done", "2026-10-15:done"];
+		expect(records()).toEqual(done);
+
+		const pane = await openDetails(m, "Weekly review");
+		await click(q(pane, ".cp-repeat-button"));
+		await click(q(pane, '.cp-repeat-pop [data-preset="weekday"]'));
+		expect(taskById(m, t.id).recurrence!.versions.map((v) => v.effectiveFrom)).toEqual(["2026-10-01", "2026-10-15"]);
+		expect(records()).toEqual(done);
+		const section = await showInbox(m);
+		await click(completedToggle(section));
+		const history = rowsFor(section, "Weekly review").filter((r) => r.dataset.occurrence !== undefined);
+		expect(history.map((r) => r.dataset.occurrence).sort()).toEqual(["2026-10-01", "2026-10-08", "2026-10-15"]);
 	});
 });
