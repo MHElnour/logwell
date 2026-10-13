@@ -29,6 +29,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#126) In the Eisenhower matrix, a task whose deadline is today is now under **Today** even when its date is later, as it is in the Today view and the sidebar's Today count.
 - (#7) A new tag name can have at most 64 characters. Longer tags you already have keep working. The Tags heading in the sidebar now shows even before you have a tag.
 
 - (#11) Tags now show just their own name, like `@calls`, wherever they appear outside the sidebar tree. Two older tags that share a name still show their full paths, and the message for a name that is already used no longer names a parent.
@@ -53,6 +54,9 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#131) Fixed a repeating task whose repeat had ended but which was still open, after an edit of the database file or a sync, failing to complete from its row or a task block with "This repeat has ended.". It now completes like any other task, and its menu no longer offers Skip, Edit repeat or Stop repeating.
 - (#124) Fixed changing the date of a repeating task after **Stop repeating** saying it now repeats from that date while it stayed completed and did not repeat. A repeat that has ended now keeps its date and the notice says to reopen the task first.
 - (#107) Fixed a drag in Today or Upcoming changing the order of tasks you did not drag in their own list: a task with no date between two dragged ones could end up on the other side. Now only the task you drag moves, in every view.
+- (#127) Fixed deleting a parent tag merging a child tag into an older tag of the same name, such as `home/calls` into `calls`, which took the child's color and joined both tags' tasks. The delete is now refused with the message a rename gives, and nothing changes.
+- (#125) Fixed an overdue task you tick in Today jumping to the Today group while its check plays. It now stays under Overdue until it leaves, and on the board the Overdue column no longer disappears and shifts the other columns for that moment.
+- (#116) Fixed the next start after a conflict saying "Changes this device saved earlier are missing" and adding another conflict copy of the version you had discarded with **Keep theirs**, or not chosen for yet.
 - (#101) Fixed an edit that was waiting to be saved disappearing without a word when the database file was damaged (for example by merge markers) or came from a newer version of Logwell, and a valid file came back. The edit is kept as a conflict copy and the conflict notice offers **Keep mine** and **Keep theirs**; if the database closes first, a notice points at the copy.
 - (#102) Fixed Restore backup leaving out the edits made since the newest snapshot once Obsidian had quit in the middle of a save. The log of saved changes behind recovery now skips a line cut off by the crash, keeps later changes readable and is cleared after each snapshot again, so it no longer grows with every save.
 - (#100) Fixed dates with a time being saved in the computer's own digits when its language writes numbers differently, such as Arabic, Persian or Bengali. Quick Add showed a false daylight saving warning and the database no longer opened. Dates, times and habit reminders now always use 0 to 9, and a database that already holds such a date opens again with those dates repaired.

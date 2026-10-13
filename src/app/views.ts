@@ -11,6 +11,7 @@ import {
 	completedEntries,
 	entryOf,
 	filterTasks,
+	hasPastDate,
 	inViewScope,
 	inUpcoming,
 	isDueByToday,
@@ -115,11 +116,15 @@ export function viewPreset(view: TaskView, ctx: QueryContext): { addCategoryId: 
 	};
 }
 
-/** Today: an Overdue group (a date before today) and a Today group; empty groups are omitted. */
-function todayGroups(entries: ListEntry[], ctx: QueryContext, ordered: (e: ListEntry[]) => ListEntry[]): ViewGroup[] {
+/**
+ * Today: an Overdue group (a date before today) and a Today group; empty groups are omitted. A held task (completed a
+ * moment ago) stays in the group it was in while open, so its check animation plays in place.
+ */
+function todayGroups(entries: ListEntry[], ctx: QueryContext, ordered: (e: ListEntry[]) => ListEntry[], held: ReadonlySet<ID>): ViewGroup[] {
 	const overdue: ListEntry[] = [];
 	const rest: ListEntry[] = [];
-	for (const e of entries) (isOverdue(e.task, ctx) ? overdue : rest).push(e);
+	const late = (t: Task) => isOverdue(t, ctx) || (held.has(t.id) && hasPastDate(t, ctx));
+	for (const e of entries) (late(e.task) ? overdue : rest).push(e);
 	const groups: ViewGroup[] = [];
 	// Dropping on Overdue is refused; dropping on Today reschedules to today.
 	if (overdue.length > 0) groups.push({ key: "overdue", date: null, label: "Overdue", tone: "overdue", entries: ordered(overdue) });
@@ -194,6 +199,8 @@ interface Prepared {
 	 * (App shell and views rule 21). The rows themselves still apply the view's Completed scope to them.
 	 */
 	keep: (task: Task) => boolean;
+	/** The tasks completed a moment ago, still shown for their check animation. */
+	held: ReadonlySet<ID>;
 	/** `tasks` are in sort order (the index's candidates of Inbox and a list), so the rows need not sort them. */
 	sorted: boolean;
 }
@@ -208,7 +215,7 @@ function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskF
 	const sorted = candidates !== undefined && index?.candidatesInOrder(view) === true;
 	const tasks = filterTasks(candidates ?? state.tasks.values(), filter, text, ctx);
 	const scope = completedScope(view);
-	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id), sorted };
+	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id), held, sorted };
 	// An open parent's row is shown when the view lists it and it passes the filter and text. Asked only for
 	// the parents of completed subtasks, once per parent.
 	const known = new Map<ID, boolean>();
@@ -220,7 +227,7 @@ function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskF
 		}
 		return s;
 	};
-	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown), sorted };
+	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown), held, sorted };
 }
 
 function openGroups(
@@ -230,9 +237,9 @@ function openGroups(
 	filter: TaskFilter,
 	text: string,
 	groupBy: GroupBy | undefined,
-	{ tasks, keep, sorted }: Prepared,
+	{ tasks, keep, held, sorted }: Prepared,
 ): ViewGroup[] {
-	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text, sorted);
+	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text, sorted, held);
 }
 
 /**
@@ -296,6 +303,8 @@ function viewGroups(
 	text = "",
 	/** `tasks` are in sort order: Inbox and list rows then skip their sort (`arrangeHierarchy` `presorted`). */
 	sorted = false,
+	/** The tasks completed a moment ago; Today keeps them in their group. */
+	held: ReadonlySet<ID> = NO_IDS,
 ): ViewGroup[] {
 	const byId = state.tasks;
 	const scope = completedScope(view);
@@ -349,7 +358,7 @@ function viewGroups(
 		case "section":
 			return sectioned(view.kind === "category" ? view.id : INBOX_ID, rows());
 		case "date": {
-			if (view.kind === "today") return todayGroups(rows(), ctx, ordered);
+			if (view.kind === "today") return todayGroups(rows(), ctx, ordered, held);
 			if (view.kind === "upcoming") {
 				return upcomingGroups(tasks, byId, ctx, keep).map((g) => ({
 					key: g.date,
