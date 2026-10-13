@@ -49,6 +49,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#131) Fixed a repeating task whose repeat had ended but which was still open, after an edit of the database file or a sync, failing to complete from its row or a task block with "This repeat has ended.". It now completes like any other task, and its menu no longer offers Skip, Edit repeat or Stop repeating.
 - (#124) Fixed changing the date of a repeating task after **Stop repeating** saying it now repeats from that date while it stayed completed and did not repeat. A repeat that has ended now keeps its date and the notice says to reopen the task first.
 - (#107) Fixed a drag in Today or Upcoming changing the order of tasks you did not drag in their own list: a task with no date between two dragged ones could end up on the other side. Now only the task you drag moves, in every view.
 - (#102) Fixed Restore backup leaving out the edits made since the newest snapshot once Obsidian had quit in the middle of a save. The log of saved changes behind recovery now skips a line cut off by the crash, keeps later changes readable and is cleared after each snapshot again, so it no longer grows with every save.
