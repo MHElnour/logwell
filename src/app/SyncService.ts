@@ -31,8 +31,8 @@ import {
 	type TtTaskWrite,
 } from "../domain/ticktick/types";
 import { type ID, type Instant, type SyncLink, type Task, paletteColor, syncLinkId } from "../domain/types";
-import type { DbData } from "../persistence/schema";
-import { type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorKind } from "./ports";
+import { type DbData, storableDbId } from "../persistence/schema";
+import { MemoryTickTickPending, type SettingsPort, type TickTickApi, TickTickError, type TickTickErrorKind, type TickTickPending, type TickTickPendingPort } from "./ports";
 import type { SectionService } from "./SectionService";
 import type { AppStore } from "./store";
 import type { TaskInput, TaskPatch, TaskService } from "./TaskService";
@@ -196,6 +196,8 @@ interface PullPlan {
 	/** Links to mark `excluded`: the task repeats on one side. */
 	exclude: Set<string>;
 	newLinks: LinkDraft[];
+	/** Entries of `pendingCreates` (list, task) the pull settled: forgotten once the links command has committed. */
+	settled: [ID, ID][];
 	needsConfirmation: PendingTrash[];
 	/** Logwell tasks and sections written. */
 	written: number;
@@ -206,6 +208,26 @@ interface PullPlan {
 interface AnsweredCreate {
 	ttId: string;
 	base: Record<string, string>;
+}
+
+/** `pendingCreates` from what this device stored (`TickTickPending`); an entry that cannot be read is left out. */
+function readPending(stored: unknown): Map<ID, Map<ID, AnsweredCreate | null>> {
+	const out = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	const lists = (stored as { lists?: unknown } | null)?.lists;
+	if (typeof lists !== "object" || lists === null) return out;
+	const isHashes = (v: unknown): v is Record<string, string> => typeof v === "object" && v !== null && Object.values(v).every((h) => typeof h === "string");
+	for (const [listId, entries] of Object.entries(lists)) {
+		if (typeof entries !== "object" || entries === null) continue;
+		const pending = new Map<ID, AnsweredCreate | null>();
+		for (const [logwellId, a] of Object.entries(entries as Record<string, unknown>)) {
+			if (a === null) pending.set(logwellId, null);
+			else if (typeof a === "object" && typeof (a as AnsweredCreate).ttId === "string" && isHashes((a as AnsweredCreate).base)) {
+				pending.set(logwellId, { ttId: (a as AnsweredCreate).ttId, base: { ...(a as AnsweredCreate).base } });
+			}
+		}
+		if (pending.size > 0) out.set(listId, pending);
+	}
+	return out;
 }
 
 type LinkDraft = Pick<SyncLink, "kind" | "logwellId" | "ttId" | "ttProjectId" | "etag" | "base"> & {
@@ -390,10 +412,13 @@ export class SyncService {
 	 * (`maybePartial`: the answer and the new id were lost; value null), matched by title on the next sync only;
 	 * or TickTick answered but writing the link failed (the store turned read-only; value: TickTick's id and the
 	 * hashes that were sent), matched by that id whatever the copy's status, and looked up by id if the pull does
-	 * not see it. The hashes sent are the base, so later edits on either side merge as usual. In memory only: after a
-	 * reload such a task can come in twice.
+	 * not see it. The hashes sent are the base, so later edits on either side merge as usual. Kept on this device per
+	 * database (`pendingPort`), so a restart does not lose it, and an entry is forgotten only once the command that
+	 * links its task has committed (or once its copy is gone).
 	 */
-	private readonly pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	private pendingCreates = new Map<ID, Map<ID, AnsweredCreate | null>>();
+	/** The database id `pendingCreates` was loaded for: null for none that may be stored under, undefined before a load. */
+	private pendingOf: string | null | undefined = undefined;
 	/** TickTick ids a lookup found gone, kept for the next sync while their tasks stay missing and undecided. */
 	private goneInTickTick = new Set<string>();
 
@@ -402,6 +427,38 @@ export class SyncService {
 		const pending = this.pendingCreates.get(listId) ?? new Map<ID, AnsweredCreate | null>();
 		pending.set(logwellId, answer);
 		this.pendingCreates.set(listId, pending);
+		this.savePending();
+	}
+
+	/** Forgets entries of `pendingCreates` (list, task) and saves what is left. */
+	private forget(entries: readonly (readonly [ID, ID])[]): void {
+		if (entries.length === 0) return;
+		for (const [listId, logwellId] of entries) this.pendingCreates.get(listId)?.delete(logwellId);
+		this.savePending();
+	}
+
+	/** Loads `pendingCreates` from this device when the open database is another one than it was loaded for. */
+	private loadPending(): void {
+		const dbId = storableDbId(this.store.state.meta.dbId, this.store.readOnlyState !== null);
+		if (dbId === this.pendingOf) return;
+		this.pendingOf = dbId;
+		this.pendingCreates = readPending(dbId === null ? null : this.pendingPort.load(dbId));
+	}
+
+	/** Saves `pendingCreates` under the database it was loaded for. A storage that fails keeps it in memory only. */
+	private savePending(): void {
+		const dbId = this.pendingOf;
+		if (dbId === null || dbId === undefined) return;
+		const lists: TickTickPending["lists"] = {};
+		for (const [listId, pending] of this.pendingCreates) {
+			if (pending.size === 0) this.pendingCreates.delete(listId);
+			else lists[listId] = Object.fromEntries(pending);
+		}
+		try {
+			this.pendingPort.save(dbId, Object.keys(lists).length === 0 ? null : { v: 1, lists });
+		} catch (err) {
+			console.warn("Logwell: could not save the TickTick tasks waiting to be linked.", err);
+		}
 	}
 
 	private readonly index: TaskIndex;
@@ -419,6 +476,8 @@ export class SyncService {
 		private readonly settings: Pick<SettingsPort, "zone">,
 		api: TickTickApi,
 		notes?: SyncNotesDeps,
+		/** Where `pendingCreates` is kept on this device. */
+		private readonly pendingPort: TickTickPendingPort = new MemoryTickTickPending(),
 	) {
 		this.index = tasks.lists;
 		this.notes = notes === undefined ? null : new SyncNotes(notes, store, tasks, { content: TICKTICK_SYNC_LABEL, links: TICKTICK_LINKS_LABEL });
@@ -650,7 +709,8 @@ export class SyncService {
 				},
 				{ undoable: false },
 			);
-			this.pendingCreates.delete(listId);
+			this.loadPending();
+			if (this.pendingCreates.delete(listId)) this.savePending();
 			return { wrote, label: TICKTICK_UNLINK_LABEL };
 		});
 	}
@@ -807,6 +867,7 @@ export class SyncService {
 		await this.marking;
 		if (this.unmarked.size > 0) await this.markRemoved([...this.unmarked]);
 		await this.healListLinks();
+		this.loadPending();
 		const startedAt: Instant = this.store.now();
 		/** The state when the sync started: unchanged at the end means the sync wrote nothing. */
 		const stateAtStart = this.store.state;
@@ -951,6 +1012,7 @@ export class SyncService {
 			// Creates that TickTick answered but whose link was not written: their copy is looked up by its id when
 			// the pull did not see it (completed outside the window). Gone there, the entry is dropped and the
 			// Logwell task goes up again as new.
+			const goneCopies: [ID, ID][] = [];
 			for (const [listId, pending] of this.pendingCreates) {
 				const pull = pulls.find((p) => p.listId === listId);
 				if (pull === undefined) continue;
@@ -961,13 +1023,17 @@ export class SyncService {
 						const tt = await this.api.getTask(pull.projectId, ttId);
 						lookedUp.set(ttId, tt);
 						if (statusFromTt(tt.status) === "completed") seen.set(tt.id, tt);
-						else pending.delete(logwellId);
+						else goneCopies.push([listId, logwellId]);
 					} catch (err) {
-						if (isNotFound(err)) pending.delete(logwellId);
-						else return failed(failureOf(err, pull));
+						if (!isNotFound(err)) {
+							this.forget(goneCopies);
+							return failed(failureOf(err, pull));
+						}
+						goneCopies.push([listId, logwellId]);
 					}
 				}
 			}
+			this.forget(goneCopies);
 		}
 		// A cut completed answer may lack completions, which would read as gone: no Trash verdict this sync, in any list.
 		// Everything else is applied and the window moves on; a hidden completion is found by a lookup at a later sync,
@@ -1020,6 +1086,8 @@ export class SyncService {
 				{ undoable: false },
 			);
 		}
+		// Linked now, the creates the pull settled are forgotten. A command that failed above keeps them for the next sync.
+		this.forget(plan.settled);
 
 		// 4b. Description notes, between the pull and the push (vault I/O, outside any command).
 		let notePushes: NotePush[] = [];
@@ -1062,7 +1130,7 @@ export class SyncService {
 	): PullPlan {
 		const zone = this.settings.zone();
 		const tags = pullTags(tx, remoteTags);
-		const plan: PullPlan = { pairs: [], deletes: [], removeLinks: new Set(), newLinks: [], exclude: new Set(), needsConfirmation: [], written: 0, wrote: false };
+		const plan: PullPlan = { pairs: [], deletes: [], removeLinks: new Set(), newLinks: [], settled: [], exclude: new Set(), needsConfirmation: [], written: 0, wrote: false };
 		const linkByTt = new Map<string, SyncLink>();
 		const sectionByColumn = new Map<string, ID | null>();
 		const sectionLinkByColumn = new Map<string, SyncLink>();
@@ -1134,11 +1202,15 @@ export class SyncService {
 		};
 		const keys = new SortKeys(tx, this.index);
 
+		// Creates not linked yet, as this pull settles them; what it settles goes in `plan.settled`, forgotten only once
+		// the links are written.
+		const pendingCreates = new Map([...this.pendingCreates].map(([listId, pending]) => [listId, new Map(pending)]));
+
 		// Creates that TickTick answered but whose link was not written (the store turned read-only): linked now by
 		// TickTick's id, whatever the copy's status, with Logwell's values as the base, so a change made there since
 		// (a completion) is pulled like any other.
 		const answered = new Set<string>();
-		for (const pending of this.pendingCreates.values()) {
+		for (const pending of pendingCreates.values()) {
 			for (const [logwellId, answer] of pending) {
 				if (answer === null) continue;
 				const tt = seen.get(answer.ttId);
@@ -1174,7 +1246,7 @@ export class SyncService {
 		}
 		fresh.sort((a, b) => (a.tt.parentId ? 1 : 0) - (b.tt.parentId ? 1 : 0));
 		for (const { tt, pull } of fresh) {
-			const pending = this.pendingCreates.get(pull.listId);
+			const pending = pendingCreates.get(pull.listId);
 			const match = pending === undefined ? undefined : this.matchPending(tx, pending, pull.listId, ttTitle(tt.title));
 			if (match !== undefined) {
 				pending!.delete(match.id);
@@ -1197,8 +1269,10 @@ export class SyncService {
 			plan.pairs.push({ logwellId: task.id, ttId: tt.id, ttProjectId: tt.projectId, etag: tt.etag ?? null, ttHashes: ttHashes(tt, lwHashes(task, tags.names)) });
 		}
 		// Title matches are for this sync only; an answered create waits until its copy is seen (looked up above).
-		for (const pending of this.pendingCreates.values()) {
-			for (const [logwellId, answer] of pending) if (answer === null) pending.delete(logwellId);
+		for (const [listId, pending] of this.pendingCreates) {
+			for (const [logwellId, answer] of pending) {
+				if (answer === null || pendingCreates.get(listId)?.has(logwellId) !== true) plan.settled.push([listId, logwellId]);
+			}
 		}
 
 		// Linked tasks, parents first so a moved parent takes its subtasks along.

@@ -77,7 +77,7 @@ Sync writes only the notes it created, and never deletes or renames them. If you
 - Logwell pulls when Obsidian opens and at the interval you set, 5 to 60 minutes.
 - **Sync now**, or the command **Sync with TickTick now**, syncs at once.
 
-A sync cannot be undone. While the database is read-only, sync waits.
+A sync cannot be undone. While the database is read-only, sync waits. If the database turns read-only or Obsidian closes right after TickTick took a new task, this device remembers the task, and the next sync links it to its TickTick copy instead of sending it again.
 
 ## Change a task on both sides
 
