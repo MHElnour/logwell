@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { descendant, emptyDbText } from "../persistence/fixtures";
-import { type FakeApp, fakeApp, loadPlugin } from "./fake-vault";
+import { type FakeApp, fakeApp, fileOf, loadPlugin } from "./fake-vault";
 import { CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 
 // Session and database lifecycle checks at the plugin level.
@@ -11,14 +11,25 @@ interface Recorded {
 	labels: string[];
 	timeout: number | undefined;
 }
-const notices = vi.hoisted(() => ({ list: [] as Recorded[], errors: [] as unknown[] }));
+const notices = vi.hoisted(() => ({ list: [] as Recorded[], errors: [] as unknown[], contexts: [] as (string | undefined)[] }));
 
 vi.mock("../../src/obsidian/notices", () => ({
 	actionNotice: (message: string, actions: { label: string }[], timeout?: number) => {
 		notices.list.push({ message, labels: actions.map((a) => a.label), timeout });
 		return {};
 	},
-	showError: (err: unknown) => void notices.errors.push(err),
+	showError: (err: unknown, context?: string) => {
+		notices.errors.push(err);
+		notices.contexts.push(context);
+	},
+	syncNotice: () => ({}),
+}));
+
+// Create database asks for a folder and a name: the vault root and "New".
+vi.mock("../../src/obsidian/modals", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	pickFolder: () => Promise.resolve({ isRoot: () => true, path: "/" }),
+	prompt: () => Promise.resolve({ name: "New" }),
 }));
 
 const A = "A.cpbase";
@@ -30,6 +41,7 @@ function setup(): FakeApp {
 	fake.files.set(B, emptyDbText("db-b", "r-bbbbbbbbbbbb"));
 	notices.list.length = 0;
 	notices.errors.length = 0;
+	notices.contexts.length = 0;
 	return fake;
 }
 
@@ -90,6 +102,62 @@ describe("edits that could not be kept", () => {
 		expect(notices.list).toHaveLength(1);
 		expect(notices.list[0]!.message).toContain("EACCES");
 		expect(notices.list[0]!.message).not.toMatch(/retry/i);
+	});
+});
+
+describe("#134: failures that used to show nothing", () => {
+	it("#134: a backup that cannot be written says the database file is not affected, never Retrying", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		(plugin.session as unknown as Emitter).onStoreEvent({ type: "backup-error", message: "ENOSPC" });
+		expect(notices.list).toHaveLength(1);
+		const message = notices.list[0]!.message;
+		expect(message).toContain("ENOSPC");
+		expect(message).toMatch(/backup/i);
+		expect(message).toMatch(/not affected/i);
+		expect(message).not.toMatch(/could not save the database|retrying/i);
+	});
+
+	it("#134: Create database tells why the file could not be created", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		const refused = new Error("EINVAL");
+		(fake.app.vault as unknown as { create: () => Promise<never> }).create = () => Promise.reject(refused);
+		await expect(plugin.createDatabase()).resolves.toBeUndefined();
+		expect(notices.errors).toEqual([refused]);
+		expect(notices.contexts).toEqual(["Could not create the database New.cpbase"]);
+		expect(plugin.settings.activeDatabasePath).toBe(A);
+	});
+
+	it("#134: the hourly cleanup shows a failure, and stays quiet when the file turned read-only meanwhile", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		const session = plugin.session!;
+		const failure = new Error("disk error");
+		vi.spyOn(session.app.tasks, "purgeExpired").mockRejectedValueOnce(failure);
+		const endSeries = vi.spyOn(session.app.recurrence, "endExhaustedSeries");
+		await expect(session.hourlyCleanup()).resolves.toBeUndefined();
+		expect(notices.errors).toEqual([failure]);
+		expect(notices.contexts[0]).toMatch(/Trash/);
+		expect(endSeries).not.toHaveBeenCalled();
+
+		const { DomainError } = await import("../../src/domain/errors");
+		vi.spyOn(session.app.tasks, "purgeExpired").mockRejectedValueOnce(new DomainError("ReadOnly", "read-only"));
+		await expect(session.hourlyCleanup()).resolves.toBeUndefined();
+		expect(notices.errors).toEqual([failure]);
+	});
+
+	it("#134: a settings save that fails after following a moved database is shown", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		const refused = new Error("EACCES");
+		plugin.saveData = () => Promise.reject(refused);
+		fake.files.set("Moved.cpbase", fake.files.get(A)!);
+		fake.files.delete(A);
+		fake.fire("rename", fileOf("Moved.cpbase"), A);
+		await vi.waitFor(() => expect(notices.errors).toEqual([refused]));
+		expect(notices.contexts[0]).toContain("Moved.cpbase");
+		expect(plugin.settings.activeDatabasePath).toBe("Moved.cpbase");
 	});
 });
 

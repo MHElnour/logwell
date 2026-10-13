@@ -98,8 +98,7 @@ export default class CheckpointPlugin extends Plugin {
 		);
 		this.registerInterval(
 			window.setInterval(() => {
-				const app = this.session?.app;
-				if (app !== undefined) void app.tasks.purgeExpired().then(() => app.recurrence.endExhaustedSeries());
+				void this.session?.hourlyCleanup();
 			}, 60 * 60 * 1000),
 		);
 		// The focus heartbeat. FocusService.tick saves lastHeartbeat every 15 s and detects gaps.
@@ -346,7 +345,7 @@ export default class CheckpointPlugin extends Plugin {
 		]);
 	}
 
-	/** "Create database": a new `.cpbase` file in a folder the user chooses. */
+	/** "Create database": a new `.cpbase` file in a folder the user chooses. A failure is shown, never thrown. */
 	async createDatabase(): Promise<void> {
 		const folder = await pickFolder(this.app, "Choose a folder for the new database");
 		if (folder === null) return;
@@ -364,14 +363,24 @@ export default class CheckpointPlugin extends Plugin {
 		const content = serializeDb(
 			createEmptyDb({ dbId: randomId(), revision: newRevision(randomId), deviceId: this.deviceId, now }),
 		);
-		await this.app.vault.create(path, content);
-		await this.setActiveDatabase(path);
-		if (!this.settings.syncNoticeShown) {
-			syncNotice();
-			this.settings.syncNoticeShown = true;
-			await this.saveSettings();
+		try {
+			await this.app.vault.create(path, content);
+		} catch (err) {
+			// A name the system refuses, or a disk error.
+			showError(err, `Could not create the database ${path}`);
+			return;
 		}
-		await this.openApp("tasks");
+		try {
+			await this.setActiveDatabase(path);
+			if (!this.settings.syncNoticeShown) {
+				syncNotice();
+				this.settings.syncNoticeShown = true;
+				await this.saveSettings();
+			}
+			await this.openApp("tasks");
+		} catch (err) {
+			showError(err, `The database ${path} was created but could not be opened`);
+		}
 	}
 
 	private noDatabaseNotice(): void {
@@ -464,7 +473,8 @@ export default class CheckpointPlugin extends Plugin {
 		}
 		if (this.settings.activeDatabasePath === oldPath) {
 			this.settings.activeDatabasePath = newPath;
-			void this.saveSettings();
+			// Unsaved, the setting would point at the old path on the next start.
+			void this.saveSettings().catch((err: unknown) => showError(err, `Could not save the moved database path ${newPath} in the settings`));
 			followed = true;
 		}
 		if (followed) this.events.emit("session", undefined);

@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LocalStorageRenameQueue } from "../../src/obsidian/renameQueue";
 import { collectionsOf, CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 import { MemoryRenameQueue, type NoteRename, type RenameQueuePort, type RenameTimers } from "../../src/app/ports";
@@ -139,6 +139,22 @@ describe("note renames", () => {
 			// Resuming twice changes nothing either.
 			await h.app.tasks.resumeRenames();
 			expect(pathOf(h, "t1")).toBe("C.md");
+		});
+
+		it("#134: a reloaded rename that fails is told through the session's error channel, not dropped silently", async () => {
+			const renames = new MemoryRenameQueue();
+			renames.save("db-1", [{ oldPath: "A.md", newPath: "B.md", isFolder: false }]);
+			const h = await appHarness({ initial: supported, renames });
+			const errors: unknown[] = [];
+			h.app.store.bus.onListenerError = (err) => errors.push(err);
+			vi.spyOn(h.app.store, "run").mockRejectedValueOnce(new Error("disk error"));
+			await h.app.tasks.resumeRenames();
+			expect(errors).toHaveLength(1);
+			const message = (errors[0] as Error).message;
+			expect(message).toContain("A.md");
+			expect(message).toContain("B.md");
+			expect(message).toContain("disk error");
+			expect(pathOf(h, "t1")).toBe("A.md");
 		});
 
 		it("queues are kept per database", async () => {

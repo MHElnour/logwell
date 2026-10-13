@@ -52,6 +52,8 @@ Open the Data page, find the snapshot under **Backups** and choose **Restore**. 
 
 "Could not save the database: …" followed by "Retrying." means a write failed. Logwell keeps your changes in memory and tries again every 5 seconds. If something else changed the file meanwhile, Logwell handles it as an outside change and may show the conflict notice instead.
 
+"A backup of the database could not be written: …" means the database file itself was saved, or was not touched, but the backup snapshot next to it failed, for example because the disk is full. Your tasks are safe in the file; the next save tries the backup again.
+
 "Unsaved changes to … could not be kept and are lost" is rare. It means a database closed while its changes could not be saved, and the conflict copy Logwell tries to keep failed too. The notice gives the reason.
 
 ## A habit reminder did not fire

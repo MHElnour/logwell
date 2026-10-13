@@ -733,6 +733,19 @@ describe("description notes and the rest of the sync (SYNC-09)", () => {
 		expect(s.task("Beta two")).toBeDefined();
 	});
 
+	it("#134: an error that is not the vault's (a bug) is not turned into a note warning", async () => {
+		const s = await ready();
+		s.notesOn = true;
+		s.tt.add(s.projectId, { title: "Alpha", content: "a" });
+		await run(s);
+		s.h.notes.set(noteOf(s, "Alpha"), "a, edited\n");
+		// The vault answers, but with something the note code cannot read: a TypeError of its own.
+		s.h.notes.read = async () => 42 as unknown as string;
+		const r = await s.sync.sync().catch((err: unknown) => ({ ok: false as const, thrown: err, warnings: [] as string[] }));
+		expect(r.ok).toBe(false);
+		expect(r.warnings).toEqual([]);
+	});
+
 	it("a duplicate of a task shares its note, but only the original's link writes it", async () => {
 		const s = await ready();
 		s.notesOn = true;

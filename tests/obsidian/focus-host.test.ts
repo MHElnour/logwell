@@ -5,6 +5,15 @@ import { type ActiveTimer, startSet } from "../../src/domain/focus";
 import { FocusHost, type FocusHostUi, type FocusLike, formatStatus, statusLabel } from "../../src/obsidian/focusHost";
 import { LocalStorageActiveTimer } from "../../src/obsidian/activeTimer";
 
+const shown = vi.hoisted(() => [] as string[]);
+vi.mock("../../src/obsidian/notices", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	actionNotice: (message: string) => {
+		shown.push(message);
+		return {};
+	},
+}));
+
 describe("focus host", () => {
 	const NOW = "2026-10-04T10:00:00.000Z";
 	const config = { rounds: 4, focusSec: 1500, breakSec: 300, longBreakSec: 900 };
@@ -554,6 +563,24 @@ describe("the active timer in local storage", () => {
 			} as never);
 			expect(port.load("db-1")).toBeNull();
 			expect(() => port.save("db-1", timer())).not.toThrow();
+			warn.mockRestore();
+		});
+
+		it("#134: a timer that cannot be saved is told once per session, with what is at risk", () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			shown.length = 0;
+			const port = new LocalStorageActiveTimer({
+				loadLocalStorage: () => null,
+				saveLocalStorage: () => {
+					throw new Error("quota exceeded");
+				},
+			} as never);
+			port.save("db-1", timer());
+			port.save("db-1", timer());
+			expect(shown).toHaveLength(1);
+			expect(shown[0]).toContain("quota exceeded");
+			expect(shown[0]).toMatch(/focus timer/);
+			expect(shown[0]).toMatch(/restarts/);
 			warn.mockRestore();
 		});
 	});

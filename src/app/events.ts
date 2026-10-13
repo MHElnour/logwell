@@ -10,7 +10,8 @@ export class EventBus<Events extends { [K in keyof Events]: unknown }> {
 	 * Receives what a listener threw. The other listeners still run and `emit`
 	 * returns normally, so one failing view never fails a change that was already
 	 * made, or the steps after it. The session shows it as an error; until then
-	 * it is thrown again outside `emit`.
+	 * it is thrown again outside `emit`. Work a listener started and nobody awaits (the replay of saved note
+	 * renames) reports its failure here too.
 	 */
 	onListenerError: (err: unknown) => void = (err) => {
 		queueMicrotask(() => {
