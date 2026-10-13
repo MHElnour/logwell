@@ -131,29 +131,54 @@ describe(`performance at ${TOTAL} tasks`, () => {
 	});
 
 	it("the Inbox list query and render grow linearly with the tasks", async () => {
+		type Big = Awaited<ReturnType<typeof bigState>>;
 		const large = await bigState();
-		const small = await bigState(TOTAL / 4);
-		const containers: HTMLElement[] = [];
-		/** Query and render of the Inbox of `big` into a new container, as when the view opens. */
-		const renderInbox = (big: Awaited<ReturnType<typeof bigState>>) => () => {
-			const { state, host, ctx } = big;
-			const container = document.createElement("div");
-			containers.push(container);
+		let small: Big | null = await bigState(TOTAL / 4);
+		const inbox = ({ state, host, ctx }: Big, container: HTMLElement) => {
 			sidebarCounts(state, ctx);
 			const groups = buildList(state, { kind: "inbox" }, ctx, emptyFilter(), "").groups;
 			render(<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" onSelect={() => undefined} />, container);
-			return container;
+		};
+		/**
+		 * The rows the Inbox of `big` draws. Counted by walking the elements: happy-dom keeps what a `querySelectorAll` over
+		 * thousands of rows matched after they are unmounted, about 300 MB per query here.
+		 */
+		const rowsOf = (big: Big) => {
+			const container = document.createElement("div");
+			inbox(big, container);
+			let rows = 0;
+			const walk = (el: Element | null): void => {
+				for (let e = el; e !== null; e = e.nextElementSibling) {
+					if (e.classList.contains("cp-task-row")) rows++;
+					walk(e.firstElementChild);
+				}
+			};
+			walk(container.firstElementChild);
+			render(null, container);
+			return rows;
+		};
+		const largeContainer = document.createElement("div");
+		const smallContainer = document.createElement("div");
+		/**
+		 * Query and render of the Inbox of `big`, as when the view opens, then its unmount, so at most one Inbox is in the
+		 * DOM at a time; both sizes pay the unmount alike.
+		 */
+		const openAndClose = (big: Big, container: HTMLElement) => () => {
+			inbox(big, container);
+			render(null, container);
 		};
 		try {
-			expect(renderInbox(large)().querySelectorAll(".cp-task-row")).toHaveLength(OPEN_ROWS);
-			expect(renderInbox(small)().querySelectorAll(".cp-task-row")).toHaveLength(openRows(TOTAL / 4));
+			expect(rowsOf(large)).toBe(OPEN_ROWS);
+			expect(rowsOf(small)).toBe(openRows(TOTAL / 4));
 			const queryMs = elapsed(() => buildList(large.state, { kind: "inbox" }, large.ctx, emptyFilter(), ""));
-			const times = timeBoth(renderInbox(small), renderInbox(large), 3);
+			const times = timeBoth(openAndClose(small, smallContainer), openAndClose(large, largeContainer), 2);
+			small = null;
 			const report = `query + render ${times.small.toFixed(0)} ms at ${TOTAL / 4} tasks, ${times.large.toFixed(0)} ms at ${TOTAL}`;
 			perfLog(`Inbox: list query ${queryMs.toFixed(1)} ms at ${TOTAL} tasks; ${report}`);
 			expect(times.large, report).toBeLessThan(times.small * GROWTH + NOISE_MS);
 		} finally {
-			for (const c of containers) render(null, c);
+			render(null, largeContainer);
+			render(null, smallContainer);
 		}
 	}, 60_000);
 });
