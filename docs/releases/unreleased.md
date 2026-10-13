@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#118) Fixed an error in one part of Logwell, such as a view or a task block, making a saved change report a failure and leaving the other views out of date. The error is now shown on its own, and a change made outside Obsidian still shows its conflict notice and saves its repairs.
 - (#106) Fixed the details pane keeping the Custom repeat editor open, filled in with the previous task's rule, after you selected another task; **Done** then gave that rule to the new task. Selecting another task now closes the repeat picker and empties the Add tag box.
 - (#130) Fixed text typed in Quick Add while the previous task was still being saved being wiped when the save finished. It now stays in the field for the next task.
 - (#105) Fixed Quick Add dropping a typed `until` date after **Never** was picked as the repeat: the chip showed it as applied, but the task was saved with no end and no deadline. With **Never** picked, `until Dec 1` is now a deadline, as on a task that does not repeat.

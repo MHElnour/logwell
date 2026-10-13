@@ -1696,3 +1696,24 @@ describe("two sections with one name in a list", () => {
 		expect(repaired?.type === "repaired" && repaired.issues.join(" ")).toContain("Task t1");
 	});
 });
+
+describe("a handler of the reload that throws", () => {
+	it("#118: the conflict is still announced and the repaired file still saved", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("t1", { categoryId: "missing" })).next, "r-remote"));
+		const push = h.events.push.bind(h.events);
+		h.events.push = (...events: StoreEvent[]) => {
+			const n = push(...events);
+			if (events.some((e) => e.type === "loaded")) throw new Error("a view failed");
+			return n;
+		};
+		await expect(h.store.handleExternalChange()).rejects.toThrow("a view failed");
+		expect(h.events.some((e) => e.type === "conflict")).toBe(true);
+		expect(h.events.some((e) => e.type === "repaired")).toBe(true);
+		const saved = load(h.dbText());
+		expect(saved.meta.revision).not.toBe("r-remote");
+		expect(saved.tasks.get("t1")?.categoryId).toBe("inbox");
+	});
+});

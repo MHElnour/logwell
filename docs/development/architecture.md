@@ -68,7 +68,7 @@ The `CommandQueue` (`src/app/events.ts`) runs one command at a time, in order. A
 
 Records are immutable: a change is a fresh object, and only the collections a command touched get a fresh map. Views and the serializer rely on that identity. `CpbaseStore.commit` swaps the state in memory at once and schedules the save, so views never wait for the file.
 
-The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, sent on the `EventBus` from `src/app/events.ts`). It carries the label and the change list: each record written, before and after. A reload or a full replace carries no list, which means anything may differ.
+The store then emits `changed` (declared as `AppEvents` in `src/app/store.ts`, sent on the `EventBus` from `src/app/events.ts`). It carries the label and the change list: each record written, before and after. A reload or a full replace carries no list, which means anything may differ. A listener that throws never fails the command or stops the other listeners: `EventBus.onListenerError` gets the error, and the session shows it with `showError`.
 
 Listeners use the list to narrow their work: the task index (`src/app/taskIndex.ts`), the task block (`src/obsidian/dashboardBlock.ts`) and the TickTick scheduler.
 
