@@ -21,7 +21,7 @@ To create sections, see [Lists, sections and tags](lists-and-tags.md#add-a-secti
 
 ## Read a card
 
-A card shows the task's title, with its date, list, tags, note and subtask count on a second line. Click a card to open its details. A subtask sits inside its parent's card when both are in the same column; the chevron folds it away. Otherwise the subtask has its own card, with the parent's name in front.
+A card shows the task's title, with its date, repeat, list, tags, note, subtask count and focused time on a second line, and **Not synced** for a task of a TickTick list that does not sync, as the list rows do. Click a card to open its details. A subtask sits inside its parent's card when both are in the same column; the chevron folds it away. Otherwise the subtask has its own card, with the parent's name in front.
 
 Each column except Overdue has a plus button that adds a task to that column.
 

@@ -67,8 +67,12 @@ export function syncNotice(): Notice {
 	);
 }
 
-export function showError(err: unknown): void {
+/**
+ * Shows an error as a notice. `context` says what failed ("Could not create the database"); the error's own
+ * message follows it. Errors other than a `DomainError` are also logged.
+ */
+export function showError(err: unknown, context?: string): void {
 	const message = err instanceof Error ? err.message : String(err);
-	new Notice(message);
+	new Notice(context === undefined ? message : `${context}: ${message}`);
 	if (!(err instanceof Error && err.name === "DomainError")) console.error("Logwell:", err);
 }

@@ -281,6 +281,26 @@ describe("sync screens", () => {
 			expect(row(root, "Weekly review").querySelector(".cp-meta-repeat")).not.toBeNull();
 		});
 
+		it("#135: a board card shows the mark as the row does, as soon as its link changes", async () => {
+			const { s, root } = await mount(true);
+			const id = await linkedWork(s);
+			const { task } = await s.h.app.tasks.create({ title: "Water the plants", categoryId: id });
+			await s.sync.sync();
+			side(root, "Work").click();
+			await settle();
+			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent?.trim() === "Board")!.click();
+			await settle();
+			const cardChip = () =>
+				[...root.querySelectorAll<HTMLElement>(".cp-board-item")]
+					.find((c) => c.querySelector(".cp-board-title")?.textContent?.trim() === "Water the plants")!
+					.querySelector<HTMLElement>(".cp-meta-notsynced");
+			expect(cardChip()).toBeNull();
+			const link = s.h.app.store.state.syncLinks.get(syncLinkId("task", task.id))!;
+			await s.h.app.store.run("test links", (tx) => void tx.put("syncLinks", { ...link, mode: "localOnly", modifiedAt: tx.now }), { undoable: false });
+			await settle();
+			expect(cardChip()!.getAttribute("title")).toBe("Kept in Logwell only, not synced with TickTick");
+		});
+
 		it("is not drawn for a completed task", async () => {
 			const { s, root } = await mount(true);
 			const id = await linkedWork(s);

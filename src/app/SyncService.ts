@@ -1,5 +1,5 @@
 import { DomainError, isDomainError } from "../domain/errors";
-import { compareSortKeys, keyBetween } from "../domain/sortKey";
+import { keyBetween } from "../domain/sortKey";
 import { TagNames, normalizeTagKey, tagDisplayPath, tagNamesOf, tagPath } from "../domain/tags";
 import { categoryNameKey, requireTitle, subtasksOf } from "../domain/tasks";
 import {
@@ -36,8 +36,10 @@ import { MemoryTickTickPending, type SettingsPort, type TickTickApi, TickTickErr
 import type { SectionService } from "./SectionService";
 import type { AppStore } from "./store";
 import type { TaskInput, TaskPatch, TaskService } from "./TaskService";
-import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "./taskIndex";
+import type { TaskIndex } from "./taskIndex";
 import { INBOX_ALIAS, InboxAliasApi, canonicalProjectId } from "./tickTickInbox";
+import { assertLinkable, countPushable, markGoneTaskLink } from "./tickTickLink";
+import { type LinkedList, linkedLists } from "./syncMarks";
 import { type NotePush, SyncNotes, type SyncNotesDeps, TICKTICK_NOTE_WARNING, ownsNote } from "./syncNotes";
 import { type StoredNoteBase, docFromTickTick, isChecklist, sameDoc, storedBase, ttNoteWrite } from "../domain/ticktick/noteText";
 import { sameLines } from "../domain/textMerge";
@@ -156,12 +158,6 @@ export interface FirstSyncPlan {
 	toLogwell: number;
 	/** Open, non-repeating Logwell tasks that go up. */
 	toTickTick: number;
-}
-
-interface LinkedList {
-	listId: ID;
-	name: string;
-	link: SyncLink;
 }
 
 interface ListPull extends Omit<LinkedList, "link"> {
@@ -524,10 +520,7 @@ export class SyncService {
 						const trashed = trashedIds(tx);
 						for (const id of ids) {
 							this.unmarked.delete(id);
-							const link = tx.get("syncLinks", syncLinkId("task", id));
-							if (link === undefined || link.pendingDelete === true) continue;
-							if (tx.get("tasks", id) !== undefined || trashed.has(id)) continue;
-							tx.put("syncLinks", { ...link, pendingDelete: true, modifiedAt: tx.now });
+							if (!trashed.has(id)) markGoneTaskLink(tx, id);
 						}
 					},
 					{ undoable: false },
@@ -588,14 +581,10 @@ export class SyncService {
 
 	/** The first-sync preview. Writes nothing. */
 	async planFirstSync(listId: ID, projectId: string): Promise<FirstSyncPlan> {
-		this.assertLinkable(this.store.state, listId, projectId);
+		assertLinkable(this.store.state, this.index, listId, projectId);
 		const data = await this.api.getProjectData(projectId);
 		assertTaskProject(data);
-		let toTickTick = 0;
-		const tasks = this.store.state.tasks;
-		for (const t of this.index.tasksOf((id) => tasks.get(id), listId)) {
-			if (t.status === "open" && t.recurrence === null) toTickTick++;
-		}
+		const toTickTick = countPushable(this.store.state, this.index, listId);
 		const toLogwell = data.tasks.filter((t) => statusFromTt(t.status) === "open" && isSyncable(t)).length;
 		return { listId, projectId, toLogwell, toTickTick };
 	}
@@ -606,7 +595,7 @@ export class SyncService {
 	 */
 	applyFirstSync(listId: ID, projectId: string): Promise<SyncResult> {
 		return this.serial(async () => {
-			this.assertLinkable(this.store.state, listId, projectId);
+			assertLinkable(this.store.state, this.index, listId, projectId);
 			let data: TtProjectData;
 			try {
 				data = await this.api.getProjectData(projectId);
@@ -621,7 +610,7 @@ export class SyncService {
 			await this.store.run(
 				TICKTICK_LINKS_LABEL,
 				(tx) => {
-					this.assertLinkable(tx.base, listId, projectId);
+					assertLinkable(tx.base, this.index, listId, projectId);
 					tx.put("syncLinks", {
 						kind: "list",
 						logwellId: listId,
@@ -772,32 +761,6 @@ export class SyncService {
 
 	// -- checks --------------------------------------------------------------------------------------------------
 
-	private assertLinkable(state: DbData, listId: ID, projectId: string): void {
-		const list = state.categories.get(listId);
-		if (list === undefined) throw new DomainError("NotFound", "The list no longer exists.");
-		if (state.syncLinks.has(syncLinkId("list", listId))) throw new DomainError("InvalidValue", "This list is already linked to TickTick.");
-		// Completed tasks do not count.
-		if (this.index.openCount(listId) > SYNCED_LIST_OPEN_MAX) {
-			throw new DomainError(
-				"SyncedListFull",
-				`Can't link the list: ${list.name} has more than ${SYNCED_LIST_OPEN_MAX} open tasks, the most a list synced with TickTick can hold.`,
-			);
-		}
-		for (const l of state.syncLinks.values()) {
-			if (l.kind === "list" && canonicalProjectId(l.ttId) === canonicalProjectId(projectId)) throw new DomainError("InvalidValue", "That TickTick list is already linked to another list.");
-		}
-	}
-
-	/** The linked lists whose Logwell list exists, in list order. A link whose list has not arrived is skipped. */
-	private linkedLists(state: DbData): LinkedList[] {
-		const out: LinkedList[] = [];
-		for (const link of state.syncLinks.values()) {
-			if (link.kind !== "list") continue;
-			const list = state.categories.get(link.logwellId);
-			if (list !== undefined) out.push({ listId: list.id, name: list.name, link });
-		}
-		return out.sort((a, b) => compareSortKeys(state.categories.get(a.listId)!.sortKey, state.categories.get(b.listId)!.sortKey));
-	}
 
 	// -- one sync ------------------------------------------------------------------------------------------------
 
@@ -871,7 +834,7 @@ export class SyncService {
 		const startedAt: Instant = this.store.now();
 		/** The state when the sync started: unchanged at the end means the sync wrote nothing. */
 		const stateAtStart = this.store.state;
-		const lists = this.linkedLists(this.store.state);
+		const lists = linkedLists(this.store.state);
 
 		// 1. Pull every linked list. A project that fails to load stops the sync before anything is written, except one
 		// that no longer exists (HTTP 404), which stops its list only.

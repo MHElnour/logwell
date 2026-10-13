@@ -2,7 +2,7 @@ import { DomainError } from "../domain/errors";
 import { type Clock, type IdGenerator, nowInstant } from "../domain/ports";
 import type { Task } from "../domain/types";
 import { BackupStore, SNAPSHOT_INTERVAL_MS, type BackupInfo, type SnapshotKind } from "./backups";
-import type { DbFile, WriteResult } from "./gateway";
+import type { DbFile, FileWriteResult } from "./gateway";
 import { type JournalEntry, type JournalOp, replayJournal } from "./journal";
 import { type Migration, MIGRATIONS, planMigration, runMigrations } from "./migrations";
 import {
@@ -76,7 +76,9 @@ export type StoreEvent =
 	| { type: "noticed"; notes: string[] }
 	| { type: "migrated"; from: number; to: number }
 	| { type: "saved"; revision: string }
-	| { type: "save-error"; message: string };
+	| { type: "save-error"; message: string }
+	/** A snapshot could not be written (after a save, or on open); the file is not affected and the next save tries again. */
+	| { type: "backup-error"; message: string };
 
 export interface StoreDeps {
 	file: DbFile;
@@ -574,7 +576,7 @@ export class CpbaseStore {
 			this.needsFullWrite = this.needsFullWrite || full;
 			if (!journalOk) this.journalStale = true;
 		};
-		let result: WriteResult;
+		let result: FileWriteResult;
 		try {
 			this.attempted.add(meta.revision);
 			result = await this.deps.file.write(content, (text) => this.isOnDisk(text));
@@ -649,7 +651,7 @@ export class CpbaseStore {
 			if (!(await backups.hasDailySnapshot(now))) await backups.writeSnapshot("daily", content);
 			await backups.prune();
 		} catch (err) {
-			this.emit({ type: "save-error", message: `Backup failed: ${err instanceof Error ? err.message : String(err)}` });
+			this.emit({ type: "backup-error", message: err instanceof Error ? err.message : String(err) });
 		}
 	}
 

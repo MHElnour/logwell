@@ -4,7 +4,8 @@ import { describeEnd } from "../../src/domain/recurrence";
 import type { Recurrence } from "../../src/domain/types";
 import { fmtDay, fmtDow, monthTitle, weekTitle } from "../../src/ui/calendar/format";
 import { formatDate, formatInstant } from "../../src/ui/format";
-import { cellLabel, checkinWhen, notScheduledText, shiftMonth, stripDays, subText } from "../../src/ui/habits/format";
+import { cellLabel, checkinWhen, monthOf, notScheduledText, stripDays, subText } from "../../src/ui/habits/format";
+import { monthStart, shiftMonth, yearMonthOf } from "../../src/domain/time";
 import { timeRange } from "../../src/ui/focus/format";
 import { slotRange } from "../../src/domain/calendar";
 import { exportFolderName } from "../../src/app/DataService";
@@ -71,9 +72,11 @@ describe("digits on a device whose language writes other digits", () => {
 	});
 
 	it("#100: the Habits page steps months with the digits 0 to 9", () => {
-		expect(shiftMonth("2026-10", 1)).toBe("2026-11");
-		expect(shiftMonth("2026-01", -1)).toBe("2025-12");
-		expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+		const step = (month: string, by: number) => monthOf(monthStart(shiftMonth(yearMonthOf(month), by)));
+		expect(step("2026-10", 1)).toBe("2026-11");
+		expect(step("2026-01", -1)).toBe("2025-12");
+		expect(step("2026-12", 1)).toBe("2027-01");
+		expect(step("0001-01", -1)).toBe("0000-12");
 	});
 
 	it("#100: times and dates shown on the Habits page, the focus timer, the calendar, rows and an export folder use the digits 0 to 9", () => {
