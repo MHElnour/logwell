@@ -99,6 +99,8 @@ By default the schedule is fixed: "every Monday" stays on Mondays however late y
 
 Tick the checkbox, press Cmd+Enter (Ctrl+Enter) on the row, or choose **Complete** in the row menu. The task moves to its next date.
 
+A task whose repeat has ended but which is still open, after an edit of the database file or a sync, shows no repeat chip and completes like any other task, from its row, its menu or a task block.
+
 If you fall behind on a fixed schedule, completing marks the earliest missed date done and skips the others before today, and the notice says how many. A repeat that counts from completion never skips dates on its own.
 
 **Skip this occurrence** in the row menu records the date as skipped. Every notice has an Undo button.

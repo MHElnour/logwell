@@ -1,3 +1,4 @@
+import { isActiveSeries } from "../domain/tasks";
 import type { Task } from "../domain/types";
 import { plural } from "../domain/text";
 import type { UiHost } from "./host";
@@ -9,7 +10,8 @@ import { completeOccurrence } from "./repeatActions";
 
 /**
  * Completes `task` through the task service and offers Undo under the label of that write. A task with
- * open subtasks asks first, as in the app. A repeating task completes its current occurrence (its own notice).
+ * open subtasks asks first, as in the app. A repeating task completes its current occurrence (its own notice);
+ * one whose repeat has ended completes as a plain task.
  * A row still held after it was completed reopens. Errors go to the host.
  */
 export async function completeBlockTask(host: UiHost, task: Task): Promise<void> {
@@ -19,7 +21,7 @@ export async function completeBlockTask(host: UiHost, task: Task): Promise<void>
 			await tasks.reopen(task.id);
 			return;
 		}
-		if (task.recurrence !== null) {
+		if (isActiveSeries(task)) {
 			await completeOccurrence(host, task);
 			return;
 		}

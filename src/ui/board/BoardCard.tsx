@@ -3,7 +3,7 @@ import { useRef } from "preact/hooks";
 import type { BoardCard as BoardCardData } from "../../domain/board";
 import type { ListEntry, QueryContext } from "../../domain/queries";
 import { tagLabel } from "../../domain/tags";
-import type { SubtaskCount } from "../../domain/tasks";
+import { type SubtaskCount, isActiveSeries } from "../../domain/tasks";
 import type { ID } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
 import { taskMenu } from "../actions";
@@ -46,7 +46,7 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	// The effective schedule, so a repeating card shows its current occurrence.
 	const due = dueSpecOf(task, entry.schedule);
 	const tone = toneOf(done, due, ctx);
-	const repeats = task.recurrence !== null && task.recurrence.endedAt === null && !done;
+	const repeats = isActiveSeries(task);
 	const category = state.categories.get(task.categoryId);
 	const subCount = task.parentId === null ? (subtasks?.total ?? 0) : 0;
 	const hasMeta =
