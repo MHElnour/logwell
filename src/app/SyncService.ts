@@ -1379,7 +1379,12 @@ export class SyncService {
 		if (conflict) {
 			const now = tx.get("tasks", t.id) ?? t;
 			const section = sectionOf(tt);
-			attempt(() => this.tasks.createIn(tx, taskInputFromTt(tx, tt, zone, tags, `${ttTitle(tt.title)} (TickTick)`, now.categoryId, null, section ?? null)));
+			attempt(() => {
+				const { task } = this.tasks.createIn(tx, taskInputFromTt(tx, tt, zone, tags, `${ttTitle(tt.title)} (TickTick)`, now.categoryId, null, section ?? null));
+				// TickTick's version as it is there: completed or won't do there is completed here, and a completed task is
+				// never created in TickTick.
+				if (statusFromTt(tt.status) === "completed") this.tasks.completeOneIn(tx, task.id);
+			});
 		}
 		return written;
 	}
