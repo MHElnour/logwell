@@ -1,40 +1,25 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { AppRoot, type AppRootHandle } from "../../src/ui/AppRoot";
 import { SectionRelay } from "../../src/ui/sectionRelay";
 import { appHarness } from "../app/harness";
-import { settle, U1Host } from "./app-helpers";
+import { type AppMount, click, mountApp, mountNode, settle, sidebarItem, U1Host } from "./app-helpers";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
 import { initialTasksState, revealInTasks } from "../../src/ui/TasksSection";
 import { makeTask } from "../persistence/fixtures";
-import { type CalMount, click, mountCal, settle as settleCal } from "./calendar-helpers";
-import { sidebarItem } from "./board-helpers";
 import { openViewMenu as openMenuAt, pickItem } from "./view-menu-helpers";
 
 describe("section relay", () => {
 	// "Open calendar" and "Open search" on a tab that is not open yet showed Tasks: the request came
 	// before AppRoot registered its handle (a post-paint effect) and was dropped. SectionRelay keeps it.
 
-	const roots: HTMLElement[] = [];
-	afterEach(() => {
-		for (const r of roots.splice(0)) {
-			render(null, r);
-			r.remove();
-		}
-	});
-
-	/** Mounts AppRoot the way CheckpointView.renderApp does. */
+	/** Mounts AppRoot the way CheckpointView.renderApp does (the order of render, show and effects is the point). */
 	async function mount(relay: SectionRelay, order: "show-before-mount" | "show-right-after-mount" | "show-after-effects") {
-		(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-			this.replaceChildren();
-		};
 		const h = await appHarness();
 		const host = new U1Host(h);
-		const root = document.createElement("div");
-		document.body.appendChild(root);
-		roots.push(root);
+		const root = mountNode(null);
 		const view = () => <AppRoot host={host} initialSection={relay.pending} handle={(handle: AppRootHandle) => relay.attach(handle)} />;
 		if (order === "show-before-mount") relay.show("calendar");
 		render(view(), root);
@@ -182,34 +167,19 @@ describe("showing tasks from a block", () => {
 	// A dashboard block opens a task, or the view that matches its filters, in the app. The request goes
 	// through the same relay as the section commands, so it also works on a tab that is not open yet.
 
-	beforeAll(() => {
-		(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-			const el = this.ownerDocument.createElement("div");
-			el.className = o.cls;
-			this.appendChild(el);
-			return el;
-		};
-	});
-
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
-	const rows = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
-	const selected = (m: CalMount) => rows(m).filter((r) => r.classList.contains("is-selected")).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
-	const visibleSection = (m: CalMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-section")].filter((s) => !s.hidden);
+	const rows = (m: AppMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")];
+	const selected = (m: AppMount) => rows(m).filter((r) => r.classList.contains("is-selected")).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
+	const visibleSection = (m: AppMount) => [...m.root.querySelectorAll<HTMLElement>(".cp-section")].filter((s) => !s.hidden);
 
 	describe("AppRootHandle.showTasks", () => {
 		it("shows the view and selects the task, from any section", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const work = await m.h.app.categories.create("Work");
 			await m.h.app.tasks.create({ title: "Other", categoryId: work.id });
 			const a = (await m.h.app.tasks.create({ title: "Target", categoryId: work.id })).task;
 			await click(m.root.querySelector('.cp-rail [aria-label="Calendar"]'));
 			m.handle.current!.showTasks({ kind: "category", id: work.id }, a.id);
-			await settleCal();
+			await settle();
 			expect(visibleSection(m)).toHaveLength(1);
 			expect(visibleSection(m)[0]!.querySelector(".cp-tasks")).not.toBeNull();
 			expect(selected(m)).toEqual(["Target"]);
@@ -217,55 +187,51 @@ describe("showing tasks from a block", () => {
 		});
 
 		it("shows a view without selecting anything when no task is given", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const work = await m.h.app.categories.create("Work");
 			await m.h.app.tasks.create({ title: "Target", categoryId: work.id });
 			m.handle.current!.showTasks({ kind: "category", id: work.id }, null);
-			await settleCal();
+			await settle();
 			expect(rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim())).toEqual(["Target"]);
 			expect(selected(m)).toEqual([]);
 		});
 	});
 
 	describe("AppRootHandle.showTasks: nothing may hide the task that was asked for", () => {
-		const search = (m: CalMount) => m.root.querySelector<HTMLInputElement>(".cp-tasks input[type=search]")!;
-		const typeSearch = async (m: CalMount, text: string) => {
+		const search = (m: AppMount) => m.root.querySelector<HTMLInputElement>(".cp-tasks input[type=search]")!;
+		const typeSearch = async (m: AppMount, text: string) => {
 			const input = search(m);
 			input.value = text;
 			input.dispatchEvent(new Event("input", { bubbles: true }));
-			await settleCal();
+			await settle();
 		};
 
 		it("clears the search text, so a task the text did not match is shown", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const work = await m.h.app.categories.create("Work");
 			await m.h.app.tasks.create({ title: "Other", categoryId: work.id });
 			const a = (await m.h.app.tasks.create({ title: "Target", categoryId: work.id })).task;
 			m.handle.current!.showTasks({ kind: "category", id: work.id }, null);
-			await settleCal();
+			await settle();
 			await typeSearch(m, "zzz");
 			expect(rows(m)).toHaveLength(0);
 			m.handle.current!.showTasks({ kind: "category", id: work.id }, a.id);
-			await settleCal();
+			await settle();
 			expect(search(m).value).toBe("");
 			expect(rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim())).toEqual(["Other", "Target"]);
 			expect(selected(m)).toEqual(["Target"]);
 		});
 
 		it("clears the search text for a view without a task too", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			await typeSearch(m, "zzz");
 			m.handle.current!.showTasks({ kind: "inbox" }, null);
-			await settleCal();
+			await settle();
 			expect(search(m).value).toBe("");
 		});
 
 		it("opens the task's section when the user had collapsed it", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");
 			const a = (await m.h.app.tasks.create({ title: "Target", sectionId: alpha.id })).task;
 			await click(sidebarItem(m.root, "Inbox"));
@@ -276,17 +242,16 @@ describe("showing tasks from a block", () => {
 			expect(toggle().getAttribute("aria-expanded")).toBe("false");
 			expect(rows(m)).toHaveLength(0);
 			m.handle.current!.showTasks({ kind: "inbox" }, a.id);
-			await settleCal();
+			await settle();
 			expect(toggle().getAttribute("aria-expanded")).toBe("true");
 			expect(selected(m)).toEqual(["Target"]);
 		});
 
 		it("keeps the sort the user chose", async () => {
-			const m = await mountCal();
-			mounted.push(m);
+			const m = await mountApp();
 			const before = await m.h.app.tasks.create({ title: "A" });
 			m.handle.current!.showTasks({ kind: "inbox" }, before.task.id);
-			await settleCal();
+			await settle();
 			expect(selected(m)).toEqual(["A"]);
 		});
 	});

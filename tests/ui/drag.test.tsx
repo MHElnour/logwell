@@ -1,30 +1,18 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { beginPointerDrag, createAutoScroller, DRAG_THRESHOLD_PX, type DragHandlers, hitTest } from "../../src/ui/drag";
 import { render } from "preact";
 import { buildList } from "../../src/app/views";
 import { emptyFilter, type TaskSort } from "../../src/domain/queries";
-import type { Task } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
 import { type AppHarness, appHarness } from "../app/harness";
-import { dragTo, press, releaseAt, settle } from "./matrix-helpers";
-import { U1Host } from "./app-helpers";
+import { dragTo, mountNode, pointer, pressKey, rect, releaseAt, settle, taskOf, U1Host } from "./app-helpers";
 
 describe("pointer drag", () => {
 	// The shared pointer drag.
 
-	function ptr(type: string, init: { x?: number; y?: number; button?: number; pointerType?: string; id?: number } = {}) {
-		const ev = new MouseEvent(type, {
-			bubbles: true,
-			cancelable: true,
-			clientX: init.x ?? 0,
-			clientY: init.y ?? 0,
-			button: init.button ?? 0,
-		});
-		Object.defineProperty(ev, "pointerId", { value: init.id ?? 1 });
-		Object.defineProperty(ev, "pointerType", { value: init.pointerType ?? "mouse" });
-		return ev as unknown as PointerEvent;
-	}
+	/** The kit's pointer event, with the point in `init`. */
+	const ptr = (type: string, init: { x?: number; y?: number; button?: number; pointerType?: string; id?: number } = {}) => pointer(type, init.x ?? 0, init.y ?? 0, init);
 
 	function setup(handlerOverrides: Partial<DragHandlers> = {}) {
 		const parent = document.createElement("div");
@@ -531,52 +519,26 @@ describe("list reorder", () => {
 	// Dragging list rows to reorder them (manual sort only). happy-dom has no layout, so every
 	// row gets a fake 40 px high box in DOM order and the list a 500 px wide one.
 
-	beforeAll(() => {
-		// Obsidian's DOM helper, which happy-dom does not have.
-		(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-			const el = this.ownerDocument.createElement("div");
-			el.className = o.cls;
-			this.appendChild(el);
-			return el;
-		};
-		(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-			this.replaceChildren();
-		};
-	});
-
-	const containers: HTMLElement[] = [];
-	afterEach(() => {
-		for (const c of containers.splice(0)) {
-			render(null, c);
-			c.remove();
-		}
-	});
-
-	const rect = (left: number, top: number, right: number, bottom: number) =>
-		({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
-
 	interface Mount {
 		h: AppHarness;
 		host: U1Host;
 		root: HTMLElement;
 		undo: ReturnType<typeof vi.spyOn>;
-		redraw: (sort: TaskSort | undefined) => Promise<void>;
+		redraw: (sort: TaskSort | undefined, extra?: Partial<Parameters<typeof TaskList>[0]>) => Promise<void>;
 	}
 
 	async function mount(sort: TaskSort | undefined = "manual"): Promise<Mount> {
 		const h = await appHarness();
 		const host = new U1Host(h);
 		const undo = vi.spyOn(host, "notifyUndo");
-		const root = document.createElement("div");
-		document.body.appendChild(root);
-		containers.push(root);
-		const redraw = async (s: TaskSort | undefined) => {
+		const root = mountNode(null);
+		const redraw = async (s: TaskSort | undefined, extra: Partial<Parameters<typeof TaskList>[0]> = {}) => {
 			const state = h.app.store.state;
 			const ctx = h.app.queryContext();
 			const filter = { ...emptyFilter("all"), sort: s ?? "manual" };
 			const groups = buildList(state, { kind: "inbox" }, ctx, filter, "").groups;
 			render(
-				<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort={s} onSelect={() => undefined} />,
+				<TaskList host={host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort={s} onSelect={() => undefined} {...extra} />,
 				root,
 			);
 			await settle();
@@ -592,7 +554,6 @@ describe("list reorder", () => {
 	const titles = (m: Mount) => [...m.root.querySelectorAll(".cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
 	const row = (m: Mount, text: string) =>
 		[...m.root.querySelectorAll<HTMLElement>(".cp-task-row")].find((r) => r.querySelector(".cp-task-title")!.textContent.includes(text))!;
-	const task = (m: Mount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
 	const centerY = (i: number) => 40 * i + 20;
 	const X = 100;
 
@@ -617,9 +578,9 @@ describe("list reorder", () => {
 		it("drops a row at the top", async () => {
 			const m = await mount();
 			await seedFlat(m);
-			const id = task(m, "C").id;
+			const id = taskOf(m, "C").id;
 			await dragTo(row(m, "C"), { x: X, y: centerY(2) }, { x: X, y: 2 });
-			expect(task(m, "C").id).toBe(id);
+			expect(taskOf(m, "C").id).toBe(id);
 			expect(await reordered(m)).toEqual(["C", "A", "B", "D"]);
 			expect(m.undo).toHaveBeenCalledWith('Moved "C".', "Move task", expect.any(Number));
 			expect(await m.h.app.store.undo()).toBe("Move task");
@@ -633,7 +594,7 @@ describe("list reorder", () => {
 			// Row A dragged below B's middle (y 60) lands between B and C.
 			await dragTo(row(m, "A"), { x: X, y: centerY(0) }, { x: X, y: 62 });
 			expect(place).toHaveBeenCalledTimes(1);
-			expect(place.mock.calls[0]![1]).toEqual([task(m, "B").id, task(m, "A").id, task(m, "C").id, task(m, "D").id]);
+			expect(place.mock.calls[0]![1]).toEqual([taskOf(m, "B").id, taskOf(m, "A").id, taskOf(m, "C").id, taskOf(m, "D").id]);
 			expect(await reordered(m)).toEqual(["B", "A", "C", "D"]);
 		});
 
@@ -691,11 +652,11 @@ describe("list reorder", () => {
 			// S1 dragged far down only goes below S2, never out of P.
 			const place = vi.spyOn(m.h.app.tasks, "place");
 			await dragTo(row(m, "S1"), { x: X, y: centerY(1) }, { x: X, y: 900 });
-			expect(place.mock.calls[0]![1]).toEqual([task(m, "S2").id, task(m, "S1").id]);
+			expect(place.mock.calls[0]![1]).toEqual([taskOf(m, "S2").id, taskOf(m, "S1").id]);
 			expect(await reordered(m)).toEqual(["P", "S2", "S1", "Q"]);
 			// P dragged below Q takes S2 and S1 along.
 			await dragTo(row(m, "P"), { x: X, y: centerY(0) }, { x: X, y: 900 });
-			expect(place.mock.calls[1]![1]).toEqual([task(m, "Q").id, task(m, "P").id]);
+			expect(place.mock.calls[1]![1]).toEqual([taskOf(m, "Q").id, taskOf(m, "P").id]);
 			expect(await reordered(m)).toEqual(["Q", "P", "S2", "S1"]);
 		});
 
@@ -717,7 +678,7 @@ describe("list reorder", () => {
 			const r = row(m, "C");
 			await dragTo(r, { x: X, y: centerY(2) }, { x: X, y: 2 }, false);
 			expect(m.root.querySelector(".cp-reorder-line")).not.toBeNull();
-			await press(window as unknown as Element, "Escape");
+			await pressKey(window as unknown as Element, "Escape");
 			expect(m.root.querySelector(".cp-reorder-line")).toBeNull();
 			await releaseAt(r, { x: X, y: 2 });
 			expect(place).not.toHaveBeenCalled();
@@ -728,14 +689,7 @@ describe("list reorder", () => {
 			const m = await mount();
 			await seedFlat(m);
 			const onSelect = vi.fn();
-			const state = m.h.app.store.state;
-			const ctx = m.h.app.queryContext();
-			const groups = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "").groups;
-			render(
-				<TaskList host={m.host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort="manual" onSelect={onSelect} />,
-				m.root,
-			);
-			await settle();
+			await m.redraw("manual", { onSelect });
 			const r = row(m, "B");
 			r.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			expect(onSelect).toHaveBeenCalledTimes(1);
@@ -754,17 +708,8 @@ describe("list reorder", () => {
 		it("a read-only list never reorders", async () => {
 			const m = await mount();
 			await seedFlat(m);
-			const state = m.h.app.store.state;
-			const ctx = m.h.app.queryContext();
-			const groups = buildList(state, { kind: "inbox" }, ctx, { ...emptyFilter("all"), sort: "manual" }, "").groups;
-			render(
-				<TaskList host={m.host} state={state} groups={groups} ctx={ctx} selectedId={null} showCategory={false} emptyText="" label="Inbox" sort="manual" readOnly onSelect={() => undefined} />,
-				m.root,
-			);
-			await settle();
+			await m.redraw("manual", { readOnly: true });
 			const place = vi.spyOn(m.h.app.tasks, "place");
-			m.root.querySelector<HTMLElement>(".cp-task-list")!.getBoundingClientRect = () => rect(0, 0, 500, 1000);
-			m.root.querySelectorAll<HTMLElement>(".cp-task-row").forEach((r, i) => (r.getBoundingClientRect = () => rect(0, 40 * i, 500, 40 * i + 40)));
 			await dragTo(row(m, "C"), { x: X, y: centerY(2) }, { x: X, y: 2 });
 			expect(place).not.toHaveBeenCalled();
 		});

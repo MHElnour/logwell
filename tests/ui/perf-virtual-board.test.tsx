@@ -1,18 +1,15 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildBoard } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
-import type { ID, Task } from "../../src/domain/types";
-import type { JournalOp } from "../../src/persistence/journal";
+import type { ID } from "../../src/domain/types";
 import { BoardView } from "../../src/ui/board/BoardView";
 import { useAppState } from "../../src/ui/hooks";
 import type { UiHost } from "../../src/ui/host";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
-import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { settle } from "./matrix-helpers";
-import { U1Host } from "./app-helpers";
+import { focusedIndex, indexOfTaskId, mountNode, pointer, pressFocused, seedTasks, settle, taskId, U1Host, unmountAll } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // A board column with more than VIRTUAL_THRESHOLD
@@ -24,25 +21,11 @@ const SUB = 40;
 const HEAD = 40;
 const BODY = 500;
 
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
-
 let layout: FakeLayout | null = null;
-const roots: HTMLElement[] = [];
 afterEach(() => {
-	for (const r of roots.splice(0)) {
-		render(null, r);
-		r.remove();
-	}
 	layout?.restore();
 	layout = null;
 });
-
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-const indexOf = (id: string | undefined) => (id === undefined ? -1 : parseInt(id.slice(-12), 16) - 1);
 
 interface Seed {
 	/** Open Inbox tasks "Task 0".."Task n-1" in this manual order. */
@@ -60,22 +43,11 @@ async function seeded(seed: Seed): Promise<AppHarness> {
 		const name = seed.sectionOf?.(i) ?? null;
 		if (name !== null && !sections.has(name)) sections.set(name, (await h.app.sections.create("inbox", name)).id);
 	}
-	const data = h.store.data;
-	const tasks = new Map(data.tasks);
-	const ops: JournalOp[] = [];
-	for (let i = 0; i < seed.count; i++) {
+	seedTasks(h, seed.count, (i) => {
 		const name = seed.sectionOf?.(i) ?? null;
 		const parent = seed.parentOf?.(i) ?? null;
-		const t: Task = makeTask(taskId(i + 1), {
-			title: `Task ${i}`,
-			sortKey: `V${i.toString(36).padStart(4, "0")}`,
-			sectionId: name === null ? null : sections.get(name)!,
-			parentId: parent === null ? null : taskId(parent + 1),
-		});
-		tasks.set(t.id, t);
-		ops.push({ c: "tasks", id: t.id, v: t });
-	}
-	h.store.commit({ ...data, tasks }, ops);
+		return { sectionId: name === null ? null : sections.get(name)!, parentId: parent === null ? null : taskId(parent + 1) };
+	});
 	return h;
 }
 
@@ -116,9 +88,7 @@ interface Mount {
 async function mount(seed: Seed, opts: { manual?: boolean } = {}): Promise<Mount> {
 	const h = await seeded(seed);
 	const host = new U1Host(h);
-	const root = document.createElement("div");
-	document.body.appendChild(root);
-	roots.push(root);
+	const root = mountNode(null);
 	layout = fakeLayout({
 		viewport: (el) => (el.classList.contains("cp-board-col-body") ? BODY : undefined),
 		height: (el) =>
@@ -133,15 +103,8 @@ async function mount(seed: Seed, opts: { manual?: boolean } = {}): Promise<Mount
 const cards = (m: Mount, column: string) => [...m.body(column).querySelectorAll<HTMLElement>(".cp-board-card")];
 const cardOf = (m: Mount, i: number) => m.root.querySelector<HTMLElement>(`.cp-board-card[data-task-id="${taskId(i + 1)}"]`);
 const itemOf = (m: Mount, i: number) => m.root.querySelector<HTMLElement>(`.cp-board-item[data-task-id="${taskId(i + 1)}"]`);
-const focusedIndex = () => indexOf((document.activeElement as HTMLElement | null)?.dataset?.taskId);
 /** A card's top inside its column's content. */
 const contentTop = (body: HTMLElement, el: HTMLElement) => el.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
-const key = async (k: string, init: KeyboardEventInit = {}) => {
-	document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
-	await new Promise((r) => setTimeout(r, 0));
-};
-const pointer = (el: HTMLElement, type: string, x: number, y: number) =>
-	el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true }));
 
 describe("board columns", () => {
 	it("a column at the threshold draws every card", async () => {
@@ -169,7 +132,7 @@ describe("board columns", () => {
 		await layout!.scrollTo(body, 6000);
 		const atTop = () => cards(m, "none").find((c) => contentTop(body, c) <= body.scrollTop && contentTop(body, c) + c.getBoundingClientRect().height > body.scrollTop)?.dataset.taskId;
 		const before = atTop();
-		expect(indexOf(before)).toBe(120);
+		expect(indexOfTaskId(before)).toBe(120);
 		// One more card at the end: 151 items, so the column windows now.
 		await m.h.app.tasks.create({ title: "Task 150" });
 		await settle();
@@ -242,12 +205,12 @@ describe("board keyboard", () => {
 		const m = await mount({ count: 300, parentOf: (i) => (i < 30 && i % 3 !== 0 ? i - (i % 3) : null) });
 		itemOf(m, 0)!.focus();
 		for (let i = 1; i < 300; i++) {
-			await key("ArrowDown");
+			await pressFocused("ArrowDown");
 			if (focusedIndex() !== i) throw new Error(`ArrowDown ${i}: focus is on ${focusedIndex()}`);
 		}
 		expect(cards(m, "none").length).toBeLessThan(40);
 		for (let i = 298; i >= 0; i--) {
-			await key("ArrowUp");
+			await pressFocused("ArrowUp");
 			if (focusedIndex() !== i) throw new Error(`ArrowUp ${i}: focus is on ${focusedIndex()}`);
 		}
 	}, 30_000);
@@ -259,7 +222,7 @@ describe("board keyboard", () => {
 		await layout!.scrollTo(m.body("none"), 300 * CARD);
 		expect(itemOf(m, 5)).toBe(five);
 		expect(document.activeElement).toBe(five);
-		await key("ArrowDown");
+		await pressFocused("ArrowDown");
 		expect(focusedIndex()).toBe(6);
 		expect(m.body("none").scrollTop).toBeLessThanOrEqual(6 * CARD);
 	});
@@ -286,16 +249,13 @@ describe("board keyboard", () => {
 				for (const [i, k] of keys) {
 					await layout!.scrollTo(m.body("none"), i * CARD);
 					itemOf(m, i)!.focus();
-					await key(k, { altKey: true });
+					await pressFocused(k, { altKey: true });
 					await settle();
 					expect(focusedIndex(), `${count} cards, manual ${manual}, ${k} from ${i}`).toBe(i);
 				}
 				expect(place).not.toHaveBeenCalled();
 				expect(update).not.toHaveBeenCalled();
-				for (const r of roots.splice(0)) {
-					render(null, r);
-					r.remove();
-				}
+				unmountAll();
 				layout?.restore();
 				layout = null;
 			}
@@ -306,7 +266,7 @@ describe("board keyboard", () => {
 		const m = await mount({ count: 400, sectionOf: (i) => (i < 200 ? null : "Later") });
 		const later = m.root.querySelectorAll<HTMLElement>(".cp-board-col")[1]!.dataset.column!;
 		itemOf(m, 0)!.focus();
-		await key("ArrowRight", { altKey: true });
+		await pressFocused("ArrowRight", { altKey: true });
 		await settle();
 		expect(m.h.app.store.state.tasks.get(taskId(1))!.sectionId).toBe(later);
 		const moved = itemOf(m, 0)!;
@@ -324,17 +284,17 @@ describe("board drag", () => {
 		const m = await mount({ count: 400 });
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const zero = itemOf(m, 0)!;
-		pointer(zero, "pointerdown", 100, HEAD + CARD / 2);
-		pointer(zero, "pointermove", 110, HEAD + CARD / 2 + 10);
+		zero.dispatchEvent(pointer("pointerdown", 100, HEAD + CARD / 2));
+		zero.dispatchEvent(pointer("pointermove", 110, HEAD + CARD / 2 + 10));
 		await settle();
 		await layout!.scrollTo(m.body("none"), 300 * CARD);
 		expect(zero.isConnected).toBe(true);
 		const target = cardOf(m, 305)!;
 		const y = target.getBoundingClientRect().top + CARD * 0.25;
-		pointer(zero, "pointermove", 100, y);
+		zero.dispatchEvent(pointer("pointermove", 100, y));
 		await settle();
 		expect(target.querySelector(".cp-board-item")!.classList.contains("is-drop-before")).toBe(true);
-		pointer(zero, "pointerup", 100, y);
+		zero.dispatchEvent(pointer("pointerup", 100, y));
 		await settle();
 		expect(place).toHaveBeenCalledTimes(1);
 		const [id, order] = place.mock.calls[0]!;
@@ -349,17 +309,17 @@ describe("board drag", () => {
 		const later = m.root.querySelectorAll<HTMLElement>(".cp-board-col")[1]!.dataset.column!;
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const zero = itemOf(m, 0)!;
-		pointer(zero, "pointerdown", 100, HEAD + CARD / 2);
-		pointer(zero, "pointermove", 110, HEAD + CARD / 2 + 10);
+		zero.dispatchEvent(pointer("pointerdown", 100, HEAD + CARD / 2));
+		zero.dispatchEvent(pointer("pointermove", 110, HEAD + CARD / 2 + 10));
 		await settle();
 		await layout!.scrollTo(m.body(later), 150 * CARD);
 		const target = cardOf(m, 350)!;
 		const r = target.getBoundingClientRect();
 		const x = r.left + 100;
 		const y = r.top + CARD * 0.75;
-		pointer(zero, "pointermove", x, y);
+		zero.dispatchEvent(pointer("pointermove", x, y));
 		await settle();
-		pointer(zero, "pointerup", x, y);
+		zero.dispatchEvent(pointer("pointerup", x, y));
 		await settle();
 		expect(place).toHaveBeenCalledTimes(1);
 		const [id, order, patch] = place.mock.calls[0]!;

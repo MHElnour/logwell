@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { INBOX_ID, type Task } from "../../src/domain/types";
+import { describe, expect, it, vi } from "vitest";
+import { INBOX_ID } from "../../src/domain/types";
 import { deleteTask, duplicateTask } from "../../src/ui/actions";
-import { type CalMount, dragTo, item, mountBoard, openBoard, settle, sidebarItem, stubBoardRects } from "./board-helpers";
+import { type AppMount, dragTo, mountApp, type Notice, recordNotices, settle, sidebarItem, taskOf } from "./app-helpers";
+import { item, openBoard, stubBoardRects } from "./board-helpers";
 import type { WriteResult } from "../../src/app/writes";
 import type { UiHost } from "../../src/ui/host";
 import { runWrite } from "../../src/ui/writeNotice";
@@ -11,42 +12,24 @@ describe("through the board", () => {
 	// Data and safety rule 17, through the board: two moves run under the same store label ("Move task"); the
 	// first move's notice must not undo the second.
 
-	const mounted: CalMount[] = [];
-
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
-	interface Shown {
-		message: string;
-		label: string;
-		undo: () => Promise<boolean>;
-	}
-
-	/** Records each notice and binds its Undo the way the Obsidian host does (`store.undoFor`). */
-	async function mount(): Promise<{ m: CalMount; shown: Shown[] }> {
-		const m = await mountBoard();
-		mounted.push(m);
-		const shown: Shown[] = [];
-		Object.assign(m.host, {
-			notifyUndo: (message: string, label: string, mark: number) => void shown.push({ message, label, undo: m.h.app.store.undoFor(mark, label) }),
-		});
+	/** Records each notice; its Undo is bound the way the Obsidian host binds it (`store.undoFor`, `host.undoButtons`). */
+	async function mount(): Promise<{ m: AppMount; notices: Notice[] }> {
+		const m = await mountApp();
+		const notices = recordNotices(m.host);
 		const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");
 		await m.h.app.sections.create(INBOX_ID, "Beta");
 		await m.h.app.tasks.create({ title: "Call the bank", sectionId: alpha.id });
 		await m.h.app.tasks.create({ title: "Water the plants", sectionId: alpha.id });
 		await settle();
 		await openBoard(m, "Inbox");
-		return { m, shown };
+		return { m, notices };
 	}
 
-	const taskOf = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
-	const sectionId = (m: CalMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!.id;
+	const sectionId = (m: AppMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!.id;
 
 	describe("#39: the Undo of a task notice", () => {
 		it("Delete: the notice's Undo brings the task back", async () => {
-			const m = await mountBoard();
-			mounted.push(m);
+			const m = await mountApp();
 			const { task } = await m.h.app.tasks.create({ title: "Call the bank" });
 			await expect(deleteTask(m.host, task)).resolves.toBe(true);
 			expect(m.h.app.store.state.tasks.has(task.id)).toBe(false);
@@ -55,8 +38,7 @@ describe("through the board", () => {
 		});
 
 		it("Duplicate: the notice's Undo removes the copy", async () => {
-			const m = await mountBoard();
-			mounted.push(m);
+			const m = await mountApp();
 			const { task } = await m.h.app.tasks.create({ title: "Call the bank" });
 			const copy = await duplicateTask(m.host, task);
 			expect(m.h.app.store.state.tasks.has(copy!.id)).toBe(true);
@@ -67,7 +49,7 @@ describe("through the board", () => {
 	});
 
 	describe("#39: the Undo of a tag delete notice", () => {
-		async function tagMenu(m: CalMount, name: string) {
+		async function tagMenu(m: AppMount, name: string) {
 			const row = [...m.root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((r) => r.querySelector(".cp-sidebar-label")?.textContent === name)!;
 			row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 			await settle();
@@ -77,8 +59,7 @@ describe("through the board", () => {
 		}
 
 		it("Delete: the notice's Undo brings the tag back on its task", async () => {
-			const m = await mountBoard();
-			mounted.push(m);
+			const m = await mountApp();
 			const { task } = await m.h.app.tasks.create({ title: "Call the bank", newTags: ["Errands"] });
 			await settle();
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
@@ -92,8 +73,7 @@ describe("through the board", () => {
 		});
 
 		it("shows no notice when the tag was already gone and unused", async () => {
-			const m = await mountBoard();
-			mounted.push(m);
+			const m = await mountApp();
 			await m.h.app.tags.create("Errands");
 			await settle();
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
@@ -110,8 +90,7 @@ describe("through the board", () => {
 
 	describe("#39: the Undo of a list delete notice", () => {
 		it("restores the list, through the notice's own Undo", async () => {
-			const m = await mountBoard();
-			mounted.push(m);
+			const m = await mountApp();
 			const work = await m.h.app.categories.create("Work");
 			await settle();
 			m.host.choose = (async () => true) as unknown as typeof m.host.choose;
@@ -128,20 +107,20 @@ describe("through the board", () => {
 
 	describe("#39: the Undo of a board move notice", () => {
 		it("undoes only its own move, not a newer move made the same way", async () => {
-			const { m, shown } = await mount();
+			const { m, notices } = await mount();
 			const beta = sectionId(m, "Beta");
 			const alpha = sectionId(m, "Alpha");
 			let r = stubBoardRects(m.root);
 			await dragTo(item(m.root, "Call the bank"), r.card("Call the bank"), r.columns[beta]!);
 			r = stubBoardRects(m.root);
 			await dragTo(item(m.root, "Water the plants"), r.card("Water the plants"), r.columns[beta]!);
-			expect(shown.map((s) => s.label)).toEqual(["Move task", "Move task"]);
+			expect(notices.map((s) => s.label)).toEqual(["Move task", "Move task"]);
 
-			await expect(shown[0]!.undo()).rejects.toMatchObject({ code: "UndoConflict" });
+			await expect(m.host.undoButtons[0]!()).rejects.toMatchObject({ code: "UndoConflict" });
 			expect(taskOf(m, "Call the bank").sectionId).toBe(beta);
 			expect(taskOf(m, "Water the plants").sectionId).toBe(beta);
 
-			await expect(shown[1]!.undo()).resolves.toBe(true);
+			await expect(m.host.undoButtons[1]!()).resolves.toBe(true);
 			expect(taskOf(m, "Water the plants").sectionId).toBe(alpha);
 			expect(taskOf(m, "Call the bank").sectionId).toBe(beta);
 		});

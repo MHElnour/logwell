@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runBlockQuery } from "../../src/domain/blockQuery";
-import type { ID, Task } from "../../src/domain/types";
-import type { JournalOp } from "../../src/persistence/journal";
+import type { ID } from "../../src/domain/types";
 import { parseBlockQuery } from "../../src/parsing/blockQuery";
 import { type BlockBody, DashboardBlock, NO_DATABASE_TEXT, NO_TASKS_TEXT } from "../../src/ui/DashboardBlock";
 import { completeBlockTask } from "../../src/ui/blockActions";
@@ -12,8 +11,7 @@ import * as format from "../../src/ui/format";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { type AppHarness, appHarness } from "../app/harness";
 import { rule } from "../domain/recurrence-fixtures";
-import { makeTask } from "../persistence/fixtures";
-import { U1Host, settle } from "./app-helpers";
+import { click, mountNode, recordNotices, seedTasks, settle, U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // The dashboard block component. Rows are the app's TaskRow in block mode (no selection, no menu, no
@@ -33,33 +31,18 @@ const allTaskCounts = () => vi.mocked(domainTasks.subtaskCounts).mock.calls.leng
 
 /** U1Host that keeps the label of each Undo notice and scripts `choose`. */
 class BlockHost extends U1Host {
-	readonly undos: { message: string; label: string }[] = [];
+	readonly undos = recordNotices(this);
 	answer: boolean | null = null;
 	readonly asked: string[] = [];
-	override notifyUndo(message: string, label: string, mark: number): void {
-		this.undos.push({ message, label });
-		this.bindUndo(label, mark);
-	}
-	// U1Host's `choose` is typed to answer null only; the scripted answer is true or null.
-	override async choose(...args: unknown[]): Promise<null> {
-		this.asked.push(`${String(args[0])}: ${String(args[1])}`);
-		return this.answer as unknown as null;
+	// The scripted answer is true or null.
+	override async choose<T>(title: string, message: string): Promise<T | null> {
+		this.asked.push(`${title}: ${message}`);
+		return this.answer as T | null;
 	}
 }
 
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
-
 let layout: FakeLayout | null = null;
-const roots: HTMLElement[] = [];
 afterEach(() => {
-	for (const r of roots.splice(0)) {
-		render(null, r);
-		r.remove();
-	}
 	layout?.restore();
 	layout = null;
 });
@@ -81,9 +64,7 @@ interface Mount {
 async function mount(): Promise<Mount> {
 	const h = await appHarness();
 	const host = new BlockHost(h);
-	const root = document.createElement("div");
-	document.body.appendChild(root);
-	roots.push(root);
+	const root = mountNode(null);
 	const opened: ID[] = [];
 	const onOpenTask = (id: ID) => opened.push(id);
 	const openApp = vi.fn();
@@ -113,11 +94,6 @@ async function mount(): Promise<Mount> {
 
 const rows = (m: Mount) => [...m.root.querySelectorAll<HTMLElement>(".cp-task-row")];
 const titles = (m: Mount) => rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
-const click = async (el: Element | null | undefined) => {
-	if (el === null || el === undefined) throw new Error("element not found");
-	el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-	await settle();
-};
 
 describe("messages", () => {
 	it("shows a parser or matcher error in the error style", async () => {
@@ -440,24 +416,10 @@ describe("completing from the block", () => {
 
 const ROW = 52;
 const BODY = 340;
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-
-async function seeded(m: Mount, count: number): Promise<void> {
-	const data = m.h.store.data;
-	const tasks = new Map(data.tasks);
-	const ops: JournalOp[] = [];
-	for (let i = 0; i < count; i++) {
-		const t: Task = makeTask(taskId(i + 1), { title: `Task ${i}`, sortKey: `V${i.toString(36).padStart(4, "0")}` });
-		tasks.set(t.id, t);
-		ops.push({ c: "tasks", id: t.id, v: t });
-	}
-	m.h.store.commit({ ...data, tasks }, ops);
-}
-
 describe("long results", () => {
 	it("at or below the threshold draws every row", async () => {
 		const m = await mount();
-		await seeded(m, VIRTUAL_THRESHOLD);
+		seedTasks(m.h, VIRTUAL_THRESHOLD);
 		await m.draw();
 		expect(rows(m)).toHaveLength(VIRTUAL_THRESHOLD);
 		expect(m.root.querySelector(".cp-virtual-spacer")).toBeNull();
@@ -465,7 +427,7 @@ describe("long results", () => {
 
 	it("above it scrolls inside the block body and draws only the rows near the viewport", async () => {
 		const m = await mount();
-		await seeded(m, 2000);
+		seedTasks(m.h, 2000);
 		layout = fakeLayout({
 			viewport: (el) => (el.classList.contains("cp-block-body") ? BODY : undefined),
 			height: (el) => (el.classList.contains("cp-task-row") ? ROW : undefined),
@@ -485,7 +447,7 @@ describe("long results", () => {
 
 	it("tolerates a container with no size, then draws the rows once it has one", async () => {
 		const m = await mount();
-		await seeded(m, 400);
+		seedTasks(m.h, 400);
 		// No layout: clientHeight is 0, as in a collapsed callout or a background tab.
 		await expect(m.draw()).resolves.toBeUndefined();
 		expect(m.root.querySelector(".cp-block-body")).not.toBeNull();
