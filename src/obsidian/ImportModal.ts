@@ -1,6 +1,6 @@
 import { type App, Setting } from "obsidian";
 import type { ImportChangeKind, ImportPreview } from "../app/DataService";
-import { COLLECTIONS } from "../persistence/schema";
+import { COLLECTIONS, type CollectionName } from "../persistence/schema";
 import { ResolvingModal } from "./resolvingModal";
 
 type ImportMode = "replace" | "merge";
@@ -11,8 +11,10 @@ const CHANGE_LABELS: Record<ImportChangeKind, string> = {
 	remove: "removed",
 };
 
-const COLLECTION_LABELS: Record<string, string> = {
+/** Every collection's name in the preview; typed over all collections so a new one cannot be left out. */
+const COLLECTION_LABELS: Record<CollectionName, string> = {
 	categories: "Lists",
+	sections: "Sections",
 	tags: "Tags",
 	tasks: "Tasks",
 	occurrenceRecords: "Occurrence records",
@@ -51,7 +53,7 @@ class ImportPreviewModal extends ResolvingModal<ImportMode | null> {
 		for (const c of COLLECTIONS) {
 			if (p.counts[c] === 0) continue;
 			const row = table.createEl("tr");
-			row.createEl("td", { text: COLLECTION_LABELS[c] ?? c });
+			row.createEl("td", { text: COLLECTION_LABELS[c] });
 			row.createEl("td", { text: String(p.counts[c]) });
 		}
 		const count = (kind: ImportChangeKind) => p.changes.filter((c) => c.kind === kind).length;
@@ -66,7 +68,7 @@ class ImportPreviewModal extends ResolvingModal<ImportMode | null> {
 			details.createEl("summary", { text: "Records a merge would change" });
 			const list = details.createEl("ul");
 			for (const c of changes.slice(0, 200)) {
-				list.createEl("li", { text: `${COLLECTION_LABELS[c.collection] ?? c.collection}: ${c.label} (${CHANGE_LABELS[c.kind]})` });
+				list.createEl("li", { text: `${COLLECTION_LABELS[c.collection]}: ${c.label} (${CHANGE_LABELS[c.kind]})` });
 			}
 			if (changes.length > 200) list.createEl("li", { text: `… and ${changes.length - 200} more` });
 		}

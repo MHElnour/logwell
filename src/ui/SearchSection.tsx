@@ -55,7 +55,7 @@ export function SearchSection(props: {
 	const habitsId = useUniqueId("cp-search-habits");
 	const tasksId = useUniqueId("cp-search-tasks");
 
-	// Note matches refresh only while Search is shown with the toggle on and a query typed (App shell and views rule 24).
+	// Note matches refresh only while Search is shown with the toggle on and a query typed: notes are never read for a hidden Search.
 	const query = ui.query.trim();
 	const active = props.visible && ui.includeNotes && query !== "";
 	const previousLinks = useRef<LinkedNotes>(NO_LINKS);

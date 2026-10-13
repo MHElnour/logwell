@@ -53,7 +53,7 @@ export interface NotePush {
 }
 
 /** A create at a sync note's path this soon after its delete is the same note (an atomic replace). */
-export const REPLACED_WITHIN_MS = 5_000;
+const REPLACED_WITHIN_MS = 5_000;
 
 /** A `SyncResult` warning: a note could not be read or written (a vault error); the rest of the sync went on. */
 export const TICKTICK_NOTE_WARNING = "A description note could not be read or written; it is tried again at the next sync.";

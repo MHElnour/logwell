@@ -49,7 +49,7 @@ The database is one file, so any tool that syncs your vault syncs it. Use one de
 - **Obsidian Sync.** `.cpbase` is not one of the file types it syncs by default. Turn on "Sync all other types". Logwell reminds you once, when you create your first database.
 - **Other sync and version-control tools.** No change is needed.
 
-When the file changes from outside, Logwell loads the new version, also when the change arrives while the database is still opening. If this device has unsaved changes at that moment, Logwell loads the other version and keeps yours as a conflict copy. A notice offers **Keep mine** and **Keep theirs**:
+When the file changes from outside, Logwell loads the new version, also when the change arrives while the database is still opening. Logwell tells versions apart by the revision on the file's first line, which every save writes anew. An edit that leaves the first line as it is, such as changing a task's line by hand, is not seen as a change, and the next save overwrites it. Edit tasks in Logwell, not in the file. If this device has unsaved changes at that moment, Logwell loads the other version and keeps yours as a conflict copy. A notice offers **Keep mine** and **Keep theirs**:
 
 - **Keep mine** writes your version on top of the current one, after a **Before restore** backup.
 - **Keep theirs** keeps the current version and moves your copy to a "resolved" folder.

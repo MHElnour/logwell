@@ -378,6 +378,20 @@ describe("unique tag names", () => {
 			expect(h.app.store.state.tags.get("work/calls")?.color).toBe("red");
 		});
 	});
+
+	it("#137: setting a tag's color to the one it has writes nothing and leaves Undo as it was", async () => {
+		const h = await appHarness();
+		await h.app.tags.add("Home", null, null);
+		await h.app.tags.setColor("home", "red");
+		const state = h.app.store.state;
+		await h.app.tasks.create({ title: "x" });
+		const label = h.app.store.undoLabel;
+		const after = h.app.store.state;
+		await h.app.tags.setColor("home", "red");
+		expect(h.app.store.state).toBe(after);
+		expect(h.app.store.undoLabel).toBe(label);
+		expect(state.tags.get("home")?.color).toBe("red");
+	});
 });
 
 describe("New tag", () => {

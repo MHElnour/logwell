@@ -125,8 +125,8 @@ export function isDated(task: Task): boolean {
 }
 
 /**
- * An open task the calendar's Unscheduled drawer lists: no schedule and no repeat rule; a deadline is allowed (Calendar
- * rule 14). A repeating task has no schedule of its own (its dates are the series), so it is never unscheduled.
+ * An open task the calendar's Unscheduled drawer lists: no schedule and no repeat rule; a deadline is allowed (a
+ * deadline-only task is in the drawer). A repeating task has no schedule of its own (its dates are the series), so it is never unscheduled.
  */
 export function isUnscheduled(task: Task): boolean {
 	return isOpen(task) && task.scheduled === null && task.recurrence === null;

@@ -59,7 +59,8 @@ export const COMPLETED_OVERLAP_MS = 5 * 60_000;
  */
 export const COMPLETED_WINDOW_MIN_MS = 1000;
 /**
- * Per list and sync: full completed-tasks reads, each split in two (TickTick sync rule 23). A list makes at most
+ * Per list and sync: full completed-tasks reads, each split in two until every half holds fewer than TickTick's
+ * answer size. A list makes at most
  * twice this many reads, plus one.
  */
 export const COMPLETED_READS_MAX = 32;
@@ -73,7 +74,7 @@ export const LAST_PULLED_REFRESH_MS = 60 * 60_000;
 export const FIELDS = ["title", "status", "priority", "date", "parent", "section", "tags"] as const satisfies readonly (keyof SyncFields)[];
 export type Field = (typeof FIELDS)[number];
 
-export const EMPTY_HASHES = fieldHashes({ title: "", status: "open", priority: 0, date: null, parent: null, section: null, tags: [] });
+const EMPTY_HASHES = fieldHashes({ title: "", status: "open", priority: 0, date: null, parent: null, section: null, tags: [] });
 export const NO_SECTION_HASH = EMPTY_HASHES.section!;
 export const OPEN_HASH = EMPTY_HASHES.status!;
 export const EMPTY_TAGS = tagsHash([]);
@@ -83,7 +84,7 @@ export const EMPTY_TAGS = tagsHash([]);
  * list is linked to no longer exists (HTTP 404 for its data); that list is skipped and the others sync. `stopped`: the
  * session closed during the sync, which wrote nothing it had pulled.
  */
-export type SyncFailureKind = TickTickErrorKind | "list-limit" | "list-gone" | "stopped";
+type SyncFailureKind = TickTickErrorKind | "list-limit" | "list-gone" | "stopped";
 
 /** Why a sync stopped: the list it was working on and the reason. */
 export interface SyncFailure {
@@ -256,7 +257,7 @@ export function sameBase(a: Record<string, string>, b: Record<string, string>): 
  * Hashes of a Logwell task's synced values, memoized per record (records are immutable) and tag names (which tags
  * sync depends on every tag; a task with no tags does not depend on them, `names` null).
  */
-export const lwMemo = new WeakMap<Task, { names: TagNames | null; h: Record<string, string> }>();
+const lwMemo = new WeakMap<Task, { names: TagNames | null; h: Record<string, string> }>();
 export function lwHashes(t: Task, names: TagNames): Record<string, string> {
 	const memo = lwMemo.get(t);
 	if (memo !== undefined && (memo.names === null || memo.names === names)) return memo.h;
@@ -356,7 +357,7 @@ export class SortKeys {
 	}
 }
 
-export interface DraftContext {
+interface DraftContext {
 	projects: ReadonlySet<string>;
 	/** Read on first need. */
 	trashed: Set<ID> | null;
@@ -416,7 +417,7 @@ export function putDraft(tx: Tx, d: LinkDraft, ctx: DraftContext): void {
 	});
 }
 
-export function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
 	if (a === undefined || b === undefined) return a === b;
 	return sameLines(a, b);
 }
@@ -494,7 +495,7 @@ export function trashedIds(tx: Tx): Set<ID> {
 	return out;
 }
 
-export function linkedProjects(tx: Tx): Set<string> {
+function linkedProjects(tx: Tx): Set<string> {
 	const out = new Set<string>();
 	for (const l of tx.all("syncLinks")) if (l.kind === "list") out.add(l.ttId);
 	return out;
@@ -528,7 +529,7 @@ export class PushStop extends Error {
 	}
 }
 
-export const STOPPED_MESSAGE = "TickTick: sync stopped because the database is closing.";
+const STOPPED_MESSAGE = "TickTick: sync stopped because the database is closing.";
 
 export function stoppedFailure(): SyncFailure {
 	return { listId: null, listName: null, kind: "stopped", message: STOPPED_MESSAGE, retryAfterSec: null };
