@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#120) Fixed a date you cleared in TickTick coming back when the task had a different date and deadline in Logwell: the sync removed only the deadline and sent the date back to TickTick. Clearing the date in TickTick now clears both in Logwell.
 - (#119) Fixed a task deleted in TickTick taking all its Logwell subtasks to the Trash with it, including ones still in TickTick and ones you had just added, and the next sync then deleting those subtasks in TickTick. Only the tasks gone from TickTick go to the Trash now; the other subtasks stay as top-level tasks, on both sides.
 - (#109) Fixed a subtask you moved to another synced list in TickTick being moved back to its old list by the next sync, and no longer a subtask on either side. It now stays in the list you moved it to, as a top-level task, in Logwell and in TickTick.
 - (#108) Fixed a TickTick sync dropping everything changed in TickTick on a task, such as a new title and priority, when one of the changes could not apply in Logwell, like a column of the list you had just moved the task out of. The sync then sent the old values back to TickTick. Each change now applies on its own, and only the one Logwell cannot take is skipped.

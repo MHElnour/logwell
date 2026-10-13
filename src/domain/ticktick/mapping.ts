@@ -138,8 +138,8 @@ export interface DatePatch {
 /**
  * What a pulled TickTick date changes on the Logwell task. A new task (`current` null), or one with neither date,
  * gets it as both schedule and deadline. An existing one moves the date that was sent (the deadline if set, else the
- * schedule), and the schedule too when it equalled the deadline. A field that already holds the value is left out;
- * null clears.
+ * schedule), and the schedule too when it equalled the deadline. A date cleared there (null) clears both: a schedule
+ * left alone would be the date sent, and go back up. A field that already holds the value is left out.
  */
 export function pulledDatePatch(
 	current: Pick<Task, "scheduled" | "deadline"> | null,
@@ -148,6 +148,11 @@ export function pulledDatePatch(
 	if (current === null) return { scheduled: pulled, deadline: pulled };
 	if (current.scheduled === null && current.deadline === null) return pulled === null ? {} : { scheduled: pulled, deadline: pulled };
 	const patch: DatePatch = {};
+	if (pulled === null) {
+		if (current.scheduled !== null) patch.scheduled = null;
+		if (current.deadline !== null) patch.deadline = null;
+		return patch;
+	}
 	if (current.deadline !== null) {
 		if (!sameDateSpec(current.deadline, pulled)) patch.deadline = pulled;
 		if (sameDateSpec(current.scheduled, current.deadline) && !sameDateSpec(current.scheduled, pulled)) patch.scheduled = pulled;
