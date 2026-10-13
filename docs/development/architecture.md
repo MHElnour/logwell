@@ -165,7 +165,7 @@ All but e2e run in `npm test`.
 - Schema fixtures: `tests/fixtures/schema-v*.cpbase` are frozen sample files that the migration tests load; a schema change adds one and never edits an old one.
 - Perf (`tests/perf`, plus `tests/ui/performance.test.tsx` and `tests/ui/perf-*.test.tsx`): pass and query counts at large counts through the real code, times compared within one run (never against a fixed number of milliseconds), and render-pass counts that guard row memoization and windowing.
 - Limits: `e2e/limits/` measures open, save and render times in real Obsidian, one size step at a time. It runs locally and outside `npm run e2e`; see [performance.md](performance.md). `tests/limits/limits.test.ts` checks its generator and CSV helpers.
-- End to end (`e2e/specs/*.e2e.ts`): the plugin bundle in a sandboxed, pinned Obsidian against a copy of `test-vault/`. `freshDatabase()` in `e2e/helpers.ts` resets the vault before each test.
+- End to end (`e2e/specs/*.e2e.ts`): the plugin bundle in a sandboxed, pinned Obsidian against a copy of `test-vault/`. `freshDatabase()` in `e2e/helpers.ts` resets the vault before each test. A spec here checks only what needs real Obsidian: Live Preview and the task block, vault events, Obsidian's commands, menus, modals, suggester and key scopes, notices, and real layout, pointer drags and scrolling. Anything a simulated DOM can check goes in `tests/ui` instead, so it runs in `npm test`.
 
 Commands:
 

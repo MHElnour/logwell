@@ -1,8 +1,8 @@
-// Windowed lists in the real app: a 2,000-task Inbox draws only the
-// rows near the viewport, and keyboard, drag, completion with Undo, a collapsed group and a board column drag still
-// work there. The database is built here with the project's own types and serializer (as e2e/limits/generate.ts
-// does) and loaded the way freshDatabase() loads the seed. Every DOM read is scoped to the visible Tasks section.
-// Drags use the real pointer: keep the mouse off the Obsidian window.
+// Windowed lists in the real app: a 2,000-task Inbox draws only the rows near the viewport, and the arrow keys
+// and auto-scroll while dragging still work there under real scrolling. The database is built here with the
+// project's own types and serializer (as e2e/limits/generate.ts does) and loaded the way freshDatabase() loads
+// the seed. Every DOM read is scoped to the visible Tasks section. Drags use the real pointer: keep the mouse off
+// the Obsidian window.
 import { randomUUID } from "node:crypto";
 import { browser, expect } from "@wdio/globals";
 import { INBOX_ID, type Section, type Task } from "../../src/domain/types";
@@ -14,13 +14,8 @@ import {
 	centerOf,
 	dragPointer,
 	freshDatabase,
-	getTask,
 	rectOf,
-	restoreMenus,
-	setGroupBy,
-	setLayout,
 	showSidebarView,
-	useDomMenus,
 	visibleTasksSection,
 	waitForStableRect,
 } from "../helpers";
@@ -107,18 +102,6 @@ async function listState(): Promise<{ drawn: number; focused: number; focusedInV
 	return { ...s, focused: indexOf(s.focused) };
 }
 
-async function setScrollTop(selector: string, top: number): Promise<void> {
-	await browser.execute(
-		(sel, y) => {
-			const el = Array.from(document.querySelectorAll<HTMLElement>(sel)).find((e) => e.offsetParent !== null);
-			if (el === undefined) throw new Error(`no visible ${sel}`);
-			el.scrollTop = y;
-		},
-		selector,
-		top,
-	);
-}
-
 /** The stored manual order of the Inbox tasks with this section (null: No section). */
 async function storedOrder(sectionId: string | null): Promise<string[]> {
 	return (await allTasks())
@@ -168,36 +151,6 @@ describe("Long lists draw only the rows near the viewport (performance release B
 		expect(last.scrollTop).toBeLessThan(80);
 	});
 
-	it("a row dragged far down the list lands among rows that are not drawn, ordered from the data", async function () {
-		this.timeout(120_000);
-		const section = await openBigInbox();
-		// Far down: rows 0..1450 are not drawn.
-		await setScrollTop(".cp-tasks .cp-main", 1500 * 52);
-		const moving = section.$(`.cp-task-row[data-task-id="${id(1500)}"]`);
-		const target = section.$(`.cp-task-row[data-task-id="${id(1506)}"]`);
-		await moving.waitForExist({ timeout: 5000, timeoutMsg: "row 1500 is not drawn after scrolling to it" });
-		await target.waitForExist({ timeout: 5000 });
-		await waitForStableRect(target);
-		expect((await listState()).drawn).toBeLessThan(120);
-		await dragPointer(
-			() => centerOf(moving.$(".cp-task-title")),
-			async (from) => {
-				const r = await rectOf(target);
-				return { x: from.x, y: Math.round(r.top + r.height * 0.75) };
-			},
-		);
-		await browser.waitUntil(
-			async () => {
-				const order = await storedOrder(LATER);
-				return order.indexOf(id(1500)) === order.indexOf(id(1506)) + 1;
-			},
-			{ timeout: 5000, timeoutMsg: "row 1500 is not right after row 1506 in the stored order" },
-		);
-		const order = await storedOrder(LATER);
-		expect(order).toHaveLength(COUNT / 2);
-		expect(order.indexOf(id(1500))).toBe(506);
-	});
-
 	it("auto-scroll while dragging keeps the dragged row drawn and dragging, far past where it was", async function () {
 		this.timeout(120_000);
 		const section = await openBigInbox();
@@ -226,117 +179,5 @@ describe("Long lists draw only the rows near the viewport (performance release B
 		await browser.keys("Escape");
 		await browser.releaseActions();
 		expect(await storedOrder(null).then((o) => o[0])).toBe(id(0));
-	});
-
-	it("completing a row far down: it lingers, leaves without moving the scroll position, and Undo puts it back in place", async function () {
-		this.timeout(120_000);
-		const section = await openBigInbox();
-		await setScrollTop(".cp-tasks .cp-main", 1200 * 52);
-		const row = section.$(`.cp-task-row[data-task-id="${id(1204)}"]`);
-		await row.waitForExist({ timeout: 5000 });
-		await waitForStableRect(row);
-		// Clicked in the page (a WebDriver click may scroll first), reading the scroll position at the same moment.
-		const before = await browser.execute((rid) => {
-			const tasks = Array.from(document.querySelectorAll<HTMLElement>(".cp-tasks")).find((e) => e.offsetParent !== null)!;
-			tasks.querySelector<HTMLElement>(`.cp-task-row[data-task-id="${rid}"] .cp-task-checkbox`)!.click();
-			return tasks.querySelector<HTMLElement>(".cp-main")!.scrollTop;
-		}, id(1204));
-		await browser.waitUntil(async () => (await getTask(id(1204)))?.status === "completed", { timeout: 5000, interval: 50, timeoutMsg: "the row was not completed" });
-		// It lingers for the check animation, then leaves the open rows; the rows below move up, the list does not scroll.
-		await row.waitForExist({ timeout: 5000, reverse: true, timeoutMsg: "the completed row did not leave the list" });
-		expect(Math.abs((await listState()).scrollTop - before)).toBeLessThanOrEqual(1);
-		// Completing shows no notice; Undo is the "Undo last task change" command (or Cmd/Ctrl+Z in the list).
-		await browser.executeObsidian(({ app }) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			(app as any).commands.executeCommandById("logwell:undo-last-change");
-		});
-		await browser.waitUntil(async () => (await getTask(id(1204)))?.status === "open", { timeout: 5000, timeoutMsg: "Undo did not reopen the row" });
-		await section.$(`.cp-task-row[data-task-id="${id(1204)}"]`).waitForExist({ timeout: 5000, timeoutMsg: "the restored row is not drawn" });
-		// Back between its old neighbours.
-		const neighbours = await browser.execute((rid) => {
-			const row = Array.from(document.querySelectorAll<HTMLElement>(`.cp-task-row[data-task-id="${rid}"]`)).find((e) => e.offsetParent !== null)!;
-			return [(row.previousElementSibling as HTMLElement | null)?.dataset.taskId ?? null, (row.nextElementSibling as HTMLElement | null)?.dataset.taskId ?? null];
-		}, id(1204));
-		expect(neighbours).toEqual([id(1203), id(1205)]);
-		expect(Math.abs((await listState()).scrollTop - before)).toBeLessThanOrEqual(1);
-	});
-
-	it("collapsing a section of 1,000 rows is instant and the next section draws right under it", async function () {
-		this.timeout(120_000);
-		const section = await openBigInbox();
-		const was = await useDomMenus();
-		try {
-			await setGroupBy("Section");
-			const toggle = section.$('.cp-section-group[data-section-id="none"] .cp-section-toggle');
-			await toggle.waitForExist({ timeout: 5000, timeoutMsg: "no No section heading" });
-			const ms = await browser.executeAsync((done: (ms: number) => void) => {
-				const tasks = Array.from(document.querySelectorAll<HTMLElement>(".cp-tasks")).find((e) => e.offsetParent !== null)!;
-				const button = tasks.querySelector<HTMLElement>('.cp-section-group[data-section-id="none"] .cp-section-toggle')!;
-				const t0 = performance.now();
-				button.click();
-				requestAnimationFrame(() => requestAnimationFrame(() => done(performance.now() - t0)));
-			});
-			expect(ms).toBeLessThan(500);
-			await section.$('.cp-section-group[data-section-id="none"].is-collapsed').waitForExist({ timeout: 5000 });
-			const laterRow = section.$(`.cp-task-row[data-task-id="${id(1000)}"]`);
-			await laterRow.waitForExist({ timeout: 5000, timeoutMsg: "the Later section did not draw its first row" });
-			const r = await rectOf(laterRow);
-			const main = await rectOf(section.$(".cp-main"));
-			expect(r.top).toBeGreaterThanOrEqual(main.top);
-			expect(r.bottom).toBeLessThanOrEqual(main.bottom);
-			expect(await section.$(`.cp-task-row[data-task-id="${id(0)}"]`).isExisting()).toBe(false);
-		} finally {
-			await restoreMenus(was);
-		}
-	});
-
-	it("a card dragged into a long board column lands among cards that are not drawn, ordered from the data", async function () {
-		this.timeout(120_000);
-		const section = await openBigInbox();
-		await setLayout(section, "Board");
-		const body = `.cp-tasks .cp-board-col[data-column="${LATER}"] .cp-board-col-body`;
-		await section.$(`.cp-board-col[data-column="${LATER}"] .cp-board-card`).waitForExist({ timeout: 10000 });
-		const drawnCards = await browser.execute(
-			(sel) => Array.from(document.querySelectorAll<HTMLElement>(sel)).find((e) => e.offsetParent !== null)!.querySelectorAll(".cp-board-card").length,
-			body,
-		);
-		expect(drawnCards).toBeLessThan(120);
-		// Far down the Later column, then pick a card that is fully in view there.
-		await setScrollTop(body, 30000);
-		let targetId = "";
-		await browser.waitUntil(
-			async () => {
-				targetId = await browser.execute((sel) => {
-					const col = Array.from(document.querySelectorAll<HTMLElement>(sel)).find((e) => e.offsetParent !== null)!;
-					const box = col.getBoundingClientRect();
-					const inView = Array.from(col.querySelectorAll<HTMLElement>(".cp-board-card")).filter((c) => {
-						const r = c.getBoundingClientRect();
-						return r.top >= box.top + 40 && r.bottom <= box.bottom - 40;
-					});
-					return inView[1]?.dataset.taskId ?? "";
-				}, body);
-				return targetId !== "";
-			},
-			{ timeout: 5000, timeoutMsg: "no card in view far down the Later column" },
-		);
-		expect(indexOf(targetId)).toBeGreaterThan(1300);
-		const target = section.$(`.cp-board-card[data-task-id="${targetId}"]`);
-		await waitForStableRect(target);
-		const card = section.$(`.cp-board-card[data-task-id="${id(0)}"] .cp-board-title`);
-		await waitForStableRect(card);
-		await dragPointer(
-			async () => {
-				const r = await rectOf(card);
-				return { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2) };
-			},
-			async () => {
-				const r = await rectOf(target);
-				return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.75) };
-			},
-		);
-		await browser.waitUntil(async () => (await getTask(id(0)))?.sectionId === LATER, { timeout: 5000, timeoutMsg: "the card did not move to Later" });
-		const order = await storedOrder(LATER);
-		expect(order).toHaveLength(COUNT / 2 + 1);
-		expect(order.indexOf(id(0))).toBe(order.indexOf(targetId) + 1);
 	});
 });

@@ -261,6 +261,22 @@ describe("app UI (smoke)", () => {
 		expect(root.querySelector<HTMLTextAreaElement>(".cp-details-title")?.value).toBe("Beta");
 	});
 
+	it("UI-01: ArrowDown moves to the next row and Enter opens its details", async () => {
+		const { h, root } = await mount();
+		await h.app.tasks.create({ title: "First" });
+		await h.app.tasks.create({ title: "Second" });
+		byText(root, ".cp-sidebar-item", "Inbox").click();
+		await settleUi();
+		const first = byText(root, ".cp-task-row", "First");
+		first.focus();
+		press(first, "ArrowDown");
+		const second = byText(root, ".cp-task-row", "Second");
+		expect(document.activeElement).toBe(second);
+		press(second, "Enter");
+		await settleUi();
+		expect(root.querySelector<HTMLTextAreaElement>(".cp-details-title")?.value).toBe("Second");
+	});
+
 	it("deletes with an undo notice and shows the batch in Trash", async () => {
 		const { h, host, root } = await mount();
 		await h.app.tasks.create({ title: "Gone soon" });
