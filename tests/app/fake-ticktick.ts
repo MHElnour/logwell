@@ -60,6 +60,8 @@ export class FakeTickTick implements TickTickApi {
 	completedOrder: "newest" | "oldest" = "newest";
 	/** Whether `listCompleted` includes a completion exactly at its start or end time: the real bounds are not known. */
 	completedBounds: { start: "inclusive" | "exclusive"; end: "inclusive" | "exclusive" } = { start: "inclusive", end: "inclusive" };
+	/** Tasks the project data leaves out although they are open there (a delay or a limit of TickTick's). */
+	readonly omitted = new Set<string>();
 	/** Completion times parsed once: `listCompleted` reads thousands per call in the window tests. */
 	private readonly completedMs = new Map<string, number>();
 	/** Every call, in order: "method" or "method:arg". */
@@ -279,7 +281,7 @@ export class FakeTickTick implements TickTickApi {
 		if (project === undefined) throw this.notFound();
 		return {
 			project: projectId === this.inboxId ? { id: asked, name: "" } : { ...project },
-			tasks: [...this.tasks.values()].filter((t) => t.projectId === projectId && t.deleted !== true && t.status === 0).map((t) => this.copy(t)),
+			tasks: [...this.tasks.values()].filter((t) => t.projectId === projectId && t.deleted !== true && t.status === 0 && !this.omitted.has(t.id)).map((t) => this.copy(t)),
 			columns: [...this.columns.values()].filter((c) => c.projectId === projectId).map((c) => ({ ...c })),
 		};
 	}

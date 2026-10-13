@@ -706,6 +706,28 @@ describe("deletions", () => {
 			expect(s.h.app.store.state.tasks.get(sub.task.id)?.parentId).toBe(s.ids[0]);
 		});
 
+		it("#123: an open task TickTick left out of its list's data, unchanged there, is not gone: no Trash, no second copy", async () => {
+			const s = await withTasks(3);
+			const ttId = s.ttIdOf("Errand 1");
+			s.tt.omitted.add(ttId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(r.needsConfirmation).toEqual([]);
+			expect(s.tt.count("getTask")).toBe(1);
+			expect(s.h.app.store.state.trash.size).toBe(0);
+			expect(s.link("task", s.ids[0]!)?.ttId).toBe(ttId);
+			// A Logwell edit still goes up while it is left out.
+			s.tick();
+			await s.h.app.tasks.update(s.ids[0]!, { priority: 1 });
+			await s.sync.sync();
+			expect(s.tt.get(ttId)?.priority).toBe(5);
+			s.tt.omitted.delete(ttId);
+			s.tick();
+			await s.sync.sync();
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+			expect(s.h.app.store.state.trash.size).toBe(0);
+		});
+
 		it("keeps a deleted task's note", async () => {
 			const s = await withTasks(1);
 			s.h.notes.files.set("Task notes/Errand 1.md", "my notes");
