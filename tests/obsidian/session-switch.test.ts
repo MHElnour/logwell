@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
+import { FocusService } from "../../src/app/FocusService";
 import { SAVE_DEBOUNCE_MS } from "../../src/persistence/CpbaseStore";
 import { descendant, emptyDbText, load, makeTask, withTask } from "../persistence/fixtures";
 import { type FakeApp, fakeApp, fileOf, loadPlugin } from "./fake-vault";
@@ -127,6 +128,38 @@ describe("pinning the database path per session (N7)", () => {
 		await switching;
 		expect(plugin.settings.activeDatabasePath).toBe("B-moved.cpbase");
 		expect(plugin.session?.path).toBe("B-moved.cpbase");
+	});
+});
+
+describe("a change to the database file while it opens", () => {
+	it("#103: is read once the open finishes, so the next edit saves with no conflict", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		// Another device's save lands after B is read, while the rest of its open goes on.
+		type Open = (this: FocusService, dbId: string) => ReturnType<FocusService["open"]>;
+		const focusOpen = Object.getOwnPropertyDescriptor(FocusService.prototype, "open")!.value as Open;
+		const spy = vi.spyOn(FocusService.prototype, "open").mockImplementation(function (this: FocusService, dbId: string) {
+			if (dbId === "db-b") {
+				fake.files.set(B, descendant(fake.files.get(B)!, (d) => withTask(d, makeTask("remote")).next, "r-remote000001"));
+				fake.fire("modify", fileOf(B));
+			}
+			return focusOpen.call(this, dbId);
+		});
+		try {
+			await plugin.setActiveDatabase(B);
+		} finally {
+			spy.mockRestore();
+		}
+		const session = plugin.session!;
+		await session.store.flush();
+		expect([...session.app.store.state.tasks.values()].map((t) => t.title)).toEqual(["Task remote"]);
+
+		await session.app.tasks.create({ title: "mine" });
+		await session.store.flush();
+		expect(titles(fake.files.get(B)).sort()).toEqual(["Task remote", "mine"]);
+		expect(notices.actions).toEqual([]);
+		const conflicts = [...fake.plugin.files.keys()].filter((p) => p.includes("/conflicts/"));
+		expect(conflicts).toEqual([]);
 	});
 });
 
