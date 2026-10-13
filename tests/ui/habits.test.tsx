@@ -10,6 +10,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { useClockTime } from "../../src/ui/hooks";
 import type { UiHost } from "../../src/ui/host";
+import { Settings } from "luxon";
 
 describe("Habits page", () => {
 	// The Habits page in its main states.
@@ -1000,6 +1001,17 @@ describe("the clock of the Now badge", () => {
 			});
 			expect(root.textContent).toBe("20:31");
 			expect(seen.length).toBeGreaterThan(renders);
+		});
+
+		it("#100: reads the wall time with the digits 0 to 9 on a device whose language writes other digits", async () => {
+			const before = Settings.defaultLocale;
+			Settings.defaultLocale = "ar-EG";
+			try {
+				await act(() => render(<Probe zone="Europe/Berlin" seen={[]} />, root));
+				expect(root.textContent).toBe("20:30");
+			} finally {
+				Settings.defaultLocale = before;
+			}
 		});
 
 		it("clears its interval when the component unmounts", async () => {

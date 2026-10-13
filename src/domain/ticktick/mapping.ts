@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { LOCAL_FORMAT, isValidZone, sameDateSpec, wallTimeToDateTime } from "../time";
+import { formatLatin, isValidZone, sameDateSpec, wallTimeOf, wallTimeToDateTime } from "../time";
 import type { DateSpec, Priority, Task, TaskStatus } from "../types";
 import type { TtTask } from "./types";
 
@@ -87,7 +87,7 @@ export function dateToTt(spec: DateSpec, displayZone: string): TtDateFields {
 	const key = `${local}|${zone}`;
 	let sent = pushed.get(key);
 	if (sent === undefined) {
-		sent = wallTimeToDateTime(local, zone).toFormat(TT_DATE_FORMAT);
+		sent = formatLatin(wallTimeToDateTime(local, zone), TT_DATE_FORMAT);
 		if (pushed.size >= MEMO_MAX) pushed.clear();
 		pushed.set(key, sent);
 	}
@@ -127,7 +127,7 @@ function readTtDate(text: string, allDay: boolean, zone: string): DateSpec | nul
 		const day = inZone.toISODate();
 		return day === null ? null : { kind: "date", date: day };
 	}
-	return { kind: "datetime", local: inZone.toFormat(LOCAL_FORMAT), tz: zone };
+	return { kind: "datetime", local: wallTimeOf(inZone), tz: zone };
 }
 
 export interface DatePatch {
