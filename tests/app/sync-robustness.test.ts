@@ -109,7 +109,7 @@ describe("errors, single flight, undo and crashes", () => {
 	});
 
 	describe("single flight (SYNC-10)", () => {
-		it("returns the running sync and runs exactly once more after it", async () => {
+		it("#137: returns the running sync and queues nothing itself (the scheduler runs a trigger once after it)", async () => {
 			const s = await oneSyncedTask();
 			let open!: () => void;
 			s.tt.gate = new Promise((r) => (open = r));
@@ -123,7 +123,7 @@ describe("errors, single flight, undo and crashes", () => {
 			open();
 			await a;
 			await s.sync.idle();
-			expect(s.tt.count("getProjectData") - before).toBe(2);
+			expect(s.tt.count("getProjectData") - before).toBe(1);
 		});
 	});
 

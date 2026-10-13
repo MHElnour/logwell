@@ -179,7 +179,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		// A new name longer than 64 characters stays in the title too.
 		if (names.tooLong(key) || names.clash(key) !== null) return false;
 		// A new tag of this input is newer than every existing one, so it never takes a name from them. Its parent is
-		// created with it when missing (Lists, sections and tags rule 26), so the parent's name is taken too.
+		// created with it when missing, in the same write, so the parent's name is taken too.
 		for (const node of tagPrefixes(key)) if (!names.has(node)) names.add(node, "￿");
 		return true;
 	})) {
@@ -271,7 +271,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			dates = datesNow();
 		}
 	}
-	// Two typed repeats are several patterns: not supported, neither applied (Repeating tasks rule 19).
+	// Two typed repeats are several patterns: not supported, neither applied.
 	const keptRepeats = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d));
 	if (keptRepeats.length > 1) {
 		for (const d of keptRepeats) {
@@ -286,7 +286,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// after an `every …` it cannot build they apply nothing.
 	const built = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d) && (d.chip.status === "applied" || d.chip.status === "choice"));
 	// Start and end parts belong to the typed repeat only when typed after it, to one picked by hand anywhere: before the
-	// first typed repeat that stays they read as without a repeat (Repeating tasks rule 19). Never picked by hand is no
+	// first typed repeat that stays they read as without a repeat. Never picked by hand is no
 	// repeat: `until Dec 1` is then a deadline, as on a task that does not repeat.
 	const picked = ctx.manual.has("recurrence") && ctx.pickedNever !== true;
 	const partsFrom = partsStart(keptRepeats.map((d) => d.chip.span.end), picked, input.length);
@@ -298,7 +298,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const repeatEnds = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d)).map((d) => d.chip.span.end);
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
 	// A date range led by a start word (`starting Oct 12 to Dec 1`) or right after a typed repeat that stays is that
-	// repeat's start and end (Repeating tasks rule 19); a repeat picked by hand never splits one.
+	// repeat's start and end; a repeat picked by hand never splits one.
 	const afterRepeat = (at: number, joined = /^[\s,]*$/u): boolean => repeatEnds.some((end) => end <= at && joined.test(input.slice(end, at)));
 	// After a repeat Quick Add cannot build, a date joined to it by `and` or `&` is as close as one after a comma
 	// (`every May 5 and Dec 25`): it is offered at most.
@@ -355,7 +355,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const chips = kept.map((d) => d.chip);
 	const open = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
-	// A typed repeat whose hour is a choice waits for it (Repeating tasks rule 19), unless a repeat picked by hand wins.
+	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
 	return finish(input, chips, open, decisions.literal);
@@ -469,9 +469,9 @@ const COMMA_AFTER_RE = /^\s*[,;]/u;
 const COMMA_BEFORE_RE = /[,;]\s*$/u;
 
 /**
- * The title: the input without the applied spans (Tasks and Quick Add rule 21). A lone comma or semicolon left next to a
+ * The title: the input without the applied spans, or the full text if nothing remains. A lone comma or semicolon left next to a
  * removed span goes with it, as does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
- * every sunday."): no stray punctuation or spaces (Repeating tasks rule 19). Text the user kept as it is (`literal`, a
+ * every sunday."): no stray punctuation or spaces. Text the user kept as it is (`literal`, a
  * dismissed chip) is never touched.
  */
 function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]): string {

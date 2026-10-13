@@ -285,7 +285,8 @@ export class PullApplier {
 		// Missing from TickTick. Fewer than 5 in a list go to Trash; 5 or more, or a project that came back
 		// empty, wait for confirmation and nothing is applied. While a list has tasks still to look up, fewer than 5
 		// wait (kept as found gone) so they are judged with the rest, never moved a few at a time; an emptied list asks
-		// nothing yet, as Keep would unlink it while some of them may be completed there (TickTick sync rule 10).
+		// nothing yet, as Keep would unlink it while some of them may be completed there. Nothing goes to Trash before every
+		// task of its list was looked up.
 		for (const [listId, group] of missingByList) {
 			const pull = pulls.find((p) => p.listId === listId)!;
 			const emptied = pull.data.tasks.length === 0;

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { TagMove } from "../app/CategoryService";
+import { DELETE_LIST_LABEL, type TagMove } from "../app/CategoryService";
 import { isListSynced } from "../app/syncMarks";
 import { type SidebarCounts, type TaskView, sameView } from "../app/views";
 import { isDomainError } from "../domain/errors";
@@ -244,7 +244,7 @@ async function deleteCategory(host: UiHost, category: Category, onDeleted: () =>
 		const mark = host.app.store.undoMark();
 		await host.app.categories.delete(category.id);
 		onDeleted();
-		host.notifyUndo(`Deleted list "${category.name}".`, "Delete category", mark);
+		host.notifyUndo(`Deleted list "${category.name}".`, DELETE_LIST_LABEL, mark);
 	} catch (err) {
 		host.error(err);
 	}

@@ -239,7 +239,7 @@ export function referenceProblem(data: DbCollections, c: CollectionName, removed
 			const holds = (task: Task) => task.tagKeys.some((k) => removed.has(k));
 			for (const t of data.tasks.values()) if (holds(t)) return "a task now uses this tag.";
 			for (const e of data.trash.values()) if (e.tasks.some(holds)) return "a task now uses this tag.";
-			// Every displayed tag is a record, its parent too (Lists, sections and tags rule 25).
+			// Every displayed tag is a record, its parent too: a tag may not be left under a removed parent.
 			for (const key of data.tags.keys()) if (tagPrefixes(key).some((p) => p !== key && removed.has(p))) return "a tag now sits under this tag.";
 			return null;
 		}

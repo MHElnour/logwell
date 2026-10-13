@@ -105,6 +105,24 @@ describe("edits that could not be kept", () => {
 	});
 });
 
+describe("#137: one change event per replacement", () => {
+	it("#137: Replace all and a snapshot restore each announce the new state once; an outside change still does", async () => {
+		const fake = setup();
+		const plugin = await loadPlugin(fake, A);
+		const store = plugin.session!.app.store;
+		const labels: string[] = [];
+		store.bus.on("changed", (e) => labels.push(e.label));
+		const { collectionsOf } = await import("../../src/persistence/schema");
+		await store.replaceAll(collectionsOf(store.state), null);
+		expect(labels).toEqual(["Replace all"]);
+
+		labels.length = 0;
+		fake.files.set(A, descendant(fake.files.get(A)!, (d) => d, "r-theirs000001"));
+		await plugin.session!.store.handleExternalChange();
+		expect(labels).toHaveLength(1);
+	});
+});
+
 describe("#134: failures that used to show nothing", () => {
 	it("#134: a backup that cannot be written says the database file is not affected, never Retrying", async () => {
 		const fake = setup();
@@ -172,7 +190,7 @@ describe("a failing rename flush never skips closing the store", () => {
 		void session.app.noteRenames.rewriteNotePaths("Y.md", "Z.md", false); // held back by the cooldown
 		await new Promise((r) => setTimeout(r, 0));
 		fake.app.saveLocalStorage = (k: string) => {
-			if (k.startsWith("checkpoint-pending-renames")) throw new Error("quota exceeded");
+			if (k.startsWith("logwell-pending-renames")) throw new Error("quota exceeded");
 		};
 		const close = vi.spyOn(session.store, "close");
 

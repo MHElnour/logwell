@@ -292,7 +292,7 @@ describe("after a pull that uses the tag", () => {
 			// An unrelated write right below the edit, which the rename and the syncs do not touch.
 			const errands = await s.h.app.categories.create("Errands");
 			const below = store.undoLabel;
-			expect(below).toBe("Create category");
+			expect(below).toBe("Create list");
 			await s.h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
 			await s.sync.sync();
 			await pullTask(s, "Call the bank", ["phone"]);
