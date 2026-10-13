@@ -136,7 +136,7 @@ flowchart TD
 
 The scheduler listens to `changed` and arms a delayed push only for edits that touch a linked list; the sync's own labels (`SYNC_OWN_LABELS`) never trigger one. How runs queue is TickTick sync rule 18.
 
-A sync pulls every linked list, then writes everything pulled as one command that is not undoable. Each field compares as a hash from `src/domain/ticktick/mapping.ts` against the base stored in the `syncLinks` collection, so the engine knows which side changed.
+A sync pulls every linked list, then writes everything pulled as one command that is not undoable. A linked list whose TickTick list answers 404 is skipped with a `list-gone` failure (the session's notice offers Unlink); its tasks and links stay as they are, and the other lists sync. Deleting a list (`CategoryService.delete`) removes its list link and its sections' links in the same command, and its tasks keep their links; the sync then also reads the project those task links name, for those tasks only, so they leave it like tasks moved out of a linked list (moved to the Inbox's project, or deleted in TickTick). Each field compares as a hash from `src/domain/ticktick/mapping.ts` against the base stored in the `syncLinks` collection, so the engine knows which side changed.
 
 The engine writes tasks through the `*In(tx, ...)` methods of `TaskService` and `SectionService`, so a pulled change obeys the same rules as an edit by hand. The pull command writes no links. A separate links command then links what the pull settled, before any push, so a failed push or a reload does not import them again.
 
@@ -165,7 +165,7 @@ All but e2e run in `npm test`.
 - Schema fixtures: `tests/fixtures/schema-v*.cpbase` are frozen sample files that the migration tests load; a schema change adds one and never edits an old one.
 - Perf (`tests/perf`, plus `tests/ui/performance.test.tsx` and `tests/ui/perf-*.test.tsx`): pass and query counts at large counts through the real code, times compared within one run (never against a fixed number of milliseconds), and render-pass counts that guard row memoization and windowing.
 - Limits: `e2e/limits/` measures open, save and render times in real Obsidian, one size step at a time. It runs locally and outside `npm run e2e`; see [performance.md](performance.md). `tests/limits/limits.test.ts` checks its generator and CSV helpers.
-- End to end (`e2e/specs/*.e2e.ts`): the plugin bundle in a sandboxed, pinned Obsidian against a copy of `test-vault/`. `freshDatabase()` in `e2e/helpers.ts` resets the vault before each test.
+- End to end (`e2e/specs/*.e2e.ts`): the plugin bundle in a sandboxed, pinned Obsidian against a copy of `test-vault/`. `freshDatabase()` in `e2e/helpers.ts` resets the vault before each test. A spec here checks only what needs real Obsidian: Live Preview and the task block, vault events, Obsidian's commands, menus, modals, suggester and key scopes, notices, and real layout, pointer drags and scrolling. Anything a simulated DOM can check goes in `tests/ui` instead, so it runs in `npm test`.
 
 Commands:
 

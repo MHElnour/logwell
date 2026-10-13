@@ -136,37 +136,6 @@ describe("Tasks and description notes", function () {
 		expect((await getTask(id))?.status).toBe("completed");
 	});
 
-	it("AS-09: subtask completion and category rules", async function () {
-		const result = await browser.executeObsidian(async ({ plugins }) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const app = (plugins as any).logwell.session.app;
-			const study = await app.categories.create("Study");
-			const parent = (await app.tasks.create({ title: "Parent" })).task;
-			const a = (await app.tasks.create({ title: "Sub A", parentId: parent.id })).task;
-			const b = (await app.tasks.create({ title: "Sub B", parentId: parent.id })).task;
-			const prompt = await app.tasks.complete(parent.id);
-			await app.tasks.complete(a.id);
-			await app.tasks.complete(b.id);
-			const find = (id: string) => [...app.store.state.tasks.values()].find((t: { id: string }) => t.id === id);
-			const parentAfterSubs = find(parent.id).status;
-			await app.tasks.complete(parent.id);
-			await app.tasks.reopen(parent.id);
-			const subsAfterReopen = [find(a.id).status, find(b.id).status];
-			await app.tasks.update(parent.id, { categoryId: study.id });
-			return {
-				prompt,
-				parentAfterSubs,
-				subsAfterReopen,
-				categories: [find(a.id).categoryId, find(b.id).categoryId],
-				studyId: study.id,
-			};
-		});
-		expect(result.prompt).toEqual({ kind: "needs-confirmation", openSubtasks: 2 });
-		expect(result.parentAfterSubs).toBe("open");
-		expect(result.subsAfterReopen).toEqual(["completed", "completed"]);
-		expect(result.categories).toEqual([result.studyId, result.studyId]);
-	});
-
 	it("re-renders a 2,000-line note with embeds in under 150 ms", async function () {
 		const timings = await browser.executeObsidian(async ({ app, obsidian }) => {
 			const file = app.vault.getFileByPath("Notes/Big note.md");

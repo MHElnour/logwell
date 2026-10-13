@@ -122,50 +122,6 @@ describe("Calendar drag", function () {
 		await expect(calendar.$(".cp-details-pane")).not.toExist();
 	});
 
-	it("Escape mid-drag cancels: the record is unchanged and the details stay closed", async function () {
-		const id = await seedBlock();
-		const before = await getTask(id);
-		const calendar = await openCalendar();
-		const block = calendar.$(`.cp-cal-entry[data-task-id="${id}"]`);
-		await block.waitForExist({ timeout: 5000 });
-		await waitForStableRect(block);
-		await dragPointer(
-			async () => {
-				const r = await rectOf(block);
-				return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 10) };
-			},
-			async (from) => ({ x: (await slotPoint(calendar, days[3]!, 0)).x, y: from.y + 3 * HOUR_PX }),
-			{ release: false },
-		);
-		await calendar.$(".cp-cal-ghost").waitForExist({ timeout: 3000, timeoutMsg: "no ghost while dragging" });
-		await browser.keys("Escape");
-		await expect(calendar.$(".cp-cal-ghost")).not.toExist();
-		// Releasing after the cancel must neither drop nor click.
-		await browser.releaseActions();
-		await browser.pause(300);
-		expect(await getTask(id)).toEqual(before);
-		await expect(calendar.$(".cp-details-pane")).not.toExist();
-	});
-
-	it("a short click on a block still opens the details and changes nothing", async function () {
-		const id = await seedBlock();
-		const before = await getTask(id);
-		const calendar = await openCalendar();
-		const block = calendar.$(`.cp-cal-entry[data-task-id="${id}"]`);
-		await block.waitForExist({ timeout: 5000 });
-		await waitForStableRect(block);
-		await dragPointer(
-			async () => {
-				const r = await rectOf(block);
-				return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 10) };
-			},
-			async (from) => ({ x: from.x + 2, y: from.y + 1 }),
-			{ steps: 1 },
-		);
-		await calendar.$(".cp-details-pane .cp-details").waitForExist({ timeout: 5000, timeoutMsg: "the details did not open after a short click" });
-		expect(await getTask(id)).toEqual(before);
-	});
-
 	it("drops an unscheduled drawer row onto a slot: a timed schedule at the snapped time", async function () {
 		const id = await createTask("From the drawer");
 		const calendar = await openCalendar();

@@ -13,7 +13,7 @@ import { RENDERER_SRC } from "./renderer";
 //
 //   npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e/limits/limits.e2e.ts
 //
-// For each row of tests/limits/limits-matrix.csv it generates a valid v5 database (generate.ts), writes it into
+// For each row of tests/limits/limits-matrix.csv it generates a valid current-schema database (generate.ts), writes it into
 // the sandboxed vault, and measures in the real renderer (renderer.ts): open, save, view render. It writes the
 // numbers back into the CSV after every row, so an interrupted run keeps what it has.
 //
