@@ -315,8 +315,9 @@ describe("pulledDatePatch (SYNC-05 pull)", () => {
 		expect(pulledDatePatch({ scheduled: null, deadline: null }, a)).toEqual({ scheduled: a, deadline: a });
 	});
 
-	it("a date cleared in TickTick clears the sent date, and the schedule when they were equal", () => {
-		expect(pulledDatePatch({ scheduled: a, deadline: b }, null)).toEqual({ deadline: null });
+	it("#120: a date cleared in TickTick clears both dates, equal or not", () => {
+		expect(pulledDatePatch({ scheduled: a, deadline: b }, null)).toEqual({ scheduled: null, deadline: null });
+		expect(pulledDatePatch({ scheduled: null, deadline: b }, null)).toEqual({ deadline: null });
 		expect(pulledDatePatch({ scheduled: b, deadline: b }, null)).toEqual({ scheduled: null, deadline: null });
 		expect(pulledDatePatch({ scheduled: a, deadline: null }, null)).toEqual({ scheduled: null });
 	});
