@@ -2,7 +2,7 @@ import { DomainError } from "../domain/errors";
 import { type Clock, type IdGenerator, nowInstant } from "../domain/ports";
 import type { Task } from "../domain/types";
 import { BackupStore, SNAPSHOT_INTERVAL_MS, type BackupInfo, type SnapshotKind } from "./backups";
-import type { DbFile, WriteResult } from "./gateway";
+import type { DbFile, FileWriteResult } from "./gateway";
 import { type JournalEntry, type JournalOp, replayJournal } from "./journal";
 import { type Migration, MIGRATIONS, planMigration, runMigrations } from "./migrations";
 import {
@@ -576,7 +576,7 @@ export class CpbaseStore {
 			this.needsFullWrite = this.needsFullWrite || full;
 			if (!journalOk) this.journalStale = true;
 		};
-		let result: WriteResult;
+		let result: FileWriteResult;
 		try {
 			this.attempted.add(meta.revision);
 			result = await this.deps.file.write(content, (text) => this.isOnDisk(text));

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
 import { tagsByLabel } from "../../domain/tags";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
-import { addDays } from "../../domain/time";
+import { type YearMonth, addDays, shiftMonth, yearMonthOf } from "../../domain/time";
 import { noteDisplayName } from "../../domain/notes";
 import { INBOX_NAME, type LocalDate, type Priority } from "../../domain/types";
 import { SrOnly } from "../common";
@@ -12,14 +12,7 @@ import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
 import { repeatLine } from "../repeat";
 import { useUniqueId } from "../hooks";
 import { priorityLabel } from "./chipLabels";
-import {
-	type YearMonth,
-	dayLabel,
-	monthGrid,
-	shiftDateByMonths,
-	shiftMonth,
-	yearMonthOf,
-} from "./calendar";
+import { dayLabel, monthGrid, shiftDateByMonths } from "./calendar";
 import { monthTitle } from "../calendar/format";
 import { quadrantWords } from "../matrix/quadrants";
 import { pad2, weekdayInitials } from "../format";

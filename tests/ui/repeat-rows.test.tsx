@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
+import { render } from "preact";
 import { afterEach, describe, expect, it } from "vitest";
+import { describeRule } from "../../src/domain/recurrence";
+import { RepeatChip } from "../../src/ui/RepeatChip";
 import {
 	COMPLETE_OCCURRENCE_LABEL,
 	REOPEN_OCCURRENCE_LABEL,
@@ -66,6 +69,20 @@ describe("the row", () => {
 		await create(m, "Gym", { repeat: { rule: weeklyFriday.rule, end: { kind: "count", count: 4 } } });
 		const row = rowFor(await showInbox(m), "Gym");
 		expect(q(row, ".cp-meta-repeat").title).toBe("Repeats every Fri · ends after 4 times");
+	});
+
+	it("#135: the chip reads the rule in force on the day its row was drawn for, not the app's day", async () => {
+		const m = await mount();
+		const t = await create(m, "Weekly review");
+		const rec = t.recurrence!;
+		const first = rec.versions[0]!;
+		// A daily rule from November on: the app's day (October 1) still has the weekly one.
+		const task = { ...t, recurrence: { ...rec, versions: [first, { ...first, effectiveFrom: "2026-11-06", rule: { ...first.rule, freq: "daily" as const } }] } };
+		const root = document.createElement("div");
+		render(<RepeatChip host={m.host} task={task} today="2026-11-10" />, root);
+		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).toBe(describeRule(task.recurrence, "2026-11-10"));
+		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).not.toBe("every Fri");
+		render(null, root);
 	});
 
 	it("a board card shows the chip and the occurrence's date", async () => {

@@ -12,8 +12,8 @@ import { dueSpecOf } from "../format";
 import type { UiHost } from "../host";
 import { RepeatChip } from "../RepeatChip";
 import { onItemKeyDown, useCompleteToggle } from "../rowItem";
-import { deadlineMark, dueMark, listMark, noteMark, subtaskMark, toneOf } from "../rowMeta";
-import { memoComponent, sameDay, sameEntry, sameLookups, sameSubtasks } from "../rowMemo";
+import { deadlineMark, dueMark, focusMark, listMark, noteMark, notSyncedMark, subtaskMark, toneOf } from "../rowMeta";
+import { memoComponent, sameDay, sameEntry, sameFocusTotal, sameLookups, sameSubtasks, sameSyncMark } from "../rowMemo";
 
 // A board card: the checkbox and title on one line, a meta line under it, and the parent's subtasks
 // nested inside the same box. It reuses the row's checkbox, meta colors and context menu.
@@ -32,7 +32,7 @@ interface CommonProps {
 	dropBeforeId: ID | null;
 }
 
-/** The meta line: date (colored), list, tags as pills, note, subtasks n/m. */
+/** The meta line: date (colored), repeat, "Not synced", list, tags as pills, note, subtasks n/m, focused time. */
 function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	host: UiHost;
 	state: DbData;
@@ -49,13 +49,23 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	const repeats = isActiveSeries(task);
 	const category = state.categories.get(task.categoryId);
 	const subCount = task.parentId === null ? (subtasks?.total ?? 0) : 0;
+	const notSynced = notSyncedMark(state, task);
+	const focus = focusMark(host, state, task);
 	const hasMeta =
-		due !== null || repeats || (showCategory && category !== undefined) || task.tagKeys.length > 0 || task.descriptionNote !== null || subCount > 0;
+		due !== null ||
+		repeats ||
+		(showCategory && category !== undefined) ||
+		task.tagKeys.length > 0 ||
+		task.descriptionNote !== null ||
+		subCount > 0 ||
+		notSynced !== null ||
+		focus !== null;
 	if (!hasMeta) return null;
 	return (
 		<div class="cp-board-meta">
 			{due !== null && dueMark(due, tone, ctx)}
-			{repeats && <RepeatChip host={host} task={task} />}
+			{repeats && <RepeatChip host={host} task={task} today={ctx.today} />}
+			{notSynced}
 			{deadlineMark(host, entry, ctx)}
 			{showCategory && category !== undefined && listMark(category)}
 			{task.tagKeys.map((key) => (
@@ -65,6 +75,7 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 			))}
 			{task.descriptionNote !== null && noteMark(host, task.descriptionNote.path)}
 			{subtaskMark(subCount, subtasks)}
+			{focus}
 		</div>
 	);
 }
@@ -184,7 +195,9 @@ function sameCard(a: BoardCardProps, b: BoardCardProps): boolean {
 			(a.draggingId === id) === (b.draggingId === id) &&
 			(a.dropBeforeId === id) === (b.dropBeforeId === id) &&
 			sameSubtasks(a.counts.get(id), b.counts.get(id)) &&
-			sameLookups(a.state, b.state, entry.task)
+			sameLookups(a.state, b.state, entry.task) &&
+			sameFocusTotal(a.state, b.state, entry.task) &&
+			sameSyncMark(a.state, b.state, entry.task)
 		);
 	});
 }
