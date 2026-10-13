@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#110) Fixed deleting a list synced with TickTick leaving it linked: its tasks never synced again from the Inbox, their TickTick copies stayed where they were, and its TickTick list could not be linked to another list. Deleting a synced list now unlinks it, and its tasks follow the Inbox: the next sync moves them to the Inbox's TickTick list when the Inbox syncs, and deletes them in TickTick when it does not. A list deleted this way with an earlier version is unlinked at the next sync.
 - (#113) Fixed a note renamed or moved while Logwell was switching to another database keeping its old path in the database being closed, which broke the task's link to its note for good. The closing database now follows the rename too.
 - (#112) Fixed a database switch that was still finishing when Logwell was turned off, reloaded or updated opening the new database anyway and leaving it open: it kept saving the file and showing notices, and after an update two copies wrote the same file. Nothing opens any more once Logwell stops, and a database whose opening fails part way is closed.
 - (#103) Fixed a change from another device that arrived while Logwell was still opening the database being ignored, so the open database showed the older version and your next edit became a conflict copy with the Keep mine / Keep theirs notice. The change is now loaded as soon as the database is open.

@@ -27,7 +27,7 @@ import {
 	requireColor,
 	requireIconName,
 } from "../domain/tasks";
-import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
+import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor, syncLinkId } from "../domain/types";
 import type { AppStore } from "./store";
 import type { TaskIndex } from "./taskIndex";
 import type { Tx } from "./tx";
@@ -146,7 +146,8 @@ export class CategoryService {
 
 	/**
 	 * Tasks move to Inbox in the same write; undo restores both. Refused when the move would take a synced Inbox past
-	 * its open-task cap.
+	 * its open-task cap. A list linked to TickTick is unlinked in the same write (its link and its sections' links go);
+	 * its tasks keep their links, so the next sync treats them as moved to the Inbox.
 	 */
 	delete(id: ID): Promise<number> {
 		return this.store.run("Delete category", (tx) => {
@@ -159,7 +160,12 @@ export class CategoryService {
 				tx.put("tasks", { ...t, categoryId: INBOX_ID, sectionId: null, modifiedAt: tx.now });
 				moved++;
 			}
-			for (const s of tx.all("sections")) if (s.categoryId === id) tx.remove("sections", s.id);
+			for (const s of tx.all("sections")) {
+				if (s.categoryId !== id) continue;
+				tx.remove("sections", s.id);
+				tx.remove("syncLinks", syncLinkId("section", s.id));
+			}
+			tx.remove("syncLinks", syncLinkId("list", id));
 			tx.remove("categories", id);
 			this.lists.assertSyncedRoom(tx);
 			return moved;
