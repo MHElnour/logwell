@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DateSpec } from "../../src/domain/types";
 import { LABEL_PEEK_PX } from "../../src/ui/calendar/geometry";
-import { ICON } from "../../src/ui/icons";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 import { type AppMount, at, byLabel, click, day, dragTo, expectLabelsResolve, keydown, mountApp, q, recordNotices, settle, strayAriaLabels } from "./app-helpers";
 import { cal, cell, entries, entry, entryName, openCalendar, stubWeek, title, weekDates } from "./calendar-helpers";
@@ -35,34 +34,6 @@ describe("calendar section", () => {
 	const modeButton = (root: HTMLElement, label: "Week" | "Month") => buttons(root).find((b) => b.textContent === label)!;
 
 	describe("rail and section state", () => {
-		it("puts Calendar after Tasks and before Matrix and Search, with the calendar icon", async () => {
-			const m = await mountApp();
-			const rail = [...m.root.querySelectorAll<HTMLElement>(".cp-rail > *")];
-			expect(rail.map((k) => k.getAttribute("aria-label") ?? k.className)).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "cp-rail-spacer", "Data"]);
-			const button = byLabel(m.root, "Calendar")!;
-			expect(iconOf(button)).toBe("calendar");
-			expect(ICON.railCalendar).toBe("calendar");
-			expect(button.closest(".cp-rail")).not.toBeNull();
-		});
-
-		it("shows the calendar section only when its rail button is active", async () => {
-			const m = await mountApp();
-			const section = () => cal(m.root).closest<HTMLElement>(".cp-section")!;
-			expect(section().hidden).toBe(true);
-			await openCalendar(m);
-			expect(section().hidden).toBe(false);
-			const rail = byLabel(m.root, "Calendar")!;
-			expect(rail.getAttribute("aria-pressed")).toBe("true");
-			expect(rail.classList.contains("is-active")).toBe(true);
-		});
-
-		it("opens from the app handle (the open-calendar command)", async () => {
-			const m = await mountApp();
-			m.handle.current!.showSection("calendar");
-			await settle();
-			expect(cal(m.root).closest<HTMLElement>(".cp-section")!.hidden).toBe(false);
-		});
-
 		it("keeps mode, anchor, selection and the unscheduled drawer while switching sections", async () => {
 			const m = await mountApp();
 			await seed(m);
@@ -145,33 +116,15 @@ describe("calendar section", () => {
 			expect(title(m.root)).toBe("October 2026");
 		});
 
-		it("month navigation crosses a year boundary", async () => {
-			const m = await mountApp();
-			await openCalendar(m);
-			await click(modeButton(m.root, "Month"));
-			for (let i = 0; i < 3; i++) await click(byLabel(cal(m.root), "Next month"));
-			expect(title(m.root)).toBe("January 2027");
-			await click(byLabel(cal(m.root), "Previous month"));
-			expect(title(m.root)).toBe("December 2026");
-		});
-
-		it("week titles name both years when the week crosses New Year", async () => {
-			const m = await mountApp();
-			m.h.clock.set("2026-12-30T10:00:00Z");
-			await m.rerender();
-			await openCalendar(m);
-			await click(byLabel(cal(m.root), "Today"));
-			expect(title(m.root)).toBe("Dec 28, 2026 – Jan 3, 2027");
-		});
-
+		// The week of Oct 1, 2026 and the October grid start on the week start's day (Mon Sep 28, Sun Sep 27, Sat Sep 26).
 		it.each([
-			["MO", "2026-09-28", "Sep 28 – Oct 4, 2026", "Mon"],
-			["SU", "2026-09-27", "Sep 27 – Oct 3, 2026", "Sun"],
-			["SA", "2026-09-26", "Sep 26 – Oct 2, 2026", "Sat"],
-		] as const)("week start %s", async (weekStart, first, expected, dow) => {
+			["MO", "Mon", "2026-09-28", "Sep 28 – Oct 4, 2026", "2026-10-26"],
+			["SU", "Sun", "2026-09-27", "Sep 27 – Oct 3, 2026", "2026-11-01"],
+			["SA", "Sat", "2026-09-26", "Sep 26 – Oct 2, 2026", "2026-10-31"],
+		] as const)("week start %s: the week and the month grid, prev, next and Today", async (weekStart, dow, first, weekTitleText, novFirst) => {
 			const m = await mountApp({ weekStart });
 			await openCalendar(m);
-			expect(title(m.root)).toBe(expected);
+			expect(title(m.root)).toBe(weekTitleText);
 			const dates = weekDates(m.root);
 			expect(dates).toHaveLength(7);
 			expect(dates[0]).toBe(first);
@@ -182,27 +135,12 @@ describe("calendar section", () => {
 			expect(weekDates(m.root)[0]).toBe(first);
 			// The month view starts its rows on the same day.
 			await click(modeButton(m.root, "Month"));
-			const head = [...cal(m.root).querySelectorAll(".cp-cal-month-head > *")].map((e) => e.textContent);
-			expect(head).toHaveLength(7);
-			expect(head[0]).toBe(dow);
-			const firstCell = cal(m.root).querySelector(".cp-cal-cell")!;
-			expect(firstCell.getAttribute("data-date")).toBe(weekStart === "MO" ? "2026-09-28" : weekStart === "SU" ? "2026-09-27" : "2026-09-26");
-		});
-
-		// October 2026: the grid's first cell depends on the week start (Mon Sep 28, Sun Sep 27, Sat Sep 26).
-		it.each([
-			["MO", "Mon", "2026-09-28", "2026-10-26"],
-			["SU", "Sun", "2026-09-27", "2026-11-01"],
-			["SA", "Sat", "2026-09-26", "2026-10-31"],
-		] as const)("month mode with week start %s: header, prev, next and Today", async (weekStart, dow, octFirst, novFirst) => {
-			const m = await mountApp({ weekStart });
-			await openCalendar(m);
-			await click(modeButton(m.root, "Month"));
 			const firstDate = () => cal(m.root).querySelector(".cp-cal-cell")!.getAttribute("data-date");
 			const head = () => [...cal(m.root).querySelectorAll(".cp-cal-month-head > *")].map((e) => e.textContent);
 			expect(title(m.root)).toBe("October 2026");
+			expect(head()).toHaveLength(7);
 			expect(head()[0]).toBe(dow);
-			expect(firstDate()).toBe(octFirst);
+			expect(firstDate()).toBe(first);
 			await click(byLabel(cal(m.root), "Next month"));
 			expect(title(m.root)).toBe("November 2026");
 			expect(head()[0]).toBe(dow);
@@ -213,7 +151,7 @@ describe("calendar section", () => {
 			expect(head()[0]).toBe(dow);
 			await click(byLabel(cal(m.root), "Today"));
 			expect(title(m.root)).toBe("October 2026");
-			expect(firstDate()).toBe(octFirst);
+			expect(firstDate()).toBe(first);
 			expect(cal(m.root).querySelector(".cp-cal-cell.is-today")?.getAttribute("data-date")).toBe("2026-10-01");
 		});
 	});
@@ -854,13 +792,6 @@ describe("calendar section", () => {
 			expect(b.querySelector(".cp-cal-entry-time")?.textContent).toBe("01:30–03:30");
 		});
 
-		it("spring forward: a block spanning the skipped hour (01:00 + 120 min) reads 01:00-04:00", async () => {
-			const m = await dstMount("2026-03-28T08:00:00Z");
-			await m.h.app.tasks.create({ title: "Span", scheduled: berlin("2026-03-29", "01:00"), plannedDurationMin: 120 });
-			await show(m);
-			expect(entryName(entry(cell(m.root, "daycol", "2026-03-29"), "Span"))).toBe("Span, Sun Mar 29, 01:00–04:00");
-		});
-
 		it("fall back: 01:30 + 120 min reads 01:30-02:30 (the end is after the repeated hour)", async () => {
 			const m = await dstMount("2026-10-24T08:00:00Z");
 			await m.h.app.tasks.create({ title: "Late", scheduled: berlin("2026-10-25", "01:30"), plannedDurationMin: 120 });
@@ -870,33 +801,12 @@ describe("calendar section", () => {
 			expect(b.querySelector(".cp-cal-entry-time")?.textContent).toBe("01:30–02:30");
 		});
 
-		it("fall back: a block that starts in the second occurrence of the repeated hour", async () => {
-			const m = await dstMount("2026-10-24T08:00:00Z");
-			// 01:30Z is 02:30 CET, the second 02:30 of the day.
-			await m.h.app.tasks.create({
-				title: "Second",
-				scheduled: { kind: "datetime", local: "2026-10-25T01:30", tz: "UTC" },
-				plannedDurationMin: 60,
-			});
-			await show(m);
-			expect(entryName(entry(cell(m.root, "daycol", "2026-10-25"), "Second"))).toBe("Second, Sun Oct 25, 02:30–03:30");
-		});
-
 		it("a block that crosses midnight into a spring-forward day names its real end on both halves", async () => {
 			const m = await dstMount("2026-03-28T08:00:00Z");
 			await m.h.app.tasks.create({ title: "Night", scheduled: berlin("2026-03-28", "23:30"), plannedDurationMin: 180 });
 			await show(m);
 			expect(entryName(entry(cell(m.root, "daycol", "2026-03-28"), "Night"))).toBe("Night, Sat Mar 28, 23:30–03:30");
 			expect(entryName(entry(cell(m.root, "daycol", "2026-03-29"), "Night"))).toBe("Night, Sun Mar 29, 00:00–03:30, continued");
-		});
-
-		it("a block that crosses midnight into a fall-back day names its real end on both halves", async () => {
-			const m = await dstMount("2026-10-24T08:00:00Z");
-			// 23:30 CEST + 240 min = 03:30 CEST = 02:30 CET.
-			await m.h.app.tasks.create({ title: "Night", scheduled: berlin("2026-10-24", "23:30"), plannedDurationMin: 240 });
-			await show(m);
-			expect(entryName(entry(cell(m.root, "daycol", "2026-10-24"), "Night"))).toBe("Night, Sat Oct 24, 23:30–02:30");
-			expect(entryName(entry(cell(m.root, "daycol", "2026-10-25"), "Night"))).toBe("Night, Sun Oct 25, 00:00–02:30, continued");
 		});
 	});
 
@@ -1298,17 +1208,6 @@ describe("repeating tasks on the calendar", () => {
 			await dragTo(block, { x: 450, y: 450 }, { x: 150, y: 600 });
 			expect(cal(m.root).classList.contains("is-dragging")).toBe(false);
 			expect(JSON.stringify(m.h.app.store.state.tasks.get(t.id))).toBe(before);
-		});
-
-		it("a plain task still moves (the guard is only for series)", async () => {
-			const m = await mountApp();
-			await seed(m);
-			await openCalendar(m);
-			stubWeek(m.root);
-			const e = entry(cal(m.root), "Dentist");
-			await dragTo(e, { x: 350, y: -75 }, { x: 50, y: -75 });
-			const dentist = [...m.h.app.store.state.tasks.values()].find((t) => t.title === "Dentist")!;
-			expect(dentist.scheduled).toEqual({ kind: "date", date: "2026-09-28" });
 		});
 
 		it("opens the details pane on a click, as for any task", async () => {

@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
 import { render } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ViewGroup, buildList } from "../../src/app/views";
@@ -11,6 +10,7 @@ import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { type AppHarness, appHarness } from "../app/harness";
 import { dragTo, focusedIndex, mountNode, pressFocused, pressKey, releaseAt, seedTasks, settle, taskId, U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
+import { cssSection } from "./styles-helpers";
 
 // A Tasks list above VIRTUAL_THRESHOLD rows draws
 // only the rows near the viewport. These tests run TaskList in a `.cp-main` scroller over a fake block layout
@@ -643,15 +643,11 @@ describe("collapse", () => {
 });
 
 describe("stylesheet", () => {
+	// The section's scoping and hygiene are checked with the other sections in layout-styles.test.ts.
 	it("the spacer takes its height from a custom property, draws nothing and is scoped to the view", () => {
-		const css = readFileSync("styles.css", "utf8");
-		const start = css.indexOf("/* == Release B windowed lists == */");
-		const section = css.slice(start, css.indexOf("/* == end Release B windowed lists == */"));
-		expect(start).toBeGreaterThan(0);
+		const section = cssSection("Release B windowed lists");
 		expect(section).toContain(".checkpoint-view .cp-virtual-spacer {");
 		expect(section).toMatch(/height:\s*var\(--cp-virtual-h, 0\)/);
 		expect(section).toMatch(/flex:\s*none/);
-		expect(section).not.toContain("!important");
-		expect(section).not.toContain(":has");
 	});
 });

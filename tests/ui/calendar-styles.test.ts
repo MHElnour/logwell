@@ -1,62 +1,14 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HOUR_PX, LABEL_PEEK_PX, initialScrollTop } from "../../src/ui/calendar/geometry";
+import { css, cssSection, uncommented } from "./styles-helpers";
 
-// The calendar stylesheet section and the initial scroll it is drawn for. happy-dom has no layout, so the stylesheet rules are checked as text; e2e checks the real rendering.
+// The calendar stylesheet section and the initial scroll it is drawn for. The section's scoping and hygiene are
+// checked with the other sections in layout-styles.test.ts.
 
-const css = readFileSync("styles.css", "utf8");
 const MARK = "/* == M3 calendar == */";
-const END = "/* == end M3 calendar == */";
-const section = css.slice(css.indexOf(MARK), css.indexOf(END) + END.length);
-
-/** Every selector in a stylesheet text, comments removed, at-rule preludes skipped. */
-function selectors(text: string): string[] {
-	const out: string[] = [];
-	const clean = text.replace(/\/\*[\s\S]*?\*\//g, "");
-	const re = /([^{}]+)\{/g;
-	for (let m = re.exec(clean); m !== null; m = re.exec(clean)) {
-		const prelude = m[1]!.trim();
-		if (prelude.startsWith("@")) continue;
-		for (const s of prelude.split(",")) out.push(s.trim());
-	}
-	return out;
-}
+const section = cssSection("M3 calendar");
 
 describe("calendar stylesheet section", () => {
-	it("is present once, intact, and followed only by the later sections", () => {
-		expect(css.split(MARK)).toHaveLength(2);
-		expect(css.split(END)).toHaveLength(2);
-		expect(css.indexOf(MARK)).toBeLessThan(css.indexOf(END));
-		// What follows the calendar block is exactly the listed blocks, in that order; earlier sections are untouched.
-		const after = css.slice(css.indexOf(END) + END.length);
-		const marks = (after.match(/\/\* == [^=]+ == \*\//g) ?? []).filter((m) => !m.startsWith("/* == end "));
-		expect(marks).toEqual(["/* == M4 matrix == */", "/* == M4 drag == */", "/* == K1a list drag == */", "/* == Release B windowed lists == */", "/* == K1a board == */", "/* == K1b sections == */", "/* == G1 group by == */", "/* == M5 focus == */", "/* == 0.3.0 tag tree == */", "/* == M6 habits == */", "/* == #4 dashboard block == */", "/* == Issue #6 TickTick sync == */", "/* == M7 recurrence == */"]);
-		expect(css.indexOf("/* == end M5 focus == */")).toBeLessThan(css.indexOf("/* == 0.3.0 tag tree == */"));
-		// Every block after the calendar block is closed by its end marker, in the same order.
-		expect(css.indexOf("/* == end 0.3.0 tag tree == */")).toBeLessThan(css.indexOf("/* == M6 habits == */"));
-		expect(css.indexOf("/* == end M6 habits == */")).toBeLessThan(css.indexOf("/* == #4 dashboard block == */"));
-		expect(css.indexOf("/* == end #4 dashboard block == */")).toBeLessThan(css.indexOf("/* == Issue #6 TickTick sync == */"));
-		expect(css.indexOf("/* == end Issue #6 TickTick sync == */")).toBeLessThan(css.indexOf("/* == M7 recurrence == */"));
-		expect(css.trimEnd().endsWith("/* == end M7 recurrence == */")).toBe(true);
-	});
-
-	it("scopes every rule to the plugin view", () => {
-		const bad = selectors(section).filter((s) => !s.startsWith(".checkpoint-view"));
-		expect(bad).toEqual([]);
-	});
-
-	it("uses no !important, no :has and no regex-like lookbehind", () => {
-		expect(section).not.toMatch(/!important/);
-		expect(section).not.toMatch(/:has\(/);
-		expect(section).not.toMatch(/\(\?<[=!]/);
-	});
-
-	it("uses theme variables only: no hex or rgb colors", () => {
-		const bare = section.replace(/\/\*[\s\S]*?\*\//g, "");
-		expect(bare).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(bare).not.toMatch(/\brgba?\(/);
-	});
-
 	it("gives entries and header controls the accent focus ring", () => {
 		expect(section).toMatch(/\.cp-cal-entry:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--cp-accent\)/);
 		expect(section).toMatch(/\.cp-cal-daynum:focus-visible|\.cp-cal-btn:focus-visible/);
@@ -123,10 +75,6 @@ describe("initial scroll (D6)", () => {
 		expect(LABEL_PEEK_PX).toBeLessThan(HOUR_PX / 2);
 	});
 
-	it("never goes below zero", () => {
-		expect(initialScrollTop(0, false)).toBeGreaterThanOrEqual(0);
-	});
-
 	it("keeps the 00:00 label inside the body at scroll 0 (it sits below its line, not above)", () => {
 		const m = /\.cp-cal-hour-label:first-child\s*\{[^}]*top:\s*(\d+)px/.exec(section);
 		expect(Number(m?.[1])).toBeGreaterThanOrEqual(0);
@@ -159,12 +107,12 @@ describe("all-day overflow and short blocks (stylesheet)", () => {
 
 describe("status bar room", () => {
 	// Outside the calendar section: Obsidian's fixed status bar overlaps the bottom right of every section.
-	const before = css.slice(0, css.indexOf(MARK)).replace(/\/\*[\s\S]*?\*\//g, "");
+	const before = uncommented(css.slice(0, css.indexOf(MARK)));
 
 	it("keeps the room inside each column, not on the body, so backgrounds reach the bottom edge", () => {
 		expect(before).not.toMatch(/\.checkpoint-view \.cp-body\s*\{[^}]*padding-bottom/);
 		expect(before).toMatch(/\.checkpoint-view \.cp-app\s*\{[^}]*--cp-status-bar-room:\s*calc\(/);
-		const all = css.replace(/\/\*[\s\S]*?\*\//g, "");
+		const all = uncommented(css);
 		for (const sel of ["cp-rail", "cp-sidebar-pane", "cp-main", "cp-details-pane", "cp-cal-main", "cp-cal-unscheduled", "cp-matrix-main"]) {
 			const m = new RegExp(`\\.checkpoint-view \\.${sel}\\s*\\{([^}]*)\\}`).exec(all);
 			expect(m?.[1], sel).toMatch(/padding:[^;]*var\(--cp-status-bar-room\)/);

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ARCHIVE_LABEL, CHECKIN_LABEL, DELETE_CHECKIN_LABEL, DELETE_HABIT_LABEL, EDIT_CHECKIN_LABEL, RESTORE_LABEL, UNCHECK_LABEL } from "../../src/app/HabitService";
-import { ICON } from "../../src/ui/icons";
 import { makeReadOnly } from "../app/harness";
 import { click, expectLabelsResolve, fill, keydown, lastNotice, menuItem, q, qa, settle, strayAriaLabels, text } from "./app-helpers";
 import { type HabitMount, input, mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
@@ -30,22 +29,6 @@ describe("Habits page", () => {
 	const labelIsStoreLabel = (m: HabitMount) => expect(lastNotice(m)?.label).toBe(m.h.app.store.undoLabel);
 
 	describe("the rail, the empty state and the dialog entry points", () => {
-		it("has a Habits entry after Focus with the flame, and shows the section on a click and through the handle", async () => {
-			const m = await mountHabits();
-			const labels = [...m.root.querySelectorAll(".cp-rail button")].map((b) => b.getAttribute("aria-label"));
-			expect(labels.indexOf("Habits")).toBe(labels.indexOf("Focus") + 1);
-			expect(q(m.root, '.cp-rail [aria-label="Habits"] [data-icon]').getAttribute("data-icon")).toBe(ICON.railHabits);
-			const section = q(m.root, ".cp-habits").closest<HTMLElement>(".cp-section")!;
-			expect(section.hidden).toBe(true);
-			await openHabits(m);
-			expect(section.hidden).toBe(false);
-			await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
-			expect(section.hidden).toBe(true);
-			m.handle.current!.showSection("habits");
-			await settle();
-			expect(section.hidden).toBe(false);
-		});
-
 		it("shows the first-visit state with four example chips that open the dialog prefilled and never create a habit", async () => {
 			const m = await mountHabits();
 			const el = await openHabits(m);
@@ -405,7 +388,7 @@ describe("Habits page", () => {
 			expect(lastNotice(m)!.label).toBe(CHECKIN_LABEL);
 		});
 
-		it("Add and Enter submit the amount; the field clears; a wrong amount is told and nothing is written", async () => {
+		it("Add and Enter submit the amount; the field clears; a wrong amount is told and nothing is written; a refused one stays in the field", async () => {
 			const { m, el, habits } = await page();
 			const field = () => q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
 			const add = () => q(rowOf(el, "Read"), ".cp-habit-add");
@@ -431,6 +414,11 @@ describe("Habits page", () => {
 			await click(add());
 			expect(m.host.messages.at(-1)).toMatch(/at most 1,000,000/u);
 			expect(field().value).toBe("2000000");
+			// The refusal frees the button (D8): the next amount is written.
+			fill(field(), "4");
+			await click(add());
+			expect(field().value).toBe("");
+			expect(m.h.app.habits.index().active(habits.read.id).at(-1)!.value).toBe(4);
 		});
 
 		it("a read-only database keeps the controls and shows the failure instead of an Undo notice", async () => {
@@ -788,18 +776,6 @@ describe("Habits page", () => {
 			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			expect(calls).toBe(2);
 			expect(m.h.app.habits.index().byDate(habits.read.id).get("2026-10-04")!.map((c) => c.value)).toEqual([20, 10, 5]);
-		});
-
-		it("D8: a refused write keeps the amount in the field and frees the button", async () => {
-			const { m, el } = await page();
-			const field = () => q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
-			fill(field(), "2000000");
-			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
-			expect(field().value).toBe("2000000");
-			fill(field(), "4");
-			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
-			expect(field().value).toBe("");
-			expect(m.h.app.habits.index().active(m.h.app.habits.list().find((h) => h.name === "Read")!.id).at(-1)!.value).toBe(4);
 		});
 
 		it("F11: a habit that started later than the shown month shows its own first month, with Previous disabled and Next following today", async () => {

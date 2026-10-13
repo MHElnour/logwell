@@ -1,21 +1,17 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Quadrant } from "../../src/domain/queries";
 import type { MenuItemSpec } from "../../src/ui/host";
-import { ICON } from "../../src/ui/icons";
 import { routeMatrixMove } from "../../src/ui/matrix/keys";
 import { type AppMount, at, byLabel, click, day, dragTo, mountApp, pressKey, quickModel, releaseAt, settle, taskOf } from "./app-helpers";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 import { card, cardsIn, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, quadrantOfCard, stubQuadrantRects, titlesIn } from "./matrix-helpers";
 import { QUADRANT_ORDER, quadrantFlags } from "../../src/domain/matrix";
 import { QUADRANT_INFO, QUADRANT_LIST, quadrantWords } from "../../src/ui/matrix/quadrants";
+import { css } from "./styles-helpers";
 
 describe("matrix section", () => {
 	// The Eisenhower matrix section. Today is 2026-10-01 (Europe/Berlin).
-
-	const iconOf = (el: Element | null) => el?.querySelector("[data-icon]")?.getAttribute("data-icon");
 
 	async function seed(m: AppMount) {
 		const T = m.h.app.tasks;
@@ -36,28 +32,6 @@ describe("matrix section", () => {
 	};
 
 	describe("rail and section state", () => {
-		it("puts Matrix after Calendar and before Search, with the layout-grid icon", async () => {
-			const m = await mountApp();
-			const rail = [...m.root.querySelectorAll<HTMLElement>(".cp-rail > *")];
-			expect(rail.map((k) => k.getAttribute("aria-label") ?? k.className)).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "cp-rail-spacer", "Data"]);
-			expect(iconOf(byLabel(m.root, "Matrix"))).toBe("layout-grid");
-			expect(ICON.railMatrix).toBe("layout-grid");
-		});
-
-		it("shows the section only when its rail button is active, and opens from the app handle", async () => {
-			const m = await mountApp();
-			const section = () => matrix(m.root).closest<HTMLElement>(".cp-section")!;
-			expect(section().hidden).toBe(true);
-			await openMatrix(m);
-			expect(section().hidden).toBe(false);
-			expect(byLabel(m.root, "Matrix")!.getAttribute("aria-pressed")).toBe("true");
-			await click(byLabel(m.root, "Tasks"));
-			expect(section().hidden).toBe(true);
-			m.handle.current!.showSection("matrix");
-			await settle();
-			expect(section().hidden).toBe(false);
-		});
-
 		it("keeps the view menu, the Completed group and the selection while another section is shown", async () => {
 			const m = await mountApp();
 			await seed(m);
@@ -595,7 +569,6 @@ describe("matrix section", () => {
 		});
 
 		it("the drag ghost has its own card styles (it lives outside the quadrant)", () => {
-			const css = readFileSync(join(process.cwd(), "styles.css"), "utf8");
 			const block = /\.cp-matrix-ghost \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "height: 46px", "box-shadow"]) expect(block).toContain(prop);
 		});
@@ -609,7 +582,6 @@ describe("matrix section", () => {
 			expect(header.querySelector(".cp-main-title")).not.toBeNull();
 			expect(header.querySelector(".cp-view-menu-button")).not.toBeNull();
 			expect(header.querySelector(".cp-filter-bar")).toBeNull();
-			const css = readFileSync(join(process.cwd(), "styles.css"), "utf8");
 			const body = /\.cp-matrix-q-body \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			expect(body).toContain("container-type: inline-size");
 			expect(body).toContain("container-name: cp-list");

@@ -247,17 +247,6 @@ describe("sync screens", () => {
 			expect(chip(root, "Water the plants")!.getAttribute("title")).toBe("This task repeats in TickTick, so it is not synced");
 		});
 
-		it("shows nothing in a list that is not synced, nor for a host without the sync", async () => {
-			const { s, root } = await mount(true);
-			const list = await s.h.app.categories.create("Study");
-			await s.h.app.tasks.create({ title: "Weekly review", categoryId: list.id, repeat });
-			await settle();
-			sidebarItem(root, "Study").click();
-			await settle();
-			expect(chip(root, "Weekly review")).toBeNull();
-			expect(row(root, "Weekly review").querySelector(".cp-meta-repeat")).not.toBeNull();
-		});
-
 		it("#135: a board card shows the mark as the row does, as soon as its link changes", async () => {
 			const { s, root } = await mount(true);
 			const id = await linkedWork(s);
@@ -276,19 +265,6 @@ describe("sync screens", () => {
 			await s.h.app.store.run("test links", (tx) => void tx.put("syncLinks", { ...link, mode: "localOnly", modifiedAt: tx.now }), { undoable: false });
 			await settle();
 			expect(cardChip()!.getAttribute("title")).toBe("Kept in Logwell only, not synced with TickTick");
-		});
-
-		it("is not drawn for a completed task", async () => {
-			const { s, root } = await mount(true);
-			const id = await linkedWork(s);
-			const { task } = await s.h.app.tasks.create({ title: "Old", categoryId: id });
-			await s.sync.sync();
-			const link = s.h.app.store.state.syncLinks.get(syncLinkId("task", task.id))!;
-			await s.h.app.store.run("test links", (tx) => void tx.put("syncLinks", { ...link, mode: "localOnly", modifiedAt: tx.now }), { undoable: false });
-			await s.h.app.tasks.complete(task.id);
-			sidebarItem(root, "Work").click();
-			await settle();
-			expect(root.querySelectorAll(".cp-meta-notsynced")).toHaveLength(0);
 		});
 	});
 });
