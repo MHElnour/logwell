@@ -346,6 +346,9 @@ export class DbSession {
 			case "repaired":
 				actionNotice(`Some database records were repaired: ${e.issues.slice(0, 3).join(" ")}${e.issues.length > 3 ? " …" : ""}`, []);
 				break;
+			case "noticed":
+				actionNotice(`Some database records need your attention: ${e.notes.slice(0, 3).join(" ")}${e.notes.length > 3 ? " …" : ""}`, []);
+				break;
 			case "migrated":
 				actionNotice(`The database was upgraded from schema ${e.from} to ${e.to}. A backup was taken first.`, []);
 				break;

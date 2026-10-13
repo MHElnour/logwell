@@ -1556,3 +1556,143 @@ describe("edits waiting to be saved when the file turns unreadable", () => {
 		expect([...h.store.data.tasks.keys()].sort()).toEqual(["pending", "saved", "theirs"]);
 	});
 });
+
+describe("a version loaded over a fork is not reported missing later", () => {
+	function conflictPathOf(events: StoreEvent[]): string {
+		const e = events.find((x) => x.type === "conflict");
+		if (e?.type !== "conflict") throw new Error("no conflict event");
+		return e.path;
+	}
+
+	it("#116: after Keep theirs, the next open reports no lost revision and writes no new copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.keepTheirs(conflictPathOf(h.events));
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toEqual([]);
+		expect(s2.data.tasks.has("theirs")).toBe(true);
+	});
+
+	it("#116: with no choice made before quitting, the open copy is the only one", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toHaveLength(1);
+	});
+
+	it("#116: a revision lost while Logwell was closed is still reported", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		// A later save of ours is replaced while Logwell is closed.
+		const s2 = h.newStore();
+		await s2.open();
+		h.addTask(makeTask("later"), s2);
+		await h.saveNow(s2);
+		await s2.close();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-other"));
+		h.events.length = 0;
+
+		await h.newStore().open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(true);
+	});
+});
+
+describe("the retry after a write that threw but landed", () => {
+	it("#139: keeps the landed revision in history, so a device that read it fast-forwards", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("t1"));
+		h.fs.failNextWrite((p) => p === DB_PATH, 1_000_000); // the whole file lands, then the write throws
+		await h.saveNow();
+		const landed = revisionOf(h.dbText());
+		// Another device syncs the landed file and reads it.
+		const other = h.newStore();
+		await other.open();
+		expect(other.data.meta.revision).toBe(landed);
+
+		h.scheduler.advance(SAVE_RETRY_MS);
+		await settle();
+		const retried = load(h.dbText()).meta;
+		expect(retried.revision).not.toBe(landed);
+		expect(retried.baseRevision).toBe(landed);
+		expect(retried.history).toContain(landed);
+
+		h.events.length = 0;
+		await other.handleExternalChange();
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+		expect(other.data.meta.revision).toBe(retried.revision);
+	});
+});
+
+describe("two sections with one name in a list", () => {
+	function withSections(text: string, ...names: string[]): string {
+		const data = load(text);
+		const sections = new Map(data.sections);
+		names.forEach((name, i) => {
+			const id = `sec-${i + 1}`;
+			sections.set(id, { id, categoryId: "inbox", name, nameKey: name.toLowerCase(), sortKey: `V${i}`, createdAt: data.meta.writtenAt, modifiedAt: data.meta.writtenAt });
+		});
+		return serializeDb({ ...data, sections });
+	}
+
+	it("#104: opening reports the duplicate but never rewrites the file or takes a backup", async () => {
+		const text = withSections(emptyDbText(), "Doing", "Doing");
+		const h = harness(text);
+		for (const store of [h.store, h.newStore()]) {
+			await store.open();
+			await store.close();
+		}
+		expect(h.dbText()).toBe(text);
+		expect([...h.fs.files.keys()].some((p) => p.includes("/pre-repair-"))).toBe(false);
+		expect(h.events.some((e) => e.type === "repaired")).toBe(false);
+		const noticed = h.events.filter((e) => e.type === "noticed");
+		expect(noticed).toHaveLength(2);
+		expect(noticed[0]?.type === "noticed" && noticed[0].notes.join(" ")).toContain('Section "Doing" has the same name');
+	});
+
+	it("#104: an outside change that still has the duplicate is reloaded without a rewrite", async () => {
+		const h = harness();
+		await h.store.open();
+		const incoming = withSections(descendant(h.dbText(), (d) => d, "r-remote"), "Doing", "Doing");
+		h.fs.files.set(DB_PATH, incoming);
+		await h.store.handleExternalChange();
+		expect(h.store.data.sections.size).toBe(2);
+		expect(h.dbText()).toBe(incoming);
+		h.scheduler.advance(SAVE_MAX_DELAY_MS);
+		await settle();
+		expect(h.dbText()).toBe(incoming);
+	});
+
+	it("#104: an outside change that is repaired on reload says so", async () => {
+		const h = harness();
+		await h.store.open();
+		h.events.length = 0;
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("t1", { categoryId: "missing" })).next, "r-remote"));
+		await h.store.handleExternalChange();
+		const repaired = h.events.find((e) => e.type === "repaired");
+		expect(repaired?.type === "repaired" && repaired.issues.join(" ")).toContain("Task t1");
+	});
+});

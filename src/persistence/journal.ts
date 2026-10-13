@@ -67,11 +67,12 @@ export function applyOps(data: DbData, ops: readonly JournalOp[]): DbData {
  * `untilRevision` if given. Returns the revision reached and the revisions
  * applied in order: the lineage after `fromRevision`.
  *
- * A write that failed leaves an entry whose revision never reached
- * the file, and the retry appends a second entry with the same base. The store
- * re-queues the failed entry's ops, so the retry's entry carries them too. The
- * last entry for a base is therefore the one that continues the chain; an
- * earlier one with the same base is a dead end.
+ * A write refused by the compare-and-swap leaves an entry whose revision never
+ * reached the file, and the retry appends a second entry with the same base. The
+ * store re-queues the failed entry's ops, so the retry's entry carries them too.
+ * The last entry for a base is therefore the one that continues the chain; an
+ * earlier one with the same base is a dead end. A write that threw may have
+ * landed, so its retry continues from the attempted revision instead.
  */
 export function replayJournal(
 	data: DbData,

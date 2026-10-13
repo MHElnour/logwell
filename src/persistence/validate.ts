@@ -814,6 +814,8 @@ export interface ValidatedDb {
 	data: DbData;
 	/** Repairs applied while loading (shown to the user, then written back). */
 	issues: string[];
+	/** Problems found and left as they are: shown to the user, never a reason to rewrite the file. */
+	notes: string[];
 }
 
 /** Validates a current-schema document and repairs references. */
@@ -837,17 +839,19 @@ export function validateDb(raw: Obj, now: string): ValidatedDb {
 			target.set(id, record);
 		});
 	}
-	repairReferences(cols, now, issues);
-	return { data: { meta, ...cols }, issues };
+	const notes: string[] = [];
+	repairReferences(cols, now, issues, notes);
+	return { data: { meta, ...cols }, issues, notes };
 }
 
 type MutableCollections = ReturnType<typeof emptyCollections>;
 
 /**
  * Cross-collection repairs (a subtask takes its parent's list), each
- * recorded as an issue.
+ * recorded as an issue. A problem left as it is goes to `notes` instead, so it
+ * never makes the file be rewritten.
  */
-export function repairReferences(cols: MutableCollections, now: string, issues: string[]): void {
+export function repairReferences(cols: MutableCollections, now: string, issues: string[], notes: string[] = []): void {
 	// The Inbox always exists and is the only Inbox.
 	const inbox = cols.categories.get(INBOX_ID);
 	if (inbox === undefined) {
@@ -868,9 +872,9 @@ export function repairReferences(cols: MutableCollections, now: string, issues: 
 			issues.push(`Section "${section.name}" pointed to a missing list and was removed.`);
 			continue;
 		}
-		// Duplicate names in a list are harmless (the services refuse new ones); recorded only.
+		// Duplicate names in a list are harmless (the services refuse new ones); noted, never changed.
 		const dupKey = `${section.categoryId}\u0000${section.nameKey}`;
-		if (seenKeys.has(dupKey)) issues.push(`Section "${section.name}" has the same name as another section in its list.`);
+		if (seenKeys.has(dupKey)) notes.push(`Section "${section.name}" has the same name as another section in its list.`);
 		seenKeys.add(dupKey);
 	}
 

@@ -105,3 +105,21 @@ describe("migration notice", () => {
 		expect(upgrades()[0]).toContain("from schema 2 to 6");
 	});
 });
+
+describe("two sections with one name", () => {
+	it("#104: opening says so on each open and leaves the file as it is", async () => {
+		const v6 = readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v6.cpbase"), "utf8");
+		// Week 2 renamed to Week 1 in the same list, as a merge or another device can leave it.
+		const text = v6.replace('"name":"Week 2","nameKey":"week 2"', '"name":"Week 1","nameKey":"week 1"');
+		const fake = fakeApp();
+		fake.files.set(PATH, text);
+		const plugin = await loadPlugin(fake, PATH);
+		await plugin.setActiveDatabase(PATH);
+		await plugin.session!.store.flush();
+		const attention = notices.messages.filter((m) => m.startsWith("Some database records need your attention:"));
+		expect(attention).toHaveLength(2);
+		expect(attention[0]).toContain('Section "Week 1" has the same name as another section in its list.');
+		expect(notices.messages.some((m) => m.includes("were repaired"))).toBe(false);
+		expect(fake.files.get(PATH)).toBe(text);
+	});
+});
