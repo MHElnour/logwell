@@ -136,6 +136,6 @@ export async function reopen(h: AppHarness, renames: RenameQueuePort): Promise<A
 	const store = h.newStore();
 	await store.open();
 	const app = new CheckpointApp(store, h.clock, sequentialIds("b"), h.app.settings, h.notes, renames);
-	await app.tasks.resumeRenames();
+	await app.noteRenames.resumeRenames();
 	return { ...h, store, app };
 }

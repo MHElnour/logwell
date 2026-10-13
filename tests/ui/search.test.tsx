@@ -246,7 +246,7 @@ describe("#16: Search note reads", () => {
 		m.h.notes.files.set("d.md", "moved, with the needle");
 		m.host.noteEvents.emit("note", "b.md");
 		m.host.noteEvents.emit("note", "d.md");
-		await m.h.app.tasks.rewriteNotePaths("b.md", "d.md", false);
+		await m.h.app.noteRenames.rewriteNotePaths("b.md", "d.md", false);
 		await afterDelay();
 		expect(m.h.notes.reads).toContain("d.md");
 		expect(resultTitles(m).some((t) => t.includes("Beta"))).toBe(true);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TickTickError } from "../../src/app/ports";
-import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/SyncService";
+import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/syncModel";
 import { tagNamesOf } from "../../src/domain/tags";
 import { isSyncedTag } from "../../src/domain/ticktick/tags";
 import { syncLinkId } from "../../src/domain/types";

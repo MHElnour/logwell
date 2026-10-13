@@ -80,7 +80,7 @@ describe("a session whose close() rejects", () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);
 		const old = plugin.session!;
-		const flush = vi.spyOn(old.app.tasks, "flushRenames");
+		const flush = vi.spyOn(old.app.noteRenames, "flushRenames");
 		vi.spyOn(old.store, "close").mockRejectedValue(new Error("EACCES"));
 		await expect(old.close()).rejects.toThrow("EACCES");
 		expect(flush).toHaveBeenCalledTimes(1);

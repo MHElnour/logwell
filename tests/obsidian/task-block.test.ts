@@ -303,7 +303,7 @@ describe("the block processor", () => {
 			// The note is renamed: Obsidian updates the context; the task's note path follows through the app.
 			ctx.sourcePath = "Notes/Renamed.md";
 			vi.useFakeTimers();
-			await s.h.app.tasks.rewriteNotePaths("Notes/Page.md", "Notes/Renamed.md", false);
+			await s.h.app.noteRenames.rewriteNotePaths("Notes/Page.md", "Notes/Renamed.md", false);
 			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
 			expect(titles(el)).toEqual(["Linked"]);
 			expect(s.h.app.store.state.tasks.get(t.id)!.descriptionNote!.path).toBe("Notes/Renamed.md");
