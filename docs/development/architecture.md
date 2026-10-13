@@ -163,7 +163,7 @@ All but e2e run in `npm test`.
 - Unit and integration (`tests/domain`, `tests/parsing`, `tests/persistence`, `tests/app`, `tests/obsidian`, `tests/ui`): pure rules, the parser, the store, the services on a real store, the host classes over a fake vault and the components in a simulated DOM.
 - Harnesses: `harness()` in `tests/persistence/fixtures.ts`, `appHarness()` in `tests/app/harness.ts`, `U1Host` in `tests/ui/app-helpers.tsx`, and `tests/app/sync-harness.ts` over a fake TickTick.
 - Schema fixtures: `tests/fixtures/schema-v*.cpbase` are frozen sample files that the migration tests load; a schema change adds one and never edits an old one.
-- Perf (`tests/perf`, plus `tests/ui/perf-*.test.tsx`): time budgets at large counts through the real code, and render-pass counts that guard row memoization and windowing.
+- Perf (`tests/perf`, plus `tests/ui/performance.test.tsx` and `tests/ui/perf-*.test.tsx`): pass and query counts at large counts through the real code, times compared within one run (never against a fixed number of milliseconds), and render-pass counts that guard row memoization and windowing.
 - Limits: `e2e/limits/` measures open, save and render times in real Obsidian, one size step at a time. It runs locally and outside `npm run e2e`; see [performance.md](performance.md). `tests/limits/limits.test.ts` checks its generator and CSV helpers.
 - End to end (`e2e/specs/*.e2e.ts`): the plugin bundle in a sandboxed, pinned Obsidian against a copy of `test-vault/`. `freshDatabase()` in `e2e/helpers.ts` resets the vault before each test.
 
