@@ -78,6 +78,16 @@ describe("matrix", () => {
 			expect(ids(q.neither, "overdue")).toEqual(["a"]);
 		});
 
+		it("#126: a deadline of today puts a task in Today, as in the Today view, even when its date is later", () => {
+			const q = run([
+				task("a", { scheduled: day("2026-10-02"), deadline: day("2026-10-01") }),
+				task("b", { scheduled: day("2026-10-09"), deadline: timed("2026-10-01T18:00") }),
+				task("c", { scheduled: day("2026-10-02"), deadline: day("2026-10-03") }),
+			]);
+			expect(ids(q.neither, "today")).toEqual(["a", "b"]);
+			expect(ids(q.neither, "next7")).toEqual(["c"]);
+		});
+
 		it("a timed schedule earlier today is not overdue", () => {
 			const q = run([task("a", { scheduled: timed("2026-10-01T08:00") })]);
 			expect(ids(q.neither, "today")).toEqual(["a"]);

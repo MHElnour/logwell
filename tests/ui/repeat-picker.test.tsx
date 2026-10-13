@@ -1312,6 +1312,25 @@ describe("the details date chip and the Repeat field", () => {
 			expect(m.host.messages).toContain("Change the repeat instead of clearing the date.");
 			expect(q<HTMLInputElement>(pane, 'input[aria-label="Scheduled date"]').value).toBe(FRIDAY);
 		});
+
+		it("#124: a stopped series refuses a new date, says to reopen it and shows its date field as before", async () => {
+			const m = await mount();
+			const t = await create(m, "Weekly review");
+			await m.h.app.recurrence.stop(t.id);
+			const section = await showInbox(m);
+			await click(rowFor(section, "Weekly review"));
+			const pane = q(section, ".cp-details");
+			if (pane.querySelector(".cp-details-fields") === null) await click(q(pane, ".cp-due-chip"));
+			const date = () => q<HTMLInputElement>(pane, 'input[aria-label="Scheduled date"]');
+			const shown = date().value;
+			date().value = "2026-10-20";
+			date().dispatchEvent(new Event("change", { bubbles: true }));
+			await settle();
+			expect(m.host.messages).toContain("This repeat has ended. Reopen the task to change its date.");
+			expect(m.notices).toEqual([]);
+			expect(taskById(m, t.id)).toMatchObject({ status: "completed", recurrence: { anchor: FRIDAY } });
+			expect(date().value).toBe(shown);
+		});
 	});
 });
 
