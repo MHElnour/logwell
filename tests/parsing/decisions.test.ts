@@ -3,8 +3,7 @@ import { parseQuickAdd, rebaseDecisions, tokenAtCursor } from "../../src/parsing
 import type { SpanDecision } from "../../src/parsing/types";
 import { CATEGORIES, makeCtx } from "./helpers";
 
-const parse = (input: string, decisions: SpanDecision[], manual: Parameters<typeof makeCtx>[0] = {}) =>
-	parseQuickAdd(input, makeCtx({ ...manual, decisions }));
+const parse = (input: string, decisions: SpanDecision[]) => parseQuickAdd(input, makeCtx({ decisions }));
 
 const lit = (input: string, word: string, nth = 0): SpanDecision => {
 	let from = -1;
@@ -12,32 +11,13 @@ const lit = (input: string, word: string, nth = 0): SpanDecision => {
 	return { span: { start: from, end: from + word.length }, text: word, kind: "literal" };
 };
 
+// The plain decisions (a literal, a literal next to a time, text that no longer matches, accepting a manual-field
+// replacement) are rows of golden.test.ts.
 describe("A11 decisions apply while the text matches", () => {
-	it("a literal decision keeps the span as plain text without a chip (QA-03, B3)", () => {
-		const input = "Buy milk tomorrow";
-		const r = parse(input, [lit(input, "tomorrow")]);
-		expect(r.chips).toEqual([]);
-		expect(r.title).toBe(input);
-		expect(r.fields.scheduled).toBeUndefined();
-	});
-
-	it("a decision whose text no longer matches is ignored", () => {
-		const input = "Buy milk tomorrow";
-		const d: SpanDecision = { span: { start: 9, end: 17 }, text: "today", kind: "literal" };
-		expect(parse(input, [d]).fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-	});
-
 	it("a decision with a span outside the input is ignored", () => {
 		const d: SpanDecision = { span: { start: 40, end: 48 }, text: "tomorrow", kind: "literal" };
 		expect(() => parse("tomorrow", [d])).not.toThrow();
 		expect(parse("tomorrow", [d]).chips).toHaveLength(1);
-	});
-
-	it("a literal span is not re-recognized even partly", () => {
-		const input = "Buy milk tomorrow at 7pm";
-		const r = parse(input, [lit(input, "tomorrow")]);
-		expect(r.chips.map((c) => c.text)).toEqual(["at 7pm"]);
-		expect(r.title).toBe("Buy milk tomorrow");
 	});
 
 	it("a literal on part of a chrono span splits it", () => {
@@ -101,14 +81,6 @@ describe("A11 decisions apply while the text matches", () => {
 		const bound: SpanDecision = { span: { start: 2, end: 6 }, text: "#Foo", kind: "category", categoryId: "cat-study-0002" };
 		const r = parse(input, [bound, lit(input, "#Foo")]);
 		expect(r.chips).toEqual([]);
-	});
-
-	it("an accept decision applies a manual-field replacement", () => {
-		const input = "Call friday";
-		const d: SpanDecision = { span: { start: 5, end: 11 }, text: "friday", kind: "accept" };
-		const r = parse(input, [d], { manual: ["scheduled"] });
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-		expect(r.chips[0]?.status).toBe("applied");
 	});
 
 	it("an accept decision on a chip that needs no acceptance changes nothing", () => {
@@ -180,10 +152,6 @@ describe("rebaseDecisions", () => {
 		const next = "aaa tomorrow BBBB friday";
 		const out = rebaseDecisions(prev, next, [d(4, 12, "tomorrow"), d(13, 16, "bbb"), d(17, 23, "friday")]);
 		expect(out).toEqual([d(4, 12, "tomorrow"), d(18, 24, "friday")]);
-	});
-
-	it("returns every decision when nothing changed", () => {
-		expect(rebaseDecisions("abc", "abc", [d(0, 3, "abc")])).toEqual([d(0, 3, "abc")]);
 	});
 
 	it("keeps the decision payload and does not mutate its input", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "../../src/parsing";
-import { NY, at, makeCtx, ruleKey } from "./helpers";
-import { check, chip, dateOf, gridSample } from "./repeat-grammar-grid";
+import { NY, at, chipOf, makeCtx, ruleKey } from "./helpers";
+import { check, dateOf, gridSample } from "./repeat-grammar-grid";
 
 // Repeating tasks rule 19 and Tasks and Quick Add rule 40 (#12): where a typed repeat phrase ends and what may follow it.
 // A generated grid, titles × repeat forms × separators × followers, in two environments. The repeat chip's text is the
@@ -135,7 +135,7 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 			const r = parseQuickAdd(input, ctx);
 			expect(r.title, input).toBe(title);
 			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe(key);
-			expect(dateOf(chip(r, "scheduled", "applied")), input).toBe(date);
+			expect(dateOf(chipOf(r, "scheduled", "applied")), input).toBe(date);
 		}
 		// A bare hour in the repeat is a choice; the weekday after it is still a date (a choice too, said on a Wednesday).
 		expect(parseQuickAdd("Gym every monday at 7 wednesday", ctx).chips.map((c) => `${c.kind}|${c.status}`)).toEqual(["recurrence|choice", "scheduled|choice"]);
