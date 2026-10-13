@@ -347,6 +347,29 @@ export function dateOf(n: number): LocalDate {
 	return `${String(y).padStart(4, "0")}-${m < 10 ? "0" : ""}${m}-${d < 10 ? "0" : ""}${d}`;
 }
 
+/** A calendar month: the year and the month, 1 to 12. */
+export interface YearMonth {
+	year: number;
+	/** 1 to 12. */
+	month: number;
+}
+
+/** The month of a "YYYY-MM-DD" date or a "YYYY-MM" month. */
+export function yearMonthOf(date: string): YearMonth {
+	return { year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) };
+}
+
+/** The month `delta` months after `ym` (before it when negative). Plain arithmetic, no Luxon. */
+export function shiftMonth(ym: YearMonth, delta: number): YearMonth {
+	const index = ym.year * 12 + (ym.month - 1) + delta;
+	return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
+/** The first day of a month, "YYYY-MM-01". */
+export function monthStart(ym: YearMonth): LocalDate {
+	return dateOf(dayNumOf(ym.year, ym.month, 1));
+}
+
 /** The ISO weekday number (1 = Monday) each week start begins on. */
 export const WEEK_START_ISO: Readonly<Record<WeekStart, number>> = { MO: 1, SU: 7, SA: 6 };
 

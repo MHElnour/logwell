@@ -583,10 +583,15 @@ function NotePreview({ host, path }: { host: UiHost; path: string }) {
 		if (el === null) return;
 		let dispose: (() => void) | null = null;
 		let cancelled = false;
-		void host.renderNote(path, el).then((d) => {
-			if (cancelled) d();
-			else dispose = d;
-		});
+		host.renderNote(path, el).then(
+			(d) => {
+				if (cancelled) d();
+				else dispose = d;
+			},
+			(err: unknown) => {
+				if (!cancelled) host.error(err, `Could not show the note ${path}`);
+			},
+		);
 		return () => {
 			cancelled = true;
 			dispose?.();

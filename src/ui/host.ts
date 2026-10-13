@@ -116,8 +116,8 @@ export interface UiHost {
 	settings(): CheckpointSettings;
 
 	notify(message: string): void;
-	/** Shows the error message of a failed command. */
-	error(err: unknown): void;
+	/** Shows the error message of a failed command; `context`, when given, says first what failed. */
+	error(err: unknown, context?: string): void;
 	/**
 	 * A notice with an Undo button for the write that ran under the store label `label`. `mark` is
 	 * `store.undoMark()` taken right before that write, so the Undo reverts that write and no other.

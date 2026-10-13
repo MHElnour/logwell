@@ -34,6 +34,7 @@ import { storableDbId } from "../persistence/schema";
 import { TRASH_RETENTION_DAYS } from "./settings";
 import { TagService } from "./CategoryService";
 import { TaskIndex } from "./taskIndex";
+import { markGoneTaskLink } from "./tickTickLink";
 import type { AppStore } from "./store";
 import type { Tx } from "./tx";
 
@@ -203,12 +204,7 @@ function removeRecordsOf(tx: Tx, tasks: readonly Task[]): void {
  * sync deletes the TickTick copy. Written in the purge's own command; the sync removes the link.
  */
 function markPurgedLinks(tx: Tx, tasks: readonly Task[]): void {
-	for (const t of tasks) {
-		if (tx.get("tasks", t.id) !== undefined) continue;
-		const link = tx.get("syncLinks", syncLinkId("task", t.id));
-		if (link === undefined || link.pendingDelete === true) continue;
-		tx.put("syncLinks", { ...link, pendingDelete: true, modifiedAt: tx.now });
-	}
+	for (const t of tasks) markGoneTaskLink(tx, t.id);
 }
 
 /** What a purge does to the tasks it removes for good: their occurrence records go, a TickTick link is marked for deletion. */
@@ -227,6 +223,12 @@ function detachSyncNote(tx: Tx, taskId: ID): void {
 	if (link === undefined || !link.noteBySync) return;
 	const { noteItems: _items, ...rest } = link;
 	tx.put("syncLinks", { ...rest, noteBySync: false, noteBase: "", modifiedAt: tx.now });
+}
+
+/** A rename that failed with no caller to tell, worded for the user. */
+function renameFailure({ oldPath, newPath }: NoteRename, err: unknown): Error {
+	const reason = err instanceof Error ? err.message : String(err);
+	return new Error(`Could not follow the note rename from ${oldPath} to ${newPath}: ${reason} Tasks linked to that note may need to be relinked.`, { cause: err });
 }
 
 /** A queued rename and, while its caller still waits, how to report its count. */
@@ -961,7 +963,9 @@ export class TaskService {
 				}
 				this.pendingRenames.splice(this.pendingRenames.indexOf(next), 1);
 				if (failure === null) next.settle?.resolve(count);
-				else next.settle?.reject(failure.err);
+				else if (next.settle !== undefined) next.settle.reject(failure.err);
+				// A rename reloaded from this device has no caller waiting: the session's error channel says it.
+				else this.store.bus.onListenerError(renameFailure(next, failure.err));
 			}
 		} finally {
 			this.draining = false;

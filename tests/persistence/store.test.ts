@@ -1756,3 +1756,24 @@ describe("the last save before the app quits", () => {
 		expect(h.events.some((e) => e.type === "edits-lost")).toBe(true);
 	});
 });
+
+describe("CpbaseStore: a failed backup", () => {
+	it("#134: a snapshot that cannot be written after a good save is a backup error, not a save error, and the next save tries again", async () => {
+		const h = harness();
+		await h.store.open();
+		h.clock.advance(SNAPSHOT_INTERVAL_MS);
+		h.fs.failNextWrite((p) => p.includes("/snapshots/hourly-"));
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+
+		expect(load(h.dbText()).tasks.has("saved")).toBe(true);
+		expect(h.events.some((e) => e.type === "save-error")).toBe(false);
+		expect(h.events.filter((e) => e.type === "backup-error")).toEqual([{ type: "backup-error", message: "Injected write fault" }]);
+
+		const hourly = async () => (await h.fs.list(`${BACKUP_ROOT}/db-1/snapshots`)).filter((p) => p.includes("/hourly-")).length;
+		const before = await hourly();
+		h.addTask(makeTask("next"));
+		await h.saveNow();
+		expect(await hourly()).toBe(before + 1);
+	});
+});

@@ -1,14 +1,15 @@
-import { type App, Modal, setIcon } from "obsidian";
+import { type App, setIcon } from "obsidian";
 import { type HabitInput, validateHabitInput } from "../domain/habits";
 import { type GoalType, type TagColor, type TimeOfDay, WEEKDAYS, type Weekday } from "../domain/types";
 import { TIME_OF_DAY_NAME, parseAmount } from "../ui/habits/format";
 import type { HabitDialogOptions } from "../ui/host";
 import { WEEKDAY_LONG, WEEKDAY_TWO_LETTER } from "../ui/repeat";
 import { el } from "./dom";
+import { openFormModal } from "./formModal";
 import { buildColorRow, pickListIcon } from "./modals";
 
 // The New habit / Edit habit dialog. The form is plain
-// DOM (buildHabitForm) so it is tested without a Modal, as buildNewListForm is; HabitModal wraps it. The
+// DOM (buildHabitForm) so it is tested without a Modal, as buildNewListForm is; `openFormModal` hosts it. The
 // segments, chips and switch are aria-pressed / role=switch buttons, and every group is named by a visible label
 // (aria-labelledby), never by an aria-label that Obsidian would show as a tooltip.
 
@@ -289,44 +290,21 @@ export function buildHabitForm(container: HTMLElement, deps: HabitFormDeps): { f
 	return { focus: () => name.focus() };
 }
 
-export class HabitModal extends Modal {
-	constructor(
-		app: App,
-		private readonly cpOptions: HabitDialogOptions,
-		private readonly cpResolve: () => void,
-		private readonly cpAccentClass: string = "",
-	) {
-		super(app);
-	}
-
-	override onOpen(): void {
-		this.setTitle(this.cpOptions.title);
-		// "checkpoint-icon-picker" carries the design tokens (accent, hues) for modals; the others scope the form.
-		this.modalEl.addClass("checkpoint-icon-picker", "checkpoint-habit-dialog");
-		if (this.cpAccentClass !== "") this.modalEl.addClass(this.cpAccentClass);
-		const form = buildHabitForm(this.contentEl, {
+/** The New habit / Edit habit dialog. Resolves when it is gone: saved, or dismissed (Escape or Cancel). */
+export async function habitDialog(app: App, options: HabitDialogOptions, accentClass = ""): Promise<void> {
+	await openFormModal<void>(app, options.title, "checkpoint-habit-dialog", accentClass, (content, done, cancel) =>
+		buildHabitForm(content, {
 			setIcon: (el, icon) => setIcon(el, icon),
-			pickIcon: (current) => pickListIcon(this.app, current, this.cpAccentClass),
-			initial: this.cpOptions.initial,
-			defaultColor: this.cpOptions.defaultColor,
-			submitLabel: this.cpOptions.submit,
+			pickIcon: (current) => pickListIcon(app, current, accentClass),
+			initial: options.initial,
+			defaultColor: options.defaultColor,
+			submitLabel: options.submit,
 			onSubmit: async (input) => {
-				const message = await this.cpOptions.save(input);
-				if (message === null) this.close();
+				const message = await options.save(input);
+				if (message === null) done();
 				return message;
 			},
-			onCancel: () => this.close(),
-		});
-		window.setTimeout(() => form.focus(), 0);
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.cpResolve();
-	}
-}
-
-/** The New habit / Edit habit dialog. Resolves when it is gone: saved, or dismissed (Escape or Cancel). */
-export function habitDialog(app: App, options: HabitDialogOptions, accentClass = ""): Promise<void> {
-	return new Promise((resolve) => new HabitModal(app, options, resolve, accentClass).open());
+			onCancel: cancel,
+		}),
+	);
 }
