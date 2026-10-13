@@ -206,7 +206,7 @@ export class DbSession {
 
 	async open(): Promise<void> {
 		await this.store.open();
-		this.focusOpened = await this.app.focus.open(this.store.data.meta.dbId);
+		this.focusOpened = await this.app.focus.open();
 		await this.app.tasks.resumeRenames();
 		await this.app.tasks.purgeExpired();
 		await this.app.recurrence.endExhaustedSeries();

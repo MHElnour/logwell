@@ -38,12 +38,12 @@ describe("unloading while the database opens", () => {
 		await plugin.onload();
 		plugin.settings.activeDatabasePath = "A.cpbase";
 		// The unload lands after the file is read, while the open goes on.
-		type Open = (this: FocusService, dbId: string) => ReturnType<FocusService["open"]>;
+		type Open = (this: FocusService) => ReturnType<FocusService["open"]>;
 		const focusOpen = Object.getOwnPropertyDescriptor(FocusService.prototype, "open")!.value as Open;
-		vi.spyOn(FocusService.prototype, "open").mockImplementation(async function (this: FocusService, dbId: string) {
+		vi.spyOn(FocusService.prototype, "open").mockImplementation(async function (this: FocusService) {
 			plugin.onunload();
 			await new Promise((r) => setTimeout(r, 10));
-			return focusOpen.call(this, dbId);
+			return focusOpen.call(this);
 		});
 		fake.layoutReady();
 		await plugin.ready();
