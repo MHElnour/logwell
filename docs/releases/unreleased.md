@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#133) Fixed a description note synced with TickTick bringing back a line you had deleted on one side when both sides made the same change next to it. The line now stays deleted on both sides.
 - (#132) Fixed a calendar drop working from the task as it was when the drag began: a change that came in during the drag, such as a new duration from TickTick sync, could be overwritten, and a task that had started repeating meanwhile was moved. A drop now uses the task as it is when you let go, and a task that now repeats does not move.
 - (#121) Fixed the "(TickTick)" copy made when a task was changed on both sides coming back as open work in Logwell and in TickTick when you had completed the task in TickTick. The copy is now completed, like TickTick's version, and stays in Logwell only.
 - (#120) Fixed a date you cleared in TickTick coming back when the task had a different date and deadline in Logwell: the sync removed only the deadline and sent the date back to TickTick. Clearing the date in TickTick now clears both in Logwell.
