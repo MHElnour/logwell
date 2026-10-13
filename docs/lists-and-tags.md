@@ -22,7 +22,7 @@ Right-click a list in the sidebar, or focus it and press the context-menu key or
 - **Change icon…** and **Change color…** open the pickers. **None** clears either.
 - **Sync with TickTick…** and **Unlink from TickTick**: see [TickTick sync](ticktick-sync.md).
 - **Move up** and **Move down** change its place in the sidebar.
-- **Delete** asks first and says how many tasks will move to Inbox. Its sections are deleted too. The notice offers **Undo**.
+- **Delete** asks first and says how many tasks will move to Inbox. Its sections are deleted too. The notice offers **Undo**. If Inbox is [synced with TickTick](ticktick-sync.md#limits) and the move would give it more than 999 open tasks, the delete is refused.
 
 ## Put a task in a list
 

@@ -50,6 +50,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#128) Fixed deleting a list moving its open tasks into an Inbox synced with TickTick past the limit of 999 open tasks. The delete is now refused with the same message as other moves into a full list.
 - (#127) Fixed deleting a parent tag merging a child tag into an older tag of the same name, such as `home/calls` into `calls`, which took the child's color and joined both tags' tasks. The delete is now refused with the message a rename gives, and nothing changes.
 - (#125) Fixed an overdue task you tick in Today jumping to the Today group while its check plays. It now stays under Overdue until it leaves, and on the board the Overdue column no longer disappears and shifts the other columns for that moment.
 - (#101) Fixed an edit that was waiting to be saved disappearing without a word when the database file was damaged (for example by merge markers) or came from a newer version of Logwell, and a valid file came back. The edit is kept as a conflict copy and the conflict notice offers **Keep mine** and **Keep theirs**; if the database closes first, a notice points at the copy.
