@@ -19,6 +19,9 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
+- (#6) Quick Add reads deadline words like `due friday`, `deadline: friday`, `before friday` and `within 3 days`, and `EOD` or `end of week`.
+- (#6) Quick Add reads `Friday 16th` and `on the 20th`; when the weekday and the day disagree, it asks which you meant.
+- (#6) Quick Add reads `scheduled for monday`, `next weekday`, `this morning` and `this afternoon` as dates.
 - (#69) Type `#Work/Admin` in Quick Add to add a task to a section; after `#Work/` the suggestions list its sections.
 - (#69) In Quick Add, text in double quotes is never read, and a backslash keeps the word or phrase after it as text: `Buy \today paper`, `Pay \by friday`.
 - (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks.
@@ -31,6 +34,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#6) In Quick Add, a range of two dates, like `Oct 20 to Oct 25`, sets the date and the deadline instead of offering a suggestion.
 - (#69) In Quick Add, `@4pm`, `@4:30pm` and `@noon` are times unless you have such a tag; `at 0900` is 09:00.
 - (#69) In Quick Add, a duration without `for`, like `Gym 2h`, now stays in the title instead of being offered as a date.
 - (#190) Priority pickers, menus, groups and filters all list High, Medium, Low, None, and Quick Add names priorities the same way.
@@ -59,6 +63,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#6) Fixed Quick Add reading `Fri 16` as 16:00 and `next weekday` as a week away, and leaving `(` from `(by friday)` in titles.
 - (#69) Fixed Quick Add reading `Wake at 6am every day` as a separate date; a time right before a repeat is the repeat's time.
 - (#69) Fixed Quick Add using the last of several times; the first time wins, as in `Call at 4pm and at 5pm`.
 - (#69) Fixed Quick Add reading a range after a repeat's time, like `every monday at 5pm-6pm`, as a separate date; the repeat takes the start time.
