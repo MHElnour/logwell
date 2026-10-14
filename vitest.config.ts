@@ -1,13 +1,12 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// Files with fixed time budgets run in their own project, one file at a time (`npm test` runs it after the unit project),
-// so the rest of the suite does not load the machine while they are timed.
+// The timed files run in their own project, one file at a time (`npm test` runs it after the unit project), so the rest
+// of the suite does not load the machine while they compare times measured in the same run.
 const timed = [
 	"tests/perf/**/*.test.ts",
 	"tests/perf/**/*.test.tsx",
 	"tests/ui/performance.test.tsx",
-	"tests/ui/perf-virtual-list.test.tsx",
 ];
 
 export default defineConfig({
@@ -19,6 +18,8 @@ export default defineConfig({
 		alias: { obsidian: fileURLToPath(new URL("./tests/app/obsidian-stub.ts", import.meta.url)) },
 	},
 	test: {
+		// Obsidian's element additions for the UI tests (a no-op outside tests/ui and outside a DOM).
+		setupFiles: ["tests/ui/dom-setup.ts"],
 		projects: [
 			{
 				extends: true,

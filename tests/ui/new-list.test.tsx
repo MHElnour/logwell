@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { paletteColor, type TagColor } from "../../src/domain/types";
 import { buildNewListForm, NEW_LIST_ICON_LIMIT } from "../../src/obsidian/modals";
-import type { NewListOptions, NewListValues } from "../../src/ui/host";
-import { type CalMount, click, mountBoard, settle } from "./board-helpers";
+import type { MenuSpec, NewListOptions, NewListValues } from "../../src/ui/host";
+import { type AppMount, click, contextMenu, fill, mountApp, mountNode, q as qIn, settle, sidebarItem } from "./app-helpers";
 
 // The one-step "New list" dialog. The form is plain DOM (buildNewListForm), so it is tested
 // without Obsidian's Modal; the sidebar test drives the real call through a scripted host.
@@ -11,34 +11,18 @@ import { type CalMount, click, mountBoard, settle } from "./board-helpers";
 const ICONS: string[] = ["lucide-book-open", "lucide-book", "lucide-briefcase", "lucide-home", ...Array.from({ length: 300 }, (_, i) => `lucide-zz-${i}`)];
 
 function form(defaultColor: TagColor | null = null, result: string | null = null) {
-	const container = document.createElement("div");
-	document.body.appendChild(container);
+	const container = mountNode(null);
 	const onSubmit = vi.fn<(v: NewListValues) => Promise<string | null>>(async () => result);
 	const onCancel = vi.fn();
 	const setIcon = (el: HTMLElement, icon: string) => el.setAttribute("data-icon", icon);
 	const f = buildNewListForm(container, { setIcon, iconIds: () => ICONS, defaultColor, onSubmit, onCancel });
-	const q = <T extends HTMLElement>(sel: string) => container.querySelector<T>(sel)!;
-	const type = (el: HTMLInputElement, v: string) => {
-		el.value = v;
-		el.dispatchEvent(new Event("input", { bubbles: true }));
-	};
+	const q = <T extends HTMLElement>(sel: string) => qIn<T>(container, sel);
+	const type = fill;
 	const submit = () => q("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 	const icons = () => [...container.querySelectorAll<HTMLButtonElement>(".cp-icon-choice")];
 	const colors = () => [...container.querySelectorAll<HTMLButtonElement>(".cp-color-choice")];
 	return { container, f, q, type, submit, icons, colors, onSubmit, onCancel };
 }
-
-beforeAll(() => {
-	// Obsidian's createEl, which happy-dom does not have.
-	(HTMLElement.prototype as unknown as { createEl: unknown }).createEl = function (this: HTMLElement, tag: string, o: { cls?: string; attr?: Record<string, string> } = {}) {
-		const node = this.ownerDocument.createElement(tag);
-		if (o.cls !== undefined) node.className = o.cls;
-		for (const [k, v] of Object.entries(o.attr ?? {})) node.setAttribute(k, v);
-		this.appendChild(node);
-		return node;
-	};
-});
-afterEach(() => document.body.replaceChildren());
 
 describe("New list form", () => {
 	it("has a name, a searchable icon grid and a color row of 8 colors plus default, as aria-pressed buttons", () => {
@@ -158,14 +142,9 @@ describe("New list form: preselected color and inline errors", () => {
 });
 
 describe("the sidebar's + uses the dialog", () => {
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
 	/** A scripted dialog: each entry is what the user submits; `outcomes` collects the create results. */
 	const scripted = async (...submits: (NewListValues | null)[]) => {
-		const m = await mountBoard();
-		mounted.push(m);
+		const m = await mountApp();
 		const outcomes: (string | null)[] = [];
 		const opened: NewListOptions[] = [];
 		const newList = vi.fn(async (opts: NewListOptions) => {
@@ -180,8 +159,8 @@ describe("the sidebar's + uses the dialog", () => {
 		(m.host as unknown as { newList: typeof newList }).newList = newList;
 		return { m, newList, outcomes, opened };
 	};
-	const plus = (m: CalMount) => m.root.querySelector<HTMLButtonElement>('.cp-sidebar [aria-label="New list"]');
-	const listNamed = (m: CalMount, name: string) => [...m.h.app.store.state.categories.values()].find((c) => c.name === name);
+	const plus = (m: AppMount) => m.root.querySelector<HTMLButtonElement>('.cp-sidebar [aria-label="New list"]');
+	const listNamed = (m: AppMount, name: string) => [...m.h.app.store.state.categories.values()].find((c) => c.name === name);
 
 	it("creates the list with its icon and color in one undo step", async () => {
 		const { m, newList } = await scripted({ name: "Study", icon: "book-open", color: "purple" });
@@ -191,7 +170,7 @@ describe("the sidebar's + uses the dialog", () => {
 		expect(create).toHaveBeenCalledWith("Study", "book-open", "purple");
 		expect(listNamed(m, "Study")).toMatchObject({ icon: "book-open", color: "purple" });
 		expect(m.root.querySelector(".cp-sidebar")!.textContent).toContain("Study");
-		expect(await m.h.app.store.undo()).toBe("Create category");
+		expect(await m.h.app.store.undo()).toBe("Create list");
 		expect(listNamed(m, "Study")).toBeUndefined();
 	});
 
@@ -223,5 +202,23 @@ describe("the sidebar's + uses the dialog", () => {
 		await click(plus(m));
 		await settle();
 		expect(m.h.app.store.state.categories.size).toBe(before);
+	});
+});
+
+describe("the list menu's Move up and Move down", () => {
+	const menuOf = (m: AppMount, name: string) => contextMenu(m, sidebarItem(m.root, name));
+	const moves = (menu: MenuSpec) =>
+		menu.flatMap((i) => (i !== "separator" && i.title.startsWith("Move ") ? [`${i.title}${i.disabled === true ? " (off)" : ""}`] : []));
+
+	it("#129: the Inbox offers neither; the first list cannot move up and the last cannot move down", async () => {
+		const m = await mountApp();
+		await m.h.app.categories.create("A");
+		await m.h.app.categories.create("B");
+		await m.h.app.categories.create("C");
+		await settle();
+		expect(moves(await menuOf(m, "Inbox"))).toEqual([]);
+		expect(moves(await menuOf(m, "A"))).toEqual(["Move up (off)", "Move down"]);
+		expect(moves(await menuOf(m, "B"))).toEqual(["Move up", "Move down"]);
+		expect(moves(await menuOf(m, "C"))).toEqual(["Move up", "Move down (off)"]);
 	});
 });

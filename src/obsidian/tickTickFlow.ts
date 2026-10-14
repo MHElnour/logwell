@@ -1,10 +1,10 @@
 import type { TickTickApi } from "../app/ports";
-import type { FirstSyncPlan, PendingTrash, SyncResult, SyncService } from "../app/SyncService";
-import { TICKTICK_TRASH_LABEL } from "../app/SyncService";
-import { type LinkOption, type LinkTarget, countPushable, defaultOption, loadLinkOptions } from "../app/tickTickLink";
-import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "../app/taskIndex";
+import type { SyncService } from "../app/SyncService";
+import type { FirstSyncPlan, PendingTrash, SyncResult } from "../app/syncModel";
+import { TICKTICK_TRASH_LABEL } from "../app/syncModel";
+import { type LinkOption, type LinkTarget, assertLinkable, countPushable, defaultOption, loadLinkOptions } from "../app/tickTickLink";
+import type { TaskIndex } from "../app/taskIndex";
 import { isListSynced } from "../app/syncMarks";
-import { DomainError } from "../domain/errors";
 import { plural } from "../domain/text";
 import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -36,24 +36,6 @@ export interface LinkFlowDeps {
 	linked: (result: SyncResult | null) => void;
 }
 
-/**
- * What can refuse a link, checked before anything is created in TickTick: the list is gone, is already linked, or has
- * more than 999 open tasks. The engine checks again when it links; this keeps an empty project from being
- * left behind by a first sync that was always going to be refused.
- */
-function assertLinkable(deps: Pick<LinkFlowDeps, "state" | "index">, listId: ID): void {
-	const state = deps.state();
-	const list = state.categories.get(listId);
-	if (list === undefined) throw new DomainError("NotFound", "The list no longer exists.");
-	if (isListSynced(state.syncLinks, listId)) throw new DomainError("InvalidValue", "This list is already linked to TickTick.");
-	if (deps.index.openCount(listId) > SYNCED_LIST_OPEN_MAX) {
-		throw new DomainError(
-			"SyncedListFull",
-			`Can't link the list: ${list.name} has more than ${SYNCED_LIST_OPEN_MAX} open tasks, the most a list synced with TickTick can hold.`,
-		);
-	}
-}
-
 /** Pick a TickTick list, preview, and run the first sync. Dismissing either dialog changes nothing. */
 export async function linkListFlow(deps: LinkFlowDeps, listId: ID): Promise<void> {
 	if (!deps.ready()) return deps.notify(NOT_READY_TEXT);
@@ -61,7 +43,9 @@ export async function linkListFlow(deps: LinkFlowDeps, listId: ID): Promise<void
 	if (list === undefined) return;
 	let chosen: LinkOption | null = null;
 	try {
-		assertLinkable(deps, listId);
+		// Checked before anything is created in TickTick, so a first sync that was always going to be refused leaves
+		// no empty project behind. The engine checks again when it links.
+		assertLinkable(deps.state(), deps.index, listId);
 		for (;;) {
 			const previous: LinkOption | null = chosen;
 			chosen = await deps.pick({
@@ -71,11 +55,16 @@ export async function linkListFlow(deps: LinkFlowDeps, listId: ID): Promise<void
 			});
 			if (chosen === null) return;
 			const plan = await planOf(deps, listId, chosen.target);
+			// TickTick could not be read for the preview: said like a failed sync, and nothing is linked.
+			if ("failures" in plan) {
+				for (const f of plan.failures) deps.notify(failureText(f));
+				return;
+			}
 			const answer = await deps.preview({ listName: list.name, projectName: chosen.target.name, plan });
 			if (answer === "back") continue;
 			if (answer === null) return;
 			// The state may have changed while the dialogs were open: check again before creating anything.
-			assertLinkable(deps, listId);
+			assertLinkable(deps.state(), deps.index, listId);
 			const projectId = chosen.target.kind === "existing" ? chosen.target.projectId : await createProject(deps, listId, chosen.target.name);
 			const result = await deps.sync.applyFirstSync(listId, projectId);
 			if (isListSynced(deps.state().syncLinks, listId)) deps.created.delete(listId);
@@ -104,13 +93,16 @@ async function createProject(deps: LinkFlowDeps, listId: ID, name: string): Prom
 }
 
 /** A new project has nothing to bring; an existing one is read (and a note list or a full list is refused there). */
-async function planOf(deps: LinkFlowDeps, listId: ID, target: LinkTarget): Promise<Pick<FirstSyncPlan, "toLogwell" | "toTickTick">> {
+async function planOf(deps: LinkFlowDeps, listId: ID, target: LinkTarget): Promise<Pick<FirstSyncPlan, "toLogwell" | "toTickTick"> | SyncResult> {
 	if (target.kind === "create") return { toLogwell: 0, toTickTick: countPushable(deps.state(), deps.index, listId) };
 	return deps.sync.planFirstSync(listId, target.projectId);
 }
 
 /** Unlinking keeps every task on both sides. Not undoable (links only). */
-export async function unlinkListFlow(deps: Pick<LinkFlowDeps, "state" | "sync" | "notify" | "error" | "linked">, listId: ID): Promise<void> {
+export async function unlinkListFlow(
+	deps: Pick<LinkFlowDeps, "state" | "notify" | "error" | "linked"> & { sync: Pick<SyncService, "unlinkList"> },
+	listId: ID,
+): Promise<void> {
 	const name = deps.state().categories.get(listId)?.name ?? "The list";
 	try {
 		const r = await deps.sync.unlinkList(listId);

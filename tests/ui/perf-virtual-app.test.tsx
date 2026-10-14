@@ -1,15 +1,8 @@
 // @vitest-environment happy-dom
-import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS } from "../../src/app/settings";
-import type { Task } from "../../src/domain/types";
-import type { JournalOp } from "../../src/persistence/journal";
-import { AppRoot } from "../../src/ui/AppRoot";
+import { afterEach, describe, expect, it } from "vitest";
 import { LINGER_MS } from "../../src/ui/useLingering";
-import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { click, settle } from "./calendar-helpers";
-import { U1Host } from "./app-helpers";
+import { type AppMount, click, mountApp, seedTasks, settle, sidebarItem, taskId } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // The windowed-list checks that need the whole Tasks
@@ -20,57 +13,26 @@ const ROW = 52;
 const VIEWPORT = 520;
 const COUNT = 2000;
 
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
-
 let layout: FakeLayout | null = null;
-const roots: HTMLElement[] = [];
 afterEach(() => {
-	for (const r of roots.splice(0)) {
-		render(null, r);
-		r.remove();
-	}
 	layout?.restore();
 	layout = null;
 });
 
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-
-interface Mount {
-	h: AppHarness;
-	host: U1Host;
-	root: HTMLElement;
+interface Mount extends AppMount {
 	main: HTMLElement;
 }
 
 async function mount(): Promise<Mount> {
-	const h = await appHarness();
-	const data = h.store.data;
-	const tasks = new Map(data.tasks);
-	const ops: JournalOp[] = [];
-	for (let i = 0; i < COUNT; i++) {
-		const t: Task = makeTask(taskId(i + 1), { title: `Task ${i}`, sortKey: `V${i.toString(36).padStart(4, "0")}` });
-		tasks.set(t.id, t);
-		ops.push({ c: "tasks", id: t.id, v: t });
-	}
-	h.store.commit({ ...data, tasks }, ops);
-	const host = new U1Host(h);
-	host.settings = () => DEFAULT_SETTINGS;
-	const root = document.createElement("div");
-	document.body.appendChild(root);
-	roots.push(root);
+	const h: AppHarness = await appHarness();
+	seedTasks(h, COUNT);
 	layout = fakeLayout({
 		viewport: (el) => (el.classList.contains("cp-main") ? VIEWPORT : undefined),
 		height: (el) => (el.classList.contains("cp-task-row") ? ROW : undefined),
 	});
-	render(<AppRoot host={host} initialSection={null} handle={() => undefined} />, root);
-	await settle();
-	await click([...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Inbox")));
-	const main = root.querySelector<HTMLElement>(".cp-tasks .cp-main")!;
-	return { h, host, root, main };
+	const m = await mountApp({}, { harness: h });
+	await click(sidebarItem(m.root, "Inbox"));
+	return Object.assign(m, { main: m.root.querySelector<HTMLElement>(".cp-tasks .cp-main")! });
 }
 
 const rows = (m: Mount) => [...m.main.querySelectorAll<HTMLElement>(".cp-task-row")];

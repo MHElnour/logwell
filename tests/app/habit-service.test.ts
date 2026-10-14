@@ -15,14 +15,13 @@ import {
 import type { SettingsPort } from "../../src/app/ports";
 import type { Tx } from "../../src/app/tx";
 import { globalSearch } from "../../src/app/views";
-import { isDomainError } from "../../src/domain/errors";
 import { checkReminders, emptyReminderState } from "../../src/domain/habitReminders";
 import { type HabitIndex, type HabitInput, indexCheckins, progressOn, streaks } from "../../src/domain/habits";
 import { emptyFilter } from "../../src/domain/queries";
 import type { Checkin, WeekStart } from "../../src/domain/types";
 import { harness } from "../persistence/fixtures";
 import { sequentialIds } from "../helpers";
-import { FakeNotes, makeReadOnly } from "./harness";
+import { expectDomainError, FakeNotes, makeReadOnly } from "./harness";
 
 // HabitService.
 // Europe/Berlin; 2026-10-14 is a Wednesday.
@@ -63,17 +62,11 @@ const input = (patch: Partial<HabitInput> = {}): HabitInput => ({
 const binary = (patch: Partial<HabitInput> = {}) => input({ name: "Meditate", goal: { type: "binary", target: 1, unit: null, period: "day" }, ...patch });
 const count = (patch: Partial<HabitInput> = {}) => input({ name: "Water", goal: { type: "count", target: 8, unit: "glasses", period: "day" }, ...patch });
 
-async function refused(p: Promise<unknown>, code: "InvalidValue" | "NotFound" | "ReadOnly" = "InvalidValue"): Promise<void> {
-	const err = await p.then(
-		() => null,
-		(e: unknown) => e,
-	);
-	expect(isDomainError(err, code), String(err)).toBe(true);
-}
+const refused = (p: Promise<unknown>, code: "InvalidValue" | "NotFound" | "ReadOnly" = "InvalidValue") => expectDomainError(p, code);
 
 const active = (app: CheckpointApp, habitId: string): Checkin[] => app.habits.index().active(habitId);
 
-describe("habit lifecycle (D9)", () => {
+describe("habit lifecycle", () => {
 	it("creates a habit with the first version from today and the week start setting", async () => {
 		const { app, prefs } = await setup();
 		prefs.weekStart = "SU";
@@ -99,8 +92,7 @@ describe("habit lifecycle (D9)", () => {
 
 	it("refuses invalid input with the dialog's message and writes nothing", async () => {
 		const { app } = await setup();
-		const err = await app.habits.create(input({ name: " " })).catch((e: unknown) => e);
-		expect(isDomainError(err, "InvalidValue") && err.message).toBe("Enter a name.");
+		await expectDomainError(app.habits.create(input({ name: " " })), "InvalidValue", "Enter a name.");
 		await refused(app.habits.create(input({ color: "teal" as never })));
 		await refused(app.habits.create(input({ timeOfDay: "noon" as never })));
 		await refused(app.habits.create(input({ icon: "Not an icon!" })));
@@ -119,7 +111,7 @@ describe("habit lifecycle (D9)", () => {
 		await refused(app.habits.update("nope", input()), "NotFound");
 	});
 
-	it("archive and restore (HAB-10); an archived habit's reminder is skipped", async () => {
+	it("archive and restore; an archived habit's reminder is skipped", async () => {
 		const { app, labelled } = await setup("2026-10-14T19:00:00.000Z");
 		const a = await app.habits.create(input({ reminder: { time: "20:00" } }));
 		const now = { date: "2026-10-14", time: "21:00", instant: "2026-10-14T19:00:00.000Z" };
@@ -155,7 +147,7 @@ describe("habit lifecycle (D9)", () => {
 	});
 });
 
-describe("J5 and AS-11 at service level (HAB-05, HAB-09)", () => {
+describe("habit goals at service level", () => {
 	it("quantity target 30: 20 + 10 meets it, a correction to 5 does not; a target change tomorrow leaves yesterday at 30", async () => {
 		const { h, app, labelled } = await setup();
 		const read = await app.habits.create(input());
@@ -199,8 +191,8 @@ describe("J5 and AS-11 at service level (HAB-05, HAB-09)", () => {
 	});
 });
 
-describe("check-ins (D8, HAB-06, HAB-07)", () => {
-	it("HAB-06: toggle on, on again writes nothing, off soft-deletes, Undo restores the exact record", async () => {
+describe("check-ins", () => {
+	it("toggle on, on again writes nothing, off soft-deletes, Undo restores the exact record", async () => {
 		const { app, labelled } = await setup();
 		const m = await app.habits.create(binary());
 		await labelled(app.habits.toggle(m.id, "2026-10-14"), CHECKIN_LABEL);
@@ -218,7 +210,7 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 		expect(app.store.state.checkins.get(on.id)).toBe(on);
 	});
 
-	it("HAB-06: two active binary check-ins on one date (from an import) count as one, and toggling off removes both", async () => {
+	it("two active binary check-ins on one date (from an import) count as one, and toggling off removes both", async () => {
 		const { app, h } = await setup();
 		const m = await app.habits.create(binary());
 		const twin = (id: string): Checkin => ({ id, habitId: m.id, date: "2026-10-14", value: 1, note: null, createdAt: "2026-10-14T08:00:00.000Z", modifiedAt: "2026-10-14T08:00:00.000Z", deletedAt: null });
@@ -245,7 +237,7 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 		expect(app.store.undoLabel).toBe(UNCHECK_LABEL);
 	});
 
-	it("count +1 and amount Add each write a check-in; a past date is a backfill created now (D19)", async () => {
+	it("count +1 and amount Add each write a check-in; a past date is a backfill created now", async () => {
 		const { app, labelled } = await setup();
 		const w = await app.habits.create(count());
 		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL);
@@ -285,7 +277,7 @@ describe("check-ins (D8, HAB-06, HAB-07)", () => {
 		await labelled(app.habits.editCheckin(b.id, { value: 1, note: "calm" }), EDIT_CHECKIN_LABEL);
 	});
 
-	it("refuses bad writes and writes nothing (D8)", async () => {
+	it("refuses bad writes and writes nothing", async () => {
 		const { app } = await setup();
 		const r = await app.habits.create(input());
 		const w = await app.habits.create(count());
@@ -353,8 +345,7 @@ describe("check-in dates, kept reminders and zero values", () => {
 		const m = await app.habits.create(binary());
 		const state = app.store.state;
 		for (const date of ["2026-10-00", "2026-02-30", "14.10.2026", ""]) {
-			const err = await app.habits.add(r.id, date, 20).catch((e: unknown) => e);
-			expect(isDomainError(err, "InvalidValue") && err.message).toBe("That date is not valid.");
+			await expectDomainError(app.habits.add(r.id, date, 20), "InvalidValue", "That date is not valid.");
 			await refused(app.habits.toggle(m.id, date));
 			await refused(app.habits.toggle(m.id, date, true));
 		}
@@ -404,7 +395,7 @@ describe("check-in dates, kept reminders and zero values", () => {
 	});
 });
 
-describe("index cache (D18) and search (D13)", () => {
+describe("index cache and search", () => {
 	it("index() is the same object while the checkins map is unchanged", async () => {
 		const { app } = await setup();
 		const r = await app.habits.create(input());

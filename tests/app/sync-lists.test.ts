@@ -1,18 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { LOOKUP_MAX, SyncService, TICKTICK_KEEP_LABEL, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL, TICKTICK_TRASH_LABEL } from "../../src/app/SyncService";
-import { isDomainError } from "../../src/domain/errors";
+import { SyncService } from "../../src/app/SyncService";
+import { linkedLists } from "../../src/app/syncMarks";
+import { TICKTICK_KEEP_LABEL, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL, TICKTICK_TRASH_LABEL } from "../../src/app/syncModel";
 import { type Category, INBOX_ID, type SyncLink, syncLinkId, type Task } from "../../src/domain/types";
-import { linkedList, syncHarness, type SyncHarness } from "./sync-harness";
+import { linkedList, oneSyncedTask, syncHarness, type SyncHarness, syncTwice, trashedTitles } from "./sync-harness";
 import { fieldHashes } from "../../src/domain/ticktick/mapping";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 import { FakeTickTick } from "./fake-ticktick";
-import { appHarness, makeReadOnly, makeWritable } from "./harness";
+import { appHarness, expectDomainError } from "./harness";
 import { load, makeTask } from "../persistence/fixtures";
 import { FakeClock } from "../helpers";
 import { TickTickError } from "../../src/app/ports";
 import { InboxAliasApi } from "../../src/app/tickTickInbox";
-import type { TtTask, TtTaskCreate } from "../../src/domain/ticktick/types";
+import type { TtTask } from "../../src/domain/ticktick/types";
 import { rule } from "../domain/recurrence-fixtures";
 
 describe("first sync", () => {
@@ -20,142 +21,149 @@ describe("first sync", () => {
 
 	const DAY = { startDate: "2026-10-07T22:00:00.000+0000", dueDate: "2026-10-07T22:00:00.000+0000", isAllDay: true, timeZone: "Europe/Berlin" };
 
-	describe("first sync (SYNC-03)", () => {
-		it("previews how many tasks each side will get: open, syncable, not repeating", async () => {
-			const s = await syncHarness();
-			const list = await s.h.app.categories.create("Work");
-			const p = s.tt.addProject("Work");
-			s.tt.add(p.id, { title: "Call the bank" });
-			s.tt.add(p.id, { title: "Shopping notes", kind: "NOTE" });
-			s.tt.add(p.id, { title: "Water the plants", repeatFlag: "RRULE:FREQ=WEEKLY;INTERVAL=1" });
-			s.tt.add(p.id, { title: "Old one", status: 2 });
-			await s.h.app.tasks.create({ title: "Pay rent", categoryId: list.id });
-			await s.h.app.tasks.create({ title: "Buy milk", categoryId: list.id });
-			const done = await s.h.app.tasks.create({ title: "Done", categoryId: list.id });
-			await s.h.app.tasks.complete(done.task.id);
-			await s.h.app.tasks.create({
-				title: "Weekly",
-				categoryId: list.id,
-				repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } },
-			});
-			const plan = await s.sync.planFirstSync(list.id, p.id);
-			expect(plan).toMatchObject({ toLogwell: 1, toTickTick: 2 });
-			// A preview writes nothing.
-			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+	it("previews how many tasks each side will get: open, syncable, not repeating", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		const p = s.tt.addProject("Work");
+		s.tt.add(p.id, { title: "Call the bank" });
+		s.tt.add(p.id, { title: "Shopping notes", kind: "NOTE" });
+		s.tt.add(p.id, { title: "Water the plants", repeatFlag: "RRULE:FREQ=WEEKLY;INTERVAL=1" });
+		s.tt.add(p.id, { title: "Old one", status: 2 });
+		await s.h.app.tasks.create({ title: "Pay rent", categoryId: list.id });
+		await s.h.app.tasks.create({ title: "Buy milk", categoryId: list.id });
+		const done = await s.h.app.tasks.create({ title: "Done", categoryId: list.id });
+		await s.h.app.tasks.complete(done.task.id);
+		await s.h.app.tasks.create({
+			title: "Weekly",
+			categoryId: list.id,
+			repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } },
 		});
+		const plan = await s.sync.planFirstSync(list.id, p.id);
+		expect(plan).toMatchObject({ toLogwell: 1, toTickTick: 2 });
+		// A preview writes nothing.
+		expect(s.h.app.store.state.syncLinks.size).toBe(0);
+	});
 
-		it("fills an empty Logwell list from TickTick: tasks, sections, subtasks, dates, priority", async () => {
-			const s = await syncHarness();
-			const list = await s.h.app.categories.create("Work");
-			const p = s.tt.addProject("Work");
-			const col = s.tt.addColumn(p.id, "Errands");
-			const parent = s.tt.add(p.id, { title: "Call the bank", priority: 5, columnId: col.id, ...DAY });
-			s.tt.add(p.id, { title: "Find the account number", parentId: parent.id });
-			const r = await s.sync.applyFirstSync(list.id, p.id);
-			expect(r.ok).toBe(true);
-			const bank = s.task("Call the bank");
-			expect(bank).toMatchObject({ categoryId: list.id, priority: 1, status: "open" });
-			expect(bank.scheduled).toEqual({ kind: "date", date: "2026-10-08" });
-			expect(bank.deadline).toEqual({ kind: "date", date: "2026-10-08" });
-			const section = s.h.app.store.state.sections.get(bank.sectionId ?? "");
-			expect(section?.name).toBe("Errands");
-			expect(s.link("section", section!.id)?.ttId).toBe(col.id);
-			const sub = s.task("Find the account number");
-			expect(sub.parentId).toBe(bank.id);
-			expect(s.link("task", bank.id)).toMatchObject({ ttId: parent.id, ttProjectId: p.id, etag: s.tt.get(parent.id)?.etag });
-			expect(s.link("list", list.id)).toMatchObject({ ttId: p.id, ttProjectId: null });
-			// Nothing goes back up.
-			expect(s.tt.count("createTask") + s.tt.count("batchTasks") + s.tt.count("updateTask")).toBe(0);
-		});
+	it("#136: a preview whose TickTick read fails is a failed result naming the list, as a failed first sync is", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		const p = s.tt.addProject("Work");
+		s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+		const plan = await s.sync.planFirstSync(list.id, p.id);
+		expect(plan).toMatchObject({ ok: false, error: { kind: "server", listId: list.id, listName: "Work" } });
+		s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+		const first = await s.sync.applyFirstSync(list.id, p.id);
+		expect(first.error).toEqual("error" in plan ? plan.error : null);
+		expect(s.h.app.store.state.syncLinks.size).toBe(0);
+	});
 
-		it("fills an empty TickTick project from Logwell, open tasks only, one createTask each", async () => {
-			const s = await syncHarness();
-			const list = await s.h.app.categories.create("Work");
-			const sec = await s.h.app.sections.create(list.id, "Errands");
-			const parent = await s.h.app.tasks.create({ title: "Call the bank", categoryId: list.id, sectionId: sec.id, priority: 2, deadline: { kind: "date", date: "2026-10-08" } });
-			await s.h.app.tasks.create({ title: "Find the account number", parentId: parent.task.id });
-			const done = await s.h.app.tasks.create({ title: "Done already", categoryId: list.id });
-			await s.h.app.tasks.complete(done.task.id);
-			const p = s.tt.addProject("Work");
-			const r = await s.sync.applyFirstSync(list.id, p.id);
-			expect(r.ok).toBe(true);
-			expect(s.tt.count("createTask")).toBe(2);
-			const bank = s.tt.get(s.ttIdOf("Call the bank"))!;
-			expect(bank).toMatchObject({ projectId: p.id, priority: 3, isAllDay: true, dueDate: "2026-10-08T00:00:00+0200" });
-			expect(s.tt.columns.get(bank.columnId ?? "")?.name).toBe("Errands");
-			expect(s.link("section", sec.id)?.ttId).toBe(bank.columnId);
-			const sub = s.tt.get(s.ttIdOf("Find the account number"))!;
-			expect(sub.parentId).toBe(bank.id);
-			expect(s.tt.findByTitle("Done already")).toBeUndefined();
-			expect(s.link("task", done.task.id)).toBeUndefined();
-			// The link holds the etag TickTick answered with; the task record is untouched.
-			expect(s.link("task", parent.task.id)?.etag).toBe(bank.etag);
-			expect(s.task("Call the bank").modifiedAt).toBe(parent.task.modifiedAt);
-		});
+	it("fills an empty Logwell list from TickTick: tasks, sections, subtasks, dates, priority", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		const p = s.tt.addProject("Work");
+		const col = s.tt.addColumn(p.id, "Errands");
+		const parent = s.tt.add(p.id, { title: "Call the bank", priority: 5, columnId: col.id, ...DAY });
+		s.tt.add(p.id, { title: "Find the account number", parentId: parent.id });
+		const r = await s.sync.applyFirstSync(list.id, p.id);
+		expect(r.ok).toBe(true);
+		const bank = s.task("Call the bank");
+		expect(bank).toMatchObject({ categoryId: list.id, priority: 1, status: "open" });
+		expect(bank.scheduled).toEqual({ kind: "date", date: "2026-10-08" });
+		expect(bank.deadline).toEqual({ kind: "date", date: "2026-10-08" });
+		const section = s.h.app.store.state.sections.get(bank.sectionId ?? "");
+		expect(section?.name).toBe("Errands");
+		expect(s.link("section", section!.id)?.ttId).toBe(col.id);
+		const sub = s.task("Find the account number");
+		expect(sub.parentId).toBe(bank.id);
+		expect(s.link("task", bank.id)).toMatchObject({ ttId: parent.id, ttProjectId: p.id, etag: s.tt.get(parent.id)?.etag });
+		expect(s.link("list", list.id)).toMatchObject({ ttId: p.id, ttProjectId: null });
+		// Nothing goes back up.
+		expect(s.tt.count("createTask") + s.tt.count("batchTasks") + s.tt.count("updateTask")).toBe(0);
+	});
 
-		it("copies both ways when both sides have tasks, with no matching", async () => {
-			const s = await syncHarness();
-			const list = await s.h.app.categories.create("Work");
-			await s.h.app.tasks.create({ title: "Buy milk", categoryId: list.id });
-			const p = s.tt.addProject("Work");
-			s.tt.add(p.id, { title: "Buy milk" });
-			s.tt.add(p.id, { title: "Call the bank" });
-			expect(await s.sync.planFirstSync(list.id, p.id)).toMatchObject({ toLogwell: 2, toTickTick: 1 });
-			await s.sync.applyFirstSync(list.id, p.id);
-			expect(s.tasks("Buy milk")).toHaveLength(2);
-			expect(s.tasks("Call the bank")).toHaveLength(1);
-			expect(s.tt.live(p.id).filter((t) => t.title === "Buy milk")).toHaveLength(2);
-			// A second sync changes nothing.
-			s.tick();
-			const calls = s.tt.calls.length;
-			const state = s.h.app.store.state;
-			const r = await s.sync.sync();
-			expect(r.ok).toBe(true);
-			expect(s.h.app.store.state.tasks).toBe(state.tasks);
-			expect(s.tt.calls.slice(calls).every((c) => c.startsWith("getProjectData") || c.startsWith("listCompleted"))).toBe(true);
-		});
+	it("fills an empty TickTick project from Logwell, open tasks only, one createTask each", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		const sec = await s.h.app.sections.create(list.id, "Errands");
+		const parent = await s.h.app.tasks.create({ title: "Call the bank", categoryId: list.id, sectionId: sec.id, priority: 2, deadline: { kind: "date", date: "2026-10-08" } });
+		await s.h.app.tasks.create({ title: "Find the account number", parentId: parent.task.id });
+		const done = await s.h.app.tasks.create({ title: "Done already", categoryId: list.id });
+		await s.h.app.tasks.complete(done.task.id);
+		const p = s.tt.addProject("Work");
+		const r = await s.sync.applyFirstSync(list.id, p.id);
+		expect(r.ok).toBe(true);
+		expect(s.tt.count("createTask")).toBe(2);
+		const bank = s.tt.get(s.ttIdOf("Call the bank"))!;
+		expect(bank).toMatchObject({ projectId: p.id, priority: 3, isAllDay: true, dueDate: "2026-10-08T00:00:00+0200" });
+		expect(s.tt.columns.get(bank.columnId ?? "")?.name).toBe("Errands");
+		expect(s.link("section", sec.id)?.ttId).toBe(bank.columnId);
+		const sub = s.tt.get(s.ttIdOf("Find the account number"))!;
+		expect(sub.parentId).toBe(bank.id);
+		expect(s.tt.findByTitle("Done already")).toBeUndefined();
+		expect(s.link("task", done.task.id)).toBeUndefined();
+		// The link holds the etag TickTick answered with; the task record is untouched.
+		expect(s.link("task", parent.task.id)?.etag).toBe(bank.etag);
+		expect(s.task("Call the bank").modifiedAt).toBe(parent.task.modifiedAt);
+	});
 
-		it("is not undoable (D26): the newest undo entry stays the user's own", async () => {
-			const s = await syncHarness();
-			const list = await s.h.app.categories.create("Work");
-			const p = s.tt.addProject("Work");
-			s.tt.add(p.id, { title: "Call the bank" });
-			s.tt.add(p.id, { title: "Buy milk" });
-			const r = await s.sync.applyFirstSync(list.id, p.id);
-			expect(r.content).toEqual({ wrote: true, label: TICKTICK_SYNC_LABEL });
-			// The newest undo entry is still the user's own (creating the list); nothing of the sync is on the stack.
-			expect(s.h.app.store.undoLabel).toBe("Create category");
-		});
+	it("copies both ways when both sides have tasks, with no matching", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		await s.h.app.tasks.create({ title: "Buy milk", categoryId: list.id });
+		const p = s.tt.addProject("Work");
+		s.tt.add(p.id, { title: "Buy milk" });
+		s.tt.add(p.id, { title: "Call the bank" });
+		expect(await s.sync.planFirstSync(list.id, p.id)).toMatchObject({ toLogwell: 2, toTickTick: 1 });
+		await s.sync.applyFirstSync(list.id, p.id);
+		expect(s.tasks("Buy milk")).toHaveLength(2);
+		expect(s.tasks("Call the bank")).toHaveLength(1);
+		expect(s.tt.live(p.id).filter((t) => t.title === "Buy milk")).toHaveLength(2);
+		// A second sync changes nothing.
+		s.tick();
+		const calls = s.tt.calls.length;
+		const state = s.h.app.store.state;
+		const r = await s.sync.sync();
+		expect(r.ok).toBe(true);
+		expect(s.h.app.store.state.tasks).toBe(state.tasks);
+		expect(s.tt.calls.slice(calls).every((c) => c.startsWith("getProjectData") || c.startsWith("listCompleted"))).toBe(true);
+	});
 
-		it("refuses a note project, a linked list and a project linked to another list (SYNC-02)", async () => {
-			const s = await syncHarness();
-			const { listId, projectId } = await linkedList(s, "Work");
-			const other = await s.h.app.categories.create("Home");
-			const notes = s.tt.addProject("Notes", "NOTE");
-			const fresh = s.tt.addProject("Fresh");
-			const code = async (p: Promise<unknown>) => {
-				const err = await p.then(() => null, (e: unknown) => e);
-				expect(isDomainError(err)).toBe(true);
-			};
-			await code(s.sync.planFirstSync(other.id, notes.id));
-			await code(s.sync.applyFirstSync(other.id, projectId));
-			await code(s.sync.applyFirstSync(listId, fresh.id));
-			expect(s.h.app.store.state.syncLinks.has(syncLinkId("list", other.id))).toBe(false);
-		});
+	it("is not undoable: the newest undo entry stays the user's own", async () => {
+		const s = await syncHarness();
+		const list = await s.h.app.categories.create("Work");
+		const p = s.tt.addProject("Work");
+		s.tt.add(p.id, { title: "Call the bank" });
+		s.tt.add(p.id, { title: "Buy milk" });
+		const r = await s.sync.applyFirstSync(list.id, p.id);
+		expect(r.content).toEqual({ wrote: true, label: TICKTICK_SYNC_LABEL });
+		// The newest undo entry is still the user's own (creating the list); nothing of the sync is on the stack.
+		expect(s.h.app.store.undoLabel).toBe("Create list");
+	});
 
-		it("unlinking keeps every task on both sides and removes the list's links", async () => {
-			const s = await syncHarness();
-			const { listId, projectId } = await linkedList(s);
-			await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
-			await s.sync.sync();
-			expect(s.tt.live(projectId)).toHaveLength(1);
-			const r = await s.sync.unlinkList(listId);
-			expect(r.wrote).toBe(true);
-			expect(s.h.app.store.state.syncLinks.size).toBe(0);
-			expect(s.tasks("Buy milk")).toHaveLength(1);
-			expect(s.tt.live(projectId)).toHaveLength(1);
-			expect(s.h.app.store.undoLabel).not.toBe(r.label);
-		});
+	it("refuses a note project, a linked list and a project linked to another list", async () => {
+		const s = await syncHarness();
+		const { listId, projectId } = await linkedList(s, "Work");
+		const other = await s.h.app.categories.create("Home");
+		const notes = s.tt.addProject("Notes", "NOTE");
+		const fresh = s.tt.addProject("Fresh");
+		await expectDomainError(s.sync.planFirstSync(other.id, notes.id));
+		await expectDomainError(s.sync.applyFirstSync(other.id, projectId));
+		await expectDomainError(s.sync.applyFirstSync(listId, fresh.id));
+		expect(s.h.app.store.state.syncLinks.has(syncLinkId("list", other.id))).toBe(false);
+	});
+
+	it("unlinking keeps every task on both sides and removes the list's links", async () => {
+		const s = await syncHarness();
+		const { listId, projectId } = await linkedList(s);
+		await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
+		await s.sync.sync();
+		expect(s.tt.live(projectId)).toHaveLength(1);
+		const r = await s.sync.unlinkList(listId);
+		expect(r.wrote).toBe(true);
+		expect(s.h.app.store.state.syncLinks.size).toBe(0);
+		expect(s.tasks("Buy milk")).toHaveLength(1);
+		expect(s.tt.live(projectId)).toHaveLength(1);
+		expect(s.h.app.store.undoLabel).not.toBe(r.label);
 	});
 });
 
@@ -225,19 +233,12 @@ describe("the open-task cap of a synced list", () => {
 		return serializeDb({ ...db, categories, tasks, syncLinks });
 	}
 
-	async function refused(p: Promise<unknown>): Promise<void> {
-		const err = await p.then(
-			() => null,
-			(e: unknown) => e,
-		);
-		expect(isDomainError(err, "SyncedListFull")).toBe(true);
-		expect((err as Error).message).toBe(FULL);
-	}
+	const refused = (p: Promise<unknown>) => expectDomainError(p, "SyncedListFull", FULL);
 
 	const openIn = (h: { app: { store: { state: { tasks: ReadonlyMap<string, Task> } } } }, listId: string) =>
 		[...h.app.store.state.tasks.values()].filter((t) => t.categoryId === listId && t.status === "open").length;
 
-	describe("SYNC-13: the 999 open-task cap of a synced list", () => {
+	describe("the 999 open-task cap of a synced list", () => {
 		it("refuses a new task in a synced list that has 999 open tasks, and writes nothing", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999 }) });
 			const before = h.app.store.state;
@@ -331,7 +332,7 @@ describe("the open-task cap of a synced list", () => {
 		});
 	});
 
-	describe("SYNC-13: linking and pulling", () => {
+	describe("linking and pulling", () => {
 		it("a list with more than 999 open tasks cannot be linked; 999 can", async () => {
 			const s = await syncHarness(capDb({ open: 1000, linked: false }));
 			const project = s.tt.addProject("Work");
@@ -385,7 +386,7 @@ describe("deletions", () => {
 		return Object.assign(s, { listId, projectId, ids });
 	}
 
-	describe("deleted in Logwell (SYNC-08)", () => {
+	describe("deleted in Logwell", () => {
 		it("deletes the TickTick task without asking; a task restored from Trash is created there again", async () => {
 			const s = await withTasks(1);
 			const ttId = s.ttIdOf("Errand 1");
@@ -416,6 +417,139 @@ describe("deletions", () => {
 			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
 			expect(s.link("task", task.id)).toBeUndefined();
 			expect(s.tt.live(s.projectId).map((t) => t.title)).toEqual(["Errand 1"]);
+		});
+
+		it("a pendingDelete marking that fails is retried at the start of the next sync", async () => {
+			const s = await oneSyncedTask("Buy milk");
+			const store = s.h.app.store;
+			const run = store.run.bind(store);
+			let failOnce = true;
+			const failing: typeof store.run = (label, fn, options) => {
+				if (failOnce && label === TICKTICK_LINKS_LABEL) {
+					failOnce = false;
+					return Promise.reject(new Error("the write failed"));
+				}
+				return run(label, fn, options);
+			};
+			store.run = failing;
+			await store.undo();
+			await new Promise((r) => setTimeout(r, 0));
+			expect(failOnce).toBe(false);
+			expect(s.link("task", s.id)?.pendingDelete).toBeUndefined();
+			await s.sync.sync();
+			expect(s.tt.calls).toContain(`deleteTask:${s.ttId}`);
+			expect(s.link("task", s.id)).toBeUndefined();
+			expect(s.tt.live(s.projectId)).toHaveLength(0);
+		});
+	});
+
+	describe("a deleted linked list", () => {
+		it("#110: deleting a linked list unlinks it; its tasks, now in an Inbox that does not sync, are deleted in TickTick", async () => {
+			const s = await withTasks(1);
+			const id = s.ids[0]!;
+			const section = await s.h.app.sections.create(s.listId, "Calls");
+			await s.h.app.tasks.update(id, { sectionId: section.id });
+			await s.sync.sync();
+			s.tick();
+			const ttId = s.ttIdOf("Errand 1");
+			expect(s.link("section", section.id)).toBeDefined();
+			await s.h.app.categories.delete(s.listId);
+			expect([...s.h.app.store.state.syncLinks.values()].filter((l) => l.kind !== "task")).toEqual([]);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
+			expect(s.tt.live(s.projectId)).toHaveLength(0);
+			expect(s.task("Errand 1")).toMatchObject({ id, categoryId: INBOX_ID });
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+			// The TickTick list is free for another list.
+			const other = await s.h.app.categories.create("Errands");
+			expect((await s.sync.applyFirstSync(other.id, s.projectId)).ok).toBe(true);
+		});
+
+		it("#110: the tasks of a deleted linked list move in TickTick to a linked Inbox, once", async () => {
+			const s = await syncHarness();
+			const inbox = s.tt.addInbox();
+			await s.sync.applyFirstSync(INBOX_ID, "inbox");
+			const { listId, projectId } = await linkedList(s);
+			await s.h.app.tasks.create({ title: "Errand 1", categoryId: listId });
+			await s.sync.sync();
+			s.tick();
+			const ttId = s.ttIdOf("Errand 1");
+			s.tt.edit(ttId, { priority: 5 });
+			await s.h.app.categories.delete(listId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.get(ttId)?.projectId).toBe(inbox.id);
+			expect(s.tt.live(projectId)).toHaveLength(0);
+			expect(s.link("task", s.task("Errand 1").id)).toMatchObject({ ttId, ttProjectId: "inbox" });
+			// TickTick's edit since the last sync came in; nothing was created twice.
+			expect(s.task("Errand 1").priority).toBe(1);
+			s.tick();
+			await s.sync.sync();
+			expect(s.tt.live(inbox.id).map((t) => t.title)).toEqual(["Errand 1"]);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+		});
+
+		it("#110: when the deleted list's TickTick list is gone too, only the links of its tasks go", async () => {
+			const s = await withTasks(1);
+			await s.h.app.categories.delete(s.listId);
+			s.tt.projects.delete(s.projectId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+		});
+
+		it("#110: undoing the delete links the list again, and nothing changes in TickTick", async () => {
+			const s = await withTasks(1);
+			const before = s.link("list", s.listId);
+			await s.h.app.categories.delete(s.listId);
+			await s.h.app.store.undo();
+			expect(s.link("list", s.listId)).toEqual(before);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tt.live(s.projectId).map((t) => t.title)).toEqual(["Errand 1"]);
+		});
+
+		it("#110: a list link left by a list deleted with an earlier version goes at the next sync, and its tasks follow", async () => {
+			const s = await withTasks(1);
+			const ttId = s.ttIdOf("Errand 1");
+			// The delete as an earlier version wrote it: the tasks move to the Inbox, the links stay.
+			await s.h.app.store.run("seed", (tx) => {
+				for (const t of tx.all("tasks")) tx.put("tasks", { ...t, categoryId: INBOX_ID });
+				tx.remove("categories", s.listId);
+			});
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
+		});
+	});
+
+	describe("a TickTick list that no longer exists", () => {
+		it("#111: its linked list is skipped with a failure naming it, its tasks and links stay, and the other lists keep syncing", async () => {
+			const s = await withTasks(2);
+			const home = await linkedList(s, "Home");
+			await s.h.app.tasks.create({ title: "Water plants", categoryId: home.listId });
+			await s.sync.sync();
+			s.tick();
+			const ofWork = () => [...s.h.app.store.state.syncLinks.values()].filter((l) => l.logwellId === s.listId || l.ttProjectId === s.projectId);
+			const before = ofWork();
+			s.tt.projects.delete(s.projectId);
+			// A new task in the other list, and a task moved from it into the list whose TickTick list is gone.
+			await s.h.app.tasks.create({ title: "Buy soil", categoryId: home.listId });
+			await s.h.app.tasks.update(s.task("Water plants").id, { categoryId: s.listId });
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(false);
+			expect(r.failures).toEqual([{ listId: s.listId, listName: "Work", kind: "list-gone", message: 'The TickTick list linked to "Work" no longer exists.', retryAfterSec: null }]);
+			expect(s.tt.live(home.projectId).map((t) => t.title).sort()).toEqual(["Buy soil", "Water plants"]);
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+			expect(ofWork()).toEqual(before);
+			// Unlinked, it no longer stops the sync.
+			await s.sync.unlinkList(s.listId);
+			expect((await s.sync.sync()).ok).toBe(true);
 		});
 	});
 
@@ -450,6 +584,15 @@ describe("deletions", () => {
 			expect(calls.indexOf("batchTasks")).toBeLessThan(firstCreate);
 			expect(calls.filter((c) => c === "createTask")).toHaveLength(3);
 			expect(s.tt.live(s.projectId).filter((t) => (t.status ?? 0) === 0)).toHaveLength(99);
+		});
+
+		it("#137: a server error on a list at 99 open tasks names the free plan as the likely cause, with TickTick's reason", async () => {
+			const s = await withTasks(99);
+			s.tt.openLimit = 99;
+			await s.h.app.tasks.create({ title: "New 1", categoryId: s.listId });
+			const r = await s.sync.sync();
+			expect(r.error?.kind).toBe("list-limit");
+			expect(r.error?.message).toMatch(/refused the change \(.+\)\. It has 99 open tasks, and TickTick's free plan allows 99 per list, so that limit is the likely cause; on a paid plan it is a TickTick error\.$/u);
 		});
 
 		it("a refused create leaves the frees already sent", async () => {
@@ -493,7 +636,7 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("purged from Trash before a sync (SYNC-08)", () => {
+	describe("purged from Trash before a sync", () => {
 		it("marks the link pendingDelete in the purge command; the next sync deletes the TickTick copy", async () => {
 			const s = await withTasks(2);
 			const ttId = s.ttIdOf("Errand 1");
@@ -523,15 +666,15 @@ describe("deletions", () => {
 		});
 	});
 
-	describe("missing from TickTick (SYNC-08)", () => {
-		it("moves fewer than 5 missing tasks of a list to Trash and removes their links", async () => {
+	describe("missing from TickTick", () => {
+		it("moves fewer than 5 missing tasks of a list to Trash, at the second read, and removes their links", async () => {
 			const s = await withTasks(6);
 			for (const t of ["Errand 1", "Errand 2", "Errand 3", "Errand 4"]) s.tt.remove(s.ttIdOf(t));
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			expect(r.ok).toBe(true);
 			expect(r.needsConfirmation).toEqual([]);
 			expect(s.h.app.store.state.tasks.size).toBe(2);
-			expect([...s.h.app.store.state.trash.values()].flatMap((e) => e.tasks.map((t) => t.title)).sort()).toEqual(["Errand 1", "Errand 2", "Errand 3", "Errand 4"]);
+			expect(trashedTitles(s)).toEqual(["Errand 1", "Errand 2", "Errand 3", "Errand 4"]);
 			for (const id of s.ids.slice(0, 4)) expect(s.link("task", id)).toBeUndefined();
 			// A background pull is not on the undo stack.
 			expect(s.h.app.store.undoLabel).not.toBe(TICKTICK_SYNC_LABEL);
@@ -540,7 +683,7 @@ describe("deletions", () => {
 		it("asks first for 5 or more: nothing applied, links kept; the confirmed Move to Trash is one undo step", async () => {
 			const s = await withTasks(6);
 			for (const id of s.ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			expect(r.ok).toBe(true);
 			expect(r.needsConfirmation).toHaveLength(1);
 			expect(r.needsConfirmation[0]).toMatchObject({ listId: s.listId, reason: "many" });
@@ -566,27 +709,246 @@ describe("deletions", () => {
 		it("asks first when a project comes back empty, even for one task", async () => {
 			const s = await withTasks(2);
 			for (const id of s.ids) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			expect(r.needsConfirmation).toHaveLength(1);
 			expect(r.needsConfirmation[0]).toMatchObject({ listId: s.listId, reason: "emptied" });
 			expect(s.h.app.store.state.tasks.size).toBe(2);
-			// Each was looked up: neither completed nor won't do.
-			expect(s.tt.count("getTask")).toBe(2);
+			// Each was read twice: neither completed nor won't do, and unchanged at the second read.
+			expect(s.tt.count("getTask")).toBe(4);
 		});
 
-		it("#38: looks up at most LOOKUP_MAX missing tasks per list; the rest wait for the next sync and are not offered", async () => {
-			const s = await withTasks(LOOKUP_MAX + 10);
-			for (const id of s.ids.slice(0, LOOKUP_MAX + 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
-			expect(s.tt.count("getTask")).toBe(LOOKUP_MAX);
-			expect(r.needsConfirmation[0]?.tasks).toHaveLength(LOOKUP_MAX);
-			expect(s.h.app.store.state.trash.size).toBe(0);
-			// The tasks confirmed gone are not looked up again: the next sync checks the other 5.
+		it("#119: a task gone from TickTick goes to Trash alone; its subtasks that are not gone stay as top-level tasks", async () => {
+			const s = await withTasks(3);
+			const [p, q] = s.ids as [string, string, string];
+			const qTt = s.ttIdOf("Errand 2");
+			s.tt.remove(s.ttIdOf("Errand 1"));
+			// The first read of the deleted task.
+			await s.sync.sync();
 			s.tick();
-			const next = await s.sync.sync();
-			expect(s.tt.count("getTask")).toBe(LOOKUP_MAX + 5);
-			expect(next.needsConfirmation[0]?.tasks).toHaveLength(LOOKUP_MAX + 5);
+			// Q made a subtask in Logwell and not sent yet; R a new subtask never sent.
+			await s.h.app.tasks.setParent(q, p);
+			const r = await s.h.app.tasks.create({ title: "New step", parentId: p });
+			await s.sync.sync();
+			expect(trashedTitles(s)).toEqual(["Errand 1"]);
+			expect(s.h.app.store.state.tasks.get(q)).toMatchObject({ parentId: null, categoryId: s.listId });
+			expect(s.h.app.store.state.tasks.get(r.task.id)).toMatchObject({ parentId: null, categoryId: s.listId });
+			s.tick();
+			await s.sync.sync();
+			expect(s.tt.count("deleteTask")).toBe(0);
+			expect(s.tt.get(qTt)).toMatchObject({ title: "Errand 2", status: 0 });
+			expect(s.tt.live(s.projectId).map((t) => t.id)).toContain(qTt);
+			expect(s.tt.findByTitle("New step")?.parentId ?? "").toBe("");
+		});
+
+		it("#119: the confirmed Move to Trash keeps a subtask that is not gone, as a top-level task, and Undo nests it again", async () => {
+			const s = await withTasks(6);
+			for (const id of s.ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
+			const res = await syncTwice(s);
+			expect(res.needsConfirmation[0]!.tasks).toHaveLength(5);
+			// Added while the question is open.
+			const sub = await s.h.app.tasks.create({ title: "Keep me", parentId: s.ids[0]! });
+			await s.sync.trashMissing(s.listId, res.needsConfirmation[0]!.tasks.map((t) => t.id));
+			expect(s.h.app.store.state.tasks.get(sub.task.id)).toMatchObject({ parentId: null, categoryId: s.listId });
+			expect(await s.h.app.store.undo()).toBe(TICKTICK_TRASH_LABEL);
+			expect(s.h.app.store.state.tasks.get(sub.task.id)?.parentId).toBe(s.ids[0]);
+		});
+
+		it("#123: an open task TickTick left out of its list's data, unchanged there, is not gone: no Trash, no second copy", async () => {
+			const s = await withTasks(3);
+			const ttId = s.ttIdOf("Errand 1");
+			s.tt.omitted.add(ttId);
+			const r = await s.sync.sync();
+			expect(r.ok).toBe(true);
+			expect(r.needsConfirmation).toEqual([]);
+			expect(s.tt.count("getTask")).toBe(1);
 			expect(s.h.app.store.state.trash.size).toBe(0);
+			expect(s.link("task", s.ids[0]!)?.ttId).toBe(ttId);
+			// A Logwell edit still goes up while it is left out.
+			s.tick();
+			await s.h.app.tasks.update(s.ids[0]!, { priority: 1 });
+			await s.sync.sync();
+			expect(s.tt.get(ttId)?.priority).toBe(5);
+			s.tt.omitted.delete(ttId);
+			s.tick();
+			await s.sync.sync();
+			expect(s.tasks("Errand 1")).toHaveLength(1);
+			expect(s.h.app.store.state.trash.size).toBe(0);
+		});
+
+		describe("a second read before Trash", () => {
+			type Synced = Awaited<ReturnType<typeof withTasks>>;
+			/** "Errand 1" after one sync. */
+			interface After {
+				trash: string[];
+				link: "kept" | "localOnly" | "none";
+				/** While the task is in Logwell; open when not given. */
+				status?: "open" | "completed";
+				/** Its title in Logwell, as pulled: exactly one task has it, and none the old title. */
+				title?: string;
+				/** `getTask` calls since the start. */
+				lookups?: number;
+			}
+			interface Row {
+				name: string;
+				/** What TickTick does to "Errand 1" before the first sync. */
+				before: (s: Synced, ttId: string) => void;
+				/** What happens between the first and the second sync. */
+				between?: (s: Synced, ttId: string) => unknown;
+				/** After the first sync, the second and a third. */
+				after: [After, After, After];
+			}
+			/** Drops the etag of a TickTick task, as an answer without one. */
+			const noEtag = (s: SyncHarness, id: string, patch: Partial<TtTask> = {}) => {
+				const copy = { ...s.tt.tasks.get(id)!, ...patch };
+				delete copy.etag;
+				s.tt.tasks.set(id, copy);
+			};
+			const edited = (s: Synced, ttId: string) => {
+				s.tt.edit(ttId, { title: "Errand 1 renamed" });
+				s.tt.omitted.add(ttId);
+			};
+			const deleted = (s: Synced, ttId: string) => s.tt.remove(ttId);
+			const kept = (more: Partial<After> = {}): After => ({ trash: [], link: "kept", ...more });
+			const gone = (more: Partial<After> = {}): After => ({ trash: ["Errand 1"], link: "none", ...more });
+			const rows: Row[] = [
+				{
+					name: "changed and left out once, back in the list at the next sync: kept, pulled, no second copy",
+					before: edited,
+					between: (s, id) => s.tt.omitted.delete(id),
+					after: [kept({ title: "Errand 1" }), kept({ title: "Errand 1 renamed" }), kept({ title: "Errand 1 renamed" })],
+				},
+				{ name: "deleted and read unchanged: trashed at the second sync", before: deleted, after: [kept({ lookups: 1 }), gone({ lookups: 2 }), gone({ lookups: 2 })] },
+				{ name: "changed again between the reads: kept at that sync, trashed after a further unchanged read", before: edited, between: (s, id) => s.tt.edit(id, { priority: 5 }), after: [kept(), kept(), gone()] },
+				{ name: "in no linked list: trashed at the first sync", before: (s, id) => s.tt.moveTo(id, s.tt.addProject("Elsewhere").id), after: [gone(), gone(), gone()] },
+				{ name: "completed between the reads: completed, not trashed", before: edited, between: (s, id) => s.tt.edit(id, { status: 2 }), after: [kept(), kept({ status: "completed" }), kept({ status: "completed" })] },
+				{ name: "a restart between the reads: read twice again before Trash", before: deleted, between: (s) => s.restart(), after: [kept(), kept(), gone()] },
+				{ name: "Keep between the reads: Logwell only, never trashed or asked", before: deleted, between: (s) => s.sync.keepMissing(s.listId, [s.ids[0]!], "many"), after: [kept(), kept({ link: "localOnly" }), kept({ link: "localOnly" })] },
+				{ name: "the list unlinked between the reads: never trashed or asked", before: deleted, between: (s) => s.sync.unlinkList(s.listId), after: [kept(), kept({ link: "none" }), kept({ link: "none" })] },
+				{
+					name: "no etag, unchanged since the last sync, left out at two syncs: kept, not trashed",
+					before: (s, id) => {
+						s.tt.omitted.add(id);
+						noEtag(s, id);
+					},
+					after: [kept(), kept(), kept()],
+				},
+			];
+
+			it.each(rows)("$name", async (row) => {
+				const s = await withTasks(3);
+				const ttId = s.ttIdOf("Errand 1");
+				const lookups = s.tt.count("getTask");
+				row.before(s, ttId);
+				for (const [sync, want] of row.after.entries()) {
+					if (sync === 1) await row.between?.(s, ttId);
+					expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+					s.tick();
+					const trash = trashedTitles(s);
+					expect(trash).toEqual(want.trash);
+					const link = s.link("task", s.ids[0]!);
+					if (want.link === "none") expect(link).toBeUndefined();
+					else expect({ ttId: link?.ttId, mode: link?.mode ?? "sync" }).toEqual({ ttId, mode: want.link === "kept" ? "sync" : "localOnly" });
+					if (trash.length === 0) expect(s.h.app.store.state.tasks.get(s.ids[0]!)?.status).toBe(want.status ?? "open");
+					// No second copy: every task is in Logwell once or in Trash.
+					expect(s.h.app.store.state.tasks.size + trash.length).toBe(3);
+					if (want.title !== undefined) {
+						expect(s.tasks(want.title).map((t) => t.id)).toEqual([s.ids[0]]);
+						if (want.title !== "Errand 1") expect(s.tasks("Errand 1")).toEqual([]);
+					}
+					if (want.lookups !== undefined) expect(s.tt.count("getTask") - lookups).toBe(want.lookups);
+				}
+			});
+
+			it.each([
+				{ name: "the same content: gone", second: undefined, trash: ["Errand 1"] },
+				{ name: "a different title: not gone", second: { title: "Errand 1 renamed again" }, trash: [] },
+				{ name: "a different description: not gone", second: { content: "New notes" }, trash: [] },
+			] satisfies { name: string; second: Partial<TtTask> | undefined; trash: string[] }[])("two reads with no etag and $name", async ({ second, trash }) => {
+				const s = await withTasks(3);
+				const t = s.ttIdOf("Errand 1");
+				s.tt.omitted.add(t);
+				noEtag(s, t, { title: "Errand 1 renamed" });
+				await s.sync.sync();
+				s.tick();
+				if (second !== undefined) noEtag(s, t, second);
+				expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+				expect(trashedTitles(s)).toEqual(trash);
+			});
+
+			it("5 or more deleted in TickTick: the window asks after the second read, not before", async () => {
+				const s = await withTasks(6);
+				for (const id of s.ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
+				const first = await s.sync.sync();
+				expect(first.needsConfirmation).toEqual([]);
+				expect(trashedTitles(s)).toEqual([]);
+				s.tick();
+				const second = await s.sync.sync();
+				expect(second.needsConfirmation).toHaveLength(1);
+				expect(second.needsConfirmation[0]).toMatchObject({ listId: s.listId, reason: "many" });
+				expect(second.needsConfirmation[0]!.tasks).toHaveLength(5);
+				expect(trashedTitles(s)).toEqual([]);
+			});
+
+			it("a list with a second read pending holds its other gone tasks, so all are judged together", async () => {
+				const s = await withTasks(6);
+				const elsewhere = s.tt.addProject("Elsewhere");
+				s.tt.moveTo(s.ttIdOf("Errand 1"), elsewhere.id);
+				s.tt.moveTo(s.ttIdOf("Errand 2"), elsewhere.id);
+				for (const t of ["Errand 3", "Errand 4", "Errand 5"]) s.tt.remove(s.ttIdOf(t));
+				const first = await s.sync.sync();
+				expect(first.needsConfirmation).toEqual([]);
+				expect(trashedTitles(s)).toEqual([]);
+				s.tick();
+				const second = await s.sync.sync();
+				expect(second.needsConfirmation).toEqual([expect.objectContaining({ listId: s.listId, reason: "many" })]);
+				expect(second.needsConfirmation[0]!.tasks).toHaveLength(5);
+			});
+
+			it("an emptied list asks only after the second read", async () => {
+				const s = await withTasks(2);
+				for (const id of s.ids) s.tt.remove(s.link("task", id)!.ttId);
+				expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+				s.tick();
+				const r = await s.sync.sync();
+				expect(r.needsConfirmation).toEqual([expect.objectContaining({ listId: s.listId, reason: "emptied" })]);
+			});
+
+			// A sync that saw the task back in the list, then stopped on a rate limit before its end, must not leave an
+			// earlier verdict behind: the next omission is judged afresh.
+			it.each([
+				{
+					name: "a first read: a later omission is read twice again",
+					setUp: (s: Synced, t: string) => {
+						s.tt.edit(t, { title: "Errand 1 renamed" });
+						s.tt.omitted.add(t);
+					},
+					back: (s: Synced, t: string) => s.tt.omitted.delete(t),
+				},
+				{
+					name: "a gone verdict: it is looked up again",
+					setUp: (s: Synced, t: string) => s.tt.moveTo(t, s.tt.addProject("Elsewhere").id),
+					back: (s: Synced, t: string) => s.tt.moveTo(t, s.projectId),
+				},
+			])("a task back in the list at a sync that then fails loses $name", async ({ setUp, back }) => {
+				const s = await withTasks(3);
+				const t = s.ttIdOf("Errand 1");
+				setUp(s, t);
+				// Errand 2 has its first read, so the list waits.
+				s.tt.remove(s.ttIdOf("Errand 2"));
+				await s.sync.sync();
+				expect(trashedTitles(s)).toEqual([]);
+				// Back in the list; the lookup of Errand 2 hits a rate limit, so the sync stops before it writes.
+				s.tick();
+				back(s, t);
+				s.tt.fail("getTask", new TickTickError("rate-limited", "TickTick: too many requests.", { retryAfterSec: 60 }));
+				expect((await s.sync.sync()).error).toMatchObject({ kind: "rate-limited" });
+				// Left out again, unchanged since: a first read.
+				s.tick();
+				s.tt.omitted.add(t);
+				expect((await s.sync.sync()).needsConfirmation).toEqual([]);
+				expect(trashedTitles(s)).toEqual([]);
+				expect(s.link("task", s.ids[0]!)?.ttId).toBe(t);
+			});
 		});
 
 		it("keeps a deleted task's note", async () => {
@@ -599,7 +961,7 @@ describe("deletions", () => {
 			await s.sync.sync();
 			s.tick();
 			s.tt.remove(s.ttIdOf("Errand 1"));
-			await s.sync.sync();
+			await syncTwice(s);
 			expect(s.h.app.store.state.tasks.has(other.task.id)).toBe(true);
 			const trashed = [...s.h.app.store.state.trash.values()][0]?.tasks[0];
 			expect(trashed?.descriptionNote?.path).toBe("Task notes/Errand 1.md");
@@ -675,75 +1037,59 @@ describe("the Inbox", () => {
 			expect(s.h.app.store.state.tasks.size).toBe(2);
 		});
 
-		it("pulls an edit made in TickTick and does not push it back", async () => {
+		it("one round trip: an edit, a completion, a delete and a move each way, as for any linked list", async () => {
 			const s = await withInbox();
-			s.tt.add(s.inboxId, { title: "Call the bank" });
-			await linkInbox(s);
-			s.tt.edit(s.ttIdOf("Call the bank"), { title: "Call the bank today" });
-			s.tick();
-			await s.sync.sync();
-			expect(s.tasks("Call the bank today")).toHaveLength(1);
-			expect(s.tt.count("updateTask")).toBe(0);
-		});
-
-		it("completes in Logwell a task completed in TickTick, and completes in TickTick one completed in Logwell", async () => {
-			const s = await withInbox();
-			s.tt.add(s.inboxId, { title: "Call the bank" });
-			s.tt.add(s.inboxId, { title: "Book the dentist" });
-			await linkInbox(s);
-			s.tt.edit(s.ttIdOf("Call the bank"), { status: 2 });
-			await s.h.app.tasks.complete(s.task("Book the dentist").id);
-			s.tick();
-			const r = await s.sync.sync();
-			expect(r.ok).toBe(true);
-			expect(s.task("Call the bank").status).toBe("completed");
-			expect(s.tt.findByTitle("Book the dentist")?.status).toBe(2);
-			expect(s.tt.calls.filter((c) => c.startsWith("listCompleted"))).toContain("listCompleted:inbox");
-		});
-
-		it("deletes in TickTick a task deleted in Logwell, and trashes in Logwell one deleted in TickTick", async () => {
-			const s = await withInbox();
-			s.tt.add(s.inboxId, { title: "Call the bank" });
-			s.tt.add(s.inboxId, { title: "Book the dentist" });
-			await linkInbox(s);
-			const gone = s.ttIdOf("Call the bank");
-			await s.h.app.tasks.delete(s.task("Book the dentist").id);
-			s.tt.remove(gone);
-			s.tick();
-			const r = await s.sync.sync();
-			expect(r.ok).toBe(true);
-			expect(s.tasks("Call the bank")).toHaveLength(0);
-			expect(s.tt.live(s.inboxId)).toHaveLength(0);
-			s.tick();
-			expect((await s.sync.sync()).ok).toBe(true);
-		});
-
-		it("moves a task from the Inbox to another linked list and back, in both directions", async () => {
-			const s = await withInbox();
-			s.tt.add(s.inboxId, { title: "Call the bank" });
-			s.tt.add(s.inboxId, { title: "Book the dentist" });
+			for (const title of ["Call the bank", "Book the dentist", "Pay rent", "Buy milk", "Water plants", "Fix the bike"]) s.tt.add(s.inboxId, { title });
 			await linkInbox(s);
 			const { listId, projectId } = await linkedList(s, "Work");
-			// Logwell moves one into Work; TickTick moves the other into Work.
-			await s.h.app.tasks.update(s.task("Call the bank").id, { categoryId: listId });
-			s.tt.moveTo(s.ttIdOf("Book the dentist"), projectId);
-			s.tick();
-			const r = await s.sync.sync();
-			expect(r.ok).toBe(true);
-			expect(s.tt.findByTitle("Call the bank")?.projectId).toBe(projectId);
-			expect(s.task("Book the dentist").categoryId).toBe(listId);
-			expect(s.link("task", s.task("Call the bank").id)?.ttProjectId).toBe(projectId);
-			// And both back into the Inbox.
-			await s.h.app.tasks.update(s.task("Call the bank").id, { categoryId: INBOX_ID });
-			s.tt.moveTo(s.ttIdOf("Book the dentist"), s.inboxId);
-			s.tick();
-			const back = await s.sync.sync();
-			expect(back.ok).toBe(true);
-			expect(s.tt.findByTitle("Call the bank")?.projectId).toBe(s.inboxId);
-			expect(s.task("Book the dentist").categoryId).toBe(INBOX_ID);
-			expect(s.link("task", s.task("Book the dentist").id)?.ttProjectId).toBe("inbox");
-			expect(s.h.app.store.state.tasks.size).toBe(2);
-			expect(s.tt.live(s.inboxId)).toHaveLength(2);
+			const sync = async () => {
+				s.tick();
+				expect((await s.sync.sync()).ok).toBe(true);
+			};
+
+			// An edit made in TickTick is pulled and not pushed back.
+			s.tt.edit(s.ttIdOf("Call the bank"), { title: "Call the bank today" });
+			await sync();
+			expect(s.tasks("Call the bank today")).toHaveLength(1);
+			expect(s.tt.count("updateTask")).toBe(0);
+
+			// A completion each way.
+			s.tt.edit(s.ttIdOf("Call the bank today"), { status: 2 });
+			await s.h.app.tasks.complete(s.task("Book the dentist").id);
+			await sync();
+			expect(s.task("Call the bank today").status).toBe("completed");
+			expect(s.tt.findByTitle("Book the dentist")?.status).toBe(2);
+			expect(s.tt.calls.filter((c) => c.startsWith("listCompleted"))).toContain("listCompleted:inbox");
+
+			// A delete each way: deleted in TickTick, trashed in Logwell.
+			const gone = s.ttIdOf("Pay rent");
+			const deleted = s.ttIdOf("Buy milk");
+			await s.h.app.tasks.delete(s.task("Buy milk").id);
+			s.tt.remove(gone);
+			// The deleted task goes to Trash at the second read.
+			await sync();
+			await sync();
+			expect(s.tasks("Pay rent")).toHaveLength(0);
+			expect(s.tt.live(s.inboxId).map((t) => t.id)).not.toContain(deleted);
+			await sync();
+
+			// A move into another linked list each way, and both back.
+			await s.h.app.tasks.update(s.task("Water plants").id, { categoryId: listId });
+			s.tt.moveTo(s.ttIdOf("Fix the bike"), projectId);
+			await sync();
+			expect(s.tt.findByTitle("Water plants")?.projectId).toBe(projectId);
+			expect(s.task("Fix the bike").categoryId).toBe(listId);
+			expect(s.link("task", s.task("Water plants").id)?.ttProjectId).toBe(projectId);
+			await s.h.app.tasks.update(s.task("Water plants").id, { categoryId: INBOX_ID });
+			s.tt.moveTo(s.ttIdOf("Fix the bike"), s.inboxId);
+			await sync();
+			expect(s.tt.findByTitle("Water plants")?.projectId).toBe(s.inboxId);
+			expect(s.task("Fix the bike").categoryId).toBe(INBOX_ID);
+			expect(s.link("task", s.task("Fix the bike").id)?.ttProjectId).toBe("inbox");
+
+			// Nothing came in or went up twice.
+			expect(s.h.app.store.state.tasks.size).toBe(4);
+			expect(s.tt.live(s.inboxId).map((t) => t.title).sort()).toEqual(["Book the dentist", "Call the bank today", "Fix the bike", "Water plants"]);
 		});
 
 		it("a project listed under an Inbox id is not a second project", async () => {
@@ -1027,7 +1373,7 @@ describe("first sync backup and Keep", () => {
 		s.tick();
 		const ttIds = TITLES.map((t) => s.ttIdOf(t));
 		for (const id of ttIds) s.tt.remove(id);
-		const r = await s.sync.sync();
+		const r = await syncTwice(s);
 		s.tick();
 		expect(r.needsConfirmation).toHaveLength(1);
 		expect(r.needsConfirmation[0]!.reason).toBe("many");
@@ -1036,7 +1382,7 @@ describe("first sync backup and Keep", () => {
 
 	const writes = (s: SyncHarness) => ["createTask", "deleteTask", "batchTasks", "moveTasks", "updateTask"].map((m) => s.tt.count(m as never)).reduce((a, b) => a + b, 0);
 
-	describe("first sync backup (SYNC-10)", () => {
+	describe("first sync backup", () => {
 		it("takes a pre-sync snapshot of the database as it was, before any write", async () => {
 			const s = await syncHarness();
 			const list = await s.h.app.categories.create("Work");
@@ -1065,7 +1411,7 @@ describe("first sync backup and Keep", () => {
 		});
 	});
 
-	describe("Keep for tasks missing from TickTick (SYNC-08, D27)", () => {
+	describe("Keep for tasks missing from TickTick", () => {
 		it("keeps 5 or more missing tasks in Logwell only: links become localOnly, nothing in the undo history", async () => {
 			const s = await syncHarness();
 			const { listId, pending } = await missingFive(s);
@@ -1147,7 +1493,7 @@ describe("first sync backup and Keep", () => {
 			await s.sync.sync();
 			s.tick();
 			for (const t of ["One", "Two"]) s.tt.remove(s.ttIdOf(t));
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			expect(r.needsConfirmation).toEqual([expect.objectContaining({ listId, reason: "emptied" })]);
 			const w = await s.sync.keepMissing(listId, r.needsConfirmation[0]!.tasks.map((t) => t.id), "emptied");
 			expect(w.wrote).toBe(true);
@@ -1174,9 +1520,8 @@ describe("first sync backup and Keep", () => {
 	});
 });
 
-describe("a list at TickTick's open-task limit", () => {
-	// A list at TickTick's open-task limit stops only its own writes; a create whose link
-	// cannot be written is linked by the next sync; a failed pendingDelete marking is retried.
+describe("a list at TickTick's open-task limit, among other lists", () => {
+	// A list at TickTick's open-task limit stops only its own writes.
 
 	/** Work holds 99 open synced tasks and one completed one; Home holds the tasks given. TickTick allows 99 open. */
 	async function fullWork(home: string[]): Promise<SyncHarness & { work: { listId: string; projectId: string }; homeList: { listId: string; projectId: string }; doneId: string }> {
@@ -1223,59 +1568,14 @@ describe("a list at TickTick's open-task limit", () => {
 			expect(s.tt.get(s.ttIdOf("Pay rent"))?.projectId).toBe(s.homeList.projectId);
 		});
 	});
+});
 
-	describe("a create whose link cannot be written", () => {
-		it("is linked by the next sync, not imported or created again", async () => {
-			const s = await syncHarness();
-			const { listId, projectId } = await linkedList(s);
-			await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
-			await s.h.saveNow();
-			const saved = s.h.dbText();
-			const create = s.tt.createTask.bind(s.tt);
-			s.tt.createTask = async (input: TtTaskCreate) => {
-				const made = await create(input);
-				// The store turns read-only after TickTick answered, before the link is written.
-				await makeReadOnly(s.h);
-				return made;
-			};
-			await expect(s.sync.sync()).rejects.toThrow();
-			s.tt.createTask = create;
-			await makeWritable(s.h, saved);
-			s.tick();
-			expect((await s.sync.sync()).ok).toBe(true);
-			expect(s.tasks("Buy milk")).toHaveLength(1);
-			expect(s.tt.live(projectId).filter((t) => t.title === "Buy milk")).toHaveLength(1);
-			expect(s.ttIdOf("Buy milk")).toBe(s.tt.findByTitle("Buy milk")?.id);
-		});
-	});
-
-	describe("a pendingDelete marking that fails", () => {
-		it("is retried at the start of the next sync", async () => {
-			const s = await syncHarness();
-			const { listId, projectId } = await linkedList(s);
-			const { task } = await s.h.app.tasks.create({ title: "Buy milk", categoryId: listId });
-			await s.sync.sync();
-			s.tick();
-			const ttId = s.ttIdOf("Buy milk");
-			const store = s.h.app.store;
-			const run = store.run.bind(store);
-			let failOnce = true;
-			const failing: typeof store.run = (label, fn, options) => {
-				if (failOnce && label === TICKTICK_LINKS_LABEL) {
-					failOnce = false;
-					return Promise.reject(new Error("the write failed"));
-				}
-				return run(label, fn, options);
-			};
-			store.run = failing;
-			await store.undo();
-			await new Promise((r) => setTimeout(r, 0));
-			expect(failOnce).toBe(false);
-			expect(s.link("task", task.id)?.pendingDelete).toBeUndefined();
-			await s.sync.sync();
-			expect(s.tt.calls).toContain(`deleteTask:${ttId}`);
-			expect(s.link("task", task.id)).toBeUndefined();
-			expect(s.tt.live(projectId)).toHaveLength(0);
-		});
+describe("linkedLists order", () => {
+	it("lists the Inbox first and lists that share a sort key by id", () => {
+		const cat = (id: string, sortKey: string): Category => ({ id, name: id, icon: null, color: null, nameKey: id, isInbox: id === INBOX_ID, sortKey, createdAt: "2026-10-01T00:00:00.000Z", modifiedAt: "2026-10-01T00:00:00.000Z" });
+		const link = (id: string): SyncLink => ({ kind: "list", logwellId: id, ttId: `p-${id}`, ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: null, modifiedAt: "2026-10-01T00:00:00.000Z" });
+		const categories = new Map([cat("b", "0M"), cat("a", "0M"), cat(INBOX_ID, "0V")].map((c) => [c.id, c]));
+		const syncLinks = new Map([INBOX_ID, "a", "b"].map((id) => [syncLinkId("list", id), link(id)]));
+		expect(linkedLists({ categories, syncLinks }).map((l) => l.listId)).toEqual([INBOX_ID, "a", "b"]);
 	});
 });

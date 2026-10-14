@@ -19,7 +19,7 @@ export interface FileGateway {
  * the expected one, or null when the file no longer exists (it is never
  * recreated). Nothing is written in either case.
  */
-export type WriteResult = { written: true } | { written: false; current: string | null };
+export type FileWriteResult = { written: true } | { written: false; current: string | null };
 
 /** The database file, bound to its current path (which can change on rename). */
 export interface DbFile {
@@ -29,5 +29,5 @@ export interface DbFile {
 	 * writes `content` only if `expected(currentText)` is true. A change that
 	 * landed after our last read is therefore never overwritten.
 	 */
-	write(content: string, expected: (current: string) => boolean): Promise<WriteResult>;
+	write(content: string, expected: (current: string) => boolean): Promise<FileWriteResult>;
 }

@@ -1,31 +1,19 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { TOGGLE_COMPLETE_EVENT } from "../../src/ui/TaskList";
 import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
-import { menuItem, mountU1, settle } from "./app-helpers";
+import { click, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
 import { render } from "preact";
 import { TaskCheckbox } from "../../src/ui/common";
+import { css } from "./styles-helpers";
 
 describe("task row", () => {
 	// The task row (priority look and menu), completion, list color.
 	const TODAY = "2026-10-01";
 
-	let current: { unmount: () => void } | null = null;
-	afterEach(() => {
-		current?.unmount();
-		current = null;
-	});
-	async function mount() {
-		const m = await mountU1();
-		current = m;
-		return m;
-	}
 	const row = (root: HTMLElement, title: string) =>
 		[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes(title))!;
-	const openInbox = async (root: HTMLElement) => {
-		[...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Inbox"))!.click();
-		await settle();
-	};
+	const openInbox = (root: HTMLElement) => click(sidebarItem(root, "Inbox"));
 
 	describe("date helpers", () => {
 		it("tones follow the color semantics", () => {
@@ -47,7 +35,7 @@ describe("task row", () => {
 
 	describe("task row", () => {
 		it("checkbox carries the priority class and an accessible label", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Urgent thing" });
 			await h.app.tasks.setPriority(task.id, 1);
 			await h.app.tasks.create({ title: "Plain thing" });
@@ -59,7 +47,7 @@ describe("task row", () => {
 		});
 
 		it("shows the first tag and a +N count, with every tag in the tooltip", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tags.create("python", "yellow");
 			await h.app.tags.create("programming", "orange");
 			await h.app.tags.create("study", "blue");
@@ -73,14 +61,14 @@ describe("task row", () => {
 		});
 
 		it("lists keep the matrix chip", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Flagged", urgent: true, important: true, scheduled: { kind: "date", date: "2026-09-29" } });
 			await openInbox(root);
 			expect(row(root, "Flagged").querySelector(".cp-meta-matrix")?.textContent).toBe("Urgent · Important");
 		});
 
 		it("shows meta in order: tags, note, subtasks, list, date", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const cat = await h.app.categories.create("Work", "briefcase");
 			await h.app.categories.setColor(cat.id, "green");
 			const tag = await h.app.tags.create("urgent", "red");
@@ -109,7 +97,7 @@ describe("task row", () => {
 		});
 
 		it("hides the list name inside that list's own view", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const cat = await h.app.categories.create("Work");
 			await h.app.tasks.create({ title: "In work", categoryId: cat.id });
 			await settle();
@@ -119,7 +107,7 @@ describe("task row", () => {
 		});
 
 		it("date tones: today blue (time only), tomorrow, later", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "A", scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" } });
 			await h.app.tasks.create({ title: "B", scheduled: { kind: "date", date: "2026-10-02" } });
 			await h.app.tasks.create({ title: "C", scheduled: { kind: "date", date: "2026-10-20" } });
@@ -131,7 +119,7 @@ describe("task row", () => {
 		});
 
 		it("selected row is marked", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Pick me" });
 			await openInbox(root);
 			row(root, "Pick me").click();
@@ -140,7 +128,7 @@ describe("task row", () => {
 		});
 
 		it("context menu has Priority items with the current one checked, and sets it", async () => {
-			const { h, host, root } = await mount();
+			const { h, host, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Menu me" });
 			await h.app.tasks.setPriority(task.id, 2);
 			await openInbox(root);
@@ -157,7 +145,7 @@ describe("task row", () => {
 		});
 
 		it("Ctrl+Enter and the toggle event still complete the task", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Finish" });
 			await openInbox(root);
 			row(root, "Finish").dispatchEvent(new CustomEvent(TOGGLE_COMPLETE_EVENT));
@@ -166,7 +154,7 @@ describe("task row", () => {
 		});
 
 		it("completes without waiting for any animation", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Quick" });
 			await openInbox(root);
 			row(root, "Quick").querySelector<HTMLInputElement>(".cp-task-checkbox")!.click();
@@ -178,7 +166,7 @@ describe("task row", () => {
 
 	describe("completion animation", () => {
 		it("rows mounted already completed are not marked as just completed", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const { task } = await h.app.tasks.create({ title: "Old news" });
 			await h.app.tasks.complete(task.id);
 			[...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes("Completed"))!.click();
@@ -189,7 +177,7 @@ describe("task row", () => {
 		});
 
 		it("the user's own completion marks the row until the animation ends", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Fresh", scheduled: { kind: "date", date: TODAY } });
 			await settle();
 			const r = row(root, "Fresh");
@@ -203,8 +191,6 @@ describe("task row", () => {
 		});
 
 		it("the stylesheet animates only a just-completed row's checkbox", async () => {
-			const { readFileSync } = await import("node:fs");
-			const css = readFileSync("styles.css", "utf8");
 			expect(css).not.toMatch(/view \.cp-task-checkbox:checked\s*\{[^}]*animation/);
 			expect(css).toMatch(/\.cp-task-row\.is-just-completed \.cp-task-checkbox:checked\s*\{[^}]*animation/);
 		});
@@ -212,7 +198,7 @@ describe("task row", () => {
 
 	describe("search results", () => {
 		it("use the same row and collect completed results in a collapsed group at the end", async () => {
-			const { h, root } = await mount();
+			const { h, root } = await mountApp();
 			const a = await h.app.tasks.create({ title: "Alpha open" });
 			const b = await h.app.tasks.create({ title: "Alpha done" });
 			await h.app.tasks.complete(b.task.id);
@@ -240,19 +226,10 @@ describe("the task checkbox", () => {
 	// restores the old `checked` after dispatch, which can be after the re-render. The box must end up
 	// matching its prop.
 
-	let host: HTMLElement | null = null;
-	afterEach(() => {
-		if (host !== null) render(null, host);
-		host?.remove();
-		host = null;
-	});
-
 	describe("TaskCheckbox", () => {
 		it("matches its prop even when the browser restores the old state after the re-render", async () => {
-			host = document.createElement("div");
-			document.body.append(host);
-			const draw = (done: boolean) =>
-				render(<TaskCheckbox done={done} title="T" onToggle={() => draw(true)} />, host!);
+			const host = mountNode(null);
+			const draw = (done: boolean) => render(<TaskCheckbox done={done} title="T" onToggle={() => draw(true)} />, host);
 			draw(false);
 			const box = host.querySelector<HTMLInputElement>("input")!;
 			box.click(); // onToggle re-renders at once, as a microtask-driven store update does
@@ -263,9 +240,7 @@ describe("the task checkbox", () => {
 		});
 
 		it("goes back to the prop when the toggle is refused", async () => {
-			host = document.createElement("div");
-			document.body.append(host);
-			render(<TaskCheckbox done={false} title="T" onToggle={() => undefined} />, host);
+			const host = mountNode(<TaskCheckbox done={false} title="T" onToggle={() => undefined} />);
 			const box = host.querySelector<HTMLInputElement>("input")!;
 			box.click();
 			box.checked = true; // a browser that kept the native toggle

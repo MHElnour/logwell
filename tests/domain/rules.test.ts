@@ -1,7 +1,8 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { isDomainError } from "../../src/domain/errors";
 import { basenameOf, noteDisplayName, noteNameCandidate, rewriteNotePath, sanitizeNoteName } from "../../src/domain/notes";
-import { compareSortKeys, keyAfter, keyBetween } from "../../src/domain/sortKey";
+import { compareSortKeys, keyAfter, keyBetween, rekeyOrder } from "../../src/domain/sortKey";
 import { isValidTagKey, normalizeTagKey, requireTagKey, tagDisplayName } from "../../src/domain/tags";
 import { assertCanBecomeSubtask, assertUniqueCategoryName, requireTitle } from "../../src/domain/tasks";
 import type { Category, Task } from "../../src/domain/types";
@@ -32,7 +33,7 @@ describe("rules", () => {
 		};
 	}
 
-	describe("tags (TAG-03)", () => {
+	describe("tags", () => {
 		it("normalizes keys: NFC, trimmed, lowercased", () => {
 			expect(normalizeTagKey("  @Learning ")).toBe("learning");
 			expect(normalizeTagKey("Café")).toBe("café");
@@ -53,7 +54,7 @@ describe("rules", () => {
 	});
 
 	describe("titles and categories", () => {
-		it("TASK-02: rejects empty titles after trimming", () => {
+		it("rejects empty titles after trimming", () => {
 			expect(requireTitle("  Buy milk ")).toBe("Buy milk");
 			try {
 				requireTitle("   ");
@@ -63,7 +64,7 @@ describe("rules", () => {
 			}
 		});
 
-		it("CAT-03: category names are unique case-insensitively", () => {
+		it("category names are unique case-insensitively", () => {
 			const cats: Category[] = [
 				{ id: "a", name: "Study", icon: null, color: null, nameKey: "study", isInbox: false, sortKey: "V", createdAt: "", modifiedAt: "" },
 			];
@@ -73,7 +74,7 @@ describe("rules", () => {
 		});
 	});
 
-	describe("subtask depth (SUB-01, B13)", () => {
+	describe("subtask depth", () => {
 		it("blocks a subtask of a subtask", () => {
 			const parent = task("p");
 			const child = task("c", "p");
@@ -99,7 +100,7 @@ describe("rules", () => {
 		});
 	});
 
-	describe("note names (NOTE-02, B45)", () => {
+	describe("note names", () => {
 		it("removes forbidden characters and collapses whitespace", () => {
 			expect(sanitizeNoteName('Plan: a/b  "draft" #1 [x] ^y | z?')).toBe("Plan ab draft 1 x y z");
 		});
@@ -118,7 +119,7 @@ describe("rules", () => {
 			expect(noteNameCandidate("Plan", 2)).toBe("Plan (2).md");
 		});
 
-		it("NOTE-06: rewrites exact file paths and folder prefixes", () => {
+		it("rewrites exact file paths and folder prefixes", () => {
 			expect(rewriteNotePath("Plan.md", "Plan.md", "Plan v2.md", false)).toBe("Plan v2.md");
 			expect(rewriteNotePath("Other.md", "Plan.md", "Plan v2.md", false)).toBeNull();
 			expect(rewriteNotePath("Notes/a/Plan.md", "Notes", "Archive/Notes", true)).toBe("Archive/Notes/a/Plan.md");
@@ -146,6 +147,41 @@ describe("rules", () => {
 				a = k;
 			}
 			expect(keyAfter(keys) > keys[keys.length - 1]!).toBe(true);
+		});
+
+		it("#107: a reorder keeps every two records other than the moved one in their order, those outside it too", () => {
+			interface Rec {
+				id: string;
+				sortKey: string;
+			}
+			const compare = (a: Rec, b: Rec) => compareSortKeys(a.sortKey, b.sortKey) || compareSortKeys(a.id, b.id);
+			fc.assert(
+				fc.property(
+					// Few distinct keys, so equal keys (the first task of every list) are common.
+					fc.array(fc.record({ key: fc.constantFrom("H", "M", "V", "c", "k"), inOrder: fc.boolean() }), { minLength: 2, maxLength: 14 }),
+					fc.nat(),
+					fc.nat(),
+					(spec, from, to) => {
+						const all: Rec[] = spec.map((r, n) => ({ id: String(n).padStart(2, "0"), sortKey: r.key })).sort(compare);
+						const shown = all.filter((_, n) => spec[Number(all[n]!.id)]!.inOrder);
+						fc.pre(shown.length >= 2);
+						const moved = shown[from % shown.length]!;
+						const order = shown.filter((r) => r !== moved);
+						const i = to % shown.length;
+						order.splice(i, 0, moved);
+						const keys = rekeyOrder(order, i, all.filter((r) => !shown.includes(r)), compare);
+						const after = new Map(all.map((r) => [r, { id: r.id, sortKey: keys.get(r) ?? r.sortKey }]));
+						const now = (r: Rec) => after.get(r)!;
+						// The order is the new sort order of its records.
+						for (let n = 1; n < order.length; n++) expect(compare(now(order[n - 1]!), now(order[n]!))).toBeLessThan(0);
+						// Every other pair keeps its order.
+						const rest = all.filter((r) => r !== moved);
+						for (let n = 1; n < rest.length; n++) expect(compare(now(rest[n - 1]!), now(rest[n]!))).toBeLessThan(0);
+						for (const key of keys.values()) expect(key.endsWith("0")).toBe(false);
+					},
+				),
+				{ numRuns: 2000 },
+			);
 		});
 
 		it("handles the start bound", () => {

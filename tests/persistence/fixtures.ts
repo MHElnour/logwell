@@ -90,6 +90,30 @@ export interface Harness {
 	saveNow(store?: CpbaseStore): Promise<void>;
 }
 
+/**
+ * Runs `before` ahead of the next `times` writes to a path `match` accepts (every one by default); a throw from it
+ * fails that write. `hits` counts the runs; `restore` puts the plain write back.
+ */
+export function interceptWrite(h: Harness, match: (path: string) => boolean, before: (path: string) => void, times = Infinity): { readonly hits: number; restore(): void } {
+	const write = h.fs.write.bind(h.fs);
+	let hits = 0;
+	h.fs.write = async (path, data) => {
+		if (hits < times && match(path)) {
+			hits++;
+			before(path);
+		}
+		await write(path, data);
+	};
+	return {
+		get hits() {
+			return hits;
+		},
+		restore() {
+			h.fs.write = write;
+		},
+	};
+}
+
 export function harness(
 	initial: string | null = emptyDbText(),
 	migrations?: Migration[],

@@ -7,12 +7,19 @@ import { isDomainError } from "../../src/domain/errors";
 import { SAVE_DEBOUNCE_MS, SAVE_MAX_DELAY_MS, SAVE_RETRY_MS, type StoreEvent } from "../../src/persistence/CpbaseStore";
 import { parseDbText, readHeader, revisionOf, serializeDb } from "../../src/persistence/serializer";
 import { FakeClock, settle } from "../helpers";
-import { BACKUP_ROOT, DB_PATH, descendant, descendants, emptyDbText, harness, type Harness, load, makeTask, withTask } from "./fixtures";
+import { BACKUP_ROOT, DB_PATH, descendant, descendants, emptyDbText, harness, type Harness, interceptWrite, load, makeTask, withTask } from "./fixtures";
 import { collectionsOf, CURRENT_SCHEMA_VERSION, HISTORY_LIMIT } from "../../src/persistence/schema";
 import { bindFile, MemoryFileGateway } from "./memoryGateway";
 import { type JournalEntry, replayJournal } from "../../src/persistence/journal";
 import { BackupStore, dbBackupRoot, SNAPSHOT_INTERVAL_MS } from "../../src/persistence/backups";
 import type { DbFile } from "../../src/persistence/gateway";
+
+/** The first conflict event (throws when there is none). */
+function conflictEvent(events: StoreEvent[]): Extract<StoreEvent, { type: "conflict" }> {
+	const e = events.find((x) => x.type === "conflict");
+	if (e?.type !== "conflict") throw new Error("no conflict event");
+	return e;
+}
 
 describe("CpbaseStore: open and save", () => {
 	it("opens a database and takes a session snapshot", async () => {
@@ -73,7 +80,7 @@ describe("CpbaseStore: open and save", () => {
 });
 
 describe("CpbaseStore: external changes", () => {
-	it("B39: fast-forwards a descendant version when nothing is pending", async () => {
+	it("fast-forwards a descendant version when nothing is pending", async () => {
 		const h = harness();
 		await h.store.open();
 		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("remote")).next, "r-remote"));
@@ -84,7 +91,7 @@ describe("CpbaseStore: external changes", () => {
 		expect(h.events.some((e) => e.type === "loaded" && e.cause === "external")).toBe(true);
 	});
 
-	it("B40: a fork with pending local edits keeps a conflict copy and loads theirs", async () => {
+	it("a fork with pending local edits keeps a conflict copy and loads theirs", async () => {
 		const h = harness();
 		await h.store.open();
 		h.addTask(makeTask("mine"));
@@ -107,7 +114,7 @@ describe("CpbaseStore: external changes", () => {
 		expect(await h.store.listConflicts()).toEqual([]);
 	});
 
-	it("B40: an unrelated version is a fork even without pending edits", async () => {
+	it("an unrelated version is a fork even without pending edits", async () => {
 		const h = harness();
 		await h.store.open();
 		h.addTask(makeTask("saved"));
@@ -121,8 +128,8 @@ describe("CpbaseStore: external changes", () => {
 	});
 });
 
-describe("CpbaseStore: fault injection (B37, B38, B41)", () => {
-	it("B37: a truncated file loads the newest backup read-only and writes nothing", async () => {
+describe("CpbaseStore: fault injection", () => {
+	it("a truncated file loads the newest backup read-only and writes nothing", async () => {
 		const h = harness();
 		await h.store.open();
 		h.addTask(makeTask("t1"));
@@ -159,7 +166,7 @@ describe("CpbaseStore: fault injection (B37, B38, B41)", () => {
 		expect([...load(h.dbText()).tasks.keys()].sort()).toEqual(["t1", "t2"]);
 	});
 
-	it("B37: a torn write during save is recovered from the journal", async () => {
+	it("a torn write during save is recovered from the journal", async () => {
 		const h = harness();
 		await h.store.open();
 		h.addTask(makeTask("t1"));
@@ -173,7 +180,7 @@ describe("CpbaseStore: fault injection (B37, B38, B41)", () => {
 		expect(s2.data.tasks.has("t1")).toBe(true);
 	});
 
-	it("B37: git merge markers open read-only", async () => {
+	it("git merge markers open read-only", async () => {
 		const base = emptyDbText();
 		const h = harness(`<<<<<<< HEAD\n${base}=======\n${base}>>>>>>> branch\n`);
 		h.local.knownDbId = "db-1";
@@ -199,7 +206,7 @@ describe("CpbaseStore: fault injection (B37, B38, B41)", () => {
 		expect(load(h.dbText()).tasks.has("t1")).toBe(true);
 	});
 
-	it("B38: a newer schema opens read-only and is never written", async () => {
+	it("a newer schema opens read-only and is never written", async () => {
 		const text = emptyDbText().replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":99');
 		const h = harness(text);
 		await h.store.open();
@@ -211,7 +218,7 @@ describe("CpbaseStore: fault injection (B37, B38, B41)", () => {
 		expect(h.fs.writes.filter((p) => p === DB_PATH)).toEqual([]);
 	});
 
-	it("B41: our last write missing from history is restored as a conflict copy", async () => {
+	it("our last write missing from history is restored as a conflict copy", async () => {
 		const h = harness();
 		await h.store.open();
 		h.addTask(makeTask("lost"));
@@ -323,12 +330,6 @@ describe("restore errors", () => {
 describe("write, reload and recovery", () => {
 	// Regression tests for the store's write, reload and recovery paths.
 
-	function conflictEvent(events: StoreEvent[]): Extract<StoreEvent, { type: "conflict" }> {
-		const e = events.find((x) => x.type === "conflict");
-		if (e?.type !== "conflict") throw new Error("no conflict event");
-		return e;
-	}
-
 	function snapshotPaths(h: Harness, kind: string): string[] {
 		return [...h.fs.files.keys()].filter((p) => p.startsWith(`${BACKUP_ROOT}/db-1/snapshots/${kind}-`));
 	}
@@ -386,7 +387,7 @@ describe("write, reload and recovery", () => {
 			expect(await h.store.listConflicts()).toEqual([]);
 		});
 
-		it("B41 does not fire when our last write scrolled out of a long remote history", async () => {
+		it("does not fire when our last write scrolled out of a long remote history", async () => {
 			const h = harness();
 			await h.store.open();
 			h.addTask(makeTask("ours"));
@@ -414,7 +415,7 @@ describe("write, reload and recovery", () => {
 			expect(h.fs.files.get(conflict.path)).toContain('"id":"mine"');
 		});
 
-		it("B41 still fires for a proven loss when the history is full", async () => {
+		it("still fires for a proven loss when the history is full", async () => {
 			const shared = descendants(emptyDbText(), HISTORY_LIMIT + 5, "s");
 			const h = harness(shared);
 			await h.store.open();
@@ -477,17 +478,9 @@ describe("write, reload and recovery", () => {
 			await h.store.open();
 			h.addTask(makeTask("mine"));
 			h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
-			const write = h.fs.write.bind(h.fs);
-			let injected = false;
-			h.fs.write = async (path, data) => {
-				if (!injected && path.includes("/conflicts/")) {
-					injected = true;
-					h.addTask(makeTask("during"));
-				}
-				await write(path, data);
-			};
+			const during = interceptWrite(h, (p) => p.includes("/conflicts/"), () => h.addTask(makeTask("during")), 1);
 			await h.store.handleExternalChange();
-			expect(injected).toBe(true);
+			expect(during.hits).toBe(1);
 			const conflict = conflictEvent(h.events);
 			expect(h.fs.files.get(conflict.path)).toContain('"id":"during"');
 			expect(await h.store.listConflicts()).toHaveLength(1);
@@ -660,13 +653,7 @@ describe("save retries, lineage and snapshots", () => {
 		return [...h.fs.files.keys()].filter((p) => p !== DB_PATH && (!p.startsWith(`${BACKUP_ROOT}/db-1/`) || p.includes("..")));
 	}
 
-	function conflictPath(events: StoreEvent[]): string {
-		const e = events.find((x) => x.type === "conflict");
-		if (e?.type !== "conflict") throw new Error("no conflict event");
-		return e.path;
-	}
-
-	describe("R1: a save that keeps failing compare-and-swap never stalls silently", () => {
+	describe("a save that keeps failing compare-and-swap never stalls silently", () => {
 		it("restoring while the file already holds our own revision keeps saving (incl. on close)", async () => {
 			const h = harness();
 			await h.store.open();
@@ -711,7 +698,7 @@ describe("save retries, lineage and snapshots", () => {
 		});
 	});
 
-	describe("R2: recovered history includes the replayed journal revisions", () => {
+	describe("recovered history includes the replayed journal revisions", () => {
 		async function threeSaves() {
 			const a = harness();
 			await a.store.open();
@@ -772,7 +759,7 @@ describe("save retries, lineage and snapshots", () => {
 		});
 	});
 
-	describe("R6: recovery does not trust another device's clock", () => {
+	describe("recovery does not trust another device's clock", () => {
 		it("picks the snapshot this device wrote last, not the newest header writtenAt", async () => {
 			const base = load(emptyDbText());
 			// Device B wrote the file with a clock 2 h ahead.
@@ -806,22 +793,14 @@ describe("save retries, lineage and snapshots", () => {
 		});
 	});
 
-	describe("R7: conflict copy name matches its content", () => {
+	describe("conflict copy name matches its content", () => {
 		it("a commit during an idle-fork copy renames the copy to the new revision", async () => {
 			const h = harness();
 			await h.store.open();
 			h.addTask(makeTask("x"));
 			await h.saveNow();
 			h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => withTask(d, makeTask("theirs")).next, "r-other0000001"));
-			const write = h.fs.write.bind(h.fs);
-			let injected = false;
-			h.fs.write = async (path, data) => {
-				if (!injected && path.includes("/conflicts/")) {
-					injected = true;
-					h.addTask(makeTask("during"));
-				}
-				await write(path, data);
-			};
+			interceptWrite(h, (p) => p.includes("/conflicts/"), () => h.addTask(makeTask("during")), 1);
 			await h.store.handleExternalChange();
 			const conflicts = await h.store.listConflicts();
 			expect(conflicts).toHaveLength(1);
@@ -829,11 +808,11 @@ describe("save retries, lineage and snapshots", () => {
 			const content = load(h.fs.files.get(c!.path)!);
 			expect(c!.revision).toBe(content.meta.revision);
 			expect(content.tasks.has("during")).toBe(true);
-			expect(c!.path).toBe(conflictPath(h.events));
+			expect(c!.path).toBe(conflictEvent(h.events).path);
 		});
 	});
 
-	describe("R8: file header values never reach a path unchecked", () => {
+	describe("file header values never reach a path unchecked", () => {
 		it("a traversal dbId makes the file damaged and writes nothing", async () => {
 			const h = harness(emptyDbText("../../../../outside"));
 			await h.store.open();
@@ -887,7 +866,7 @@ describe("save retries, lineage and snapshots", () => {
 		});
 	});
 
-	describe("R9: snapshots after an external reload do not evict hourly snapshots", () => {
+	describe("snapshots after an external reload do not evict hourly snapshots", () => {
 		it("five git pulls within minutes keep the hourly snapshots", async () => {
 			const h = harness();
 			await h.store.open();
@@ -918,15 +897,7 @@ describe("save retries, lineage and snapshots", () => {
 			await h.store.open();
 			h.addTask(makeTask("before"));
 			await h.saveNow();
-			const write = h.fs.write.bind(h.fs);
-			let injected = false;
-			h.fs.write = async (path, data) => {
-				if (!injected && path.includes("/pre-restore-")) {
-					injected = true;
-					h.addTask(makeTask("during"));
-				}
-				await write(path, data);
-			};
+			interceptWrite(h, (p) => p.includes("/pre-restore-"), () => h.addTask(makeTask("during")), 1);
 			await h.store.replaceAll(collectionsOf(load(emptyDbText())), "pre-restore");
 			const [pre] = (await h.store.listSnapshots()).filter((s) => s.kind === "pre-restore");
 			const backup = load(h.fs.files.get(pre!.path)!);
@@ -942,15 +913,7 @@ describe("save retries, lineage and snapshots", () => {
 			await h.store.open();
 			h.addTask(makeTask("old"));
 			await h.saveNow();
-			const write = h.fs.write.bind(h.fs);
-			let injected = false;
-			h.fs.write = async (path, data) => {
-				if (!injected && path === DB_PATH) {
-					injected = true;
-					h.addTask(makeTask("late"));
-				}
-				await write(path, data);
-			};
+			interceptWrite(h, (p) => p === DB_PATH, () => h.addTask(makeTask("late")), 1);
 			await h.store.replaceAll(collectionsOf(load(emptyDbText())), "pre-restore");
 			h.scheduler.advance(SAVE_MAX_DELAY_MS);
 			await settle();
@@ -964,15 +927,7 @@ describe("save retries, lineage and snapshots", () => {
 			await h.saveNow();
 			h.fs.files.set(DB_PATH, "<<<<<<< HEAD\nbroken\n");
 			await h.store.handleExternalChange();
-			const write = h.fs.write.bind(h.fs);
-			let injected = false;
-			h.fs.write = async (path, data) => {
-				if (!injected && path === DB_PATH) {
-					injected = true;
-					h.addTask(makeTask("late"));
-				}
-				await write(path, data);
-			};
+			interceptWrite(h, (p) => p === DB_PATH, () => h.addTask(makeTask("late")), 1);
 			await h.store.restoreRecovered();
 			h.scheduler.advance(SAVE_MAX_DELAY_MS);
 			await settle();
@@ -985,7 +940,7 @@ describe("save retries, lineage and snapshots", () => {
 // rollbacks and a newer-schema file that becomes valid. The import check and
 // the command-queue routing are in tests/app/review3.test.ts.
 
-describe("N2: a snapshot stamped in the future (clock jumped back) never outranks later ones", () => {
+describe("a snapshot stamped in the future (clock jumped back) never outranks later ones", () => {
 	async function clockJump(): Promise<Harness> {
 		const h = harness();
 		await h.store.open(); // S0 stamped 2026-10-01
@@ -1042,14 +997,16 @@ describe("N2: a snapshot stamped in the future (clock jumped back) never outrank
 		await h.saveNow(); // hourly S1 (future) holds a1, journal reset
 		h.clock.set("2026-10-01T10:05:00.000Z");
 		// Snapshots can no longer be written, so a2 survives only in the journal on top of S1.
-		const write = h.fs.write.bind(h.fs);
-		h.fs.write = async (path, data) => {
-			if (path.includes("/snapshots/")) throw new Error("disk full");
-			await write(path, data);
-		};
+		const full = interceptWrite(
+			h,
+			(p) => p.includes("/snapshots/"),
+			() => {
+				throw new Error("disk full");
+			},
+		);
 		h.addTask(makeTask("a2"));
 		await h.saveNow();
-		h.fs.write = write;
+		full.restore();
 		h.fs.files.set(DB_PATH, h.dbText().slice(0, 60));
 		const s2 = h.newStore();
 		await s2.open();
@@ -1076,7 +1033,7 @@ describe("N2: a snapshot stamped in the future (clock jumped back) never outrank
 	});
 });
 
-describe("N3: close() keeps pending changes whenever the save left the store dirty", () => {
+describe("close() keeps pending changes whenever the save left the store dirty", () => {
 	it("writes the conflict copy and announces it even if the file was recreated meanwhile", async () => {
 		let recreate: string | null = null;
 		const wrap = (file: DbFile): DbFile => ({
@@ -1201,18 +1158,25 @@ describe("a newer-schema database becomes writable again when the file is valid 
 		expect(h.store.readOnlyState).toBeNull();
 	});
 
-	it("a still-newer file stays read-only and shows what can be read", async () => {
+	it("a still-newer file stays read-only, shows what can be read, and is never written", async () => {
 		const base = emptyDbText();
 		const h = harness(base.replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":99'));
 		await h.store.open();
-		h.fs.files.set(DB_PATH, base.replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":100'));
+		const other = descendant(base, (d) => withTask(d, makeTask("theirs")).next, "r-newer0000001").replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":100');
+		h.fs.files.set(DB_PATH, other);
 		await h.store.handleExternalChange();
 		expect(h.store.readOnlyState?.reason).toBe("newer-schema");
+		expect(h.store.data.tasks.has("theirs")).toBe(true);
+		expect(() => h.addTask(makeTask("t1"))).toThrow(/read-only/);
+		await h.store.flush();
+		h.scheduler.advance(60_000);
+		expect(h.dbText()).toBe(other);
+		expect(h.fs.writes.filter((p) => p === DB_PATH)).toEqual([]);
 	});
 });
 
-// Regression tests for the store: retries after a write that threw, close()
-// that never rejects, and recovery that reads as few snapshots as it can.
+// Regression tests for the store: retries after a write that threw, recovery that reads as few snapshots as it can,
+// and close() with edits it cannot keep (it never rejects).
 
 describe("a retry after a write that threw (header intact) is still our own write", () => {
 	it("stays writable and saves the retry", async () => {
@@ -1261,48 +1225,6 @@ describe("a retry after a write that threw (header intact) is still our own writ
 		h.fs.files.set(DB_PATH, failedText);
 		await h.store.handleExternalChange();
 		expect([...h.store.data.tasks.keys()]).toEqual(["t1"]);
-	});
-});
-
-describe("close() never rejects", () => {
-	it("resolves and reports when the conflict copy cannot be written", async () => {
-		const h = harness();
-		await h.store.open();
-		h.addTask(makeTask("pending"));
-		h.fs.failNextWrite((p) => p === DB_PATH); // the save fails, so the edits stay pending
-		const write = h.fs.write.bind(h.fs);
-		h.fs.write = async (path, data) => {
-			if (path.includes("/conflicts/")) throw new Error("disk full");
-			await write(path, data);
-		};
-		await expect(h.store.close()).resolves.toBeUndefined();
-		// Round 5: the lost edits get their own event, not a save error that promises a retry.
-		expect(h.events.some((e) => e.type === "edits-lost" && e.message.includes("disk full"))).toBe(true);
-		expect(h.events.some((e) => e.type === "pending-saved-as-conflict")).toBe(false);
-	});
-
-	it("resolves when the final save itself throws while handling a concurrent change", async () => {
-		const h = harness();
-		await h.store.open();
-		h.addTask(makeTask("pending"));
-		// another device changed the file; saving must set our edits aside, which fails
-		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => d, "r-other0000001"));
-		const write = h.fs.write.bind(h.fs);
-		h.fs.write = async (path, data) => {
-			if (path.includes("/conflicts/")) throw new Error("disk full");
-			await write(path, data);
-		};
-		await expect(h.store.close()).resolves.toBeUndefined();
-		expect(h.events.some((e) => e.type === "edits-lost" && e.message.includes("disk full"))).toBe(true);
-	});
-
-	it("a successful conflict copy is still announced", async () => {
-		const h = harness();
-		await h.store.open();
-		h.addTask(makeTask("pending"));
-		h.fs.files.delete(DB_PATH);
-		await h.store.close();
-		expect(h.events.filter((e) => e.type === "pending-saved-as-conflict")).toHaveLength(1);
 	});
 });
 
@@ -1359,78 +1281,408 @@ describe("recoverLatest stops at the first usable snapshot", () => {
 });
 
 describe("close() with edits that cannot be kept", () => {
-	// When close() cannot keep unsaved edits anywhere, it says so
-	// with its own event. It is not the generic save error, which promises a retry
-	// that a closed store never makes.
+	// When close() cannot keep unsaved edits anywhere, it says so with its own event and still resolves. It is not
+	// the generic save error, which promises a retry that a closed store never makes.
 
-	function failConflictWrites(h: ReturnType<typeof harness>, reason = "disk full"): void {
-		const write = h.fs.write.bind(h.fs);
-		h.fs.write = async (path, data) => {
-			if (path.includes("/conflicts/")) throw new Error(reason);
-			await write(path, data);
-		};
+	function failConflictWrites(h: Harness): void {
+		interceptWrite(
+			h,
+			(p) => p.includes("/conflicts/"),
+			() => {
+				throw new Error("disk full");
+			},
+		);
 	}
 
-	describe("close() with edits that cannot be kept", () => {
-		it("emits edits-lost with the reason when the file cannot be written and neither can the conflict copy", async () => {
-			const h = harness();
-			await h.store.open();
-			h.addTask(makeTask("pending"));
-			h.fs.failNextWrite((p) => p === DB_PATH);
-			failConflictWrites(h);
-			await expect(h.store.close()).resolves.toBeUndefined();
-			const lost = h.events.filter((e) => e.type === "edits-lost");
-			expect(lost).toHaveLength(1);
-			expect(lost[0]).toMatchObject({ type: "edits-lost" });
-			expect(lost[0]?.type === "edits-lost" && lost[0].message).toContain("disk full");
-			expect(h.events.some((e) => e.type === "pending-saved-as-conflict")).toBe(false);
-		});
+	it("resolves and emits edits-lost with the reason when the file cannot be written and neither can the conflict copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		failConflictWrites(h);
+		await expect(h.store.close()).resolves.toBeUndefined();
+		const lost = h.events.filter((e) => e.type === "edits-lost");
+		expect(lost).toHaveLength(1);
+		expect(lost[0]).toMatchObject({ type: "edits-lost" });
+		expect(lost[0]?.type === "edits-lost" && lost[0].message).toContain("disk full");
+		expect(h.events.some((e) => e.type === "pending-saved-as-conflict")).toBe(false);
+	});
 
-		it("does not report 'could not be kept' as a save error (a closed store never retries)", async () => {
-			const h = harness();
-			await h.store.open();
-			h.addTask(makeTask("pending"));
-			h.fs.failNextWrite((p) => p === DB_PATH);
-			failConflictWrites(h);
-			await h.store.close();
-			const saveErrors = h.events.filter((e) => e.type === "save-error");
-			expect(saveErrors.some((e) => /could not be kept/i.test(e.message))).toBe(false);
-			expect(h.scheduler.pending).toBe(0);
-		});
+	it("does not report 'could not be kept' as a save error (a closed store never retries)", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		failConflictWrites(h);
+		await h.store.close();
+		const saveErrors = h.events.filter((e) => e.type === "save-error");
+		expect(saveErrors.some((e) => /could not be kept/i.test(e.message))).toBe(false);
+		expect(h.scheduler.pending).toBe(0);
+	});
 
-		it("emits edits-lost when the final save throws on a concurrent change and the copy cannot be written", async () => {
-			const h = harness();
-			await h.store.open();
-			h.addTask(makeTask("pending"));
-			h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => d, "r-other0000001"));
-			failConflictWrites(h);
-			await expect(h.store.close()).resolves.toBeUndefined();
-			const lost = h.events.filter((e) => e.type === "edits-lost");
-			expect(lost).toHaveLength(1);
-			expect(lost[0]?.type === "edits-lost" && lost[0].message).toContain("disk full");
-		});
+	it("emits edits-lost when the final save throws on a concurrent change and the copy cannot be written", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => d, "r-other0000001"));
+		failConflictWrites(h);
+		await expect(h.store.close()).resolves.toBeUndefined();
+		const lost = h.events.filter((e) => e.type === "edits-lost");
+		expect(lost).toHaveLength(1);
+		expect(lost[0]?.type === "edits-lost" && lost[0].message).toContain("disk full");
+	});
 
-		it("emits no edits-lost when the conflict copy is written, or when nothing was pending", async () => {
-			const h = harness();
-			await h.store.open();
-			h.addTask(makeTask("pending"));
-			h.fs.files.delete(DB_PATH);
-			await h.store.close();
-			expect(h.events.filter((e) => e.type === "pending-saved-as-conflict")).toHaveLength(1);
-			expect(h.events.some((e) => e.type === "edits-lost")).toBe(false);
+	it("emits no edits-lost when the conflict copy is written, or when nothing was pending", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.files.delete(DB_PATH);
+		await h.store.close();
+		expect(h.events.filter((e) => e.type === "pending-saved-as-conflict")).toHaveLength(1);
+		expect(h.events.some((e) => e.type === "edits-lost")).toBe(false);
 
-			const clean = harness();
-			await clean.store.open();
-			await clean.store.close();
-			expect(clean.events.some((e) => e.type === "edits-lost")).toBe(false);
-		});
+		const clean = harness();
+		await clean.store.open();
+		await clean.store.close();
+		expect(clean.events.some((e) => e.type === "edits-lost")).toBe(false);
+	});
 
-		it("emits no edits-lost when the final save succeeds", async () => {
-			const h = harness();
-			await h.store.open();
-			h.addTask(makeTask("pending"));
-			await h.store.close();
-			expect(h.events.some((e) => e.type === "edits-lost" || e.type === "save-error")).toBe(false);
+	it("emits no edits-lost when the final save succeeds", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		await h.store.close();
+		expect(h.events.some((e) => e.type === "edits-lost" || e.type === "save-error")).toBe(false);
+	});
+});
+
+describe("a torn journal line", () => {
+	const JOURNAL = `${BACKUP_ROOT}/db-1/journal.ndjson`;
+
+	it("#102: later entries stay readable and the next snapshot still resets the journal", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("t1"));
+		await h.saveNow();
+		// The app quits in the middle of an append: the last line has no end.
+		const journal = h.fs.files.get(JOURNAL) ?? "";
+		h.fs.files.set(JOURNAL, journal.slice(0, journal.length - 20));
+		const s = h.newStore();
+		await s.open();
+		h.addTask(makeTask("t2"), s);
+		await h.saveNow(s);
+		h.addTask(makeTask("t3"), s);
+		await h.saveNow(s);
+		const backups = new BackupStore(h.fs, dbBackupRoot(BACKUP_ROOT, "db-1"), h.clock);
+		const ids = (await backups.readJournal()).flatMap((e) => e.ops.map((op) => op.id));
+		expect(ids).toEqual(["t2", "t3"]);
+
+		// The hourly snapshot covers every entry, so the journal is cleared.
+		h.clock.advance(SNAPSHOT_INTERVAL_MS);
+		h.addTask(makeTask("t4"), s);
+		await h.saveNow(s);
+		expect(h.fs.files.get(JOURNAL)).toBe("");
+
+		// Damage after one more save recovers it from the snapshot and the journal.
+		h.addTask(makeTask("t5"), s);
+		await h.saveNow(s);
+		h.fs.files.set(DB_PATH, h.dbText().slice(0, 100));
+		const s2 = h.newStore();
+		await s2.open();
+		expect(s2.readOnlyState?.reason).toBe("damaged");
+		expect([...s2.data.tasks.keys()].sort()).toEqual(["t1", "t2", "t3", "t4", "t5"]);
+	});
+});
+
+describe("edits waiting to be saved when the file turns unreadable", () => {
+	it("#101: a damaged file repaired to the other side is a conflict, and Keep mine brings the edit back", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState?.reason).toBe("damaged");
+
+		// The merge is resolved to the other side, a descendant of the saved revision.
+		h.fs.files.set(DB_PATH, descendant(good, (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState).toBeNull();
+		expect(h.store.data.tasks.has("theirs")).toBe(true);
+		const path = conflictEvent(h.events).path;
+		expect(h.fs.files.get(path)).toContain('"id":"pending"');
+		// One copy holds the edit; the damaged text is the other.
+		expect((await h.store.listConflicts()).filter((c) => h.fs.files.get(c.path)?.includes('"id":"pending"'))).toHaveLength(1);
+
+		await h.store.keepMine(path);
+		expect([...load(h.dbText()).tasks.keys()].sort()).toEqual(["pending", "saved"]);
+	});
+
+	it("#101: a newer-schema file while an edit waits, then a valid file, is a conflict", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		const newer = descendant(good, (d) => d, "r-newer").replace(`"schemaVersion":${CURRENT_SCHEMA_VERSION}`, '"schemaVersion":99');
+		h.fs.files.set(DB_PATH, newer);
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState?.reason).toBe("newer-schema");
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+
+		h.fs.files.set(DB_PATH, descendant(good, (d) => withTask(d, makeTask("back")).next, "r-back"));
+		await h.store.handleExternalChange();
+		expect(h.store.readOnlyState).toBeNull();
+		expect(h.store.data.tasks.has("back")).toBe(true);
+		expect(h.fs.files.get(conflictEvent(h.events).path)).toContain('"id":"pending"');
+	});
+
+	it("#101: closing while the file is damaged points at the copy that holds the edit", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		await h.store.close();
+		const kept = h.events.find((e) => e.type === "pending-saved-as-conflict");
+		if (kept?.type !== "pending-saved-as-conflict") throw new Error("the copy was not announced");
+		expect(h.fs.files.get(kept.path)).toContain('"id":"pending"');
+	});
+
+	it("#101: Restore backup writes the edit, so a later valid file is no conflict", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+		const good = h.dbText();
+		h.addTask(makeTask("pending"));
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${good}=======\n${good}>>>>>>> other\n`);
+		await h.store.handleExternalChange();
+		await h.store.restoreRecovered();
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+		expect([...h.store.data.tasks.keys()].sort()).toEqual(["pending", "saved", "theirs"]);
+	});
+});
+
+describe("a version loaded over a fork is not reported missing later", () => {
+	it("#116: after Keep theirs, the next open reports no lost revision and writes no new copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => withTask(d, makeTask("theirs")).next, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.keepTheirs(conflictEvent(h.events).path);
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toEqual([]);
+		expect(s2.data.tasks.has("theirs")).toBe(true);
+	});
+
+	it("#116: with no choice made before quitting, the open copy is the only one", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		h.events.length = 0;
+
+		const s2 = h.newStore();
+		await s2.open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(false);
+		expect(await s2.listConflicts()).toHaveLength(1);
+	});
+
+	it("#116: a revision lost while Logwell was closed is still reported", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		await h.saveNow();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-theirs"));
+		await h.store.handleExternalChange();
+		await h.store.close();
+		// A later save of ours is replaced while Logwell is closed.
+		const s2 = h.newStore();
+		await s2.open();
+		h.addTask(makeTask("later"), s2);
+		await h.saveNow(s2);
+		await s2.close();
+		h.fs.files.set(DB_PATH, descendant(emptyDbText(), (d) => d, "r-other"));
+		h.events.length = 0;
+
+		await h.newStore().open();
+		expect(h.events.some((e) => e.type === "lost-revision")).toBe(true);
+	});
+});
+
+describe("the retry after a write that threw but landed", () => {
+	it("#139: keeps the landed revision in history, so a device that read it fast-forwards", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("t1"));
+		h.fs.failNextWrite((p) => p === DB_PATH, 1_000_000); // the whole file lands, then the write throws
+		await h.saveNow();
+		const landed = revisionOf(h.dbText());
+		// Another device syncs the landed file and reads it.
+		const other = h.newStore();
+		await other.open();
+		expect(other.data.meta.revision).toBe(landed);
+
+		h.scheduler.advance(SAVE_RETRY_MS);
+		await settle();
+		const retried = load(h.dbText()).meta;
+		expect(retried.revision).not.toBe(landed);
+		expect(retried.baseRevision).toBe(landed);
+		expect(retried.history).toContain(landed);
+
+		h.events.length = 0;
+		await other.handleExternalChange();
+		expect(h.events.some((e) => e.type === "conflict")).toBe(false);
+		expect(other.data.meta.revision).toBe(retried.revision);
+	});
+});
+
+describe("two sections with one name in a list", () => {
+	function withSections(text: string, ...names: string[]): string {
+		const data = load(text);
+		const sections = new Map(data.sections);
+		names.forEach((name, i) => {
+			const id = `sec-${i + 1}`;
+			sections.set(id, { id, categoryId: "inbox", name, nameKey: name.toLowerCase(), sortKey: `V${i}`, createdAt: data.meta.writtenAt, modifiedAt: data.meta.writtenAt });
 		});
+		return serializeDb({ ...data, sections });
+	}
+
+	it("#104: opening reports the duplicate but never rewrites the file or takes a backup", async () => {
+		const text = withSections(emptyDbText(), "Doing", "Doing");
+		const h = harness(text);
+		for (const store of [h.store, h.newStore()]) {
+			await store.open();
+			await store.close();
+		}
+		expect(h.dbText()).toBe(text);
+		expect([...h.fs.files.keys()].some((p) => p.includes("/pre-repair-"))).toBe(false);
+		expect(h.events.some((e) => e.type === "repaired")).toBe(false);
+		const noticed = h.events.filter((e) => e.type === "noticed");
+		expect(noticed).toHaveLength(2);
+		expect(noticed[0]?.type === "noticed" && noticed[0].notes.join(" ")).toContain('Section "Doing" has the same name');
+	});
+
+	it("#104: an outside change that still has the duplicate is reloaded without a rewrite", async () => {
+		const h = harness();
+		await h.store.open();
+		const incoming = withSections(descendant(h.dbText(), (d) => d, "r-remote"), "Doing", "Doing");
+		h.fs.files.set(DB_PATH, incoming);
+		await h.store.handleExternalChange();
+		expect(h.store.data.sections.size).toBe(2);
+		expect(h.dbText()).toBe(incoming);
+		h.scheduler.advance(SAVE_MAX_DELAY_MS);
+		await settle();
+		expect(h.dbText()).toBe(incoming);
+	});
+
+	it("#104: an outside change that is repaired on reload says so", async () => {
+		const h = harness();
+		await h.store.open();
+		h.events.length = 0;
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("t1", { categoryId: "missing" })).next, "r-remote"));
+		await h.store.handleExternalChange();
+		const repaired = h.events.find((e) => e.type === "repaired");
+		expect(repaired?.type === "repaired" && repaired.issues.join(" ")).toContain("Task t1");
+	});
+});
+
+describe("a handler of the reload that throws", () => {
+	it("#118: the conflict is still announced and the repaired file still saved", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("mine"));
+		h.fs.files.set(DB_PATH, descendant(h.dbText(), (d) => withTask(d, makeTask("t1", { categoryId: "missing" })).next, "r-remote"));
+		const push = h.events.push.bind(h.events);
+		h.events.push = (...events: StoreEvent[]) => {
+			const n = push(...events);
+			if (events.some((e) => e.type === "loaded")) throw new Error("a view failed");
+			return n;
+		};
+		await expect(h.store.handleExternalChange()).rejects.toThrow("a view failed");
+		expect(h.events.some((e) => e.type === "conflict")).toBe(true);
+		expect(h.events.some((e) => e.type === "repaired")).toBe(true);
+		const saved = load(h.dbText());
+		expect(saved.meta.revision).not.toBe("r-remote");
+		expect(saved.tasks.get("t1")?.categoryId).toBe("inbox");
+	});
+});
+
+describe("the last save before the app quits", () => {
+	it("#117: a write that fails keeps the edits as a conflict copy, and a later close adds no second copy", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		await h.store.flushBeforeQuit();
+		const kept = h.events.find((e) => e.type === "pending-saved-as-conflict");
+		if (kept?.type !== "pending-saved-as-conflict") throw new Error("the edits were not kept");
+		expect(h.fs.files.get(kept.path)).toContain('"id":"pending"');
+
+		// Unload may still close the store; its save fails again.
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		await h.store.close();
+		expect(await h.store.listConflicts()).toHaveLength(1);
+	});
+
+	it("#117: a save that succeeds keeps no copy, and nothing pending writes nothing", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		await h.store.flushBeforeQuit();
+		expect(load(h.dbText()).tasks.has("pending")).toBe(true);
+		await h.store.flushBeforeQuit();
+		expect(h.events.some((e) => e.type === "pending-saved-as-conflict" || e.type === "edits-lost")).toBe(false);
+		expect(await h.store.listConflicts()).toEqual([]);
+	});
+
+	it("#117: when the copy cannot be written either, it says the edits are lost", async () => {
+		const h = harness();
+		await h.store.open();
+		h.addTask(makeTask("pending"));
+		h.fs.failNextWrite((p) => p === DB_PATH);
+		h.fs.failNextWrite((p) => p.includes("/conflicts/"));
+		await expect(h.store.flushBeforeQuit()).resolves.toBeUndefined();
+		expect(h.events.some((e) => e.type === "edits-lost")).toBe(true);
+	});
+});
+
+describe("CpbaseStore: a failed backup", () => {
+	it("#134: a snapshot that cannot be written after a good save is a backup error, not a save error, and the next save tries again", async () => {
+		const h = harness();
+		await h.store.open();
+		h.clock.advance(SNAPSHOT_INTERVAL_MS);
+		h.fs.failNextWrite((p) => p.includes("/snapshots/hourly-"));
+		h.addTask(makeTask("saved"));
+		await h.saveNow();
+
+		expect(load(h.dbText()).tasks.has("saved")).toBe(true);
+		expect(h.events.some((e) => e.type === "save-error")).toBe(false);
+		expect(h.events.filter((e) => e.type === "backup-error")).toEqual([{ type: "backup-error", message: "Injected write fault" }]);
+
+		const hourly = async () => (await h.fs.list(`${BACKUP_ROOT}/db-1/snapshots`)).filter((p) => p.includes("/hourly-")).length;
+		const before = await hourly();
+		h.addTask(makeTask("next"));
+		await h.saveNow();
+		expect(await hourly()).toBe(before + 1);
 	});
 });

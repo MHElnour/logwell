@@ -41,7 +41,7 @@ describe("sections", () => {
 
 	const taskRow = (raw: Raw, id: string) => raw.tasks.find((t) => t.id === id)!;
 
-	describe("section repairs on load (D3)", () => {
+	describe("section repairs on load", () => {
 		it("a sectionId that names a missing section is cleared, with an issue", () => {
 			const r = ok(loadMutated((raw) => (taskRow(raw, INVOICE).sectionId = "no-such-section")));
 			expect(r.data.tasks.get(INVOICE)?.sectionId).toBeNull();
@@ -173,7 +173,7 @@ describe("sections", () => {
 			expect(ok(loadText(serializeDb(r.data), NOW)).issues).toEqual([]);
 		});
 
-		it("duplicate nameKeys within a list stay as they are, with an issue", () => {
+		it("duplicate nameKeys within a list stay as they are, with a note and no issue (#104)", () => {
 			const r = ok(
 				loadMutated((raw) => {
 					const w = raw.sections.find((s) => s.id === WEEK1)!;
@@ -181,7 +181,8 @@ describe("sections", () => {
 				}),
 			);
 			expect(r.data.sections.has("dup-sec")).toBe(true);
-			expect(r.issues.some((i) => i.includes("same name"))).toBe(true);
+			expect(r.issues).toEqual([]);
+			expect(r.notes.some((i) => i.includes("same name"))).toBe(true);
 		});
 
 		it("a valid file produces no issues and repaired data round-trips", () => {
@@ -224,7 +225,7 @@ describe("sections", () => {
 			expect(removed.sections.has("new-sec")).toBe(false);
 		});
 
-		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already schema 3, so the e2e vault never migrates (§11.6)", (path) => {
+		it.each(["test-vault/Checkpoint.cpbase", "e2e/fixtures/seed.cpbase"])("the seed %s is already at the current schema, so the e2e vault never migrates", (path) => {
 			const text = readFileSync(join(import.meta.dirname, "..", "..", path), "utf8");
 			const r = ok(loadText(text, NOW));
 			expect(r.migratedFrom).toBeNull();
@@ -236,7 +237,7 @@ describe("sections", () => {
 });
 
 describe("years 0000 to 0099", () => {
-	// Spec "Data and storage" rule 8: every real day in years 0000 to 9999 loads. Before the fix a
+	// Every real day in years 0000 to 9999 loads. Before the fix a
 	// repeat, end date, occurrence record, habit version or check-in in years 0000 to 0099 was
 	// removed on load.
 
@@ -323,7 +324,7 @@ describe("list name keys", () => {
 });
 
 describe("long tag keys", () => {
-	// The 64-character limit applies to NEW names only (Lists, sections and tags rule 21): a longer tag already in a file
+	// The 64-character limit applies to NEW names only: a longer tag already in a file
 	// loads, stays on its tasks, can be recolored, and is never cut or refused.
 
 	const long = "a".repeat(100);
@@ -354,5 +355,41 @@ describe("long tag keys", () => {
 			await expect(h.app.tags.add("b".repeat(65), null, null)).rejects.toMatchObject({ code: "InvalidTag", message: TAG_LENGTH_MESSAGE });
 			await expect(h.app.tags.create("c".repeat(65))).rejects.toMatchObject({ code: "InvalidTag", message: TAG_LENGTH_MESSAGE });
 		});
+	});
+});
+
+describe("timed dates written with other digits", () => {
+	// A device whose language writes other digits (Arabic, Persian) once stored timed dates with them. Such a file
+	// still opens: the digits are read as 0 to 9, with an issue per date.
+
+	const NOW = "2026-10-13T10:00:00.000Z";
+	const ARABIC = "٢٠٢٦-١٠-١٣T١٧:٠٠";
+	const PERSIAN = "۲۰۲۶-۱۰-۱۴T۰۹:۳۰";
+
+	function fileWith(scheduled: string, deadline: string): string {
+		const data = createEmptyDb({ dbId: "db-1", revision: "r-000000000000", deviceId: "d-other", now: "2026-10-01T08:00:00.000Z" });
+		const tasks = new Map(data.tasks);
+		tasks.set("t1", makeTask("t1", { title: "Call mom", scheduled: { kind: "datetime", local: "2026-01-01T00:00", tz: "Africa/Cairo" }, deadline: { kind: "datetime", local: "2026-01-02T00:00", tz: "Asia/Tehran" } }));
+		const trash = new Map(data.trash);
+		trash.set("b1", { batchId: "b1", deletedAt: "2026-10-12T10:00:00.000Z", tasks: [makeTask("t2", { title: "Old call", scheduled: { kind: "datetime", local: "2026-01-01T00:00", tz: "Africa/Cairo" } })] });
+		return serializeDb({ ...data, tasks, trash }).replaceAll("2026-01-01T00:00", scheduled).replace("2026-01-02T00:00", deadline);
+	}
+
+	it("#100: loads with the digits 0 to 9 and one issue per date; the repaired file loads clean", () => {
+		const r = loadText(fileWith(ARABIC, PERSIAN), NOW);
+		if (r.kind !== "ok") throw new Error(`did not load: ${JSON.stringify(r)}`);
+		expect(r.data.tasks.get("t1")?.scheduled).toEqual({ kind: "datetime", local: "2026-10-13T17:00", tz: "Africa/Cairo" });
+		expect(r.data.tasks.get("t1")?.deadline).toEqual({ kind: "datetime", local: "2026-10-14T09:30", tz: "Asia/Tehran" });
+		expect(r.data.trash.get("b1")?.tasks[0]?.scheduled).toEqual({ kind: "datetime", local: "2026-10-13T17:00", tz: "Africa/Cairo" });
+		expect(r.issues).toHaveLength(3);
+		expect(r.issues[0]).toContain("Call mom");
+		expect(r.issues.join(" ")).toContain("Old call");
+		const again = loadText(serializeDb(r.data), NOW);
+		expect(again.kind === "ok" && again.issues).toEqual([]);
+	});
+
+	it("#100: a date that is still not a real time once read as 0 to 9 fails the load as before", () => {
+		const r = loadText(fileWith("٢٠٢٦-١٣-٠١T١٧:٠٠", PERSIAN), NOW);
+		expect(r.kind).not.toBe("ok");
 	});
 });

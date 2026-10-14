@@ -1,7 +1,7 @@
 import type { ID, Task } from "./types";
 import { compareNewestFirst } from "./completed";
 import { compareSortKeys } from "./sortKey";
-import { type ListEntry, type Quadrant, type QueryContext, entryOf, hasPastDate, keyDate, nextSevenDaysEnd, quadrantOf, scheduleOf } from "./queries";
+import { type ListEntry, type Quadrant, type QueryContext, entryOf, hasPastDate, isDueByToday, keyDate, nextSevenDaysEnd, quadrantOf, scheduleOf } from "./queries";
 import { dateSpecSortValue } from "./time";
 
 // The Eisenhower matrix layout. Pure: it takes the tasks the view menu let
@@ -37,9 +37,10 @@ function groupOf(task: Task, ctx: QueryContext, held: ReadonlySet<ID>): MatrixGr
 	// A task completed a moment ago stays in its date group until its check animation ends.
 	if (task.status === "completed" && !held.has(task.id)) return "completed";
 	if (hasPastDate(task, ctx)) return "overdue";
+	// Due by today by either date, as in the Today view; later dates go by the schedule, else the deadline.
+	if (isDueByToday(task, ctx)) return "today";
 	const key = keyDate(task, ctx);
 	if (key === null) return "nodate";
-	if (key <= ctx.today) return "today";
 	return key <= nextSevenDaysEnd(ctx) ? "next7" : "later";
 }
 

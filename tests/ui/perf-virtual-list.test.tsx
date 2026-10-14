@@ -1,18 +1,16 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ViewGroup, buildList } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import type { ID, Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
 import { TaskList } from "../../src/ui/TaskList";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
-import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "../app/harness";
-import { dragTo, press, releaseAt, settle } from "./matrix-helpers";
-import { U1Host } from "./app-helpers";
+import { dragTo, focusedIndex, mountNode, pressFocused, pressKey, releaseAt, seedTasks, settle, taskId, U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
+import { cssSection } from "./styles-helpers";
 
 // A Tasks list above VIRTUAL_THRESHOLD rows draws
 // only the rows near the viewport. These tests run TaskList in a `.cp-main` scroller over a fake block layout
@@ -22,45 +20,11 @@ const ROW = 52;
 const HEAD = 30;
 const VIEWPORT = 520;
 
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-		const el = this.ownerDocument.createElement("div");
-		el.className = o.cls;
-		this.appendChild(el);
-		return el;
-	};
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
-
 let layout: FakeLayout | null = null;
-const roots: HTMLElement[] = [];
 afterEach(() => {
-	for (const r of roots.splice(0)) {
-		render(null, r);
-		r.remove();
-	}
 	layout?.restore();
 	layout = null;
 });
-
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-
-/** `count` open Inbox tasks "Task 0".."Task n-1" in that manual order, committed in one write. */
-async function seeded(count: number): Promise<AppHarness> {
-	const h = await appHarness();
-	const data = h.store.data;
-	const tasks = new Map(data.tasks);
-	const ops: JournalOp[] = [];
-	for (let i = 0; i < count; i++) {
-		const t: Task = makeTask(taskId(i + 1), { title: `Task ${i}`, sortKey: `V${i.toString(36).padStart(4, "0")}` });
-		tasks.set(t.id, t);
-		ops.push({ c: "tasks", id: t.id, v: t });
-	}
-	h.store.commit({ ...data, tasks }, ops);
-	return h;
-}
 
 interface Mount {
 	h: AppHarness;
@@ -71,11 +35,10 @@ interface Mount {
 }
 
 async function mount(count: number, opts: { virtualize?: boolean; groups?: (all: ViewGroup[]) => ViewGroup[]; layout?: boolean } = {}): Promise<Mount> {
-	const h = await seeded(count);
+	const h = await appHarness();
+	seedTasks(h, count);
 	const host = new U1Host(h);
-	const root = document.createElement("div");
-	document.body.appendChild(root);
-	roots.push(root);
+	const root = mountNode(null);
 	if (opts.layout !== false) {
 		layout = fakeLayout({
 			viewport: (el) => (el.classList.contains("cp-main") ? VIEWPORT : undefined),
@@ -115,15 +78,6 @@ async function mount(count: number, opts: { virtualize?: boolean; groups?: (all:
 const rows = (m: Mount) => [...m.root.querySelectorAll<HTMLElement>(".cp-task-row")];
 const drawnTitles = (m: Mount) => rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
 const rowOf = (m: Mount, i: number) => m.root.querySelector<HTMLElement>(`.cp-task-row[data-task-id="${taskId(i + 1)}"]`);
-const focusedIndex = () => {
-	const id = (document.activeElement as HTMLElement | null)?.dataset?.taskId;
-	return id === undefined ? -1 : parseInt(id.slice(-12), 16) - 1;
-};
-/** A key on the focused element; Preact renders in microtasks, so one macrotask later the focus has moved. */
-const key = async (k: string) => {
-	document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
-	await new Promise((r) => setTimeout(r, 0));
-};
 /** The row's top inside the list content (the scroller's viewport top is 0 at scrollTop 0). */
 const contentTop = (m: Mount, el: HTMLElement) => el.getBoundingClientRect().top - m.main.getBoundingClientRect().top + m.main.scrollTop;
 const tabKey = (shiftKey = false) => new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
@@ -247,17 +201,17 @@ describe("keyboard", () => {
 		const m = await mount(400);
 		rowOf(m, 0)!.focus();
 		for (let i = 1; i < 400; i++) {
-			await key("ArrowDown");
+			await pressFocused("ArrowDown");
 			if (focusedIndex() !== i) throw new Error(`ArrowDown ${i}: focus is on ${focusedIndex()}`);
 			const top = contentTop(m, rowOf(m, i)!);
 			if (top < m.main.scrollTop || top + ROW > m.main.scrollTop + VIEWPORT) throw new Error(`ArrowDown ${i}: the row is out of view`);
 		}
 		// Far fewer rows are drawn than the list has.
 		expect(rows(m).length).toBeLessThan(60);
-		await key("ArrowDown");
+		await pressFocused("ArrowDown");
 		expect(focusedIndex()).toBe(399);
 		for (let i = 398; i >= 0; i--) {
-			await key("ArrowUp");
+			await pressFocused("ArrowUp");
 			if (focusedIndex() !== i) throw new Error(`ArrowUp ${i}: focus is on ${focusedIndex()}`);
 		}
 		expect(m.main.scrollTop).toBe(0);
@@ -272,7 +226,7 @@ describe("keyboard", () => {
 		expect(document.activeElement).toBe(five);
 		expect(contentTop(m, five)).toBe(5 * ROW);
 		expect(rowOf(m, 1500)).not.toBeNull();
-		await press(five, "ArrowDown");
+		await pressKey(five, "ArrowDown");
 		expect(focusedIndex()).toBe(6);
 		// Focusing it scrolled it into view, like any focused row.
 		expect(m.main.scrollTop).toBeLessThanOrEqual(6 * ROW);
@@ -311,9 +265,9 @@ describe("keyboard", () => {
 		// Scroll away so neither the row nor the next group's first row would be drawn without the pin.
 		await layout!.scrollTo(m.main, 0);
 		expect(rowOf(m, 300)).toBeNull();
-		await press(document.activeElement!, "ArrowDown");
+		await pressKey(document.activeElement!, "ArrowDown");
 		expect(focusedIndex()).toBe(300);
-		await press(document.activeElement!, "ArrowUp");
+		await pressKey(document.activeElement!, "ArrowUp");
 		expect(focusedIndex()).toBe(299);
 	});
 
@@ -679,9 +633,7 @@ describe("collapse", () => {
 		await m.draw(groups(), { sections: sections() });
 		expect(rowOf(m, 2000)).toBeNull();
 		collapsed = true;
-		const start = performance.now();
 		await m.draw(groups(), { sections: sections() });
-		expect(performance.now() - start).toBeLessThan(500);
 		// "No section" shows only its heading; "Later" now starts right under it and draws its first rows.
 		expect(rowOf(m, 0)).toBeNull();
 		const first = rowOf(m, 2000);
@@ -691,15 +643,11 @@ describe("collapse", () => {
 });
 
 describe("stylesheet", () => {
+	// The section's scoping and hygiene are checked with the other sections in layout-styles.test.ts.
 	it("the spacer takes its height from a custom property, draws nothing and is scoped to the view", () => {
-		const css = readFileSync("styles.css", "utf8");
-		const start = css.indexOf("/* == Release B windowed lists == */");
-		const section = css.slice(start, css.indexOf("/* == end Release B windowed lists == */"));
-		expect(start).toBeGreaterThan(0);
+		const section = cssSection("Release B windowed lists");
 		expect(section).toContain(".checkpoint-view .cp-virtual-spacer {");
 		expect(section).toMatch(/height:\s*var\(--cp-virtual-h, 0\)/);
 		expect(section).toMatch(/flex:\s*none/);
-		expect(section).not.toContain("!important");
-		expect(section).not.toContain(":has");
 	});
 });

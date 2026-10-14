@@ -65,7 +65,7 @@ function player(theme: "chime" | "soft" | "digital" | "none", volume: number) {
 
 const freqs = (tones: Tone[]) => tones.map((t) => t.freq);
 
-describe("SoundPlayer (D14)", () => {
+describe("SoundPlayer", () => {
 	it("creates the AudioContext lazily", () => {
 		const { ctx, p } = player("chime", 60);
 		expect(ctx.created).toBe(0);
@@ -164,7 +164,7 @@ describe("SoundPlayer (D14)", () => {
 		expect(c.ctx.created).toBe(0);
 	});
 
-	it("dispose closes the context once, and a later play or preview is a no-op that creates nothing (B5)", () => {
+	it("dispose closes the context once, and a later play or preview is a no-op that creates nothing", () => {
 		const { ctx, p } = player("chime", 60);
 		p.play("focus-start");
 		p.dispose();
@@ -175,7 +175,7 @@ describe("SoundPlayer (D14)", () => {
 		expect(ctx.created).toBe(1);
 	});
 
-	it("play after dispose never creates a context, even before the first sound (B5)", () => {
+	it("play after dispose never creates a context, even before the first sound", () => {
 		const { ctx, p } = player("chime", 60);
 		p.dispose();
 		p.play("set-done");

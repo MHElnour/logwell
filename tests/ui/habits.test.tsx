@@ -1,34 +1,23 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ARCHIVE_LABEL, CHECKIN_LABEL, DELETE_CHECKIN_LABEL, DELETE_HABIT_LABEL, EDIT_CHECKIN_LABEL, RESTORE_LABEL, UNCHECK_LABEL } from "../../src/app/HabitService";
-import { ICON } from "../../src/ui/icons";
 import { makeReadOnly } from "../app/harness";
-import { click, type HabitMount, input, mountHabits, openHabits, q, qa, rowOf, seedMockup, settle, text } from "./habits-helpers";
-import { menuItem } from "./app-helpers";
+import { click, expectLabelsResolve, fill, keydown, lastNotice, menuItem, q, qa, settle, strayAriaLabels, text } from "./app-helpers";
+import { type HabitMount, input, mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
 import { parseAmount, plusLabel } from "../../src/ui/habits/format";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { useClockTime } from "../../src/ui/hooks";
 import type { UiHost } from "../../src/ui/host";
+import { Settings } from "luxon";
 
 describe("Habits page", () => {
 	// The Habits page in its main states.
 	// The harness clock is the FakeClock; seedMockup moves it to Sunday 2026-10-04, 20:30 in Europe/Berlin.
 
-	const mounted: HabitMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
-	async function mount(): Promise<HabitMount> {
-		const m = await mountHabits();
-		mounted.push(m);
-		return m;
-	}
-
 	/** The mockup's habits are in place and the page is open. */
 	async function page() {
-		const m = await mount();
+		const m = await mountHabits();
 		const habits = await seedMockup(m.h);
 		await m.rerender();
 		const el = await openHabits(m);
@@ -36,34 +25,12 @@ describe("Habits page", () => {
 	}
 
 	const select = async (el: ParentNode, name: string) => click(q(rowOf(el, name), ".cp-habit-name"));
-	const typeInto = (field: HTMLInputElement, value: string) => {
-		field.value = value;
-		field.dispatchEvent(new Event("input", { bubbles: true }));
-	};
-	const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
-	const lastNotice = (m: HabitMount) => m.notices[m.notices.length - 1];
 	/** The Undo notice carries the label the store holds, so pressing Undo works. */
 	const labelIsStoreLabel = (m: HabitMount) => expect(lastNotice(m)?.label).toBe(m.h.app.store.undoLabel);
 
 	describe("the rail, the empty state and the dialog entry points", () => {
-		it("has a Habits entry after Focus with the flame, and shows the section on a click and through the handle", async () => {
-			const m = await mount();
-			const labels = [...m.root.querySelectorAll(".cp-rail button")].map((b) => b.getAttribute("aria-label"));
-			expect(labels.indexOf("Habits")).toBe(labels.indexOf("Focus") + 1);
-			expect(q(m.root, '.cp-rail [aria-label="Habits"] [data-icon]').getAttribute("data-icon")).toBe(ICON.railHabits);
-			const section = q(m.root, ".cp-habits").closest<HTMLElement>(".cp-section")!;
-			expect(section.hidden).toBe(true);
-			await openHabits(m);
-			expect(section.hidden).toBe(false);
-			await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
-			expect(section.hidden).toBe(true);
-			m.handle.current!.showSection("habits");
-			await settle();
-			expect(section.hidden).toBe(false);
-		});
-
 		it("shows the first-visit state with four example chips that open the dialog prefilled and never create a habit", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			const el = await openHabits(m);
 			expect(text(q(el, "h2"))).toBe("Habits");
 			expect(text(q(el, ".cp-habit-empty h3"))).toBe("Build a habit, one day at a time");
@@ -80,7 +47,7 @@ describe("Habits page", () => {
 		});
 
 		it("New habit opens an empty dialog; saving creates the habit, selects it and shows an Undo notice with the store label", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			const el = await openHabits(m);
 			await click(q(el, ".cp-habits-head button"));
 			const d = m.dialogs[0]!;
@@ -96,7 +63,7 @@ describe("Habits page", () => {
 		});
 
 		it("saving with a reminder on asks for the notification permission in that click; a refusal keeps the dialog open with the message", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			const el = await openHabits(m);
 			await click(q(el, ".cp-habits-head button"));
 			const d = m.dialogs[0]!;
@@ -157,7 +124,7 @@ describe("Habits page", () => {
 		});
 
 		it("moves the Evening start with the Evening time setting", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			const base = m.host.settings.bind(m.host);
 			m.host.settings = () => ({ ...base(), eveningTime: "18:00" });
 			await seedMockup(m.h);
@@ -248,7 +215,7 @@ describe("Habits page", () => {
 		});
 	});
 
-	describe("the week strip and backfilling (D19)", () => {
+	describe("the week strip and backfilling", () => {
 		it("shows the seven days ending today with a ring share and a spoken label", async () => {
 			const { el } = await page();
 			const days = qa<HTMLButtonElement>(el, ".cp-habit-day");
@@ -274,7 +241,7 @@ describe("Habits page", () => {
 		});
 
 		it("a day without scheduled habits has an empty ring and says so", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			m.h.clock.set("2026-10-04T08:00:00.000Z");
 			await m.h.app.habits.create(input({ name: "Gym", goal: { type: "binary", target: 1, unit: null, period: "day" }, schedule: { kind: "weekdays", days: ["MO"] } }));
 			m.h.clock.set("2026-10-06T08:00:00.000Z");
@@ -322,7 +289,7 @@ describe("Habits page", () => {
 			const index = () => m.h.app.habits.index();
 			await click(qa(el, ".cp-habit-day")[3]); // Thursday Oct 1
 			const field = q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
-			typeInto(field, "10");
+			fill(field, "10");
 			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			expect(index().byDate(habits.read.id).get("2026-10-01")!.map((c) => c.value)).toEqual([30, 10]);
 			expect(index().byDate(habits.read.id).get("2026-10-04")!.map((c) => c.value)).toEqual([20]);
@@ -333,8 +300,8 @@ describe("Habits page", () => {
 			expect(index().byDate(habits.gym.id).get("2026-10-04")).toBeUndefined();
 		});
 
-		it("AS-11 through the page: yesterday keeps the goal it had when the target changes today", async () => {
-			const m = await mount();
+		it("through the page: yesterday keeps the goal it had when the target changes today", async () => {
+			const m = await mountHabits();
 			m.h.clock.set("2026-10-03T08:00:00.000Z");
 			await m.h.app.habits.create(input());
 			m.h.clock.set("2026-10-04T08:00:00.000Z");
@@ -342,7 +309,7 @@ describe("Habits page", () => {
 			const el = await openHabits(m);
 			await click(qa(el, ".cp-habit-day")[5]); // yesterday
 			for (const v of ["20", "10"]) {
-				typeInto(q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input"), v);
+				fill(q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input"), v);
 				await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			}
 			expect(text(q(rowOf(el, "Read"), ".cp-habit-progress"))).toBe("30 of 30 min");
@@ -365,7 +332,7 @@ describe("Habits page", () => {
 			expect(rowOf(el, "Read").classList.contains("is-done")).toBe(false);
 			await click(qa(el, ".cp-habit-day")[6]);
 			expect(text(q(rowOf(el, "Read"), ".cp-habit-progress"))).toBe("0 of 20 min");
-			typeInto(q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input"), "20");
+			fill(q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input"), "20");
 			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			expect(rowOf(el, "Read").classList.contains("is-done")).toBe(true);
 			expect(m.h.app.habits.list()[0]!.versions.map((v) => [v.effectiveFrom, v.goal.target])).toEqual([
@@ -421,32 +388,37 @@ describe("Habits page", () => {
 			expect(lastNotice(m)!.label).toBe(CHECKIN_LABEL);
 		});
 
-		it("Add and Enter submit the amount; the field clears; a wrong amount is told and nothing is written", async () => {
+		it("Add and Enter submit the amount; the field clears; a wrong amount is told and nothing is written; a refused one stays in the field", async () => {
 			const { m, el, habits } = await page();
 			const field = () => q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
 			const add = () => q(rowOf(el, "Read"), ".cp-habit-add");
-			typeInto(field(), "10");
+			fill(field(), "10");
 			await click(add());
 			expect(text(q(rowOf(el, "Read"), ".cp-habit-progress"))).toBe("30 of 30 min");
 			expect(field().value).toBe("");
 			expect(lastNotice(m)).toEqual({ message: "Checked in Read.", label: CHECKIN_LABEL });
-			typeInto(field(), "2,5");
-			key(field(), "Enter");
+			fill(field(), "2,5");
+			keydown(field(), "Enter");
 			await settle();
 			expect(text(q(rowOf(el, "Read"), ".cp-habit-progress"))).toBe("32.5 of 30 min");
 			const before = m.notices.length;
 			for (const bad of ["", "abc", "0", "-3"]) {
-				typeInto(field(), bad);
+				fill(field(), bad);
 				await click(add());
 			}
 			expect(m.notices).toHaveLength(before);
 			expect(m.host.messages.filter((x) => x === "Enter an amount above 0.")).toHaveLength(4);
 			expect(m.h.app.habits.index().active(habits.read.id)).toHaveLength(8);
 			// A value the service refuses (too big) is shown by the host and kept in the field.
-			typeInto(field(), "2000000");
+			fill(field(), "2000000");
 			await click(add());
 			expect(m.host.messages.at(-1)).toMatch(/at most 1,000,000/u);
 			expect(field().value).toBe("2000000");
+			// The refusal frees the button: the next amount is written.
+			fill(field(), "4");
+			await click(add());
+			expect(field().value).toBe("");
+			expect(m.h.app.habits.index().active(habits.read.id).at(-1)!.value).toBe(4);
 		});
 
 		it("a read-only database keeps the controls and shows the failure instead of an Undo notice", async () => {
@@ -537,7 +509,7 @@ describe("Habits page", () => {
 		});
 
 		it("starts the calendar's columns on Sunday for a habit made with that week start", async () => {
-			const m = await mount();
+			const m = await mountHabits();
 			const settings = { weekStart: "SU" as const };
 			(m.h.app as unknown as { settings: { weekStart: () => string } }).settings.weekStart = () => settings.weekStart;
 			m.h.clock.set("2026-10-04T08:00:00.000Z");
@@ -679,7 +651,7 @@ describe("Habits page", () => {
 		});
 	});
 
-	describe("archived habits (HAB-10)", () => {
+	describe("archived habits", () => {
 		it("hides the footer button when nothing is archived and counts archived habits otherwise", async () => {
 			const { m, el, habits } = await page();
 			expect(el.querySelector(".cp-habits-foot")).toBeNull();
@@ -772,8 +744,8 @@ describe("Habits page", () => {
 		});
 	});
 
-	describe("pending writes and the first month (D8, F11)", () => {
-		it("D8: a second Enter or click on Add while the first write is pending is ignored, and the field clears only after success", async () => {
+	describe("pending writes and the first month", () => {
+		it("a second Enter or click on Add while the first write is pending is ignored, and the field clears only after success", async () => {
 			const { m, el, habits } = await page();
 			const real = m.h.app.habits.add.bind(m.h.app.habits);
 			let release!: () => void;
@@ -785,9 +757,9 @@ describe("Habits page", () => {
 				return real(...args);
 			};
 			const field = () => q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
-			typeInto(field(), "10");
-			key(field(), "Enter");
-			key(field(), "Enter");
+			fill(field(), "10");
+			keydown(field(), "Enter");
+			keydown(field(), "Enter");
 			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			await settle();
 			expect(calls).toBe(1);
@@ -800,25 +772,13 @@ describe("Habits page", () => {
 			expect(field().value).toBe("");
 			expect(m.notices.filter((n) => n.message === "Checked in Read.")).toHaveLength(1);
 			// Free again: a later amount is written.
-			typeInto(field(), "5");
+			fill(field(), "5");
 			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
 			expect(calls).toBe(2);
 			expect(m.h.app.habits.index().byDate(habits.read.id).get("2026-10-04")!.map((c) => c.value)).toEqual([20, 10, 5]);
 		});
 
-		it("D8: a refused write keeps the amount in the field and frees the button", async () => {
-			const { m, el } = await page();
-			const field = () => q<HTMLInputElement>(rowOf(el, "Read"), ".cp-habit-amount input");
-			typeInto(field(), "2000000");
-			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
-			expect(field().value).toBe("2000000");
-			typeInto(field(), "4");
-			await click(q(rowOf(el, "Read"), ".cp-habit-add"));
-			expect(field().value).toBe("");
-			expect(m.h.app.habits.index().active(m.h.app.habits.list().find((h) => h.name === "Read")!.id).at(-1)!.value).toBe(4);
-		});
-
-		it("F11: a habit that started later than the shown month shows its own first month, with Previous disabled and Next following today", async () => {
+		it("a habit that started later than the shown month shows its own first month, with Previous disabled and Next following today", async () => {
 			const { m, el } = await page();
 			await select(el, "Read");
 			await click(q(el, 'button[aria-label="Previous month"]'));
@@ -846,14 +806,8 @@ describe("Habits page", () => {
 			await settle();
 			expect(el.querySelectorAll(".cp-habit-met").length).toBeGreaterThan(0);
 			// Only real controls carry an aria-label (Obsidian turns any other one into a hover tooltip).
-			for (const c of el.querySelectorAll("[aria-label]")) {
-				expect(["button", "input", "select", "a"].includes(c.tagName.toLowerCase()), `${c.tagName}.${c.className}`).toBe(true);
-			}
-			for (const c of el.querySelectorAll("[aria-labelledby]")) {
-				expect(text(el.ownerDocument.getElementById(c.getAttribute("aria-labelledby")!)), c.className).not.toBe("");
-			}
-			const ids = [...el.ownerDocument.querySelectorAll("[id]")].map((e) => e.id);
-			expect(new Set(ids).size).toBe(ids.length);
+			expect(strayAriaLabels(el, ["button", "input", "select", "a"])).toEqual([]);
+			expectLabelsResolve(el);
 		});
 
 		it("keeps every control a real button or input in the tab order and the toggles aria-pressed", async () => {
@@ -870,11 +824,11 @@ describe("Habits page", () => {
 		});
 	});
 
-	describe("global search (D13)", () => {
+	describe("global search", () => {
 		async function search(m: HabitMount, query: string): Promise<HTMLElement> {
 			await click(m.root.querySelector('.cp-rail [aria-label="Search"]'));
 			const box = q<HTMLInputElement>(m.root, '.cp-search input[type="search"]');
-			typeInto(box, query);
+			fill(box, query);
 			await settle();
 			return q(m.root, ".cp-search");
 		}
@@ -1000,6 +954,17 @@ describe("the clock of the Now badge", () => {
 			});
 			expect(root.textContent).toBe("20:31");
 			expect(seen.length).toBeGreaterThan(renders);
+		});
+
+		it("#100: reads the wall time with the digits 0 to 9 on a device whose language writes other digits", async () => {
+			const before = Settings.defaultLocale;
+			Settings.defaultLocale = "ar-EG";
+			try {
+				await act(() => render(<Probe zone="Europe/Berlin" seen={[]} />, root));
+				expect(root.textContent).toBe("20:30");
+			} finally {
+				Settings.defaultLocale = before;
+			}
 		});
 
 		it("clears its interval when the component unmounts", async () => {

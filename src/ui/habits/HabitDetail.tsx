@@ -10,7 +10,8 @@ import { HabitIcon } from "./HabitRow";
 import { MonthCalendar } from "./MonthCalendar";
 import { runWrite } from "../writeNotice";
 import { habitDialogOptions } from "./actions";
-import { currentVersion, detailLine, monthOf, shiftMonth, streakText, totalText } from "./format";
+import { monthStart, shiftMonth, yearMonthOf } from "../../domain/time";
+import { currentVersion, detailLine, monthOf, streakText, totalText } from "./format";
 
 // The right column of the Habits page: the selected habit's goal in words, four tiles, the
 // month calendar and the check-in log.
@@ -53,7 +54,7 @@ export function HabitDetail(props: {
 		"separator",
 		{ title: "Delete habit…", icon: ICON.remove, warning: true, run: () => void remove() },
 	];
-	const shift = (by: -1 | 1) => props.onMonth(shiftMonth(month, by));
+	const shift = (by: -1 | 1) => props.onMonth(monthOf(monthStart(shiftMonth(yearMonthOf(month), by))));
 	return (
 		<aside class="cp-habit-detail" aria-labelledby={titleId}>
 			<div class="cp-habit-detail-head">

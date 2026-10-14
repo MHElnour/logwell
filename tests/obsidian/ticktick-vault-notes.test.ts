@@ -28,7 +28,7 @@ function vault() {
 	return { notes: new VaultNotes({ vault: v } as never), files, created };
 }
 
-describe("VaultNotes for TickTick sync (SYNC-09)", () => {
+describe("VaultNotes for TickTick sync", () => {
 	it("replaces a note's text only while it is still what the sync read", async () => {
 		const { notes, files } = vault();
 		files.set("Task notes/Trip.md", { text: "old", mtime: 5 });

@@ -1,5 +1,6 @@
 import type { App, SecretStorage } from "obsidian";
-import type { TickTickDevicePort, TickTickSecretPort } from "../app/ports";
+import type { TickTickDevicePort, TickTickPending, TickTickPendingPort, TickTickSecretPort } from "../app/ports";
+import { loadVersionedLocal } from "./localJson";
 import { TICKTICK_DEFAULT_SECRET_ID } from "../app/settings";
 
 // Where the TickTick token and this device's sync switch live. The session's sync reads them.
@@ -63,5 +64,27 @@ export class LocalStorageTickTickDevice implements TickTickDevicePort {
 		const key = this.key();
 		if (key === null) return;
 		this.app.saveLocalStorage(key, on ? true : null);
+	}
+}
+
+/**
+ * The tasks the sync created in TickTick and has not linked yet, in the vault's local storage per database
+ * (`logwell-ticktick-pending-<dbId>`), so a restart neither sends them again nor imports their copies. An unreadable
+ * value or another version is ignored with a warning and never deleted here; the next save overwrites it.
+ */
+export class LocalStorageTickTickPending implements TickTickPendingPort {
+	constructor(private readonly app: Pick<App, "loadLocalStorage" | "saveLocalStorage">) {}
+
+	private key(dbId: string): string {
+		return `logwell-ticktick-pending-${dbId}`;
+	}
+
+	load(dbId: string): unknown {
+		return loadVersionedLocal(this.app, this.key(dbId), "TickTick tasks waiting to be linked");
+	}
+
+	/** null removes the entry. */
+	save(dbId: string, pending: TickTickPending | null): void {
+		this.app.saveLocalStorage(this.key(dbId), pending);
 	}
 }

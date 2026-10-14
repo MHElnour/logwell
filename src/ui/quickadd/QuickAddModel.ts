@@ -152,6 +152,8 @@ export class QuickAddModel {
 			pickedEnd: this.manual.has("recurrence") && this.vals.repeat !== null && this.vals.repeat.end.kind !== "never",
 			// A typed end of a repeat picked by hand is checked against that repeat.
 			...(this.manual.has("recurrence") && this.vals.repeat !== null ? { pickedRule: this.vals.repeat.rule } : {}),
+			// Never picked by hand is no repeat for a typed end: `until Dec 1` is then a deadline.
+			pickedNever: this.manual.has("recurrence") && this.vals.repeat === null,
 		});
 	}
 
@@ -616,10 +618,13 @@ export class QuickAddModel {
 		}
 	}
 
-	/** After a save with "keep open": back to an empty form, keeping only the preset. */
-	reset(): void {
-		this.input = "";
-		this.decisions = [];
+	/**
+	 * After a save with "keep open": back to an empty form, keeping only the preset. `typed` is text typed while the task
+	 * was saving: it stays, with its decisions, for the next task.
+	 */
+	reset(typed?: { input: string; decisions: SpanDecision[] }): void {
+		this.input = typed?.input ?? "";
+		this.decisions = typed?.decisions ?? [];
 		this.message = null;
 		this.openChipId = null;
 		this.saveAfterPick = false;
@@ -687,11 +692,14 @@ export class QuickAddModel {
 		const deadlineDropped = repeat !== null && typedDeadline !== null;
 		const deadline = deadlineDropped ? null : typedDeadline;
 		const manualTags = this.tagKeysValue();
+		// The input stays editable while the task saves: what follows reads the text that was saved.
+		const submitted = this.input;
+		const result = this.result;
 		this.saving = true;
 		this.notify();
 		try {
 			const { task, warnings } = await this.env.app.tasks.create({
-				title: this.result.title,
+				title: result.title,
 				categoryId: this.categoryValue(),
 				parentId: this.parent?.id ?? null,
 				// The preset's section only holds while the task stays in the preset's list (a typed #list leaves it).
@@ -708,14 +716,17 @@ export class QuickAddModel {
 				...(repeat === null ? {} : { repeat: { rule: repeat.rule, end: repeat.end } }),
 			});
 			// The parser already moved a time out of a DST gap; `create` sees a valid time.
-			const chipWarnings = this.result.chips.flatMap((c) =>
+			const chipWarnings = result.chips.flatMap((c) =>
 				c.status === "applied" && c.warning !== undefined && !(deadlineDropped && c.kind === "deadline") ? [c.warning] : [],
 			);
 			const texts = [...chipWarnings, ...warnings].map((w) => DST_WARNING_TEXT[w]);
 			if (deadlineDropped) texts.push(DEADLINE_CLEARED_TEXT);
-			if (this.result.titleFallback) texts.push(TITLE_FALLBACK_TEXT);
+			if (result.titleFallback) texts.push(TITLE_FALLBACK_TEXT);
 			this.env.onSaved(task.title, [...new Set(texts)]);
-			if (this.env.keepOpen()) this.reset();
+			// Text typed during the save is kept for the next task: the field clears, or the window closes, only when it
+			// still holds the saved text.
+			if (this.input !== submitted) this.reset({ input: this.input, decisions: this.decisions });
+			else if (this.env.keepOpen()) this.reset();
 			else this.env.onClose();
 			return "saved";
 		} catch (err) {

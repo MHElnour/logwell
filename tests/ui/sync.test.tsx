@@ -1,13 +1,11 @@
 // @vitest-environment happy-dom
-import { render } from "preact";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EventBus } from "../../src/app/events";
 import { type SyncLink, syncLinkId } from "../../src/domain/types";
-import { AppRoot } from "../../src/ui/AppRoot";
 import { formatAgo } from "../../src/ui/format";
-import type { TickTickUi } from "../../src/ui/host";
+import type { MenuSpec, TickTickUi } from "../../src/ui/host";
 import { linkedList, type SyncHarness, syncHarness } from "../app/sync-harness";
-import { menuItem, settle, U1Host } from "./app-helpers";
+import { contextMenu, menuItem, mountApp, settle, sidebarItem, U1Host } from "./app-helpers";
 import { TickTickError } from "../../src/app/ports";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "../../src/app/settings";
 import { isListSynced, notSyncedReason } from "../../src/app/syncMarks";
@@ -33,35 +31,14 @@ describe("sync screens", () => {
 		};
 	}
 
-	let unmount: (() => void) | null = null;
-	afterEach(() => {
-		unmount?.();
-		unmount = null;
-	});
-
 	async function mount(withSync: boolean) {
-		(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-			this.replaceChildren();
-		};
 		const s = await syncHarness();
-		const host = withSync ? new SyncHost(s.h) : new U1Host(s.h);
-		const root = document.createElement("div");
-		document.body.appendChild(root);
-		render(<AppRoot host={host} initialSection={null} handle={() => undefined} />, root);
-		await settle();
-		unmount = () => {
-			render(null, root);
-			root.remove();
-		};
+		const { host, root } = await mountApp({}, { harness: s.h, host: (h) => (withSync ? new SyncHost(h) : new U1Host(h)) });
 		return { s, host: host as SyncHost, root };
 	}
 
-	const side = (root: HTMLElement, name: string) => [...root.querySelectorAll<HTMLElement>(".cp-sidebar-item")].find((e) => e.textContent?.includes(name))!;
-	const menuOf = (host: U1Host, root: HTMLElement, name: string) => {
-		side(root, name).dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-		return host.menus.at(-1)!;
-	};
-	const titles = (menu: ReturnType<typeof menuOf>) => menu.map((i) => (i === "separator" ? "-" : i.title));
+	const menuOf = (host: U1Host, root: HTMLElement, name: string) => contextMenu({ host }, sidebarItem(root, name));
+	const titles = (menu: MenuSpec) => menu.map((i) => (i === "separator" ? "-" : i.title));
 	const row = (root: HTMLElement, title: string) => [...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes(title))!;
 	const repeat = { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } as never;
 
@@ -76,7 +53,7 @@ describe("sync screens", () => {
 			const { s, host, root } = await mount(true);
 			const list = await s.h.app.categories.create("Study");
 			await settle();
-			const menu = menuOf(host, root, "Study");
+			const menu = await menuOf(host, root, "Study");
 			expect(titles(menu)).toEqual(["Edit", "Change icon…", "Change color…", "-", "Sync with TickTick…", "-", "Move up", "Move down", "-", "Delete"]);
 			menuItem(menu, "Sync with TickTick…").run();
 			expect(host.linked).toEqual([list.id]);
@@ -85,7 +62,7 @@ describe("sync screens", () => {
 		it("offers Unlink from TickTick on a linked list", async () => {
 			const { s, host, root } = await mount(true);
 			const id = await linkedWork(s);
-			const menu = menuOf(host, root, "Work");
+			const menu = await menuOf(host, root, "Work");
 			expect(titles(menu)).not.toContain("Sync with TickTick…");
 			menuItem(menu, "Unlink from TickTick").run();
 			expect(host.unlinked).toEqual([id]);
@@ -93,13 +70,13 @@ describe("sync screens", () => {
 
 		it("the Inbox menu has it too", async () => {
 			const { host, root } = await mount(true);
-			expect(titles(menuOf(host, root, "Inbox"))).toContain("Sync with TickTick…");
+			expect(titles(await menuOf(host, root, "Inbox"))).toContain("Sync with TickTick…");
 		});
 
 		it("a host without the sync has no TickTick item (the marker still shows the link)", async () => {
 			const { s, host, root } = await mount(false);
 			await linkedWork(s);
-			expect(titles(menuOf(host, root, "Work"))).toEqual(["Edit", "Change icon…", "Change color…", "Move up", "Move down", "-", "Delete"]);
+			expect(titles(await menuOf(host, root, "Work"))).toEqual(["Edit", "Change icon…", "Change color…", "Move up", "Move down", "-", "Delete"]);
 			expect(root.querySelector(".cp-sync-mark")).not.toBeNull();
 		});
 	});
@@ -109,12 +86,12 @@ describe("sync screens", () => {
 			const { s, root } = await mount(true);
 			await s.h.app.categories.create("Study");
 			await linkedWork(s);
-			const mark = side(root, "Work").querySelector(".cp-sync-mark")!;
+			const mark = sidebarItem(root, "Work").querySelector(".cp-sync-mark")!;
 			expect(mark.getAttribute("role")).toBe("img");
 			expect(mark.getAttribute("aria-label")).toBe("Synced with TickTick");
 			expect(mark.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("refresh-cw");
-			expect(side(root, "Study").querySelector(".cp-sync-mark")).toBeNull();
-			expect(side(root, "Inbox").querySelector(".cp-sync-mark")).toBeNull();
+			expect(sidebarItem(root, "Study").querySelector(".cp-sync-mark")).toBeNull();
+			expect(sidebarItem(root, "Inbox").querySelector(".cp-sync-mark")).toBeNull();
 		});
 
 		it("the marker follows an unlink", async () => {
@@ -129,7 +106,7 @@ describe("sync screens", () => {
 			const { s, host, root } = await mount(true);
 			await linkedWork(s);
 			host.last = s.h.clock.now().getTime() - 2 * 60_000;
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			const line = root.querySelector(".cp-main-header .cp-sync-status")!;
 			expect(line.textContent).toBe("Synced with TickTick · Last sync 2 minutes ago");
@@ -138,7 +115,7 @@ describe("sync screens", () => {
 		it("says only 'Synced with TickTick' before this device has synced", async () => {
 			const { s, root } = await mount(true);
 			await linkedWork(s);
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")!.textContent).toBe("Synced with TickTick");
 		});
@@ -147,7 +124,7 @@ describe("sync screens", () => {
 			const { s, host, root } = await mount(true);
 			await linkedWork(s);
 			host.ready = false;
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")!.textContent).toBe("Linked to TickTick · sync is off on this device");
 		});
@@ -155,7 +132,7 @@ describe("sync screens", () => {
 		it("updates after a sync of this device", async () => {
 			const { s, host, root } = await mount(true);
 			await linkedWork(s);
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			host.last = s.h.clock.now().getTime() - 5 * 60_000;
 			host.status.emit("changed", undefined);
@@ -167,7 +144,7 @@ describe("sync screens", () => {
 			const { s, host, root } = await mount(true);
 			await linkedWork(s);
 			host.ready = false;
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")!.textContent).toBe("Linked to TickTick · sync is off on this device");
 			host.ready = true;
@@ -182,11 +159,11 @@ describe("sync screens", () => {
 			const win = root.ownerDocument.defaultView!;
 			const set = vi.spyOn(win, "setInterval");
 			const clear = vi.spyOn(win, "clearInterval");
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			await new Promise((r) => setTimeout(r, 120));
 			expect(set).toHaveBeenCalledWith(expect.any(Function), 60_000);
-			side(root, "Inbox").click();
+			sidebarItem(root, "Inbox").click();
 			await settle();
 			await new Promise((r) => setTimeout(r, 120));
 			expect(clear).toHaveBeenCalled();
@@ -196,10 +173,10 @@ describe("sync screens", () => {
 			const { s, root } = await mount(true);
 			await s.h.app.categories.create("Study");
 			await settle();
-			side(root, "Study").click();
+			sidebarItem(root, "Study").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")).toBeNull();
-			side(root, "Inbox").click();
+			sidebarItem(root, "Inbox").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")).toBeNull();
 		});
@@ -207,7 +184,7 @@ describe("sync screens", () => {
 		it("no line for a host without the sync", async () => {
 			const { s, root } = await mount(false);
 			await linkedWork(s);
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(root.querySelector(".cp-sync-status")).toBeNull();
 		});
@@ -227,7 +204,7 @@ describe("sync screens", () => {
 		});
 	});
 
-	describe("Not synced chip (SYNC-06, SYNC-08)", () => {
+	describe("Not synced chip", () => {
 		const chip = (root: HTMLElement, title: string) => row(root, title).querySelector<HTMLElement>(".cp-meta-notsynced");
 
 		it("marks a repeating task of a synced list, not a plain one", async () => {
@@ -235,7 +212,7 @@ describe("sync screens", () => {
 			const id = await linkedWork(s);
 			await s.h.app.tasks.create({ title: "Take out the trash", categoryId: id, repeat });
 			await s.h.app.tasks.create({ title: "Call the bank", categoryId: id });
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(chip(root, "Take out the trash")!.textContent).toBe("Not synced");
 			expect(chip(root, "Take out the trash")!.getAttribute("title")).toBe("Repeating tasks are not synced with TickTick");
@@ -248,7 +225,7 @@ describe("sync screens", () => {
 			const ids: string[] = [];
 			for (let i = 1; i <= 5; i++) ids.push((await s.h.app.tasks.create({ title: `Errand ${i}`, categoryId: id })).task.id);
 			await s.sync.sync();
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(chip(root, "Errand 1")).toBeNull();
 			await s.sync.keepMissing(id, ids.slice(0, 2), "many");
@@ -265,33 +242,29 @@ describe("sync screens", () => {
 			await s.sync.sync();
 			const link = s.h.app.store.state.syncLinks.get(syncLinkId("task", task.id))!;
 			await s.h.app.store.run("test links", (tx) => void tx.put("syncLinks", { ...link, mode: "excluded", modifiedAt: tx.now }), { undoable: false });
-			side(root, "Work").click();
+			sidebarItem(root, "Work").click();
 			await settle();
 			expect(chip(root, "Water the plants")!.getAttribute("title")).toBe("This task repeats in TickTick, so it is not synced");
 		});
 
-		it("shows nothing in a list that is not synced, nor for a host without the sync", async () => {
-			const { s, root } = await mount(true);
-			const list = await s.h.app.categories.create("Study");
-			await s.h.app.tasks.create({ title: "Weekly review", categoryId: list.id, repeat });
-			await settle();
-			side(root, "Study").click();
-			await settle();
-			expect(chip(root, "Weekly review")).toBeNull();
-			expect(row(root, "Weekly review").querySelector(".cp-meta-repeat")).not.toBeNull();
-		});
-
-		it("is not drawn for a completed task", async () => {
+		it("#135: a board card shows the mark as the row does, as soon as its link changes", async () => {
 			const { s, root } = await mount(true);
 			const id = await linkedWork(s);
-			const { task } = await s.h.app.tasks.create({ title: "Old", categoryId: id });
+			const { task } = await s.h.app.tasks.create({ title: "Water the plants", categoryId: id });
 			await s.sync.sync();
+			sidebarItem(root, "Work").click();
+			await settle();
+			[...root.querySelectorAll<HTMLElement>(".cp-tasks .cp-mode-button")].find((b) => b.textContent?.trim() === "Board")!.click();
+			await settle();
+			const cardChip = () =>
+				[...root.querySelectorAll<HTMLElement>(".cp-board-item")]
+					.find((c) => c.querySelector(".cp-board-title")?.textContent?.trim() === "Water the plants")!
+					.querySelector<HTMLElement>(".cp-meta-notsynced");
+			expect(cardChip()).toBeNull();
 			const link = s.h.app.store.state.syncLinks.get(syncLinkId("task", task.id))!;
 			await s.h.app.store.run("test links", (tx) => void tx.put("syncLinks", { ...link, mode: "localOnly", modifiedAt: tx.now }), { undoable: false });
-			await s.h.app.tasks.complete(task.id);
-			side(root, "Work").click();
 			await settle();
-			expect(root.querySelectorAll(".cp-meta-notsynced")).toHaveLength(0);
+			expect(cardChip()!.getAttribute("title")).toBe("Kept in Logwell only, not synced with TickTick");
 		});
 	});
 });

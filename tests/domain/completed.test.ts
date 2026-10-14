@@ -80,7 +80,7 @@ describe("Today scope", () => {
 
 describe("Upcoming scope", () => {
 	const up: CompletedScope = { kind: "upcoming" };
-	it("holds dates from tomorrow to today + days (D1)", () => {
+	it("holds dates from tomorrow to today + days", () => {
 		expect(inScope(task("a", { scheduled: day("2026-10-02") }), up)).toBe(true);
 		expect(inScope(task("b", { scheduled: day("2026-10-08") }), up)).toBe(true);
 		expect(inScope(task("c", { deadline: day("2026-10-04") }), up)).toBe(true);
@@ -117,7 +117,7 @@ describe("Inbox, list and tag scopes", () => {
 	});
 });
 
-describe("subtasks (SUB-07, spec §7)", () => {
+describe("subtasks", () => {
 	const parentOpen = task("p", { status: "open", completedAt: null });
 	const parentDone = task("p", { status: "completed" });
 	const sub = task("s", { parentId: "p" });

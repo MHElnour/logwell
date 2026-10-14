@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildList } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID, type Task } from "../../src/domain/types";
@@ -8,42 +8,19 @@ import { cancelMoveToSection, moveToSection, taskMenu } from "../../src/ui/actio
 import { AddSectionField } from "../../src/ui/AddSectionField";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, board, cardTitles, click, columnEl, columnEls, columnTitles, dragTo, item, modeButton, mountBoard, openBoard, press, settle, sidebarItem, stubBoardRects } from "./board-helpers";
-import { U1Host } from "./app-helpers";
+import type { QuickAddPreset } from "../../src/ui/host";
+import { type AppMount, click, dragTo, mountApp, mountNode, pressKey, quickModel, rect, settle, sidebarItem, taskOf, typeInto, U1Host } from "./app-helpers";
+import { board, cardTitles, columnEl, columnEls, columnTitles, item, modeButton, openBoard, stubBoardRects } from "./board-helpers";
 import { openViewMenu as openMenuAt, pickItem } from "./view-menu-helpers";
 
 // Sections in the list view and on the board.
 // Today is 2026-10-01 (Europe/Berlin).
 
-const mounted: CalMount[] = [];
-const containers: HTMLElement[] = [];
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-		const el = this.ownerDocument.createElement("div");
-		el.className = o.cls;
-		this.appendChild(el);
-		return el;
-	};
-});
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-	for (const c of containers.splice(0)) {
-		render(null, c);
-		c.remove();
-	}
-});
-async function mount() {
-	const m = await mountBoard();
-	mounted.push(m);
-	return m;
-}
+const sectionOf = (m: AppMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!;
+const sectionNames = (m: AppMount) => m.h.app.sections.inList(INBOX_ID).map((s) => s.name);
 
-const taskOf = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
-const sectionOf = (m: CalMount, name: string) => [...m.h.app.store.state.sections.values()].find((s) => s.name === name)!;
-const sectionNames = (m: CalMount) => m.h.app.sections.inList(INBOX_ID).map((s) => s.name);
-
-/** Inbox with sections Alpha (A1, A2), Beta (empty) and the unsectioned N1. */
-async function seed(m: CalMount) {
+/** Inbox with sections Alpha, Beta (empty) and the unsectioned N1. */
+async function seed(m: AppMount) {
 	const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");
 	await m.h.app.sections.create(INBOX_ID, "Beta");
 	await m.h.app.tasks.create({ title: "N1" });
@@ -52,38 +29,29 @@ async function seed(m: CalMount) {
 	await settle();
 }
 
-const headings = (m: CalMount) =>
+const headings = (m: AppMount) =>
 	[...m.root.querySelectorAll(".cp-tasks .cp-section-heading")].map((h) => `${h.querySelector(".cp-section-toggle span[id]")!.textContent}:${h.querySelector(".cp-group-count")!.textContent}`);
-const rowTitles = (m: CalMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
+const rowTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
 const byLabel = (root: ParentNode, label: string) => root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 type Menu = Exclude<U1Host["menus"][number][number], "separator">;
 const menuItems = (host: U1Host): Menu[] => host.menus.at(-1)!.flatMap((i) => (i === "separator" ? [] : [i]));
 const menuRun = (host: U1Host, title: string) => menuItems(host).find((i) => i.title === title)!.run();
 
-async function openViewMenu(m: CalMount) {
+async function openViewMenu(m: AppMount) {
 	m.host.menus.length = 0;
 	await click(byLabel(m.root.querySelector(".cp-tasks")!, "View options"));
 }
 /** Inbox groups by nothing until asked; the section headings show under "Group by: Section". */
-async function inboxBySection(m: CalMount) {
+async function inboxBySection(m: AppMount) {
 	await click(sidebarItem(m.root, "Inbox"));
 	const menu = await openMenuAt(m, m.root.querySelector(".cp-tasks")!);
 	const second = await pickItem(m, menu, "Group by…");
 	await pickItem(m, second!, "Section");
 }
-const typeInto = async (input: HTMLInputElement, text: string) => {
-	input.value = text;
-	input.dispatchEvent(new Event("input", { bubbles: true }));
-	await settle();
-};
-const key = async (el: Element, k: string) => {
-	el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
-	await settle();
-};
 
-describe("list view headings (D7, answers 1 and 4)", () => {
+describe("list view headings", () => {
 	it("shows No section first, then each section with its count; an empty section keeps its heading", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		expect(headings(m)).toEqual(["No section:1", "Alpha:2", "Beta:0"]);
@@ -95,7 +63,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it("a list without sections keeps its plain look: no heading at all", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await m.h.app.tasks.create({ title: "Lonely" });
 		await click(sidebarItem(m.root, "Inbox"));
 		expect(m.root.querySelector(".cp-tasks .cp-section-heading")).toBeNull();
@@ -103,7 +71,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it("collapses a section; the state is kept per section across view switches", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		const toggle = () => [...m.root.querySelectorAll<HTMLButtonElement>(".cp-tasks .cp-section-toggle")].find((b) => b.textContent.includes("Alpha"))!;
@@ -120,7 +88,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it('the "+" opens Quick Add with the list and the section preset; No section presets none', async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const quickAdd = vi.spyOn(m.host, "quickAdd");
 		await inboxBySection(m);
@@ -131,7 +99,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it("the ⋯ menu offers Rename and Delete; No section has none", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		expect(byLabel(m.root, "Options for section No section")).toBeNull();
@@ -141,7 +109,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it("Rename asks for a name; a duplicate is an error notice and changes nothing", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		(m.host as { prompt: unknown }).prompt = async () => ({ name: "Gamma" });
@@ -158,7 +126,7 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 
 	it("Delete moves the tasks to No section and shows an Undo notice that restores both", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const undo = vi.spyOn(m.host, "notifyUndo");
 		await inboxBySection(m);
@@ -177,9 +145,9 @@ describe("list view headings (D7, answers 1 and 4)", () => {
 	});
 });
 
-describe('"Add section" in the view menu (answer 6)', () => {
+describe('"Add section" in the view menu', () => {
 	it("is in Inbox and lists, not in Today", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await openViewMenu(m);
 		expect(menuItems(m.host).map((i) => i.title)).not.toContain("Add section");
 		await inboxBySection(m);
@@ -188,7 +156,7 @@ describe('"Add section" in the view menu (answer 6)', () => {
 	});
 
 	it("opens a name field at the bottom of the list; Enter creates, the field closes", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		await openViewMenu(m);
@@ -198,14 +166,14 @@ describe('"Add section" in the view menu (answer 6)', () => {
 		expect(input).not.toBeNull();
 		expect(document.activeElement).toBe(input);
 		await typeInto(input, "Gamma");
-		await key(input, "Enter");
+		await pressKey(input, "Enter");
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta", "Gamma"]);
 		expect(m.root.querySelector(".cp-tasks .cp-section-name-input")).toBeNull();
 		expect(headings(m)).toEqual(["No section:1", "Alpha:2", "Beta:0", "Gamma:0"]);
 	});
 
 	it("Escape closes only the field: the selection and the view stay", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		await click(m.root.querySelector(".cp-tasks .cp-task-row"));
@@ -217,7 +185,7 @@ describe('"Add section" in the view menu (answer 6)', () => {
 		await typeInto(input, "Half typed");
 		const bubbled = vi.fn();
 		m.root.addEventListener("keydown", bubbled);
-		await key(input, "Escape");
+		await pressKey(input, "Escape");
 		expect(m.root.querySelector(".cp-tasks .cp-section-name-input")).toBeNull();
 		expect(bubbled).not.toHaveBeenCalled();
 		expect(m.root.querySelector(".cp-tasks .cp-details")).not.toBeNull();
@@ -225,7 +193,7 @@ describe('"Add section" in the view menu (answer 6)', () => {
 	});
 
 	it("a duplicate name (ignoring case) shows an inline error and keeps the field", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		await openViewMenu(m);
@@ -233,7 +201,7 @@ describe('"Add section" in the view menu (answer 6)', () => {
 		await settle();
 		const input = m.root.querySelector<HTMLInputElement>(".cp-tasks .cp-section-name-input")!;
 		await typeInto(input, "ALPHA");
-		await key(input, "Enter");
+		await pressKey(input, "Enter");
 		const error = m.root.querySelector(".cp-tasks .cp-section-error")!;
 		expect(error.getAttribute("role")).toBe("alert");
 		expect(error.textContent).toMatch(/already|exists/i);
@@ -244,7 +212,7 @@ describe('"Add section" in the view menu (answer 6)', () => {
 	});
 
 	it("is absent while the database is read-only, and the heading buttons are disabled", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		await makeReadOnly(m.h);
@@ -257,9 +225,9 @@ describe('"Add section" in the view menu (answer 6)', () => {
 	});
 });
 
-describe('"Move to section…" (answer 5)', () => {
+describe('"Move to section…"', () => {
 	it("is only offered for a top-level task of a list that has sections", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		const plain = await m.h.app.tasks.create({ title: "Plain" });
 		const titles = (t: Task) => taskMenu(m.host, t, "2026-10-01", () => undefined, document.body).flatMap((i) => (i === "separator" ? [] : [i.title]));
 		expect(titles(plain.task)).not.toContain("Move to section…");
@@ -270,7 +238,7 @@ describe('"Move to section…" (answer 5)', () => {
 	});
 
 	it("opens a second menu with No section and the sections, the current one checked, and moves the task", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const a1 = taskOf(m, "A1");
 		const entry = taskMenu(m.host, a1, "2026-10-01", () => undefined, document.body).find((i) => i !== "separator" && i.title === "Move to section…");
@@ -292,7 +260,7 @@ describe('"Move to section…" anchor and timer (#120)', () => {
 	const rectAt = (left: number, bottom: number) => ({ left, bottom, top: bottom - 20, right: left + 100, width: 100, height: 20, x: left, y: bottom - 20, toJSON: () => ({}) }) as DOMRect;
 
 	it("anchors the second menu to the element passed in, not to document.activeElement", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const anchor = document.createElement("div");
 		document.body.appendChild(anchor);
@@ -311,7 +279,7 @@ describe('"Move to section…" anchor and timer (#120)', () => {
 	});
 
 	it("shows nothing when the timer was cancelled, when the anchor left the document, or after a newer call", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const show = vi.spyOn(m.host, "showMenu");
 		const anchor = document.createElement("div");
@@ -334,14 +302,13 @@ describe('"Move to section…" anchor and timer (#120)', () => {
 	});
 
 	it("unmounting the app clears a pending timer", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const show = vi.spyOn(m.host, "showMenu");
 		const anchor = document.createElement("div");
 		document.body.appendChild(anchor);
 		moveToSection(m.host, taskOf(m, "A1"), anchor);
 		m.unmount();
-		mounted.splice(mounted.indexOf(m), 1);
 		await new Promise((r) => setTimeout(r, 5));
 		expect(show).not.toHaveBeenCalled();
 		anchor.remove();
@@ -352,7 +319,7 @@ describe("keyboard reorder of sections", () => {
 	const item = (host: U1Host, title: string) => menuItems(host).find((i) => i.title === title)!;
 
 	it("the list heading menu moves a section left or right, disabled at the ends", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		m.host.menus.length = 0;
@@ -374,7 +341,7 @@ describe("keyboard reorder of sections", () => {
 	});
 
 	it("the board column header menu does the same", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		m.host.menus.length = 0;
@@ -392,7 +359,7 @@ describe("listbox structure", () => {
 		[...root.querySelectorAll<HTMLElement>('[role="listbox"] button')].filter((b) => b.closest('[role="option"]') === null).map((b) => b.className || b.textContent);
 
 	it("no heading button sits inside a listbox; a listbox holds only options; arrows still cross sections", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		const done = taskOf(m, "A2");
@@ -410,32 +377,27 @@ describe("listbox structure", () => {
 		const rows = [...tasks.querySelectorAll<HTMLElement>(".cp-task-row")];
 		const n1 = rows.find((r) => r.textContent.includes("N1"))!;
 		n1.focus();
-		await key(n1, "ArrowDown");
+		await pressKey(n1, "ArrowDown");
 		expect(document.activeElement).toBe(rows[rows.indexOf(n1) + 1]);
 		expect(document.activeElement!.closest(".cp-section-group")!.getAttribute("data-section-id")).not.toBe("none");
 	});
 
 	it("the board has no button directly inside a listbox", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		expect(buttonsOutsideOptions(m.root.querySelector(".cp-tasks")!)).toEqual([]);
 	});
 });
 
-describe("row drag between sections (D7)", () => {
+describe("row drag between sections", () => {
 	// happy-dom has no layout: groups are boxes of a 30 px heading plus 40 px rows, one under the other.
-	const rect = (left: number, top: number, right: number, bottom: number) =>
-		({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
-
 	async function mountList() {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const host = new U1Host(m.h);
 		const undo = vi.spyOn(host, "notifyUndo");
-		const root = document.createElement("div");
-		document.body.appendChild(root);
-		containers.push(root);
+		const root = mountNode(null);
 		const redraw = async () => {
 			const state = m.h.app.store.state;
 			const ctx = m.h.app.queryContext();
@@ -524,9 +486,9 @@ describe("row drag between sections (D7)", () => {
 	});
 });
 
-describe("board columns (D6, answers 5 and 6)", () => {
+describe("board columns", () => {
 	it("shows No section, the sections, then the faint Add section column", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		expect(columnTitles(m.root)).toEqual(["No section", "Alpha", "Beta"]);
@@ -539,7 +501,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("the column turns into a name field: Enter creates, Escape cancels only the field", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		const open = async () => click(board(m.root).querySelector(".cp-board-add-section"));
@@ -547,32 +509,32 @@ describe("board columns (D6, answers 5 and 6)", () => {
 		const input = () => board(m.root).querySelector<HTMLInputElement>(".cp-section-name-input")!;
 		expect(document.activeElement).toBe(input());
 		await typeInto(input(), "Typed");
-		await key(input(), "Escape");
+		await pressKey(input(), "Escape");
 		expect(board(m.root)).not.toBeNull();
 		expect(board(m.root).querySelector(".cp-section-name-input")).toBeNull();
 		expect(board(m.root).querySelector(".cp-board-add-section")).not.toBeNull();
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta"]);
 		await open();
 		await typeInto(input(), "Gamma");
-		await key(input(), "Enter");
+		await pressKey(input(), "Enter");
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta", "Gamma"]);
 		expect(columnTitles(m.root)).toEqual(["No section", "Alpha", "Beta", "Gamma"]);
 	});
 
 	it("a duplicate name shows an inline error", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		await click(board(m.root).querySelector(".cp-board-add-section"));
 		const input = board(m.root).querySelector<HTMLInputElement>(".cp-section-name-input")!;
 		await typeInto(input, "beta");
-		await key(input, "Enter");
+		await pressKey(input, "Enter");
 		expect(board(m.root).querySelector(".cp-section-error")!.textContent).toMatch(/already|exists/i);
 		expect(sectionNames(m)).toEqual(["Alpha", "Beta"]);
 	});
 
 	it('the view menu\'s "Add section" opens the Add section column field', async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		await openViewMenu(m);
@@ -584,7 +546,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("each section header has a ⋯ menu (Rename, Delete) and a + with the section; No section has no ⋯", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const quickAdd = vi.spyOn(m.host, "quickAdd");
 		await openBoard(m, "Inbox");
@@ -600,7 +562,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("dragging a card to another column moves it to that section, in one place call", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		const place = vi.spyOn(m.h.app.tasks, "place");
@@ -620,7 +582,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("a nested subtask cannot be dragged to another column", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await m.h.app.tasks.create({ title: "Sub", parentId: taskOf(m, "A1").id });
 		await settle();
@@ -628,12 +590,12 @@ describe("board columns (D6, answers 5 and 6)", () => {
 		const r = stubBoardRects(m.root);
 		await dragTo(item(m.root, "Sub"), r.card("Sub"), r.columns[sectionOf(m, "Beta").id]!);
 		expect(taskOf(m, "Sub").sectionId).toBe(sectionOf(m, "Alpha").id);
-		await press(item(m.root, "Sub"), "ArrowRight", { altKey: true });
+		await pressKey(item(m.root, "Sub"), "ArrowRight", { altKey: true });
 		expect(taskOf(m, "Sub").sectionId).toBe(sectionOf(m, "Alpha").id);
 	});
 
 	it("moving a parent card takes its subtasks along", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await m.h.app.tasks.create({ title: "Sub", parentId: taskOf(m, "A1").id });
 		await settle();
@@ -644,25 +606,25 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("Alt+Right and Alt+Left move a focused top-level card to the adjacent section column", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		const alpha = sectionOf(m, "Alpha");
 		item(m.root, "N1").focus();
-		await press(item(m.root, "N1"), "ArrowRight", { altKey: true });
+		await pressKey(item(m.root, "N1"), "ArrowRight", { altKey: true });
 		expect(taskOf(m, "N1").sectionId).toBe(alpha.id);
 		expect(document.activeElement).toBe(item(m.root, "N1"));
-		await press(document.activeElement!, "ArrowRight", { altKey: true });
+		await pressKey(document.activeElement!, "ArrowRight", { altKey: true });
 		expect(taskOf(m, "N1").sectionId).toBe(sectionOf(m, "Beta").id);
 		// Beta is the last column: the key does nothing more.
-		await press(document.activeElement!, "ArrowRight", { altKey: true });
+		await pressKey(document.activeElement!, "ArrowRight", { altKey: true });
 		expect(taskOf(m, "N1").sectionId).toBe(sectionOf(m, "Beta").id);
-		await press(document.activeElement!, "ArrowLeft", { altKey: true });
+		await pressKey(document.activeElement!, "ArrowLeft", { altKey: true });
 		expect(taskOf(m, "N1").sectionId).toBe(alpha.id);
 	});
 
 	it("dragging a section header reorders the sections through app.sections.place", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await m.h.app.sections.create(INBOX_ID, "Gamma");
 		await settle();
@@ -684,7 +646,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("No section can neither be dragged nor be a target", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		const place = vi.spyOn(m.h.app.sections, "place");
@@ -700,7 +662,7 @@ describe("board columns (D6, answers 5 and 6)", () => {
 	});
 
 	it("is read-only aware: no Add section column, disabled header buttons, no drag", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
 		await makeReadOnly(m.h);
@@ -717,21 +679,16 @@ describe("board columns (D6, answers 5 and 6)", () => {
 
 describe("Quick Add with a section preset", () => {
 	it("saves the task in the preset section; a typed other list leaves the section", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const work = await m.h.app.categories.create("Work", "briefcase");
-		const { QuickAddModel } = await import("../../src/ui/quickadd/QuickAddModel");
 		const alpha = sectionOf(m, "Alpha");
-		const make = (preset: object) =>
-			new QuickAddModel(
-				{ app: m.h.app, preset, locale: () => "en", resolveNote: () => [], onSaved: () => undefined, onError: (e) => { throw e; }, keepOpen: () => false, onClose: () => undefined },
-				() => undefined,
-			);
-		const one = make({ categoryId: INBOX_ID, sectionId: alpha.id });
+		const make = async (preset: QuickAddPreset) => (await quickModel({ h: m.h, preset, keepOpen: false })).m;
+		const one = await make({ categoryId: INBOX_ID, sectionId: alpha.id });
 		one.setInput("In alpha");
 		await one.submit();
 		expect(taskOf(m, "In alpha").sectionId).toBe(alpha.id);
-		const two = make({ categoryId: INBOX_ID, sectionId: alpha.id });
+		const two = await make({ categoryId: INBOX_ID, sectionId: alpha.id });
 		two.setInput("Elsewhere #Work");
 		await two.submit();
 		const moved = taskOf(m, "Elsewhere");
@@ -744,17 +701,14 @@ describe("Quick Add with a section preset", () => {
 // "+ Add section" right after the board mounts must not be undone by a late mount effect.
 describe("the Add section field is ready when it appears", () => {
 	it("takes focus when it mounts, before any passive effect has run", async () => {
-		const m = await mount();
-		const container = document.createElement("div");
-		document.body.appendChild(container);
-		containers.push(container);
-		render(<AddSectionField host={m.host} categoryId={INBOX_ID} onClose={() => undefined} />, container);
+		const m = await mountApp();
+		const container = mountNode(<AddSectionField host={m.host} categoryId={INBOX_ID} onClose={() => undefined} />);
 		// No settle(): useEffect would run after the next frame, which is the window the e2e race hit.
 		expect(document.activeElement).toBe(container.querySelector(".cp-section-name-input"));
 	});
 
 	it("the board's Add section column opened in the first moment after the board mounts stays open", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
 		modeButtonEl(m).click();
@@ -768,4 +722,4 @@ describe("the Add section field is ready when it appears", () => {
 	});
 });
 
-const modeButtonEl = (m: CalMount) => modeButton(m.root, "Board")!;
+const modeButtonEl = (m: AppMount) => modeButton(m.root, "Board")!;

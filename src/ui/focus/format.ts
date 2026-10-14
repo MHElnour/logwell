@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import { isFinishedEarly } from "../../domain/focus";
 import { plural } from "../../domain/text";
+import { clockTimeOf } from "../../domain/time";
 import type { FocusGap, FocusSession, Instant } from "../../domain/types";
 import { formatDuration, pad2 } from "../format";
 
@@ -33,7 +34,7 @@ export function summaryText(rounds: number, focusedSec: number): string {
 
 /** "09:30–09:55" in the display zone; `separator` goes between the two times. */
 export function timeRange(session: Pick<FocusSession, "startedAt" | "endedAt">, zone: string, separator = "–"): string {
-	const hm = (at: Instant) => DateTime.fromISO(at, { zone }).toFormat("HH:mm");
+	const hm = (at: Instant) => clockTimeOf(DateTime.fromISO(at, { zone }));
 	return `${hm(session.startedAt)}${separator}${hm(session.endedAt)}`;
 }
 

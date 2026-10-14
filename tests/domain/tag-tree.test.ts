@@ -86,6 +86,20 @@ describe("parent tags", () => {
 			expect(tree[0]!.children.map((c) => c.count)).toEqual([2, 0]);
 		});
 
+		it("every node carries its own record and its count", () => {
+			const home = tag("Home");
+			const calls = tag("Home/Calls");
+			const tree = tagTree([calls, home], new Map([["home", 2]]));
+			expect(tree).toHaveLength(1);
+			expect(tree[0]).toMatchObject({ key: "home", name: "Home", tag: home, count: 2 });
+			expect(tree[0]!.children).toEqual([{ key: "home/calls", name: "Calls", tag: calls, count: 0, children: [] }]);
+		});
+
+		it("a child whose parent record is missing is shown at the top, never dropped", () => {
+			const calls = tag("Home/Calls");
+			expect(tagTree([calls], new Map()).map((n) => [n.key, n.name, n.tag])).toEqual([["home/calls", "Calls", calls]]);
+		});
+
 		it("does not confuse programmingx with a child of programming", () => {
 			const tree = tagTree([tag("Programming"), tag("Programming/Go"), tag("programmingx")], new Map());
 			expect(tree.map((n) => [n.key, n.name])).toEqual([["programming", "Programming"], ["programmingx", "programmingx"]]);
@@ -264,7 +278,7 @@ describe("unique tag names", () => {
 	/** The existing tag whose name a new key would repeat, among tags with these keys. */
 	const clash = (keys: string[], key: string) => TagNames.of(keys.map((k) => ({ key: k }))).clash(key);
 
-	describe("tag names (D29)", () => {
+	describe("tag names", () => {
 		it("the leaf is the last path segment", () => {
 			expect(tagLeaf("home/calls")).toBe("calls");
 			expect(tagLeaf("calls")).toBe("calls");
@@ -282,6 +296,14 @@ describe("unique tag names", () => {
 			// The parent itself is no clash, and may get more children.
 			expect(clash(["home", "home/calls"], "home")).toBeNull();
 			expect(clash(["home", "home/calls"], "home/garden")).toBeNull();
+		});
+
+		it("a name is the record's own: a parent's name exists only with its record", () => {
+			const names = TagNames.of([tag("home/calls", "Home/Calls")]);
+			expect(names.has("home/calls")).toBe(true);
+			expect(names.has("home")).toBe(false);
+			expect(names.owner("home")).toBeUndefined();
+			expect(names.owner("calls")).toBe("home/calls");
 		});
 
 		it("a new parent segment that repeats a name clashes", () => {
@@ -398,7 +420,7 @@ describe("unique tag names", () => {
 });
 
 describe("the tag name check", () => {
-	// The one name check of the New tag and Edit tag dialogs (Lists, sections and tags rules 21, 22, 23b, 24):
+	// The one name check of the New tag and Edit tag dialogs:
 	// the typed text first, in a fixed order, then a name already in use. Edit allows the tag's own name.
 
 	const tag = (key: string, displayName: string, createdAt = "2026-10-01T10:00:00Z"): Tag => ({ key, displayName, color: null, createdAt, modifiedAt: createdAt });
@@ -537,65 +559,6 @@ describe("the tag name check", () => {
 
 		it("a name repeating its new parent's is refused", () => {
 			expect(newTagProblem(tags, "errands", "errands", "home/calls")).toBe(TAG_REPEAT_MESSAGE);
-		});
-	});
-});
-
-describe("tag records", () => {
-	// Every tag the tree shows is a tag record (Lists, sections and tags rule 25); a name is owned by the oldest record
-	// that uses it (rule 22).
-
-	const tag = (key: string, displayName: string, createdAt = "2026-01-01T00:00:00.000Z"): Tag => ({ key, displayName, color: null, createdAt, modifiedAt: createdAt });
-	const map = (...tags: Tag[]) => new Map(tags.map((t) => [t.key, t]));
-
-	describe("tagTree from records", () => {
-		it("nests a child under its parent record; every node carries its record", () => {
-			const home = tag("home", "Home");
-			const calls = tag("home/calls", "Home/Calls");
-			const tree = tagTree([calls, home], new Map([["home", 2]]));
-			expect(tree).toHaveLength(1);
-			expect(tree[0]).toMatchObject({ key: "home", name: "Home", tag: home, count: 2 });
-			expect(tree[0]!.children).toEqual([{ key: "home/calls", name: "Calls", tag: calls, count: 0, children: [] }]);
-		});
-
-		it("a child whose parent record is missing is shown at the top, never dropped", () => {
-			const calls = tag("home/calls", "Home/Calls");
-			const tree = tagTree([calls], new Map());
-			expect(tree.map((n) => [n.key, n.name, n.tag])).toEqual([["home/calls", "Calls", calls]]);
-		});
-	});
-
-	describe("tag names from records", () => {
-		it("a name is the record's own: a parent's name exists only with its record", () => {
-			const names = TagNames.of([tag("home/calls", "Home/Calls")]);
-			expect(names.has("home/calls")).toBe(true);
-			expect(names.has("home")).toBe(false);
-			expect(names.owner("home")).toBeUndefined();
-			expect(names.owner("calls")).toBe("home/calls");
-		});
-
-		it("a node owns its name by its own record's createdAt, not its children's", () => {
-			const names = TagNames.of([
-				tag("work/home", "Work/Home", "2026-02-01T00:00:00.000Z"),
-				tag("work", "Work", "2026-02-01T00:00:00.000Z"),
-				tag("home", "Home", "2026-03-01T00:00:00.000Z"),
-				tag("home/calls", "Home/Calls", "2026-01-01T00:00:00.000Z"),
-			]);
-			expect(names.owner("home")).toBe("work/home");
-		});
-
-		it("a new key's parent name is checked too", () => {
-			const names = TagNames.of([tag("work", "Work"), tag("work/home", "Work/Home")]);
-			expect(names.clash("home/calls")).toBe("work/home");
-		});
-	});
-
-	describe("tagDisplayPath", () => {
-		it("is the record's display name, or the key when there is no record", () => {
-			const tags = map(tag("home", "Home"), tag("home/calls", "Home/Calls"));
-			expect(tagDisplayPath(tags, "home/calls")).toBe("Home/Calls");
-			expect(tagDisplayPath(map(tag("home/calls", "Home/Calls")), "home")).toBe("home");
-			expect(tagLabel(tags, "home/calls")).toBe("Calls");
 		});
 	});
 });

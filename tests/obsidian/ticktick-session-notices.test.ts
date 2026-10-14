@@ -116,11 +116,25 @@ describe("failure notices (screen 10)", () => {
 		cleanup = () => plugin.onunload();
 		await vi.waitFor(() => expect(mocks.actionNotice).toHaveBeenCalled());
 		const [message, actions] = mocks.actionNotice.mock.calls[0] as [string, { label: string; run: () => void }[]];
-		expect(message).toContain("limit of TickTick's free plan");
+		expect(message).toContain("TickTick's free plan allows 99 per list");
 		expect(actions.map((a) => a.label)).toEqual(["Sync now"]);
 		const syncNow = vi.spyOn(plugin.session!.tickTick, "syncNow");
 		actions[0]!.run();
 		expect(syncNow).toHaveBeenCalledTimes(1);
+	});
+
+	it("#111: a TickTick list that no longer exists is named and offers Unlink, which unlinks the list", async () => {
+		const { fake, tt, project } = vault({ linked: true, tasks: 0 });
+		tt.projects.delete(project.id);
+		const plugin = await loadPlugin(fake, "A.cpbase");
+		cleanup = () => plugin.onunload();
+		await vi.waitFor(() => expect(mocks.actionNotice).toHaveBeenCalled());
+		const [message, actions] = mocks.actionNotice.mock.calls[0] as [string, { label: string; run: () => void }[]];
+		expect(message).toBe('The TickTick list linked to "Work" no longer exists.');
+		expect(actions.map((a) => a.label)).toEqual(["Unlink"]);
+		actions[0]!.run();
+		await vi.waitFor(() => expect(plugin.session!.app.store.state.syncLinks.size).toBe(0));
+		expect(mocks.notices).toContain("Work is no longer synced with TickTick. Its tasks stay on both sides.");
 	});
 
 	it("too many requests is a plain notice", async () => {
@@ -142,6 +156,10 @@ describe("tasks removed in TickTick (screens 8 and 9)", () => {
 		await session.sync.idle();
 		await settle();
 		for (let i = 1; i <= 5; i++) v.tt.remove(v.tt.findByTitle(`Errand ${i}`)!.id);
+		// The first read of the deleted tasks: nothing is asked until a second read finds them unchanged.
+		await session.tickTick.syncNow();
+		await settle();
+		expect(mocks.askMissing).not.toHaveBeenCalled();
 		return { ...v, plugin, session };
 	}
 

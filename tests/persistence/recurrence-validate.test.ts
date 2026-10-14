@@ -59,7 +59,7 @@ function loadRec(recurrence: unknown): { value: Recurrence | null; issues: strin
 
 const ruleOf = (r: { value: Recurrence | null }) => r.value?.versions[0]?.rule;
 
-describe("recurrence reader (D2)", () => {
+describe("recurrence reader", () => {
 	it("a valid recurrence loads unchanged with no issue", () => {
 		const r = loadRec(rec());
 		expect(r.issues).toEqual([]);
@@ -88,7 +88,7 @@ describe("recurrence reader (D2)", () => {
 		}
 	});
 
-	it("H1: an interval above 999 becomes 999", () => {
+	it("an interval above 999 becomes 999", () => {
 		for (const interval of [1000, 1e15]) {
 			const r = loadRec(rec({}, { interval }));
 			expect(ruleOf(r)?.interval).toBe(999);
@@ -97,7 +97,7 @@ describe("recurrence reader (D2)", () => {
 		expect(loadRec(rec({}, { interval: 999 })).issues).toEqual([]);
 	});
 
-	it("M4: a known week start is kept, an unknown one dropped, none written when absent", () => {
+	it("a known week start is kept, an unknown one dropped, none written when absent", () => {
 		const ok = loadRec(rec({}, { weekStart: "SU" }));
 		expect(ruleOf(ok)?.weekStart).toBe("SU");
 		expect(ok.issues).toEqual([]);
@@ -107,7 +107,7 @@ describe("recurrence reader (D2)", () => {
 		expect(ruleOf(loadRec(rec()))).not.toHaveProperty("weekStart");
 	});
 
-	it("L4: a deadline on a repeating task is removed", () => {
+	it("a deadline on a repeating task is removed", () => {
 		const r = load({ tasks: [taskWith(rec(), { deadline: { kind: "date", date: "2026-10-20" } })] });
 		expect(r.tasks.get("t1")?.deadline).toBeNull();
 		expect(r.issues).toHaveLength(1);
@@ -220,7 +220,7 @@ describe("recurrence reader (D2)", () => {
 		expect(absent.value).not.toHaveProperty("anchoredAt");
 	});
 
-	it("N1: countFrom is kept when it is a string and dropped otherwise", () => {
+	it("countFrom is kept when it is a string and dropped otherwise", () => {
 		const ok = loadRec(rec({ countFrom: "2026-10-05T08:00:00.000Z" }));
 		expect(ok.value?.countFrom).toBe("2026-10-05T08:00:00.000Z");
 		expect(ok.issues).toEqual([]);
@@ -307,7 +307,7 @@ function loadRecords(records: Obj[], tasks: Obj[] = [taskWith(rec())]) {
 	return load({ tasks, occurrenceRecords: records });
 }
 
-describe("occurrence record reader (D2)", () => {
+describe("occurrence record reader", () => {
 	it("a valid record loads with the defaults filled in", () => {
 		const r = loadRecords([record(), record({ occurrenceDate: "2026-10-07", status: "skipped", auto: true, completedOn: undefined })]);
 		expect(r.issues).toEqual([]);

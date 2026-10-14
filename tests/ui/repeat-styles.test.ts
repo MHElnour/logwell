@@ -1,48 +1,14 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { cssSection, selectors, uncommented } from "./styles-helpers";
 
-// The repeat stylesheet section (marked "M7 recurrence" in styles.css). happy-dom has no layout, so the rules are
-// checked as text; the visual pass (dark and light, wide and narrow) is done in real Obsidian.
+// The repeat stylesheet section (marked "M7 recurrence" in styles.css); the visual pass (dark and light, wide and
+// narrow) is done in real Obsidian. Its scoping, hygiene and place as the last block are checked with the other
+// sections in layout-styles.test.ts.
 
-const css = readFileSync("styles.css", "utf8");
-const MARK = "/* == M7 recurrence == */";
-const END = "/* == end M7 recurrence == */";
-const section = css.slice(css.indexOf(MARK), css.indexOf(END) + END.length);
-const bare = section.replace(/\/\*[\s\S]*?\*\//g, "");
-
-function selectors(text: string): string[] {
-	const out: string[] = [];
-	const re = /([^{}]+)\{/g;
-	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-		const prelude = m[1]!.trim();
-		if (prelude.startsWith("@")) continue;
-		for (const s of prelude.replace(/\([^)]*\)/g, (g) => g.replace(/,/g, "|")).split(",")) out.push(s.trim());
-	}
-	return out;
-}
+const section = cssSection("M7 recurrence");
+const bare = uncommented(section);
 
 describe("the repeat stylesheet section", () => {
-	it("is present once, closed, and the last block of the file", () => {
-		expect(css.split(MARK)).toHaveLength(2);
-		expect(css.split(END)).toHaveLength(2);
-		expect(css.indexOf(MARK)).toBeLessThan(css.indexOf(END));
-		expect(css.indexOf("/* == end M6 habits == */")).toBeLessThan(css.indexOf(MARK));
-		expect(css.trimEnd().endsWith(END)).toBe(true);
-	});
-
-	it("scopes every rule to the view or the Quick Add modal", () => {
-		const bad = selectors(bare).filter((s) => !s.startsWith(".checkpoint-view ") && !s.startsWith(".checkpoint-quick-add-modal "));
-		expect(bad).toEqual([]);
-	});
-
-	it("uses no !important, no :has, no lookbehind and no hex or rgb colors", () => {
-		expect(bare).not.toMatch(/!important/);
-		expect(bare).not.toMatch(/:has\(/);
-		expect(bare).not.toMatch(/\(\?<[=!]/);
-		expect(bare).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(bare).not.toMatch(/\brgba?\(/);
-	});
-
 	it("gives the picker's own controls a visible focus outline", () => {
 		for (const part of [".cp-repeat-button", ".cp-repeat-opt", ".cp-repeat-day", ".cp-repeat-seg button", ".cp-repeat-custom select", ".cp-repeat-custom input"]) {
 			expect(section, part).toMatch(new RegExp(`${part.replace(/[.]/g, "\\.")}:focus-visible`));

@@ -59,7 +59,7 @@ async function setup(): Promise<Setup> {
 		return new FocusService(h.app.store, h.clock, sequentialIds(`e${n++}`), port, s);
 	};
 	const svc = make();
-	await svc.open(DB);
+	await svc.open();
 	return { h, port, svc, settings, reload: make };
 }
 
@@ -72,7 +72,7 @@ async function ticks(s: Setup, svc: FocusService, seconds: number, by = 1): Prom
 
 const sessions = (s: Setup): FocusSession[] => [...s.h.app.store.state.focusSessions.values()];
 
-describe("start (B34)", () => {
+describe("start", () => {
 	it("starts a set and keeps the timer on the port", async () => {
 		const s = await setup();
 		expect(await s.svc.start(cfg(), null)).toEqual({ kind: "started" });
@@ -100,7 +100,7 @@ describe("start (B34)", () => {
 	});
 });
 
-describe("finalizing a round (D4, B36, POM-07)", () => {
+describe("finalizing a round", () => {
 	it("writes the record and flushes the file before the timer moves on", async () => {
 		const s = await setup();
 		const task = (await s.h.app.tasks.create({ title: "Study" })).task;
@@ -143,7 +143,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		expect(sessions(s)[0]?.taskTitleSnapshot).toBe("New");
 	});
 
-	it("a failed write puts the round back, pauses it, and does not fail again every second (A1, A2)", async () => {
+	it("a failed write puts the round back, pauses it, and does not fail again every second", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 1470, 30);
@@ -156,7 +156,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		await expect(s.svc.tick()).resolves.toBeUndefined();
 	});
 
-	it("A1: flush resolves although the file write failed; the port still holds the focus round", async () => {
+	it("flush resolves although the file write failed; the port still holds the focus round", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		const id = s.svc.timer()!.sessionId!;
@@ -180,7 +180,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		expect(sessions(s)).toHaveLength(1);
 	});
 
-	it("A3: a Pause during a failing finalize keeps the focus round recoverable", async () => {
+	it("a Pause during a failing finalize keeps the focus round recoverable", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		const id = s.svc.timer()!.sessionId!;
@@ -203,7 +203,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		expect(sessions(s).map((x) => x.id)).toEqual([id]);
 	});
 
-	it("A2: start, split and reassign are refused while the database is read-only", async () => {
+	it("start and split are refused while the database is read-only", async () => {
 		const s = await setup();
 		await makeReadOnly(s.h);
 		await expect(s.svc.start(cfg(), null)).rejects.toThrow(/read-only/);
@@ -226,7 +226,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 		expect(s.port.timer?.taskId).toBe(b.id);
 	});
 
-	it("A1: an unrelated edit landing during the first flush does not roll the round back", async () => {
+	it("an unrelated edit landing during the first flush does not roll the round back", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		await ticks(s, s.svc, 1470, 30);
@@ -246,7 +246,7 @@ describe("finalizing a round (D4, B36, POM-07)", () => {
 	});
 });
 
-describe("heartbeat (B32)", () => {
+describe("heartbeat", () => {
 	it("saves lastHeartbeat to the port at most every 15 s", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
@@ -276,8 +276,8 @@ describe("heartbeat (B32)", () => {
 	});
 });
 
-describe("open (B31, B33)", () => {
-	it("B31: a running timer found on open is paused with a pending gap, nothing is written", async () => {
+describe("open", () => {
+	it("a running timer found on open is paused with a pending gap, nothing is written", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 60, 15);
@@ -286,7 +286,7 @@ describe("open (B31, B33)", () => {
 		const svc2 = s.reload();
 		const events: string[] = [];
 		svc2.bus.on("recovery-needed", () => events.push("recovery"));
-		expect(await svc2.open(DB)).toBe("recovery");
+		expect(await svc2.open()).toBe("recovery");
 		expect(events).toEqual(["recovery"]);
 		expect(svc2.timer()).toMatchObject({ state: "paused", needsRecovery: true });
 		expect(svc2.timer()?.unobserved[0]).toMatchObject({ resolution: "pending" });
@@ -295,7 +295,7 @@ describe("open (B31, B33)", () => {
 		expect(s.port.timer?.needsRecovery).toBe(true);
 	});
 
-	it("B33: a timer whose session is already in the file is cleared and nothing is written", async () => {
+	it("a timer whose session is already in the file is cleared and nothing is written", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		const before = JSON.stringify(s.port.timer);
@@ -305,7 +305,7 @@ describe("open (B31, B33)", () => {
 		s.port.stored.set(DB, before);
 		const writes = s.h.fs.writes.length;
 		const svc2 = s.reload();
-		expect(await svc2.open(DB)).toBe("already-saved");
+		expect(await svc2.open()).toBe("already-saved");
 		expect(svc2.timer()).toBeNull();
 		expect(s.port.timer).toBeNull();
 		expect(sessions(s)).toHaveLength(1);
@@ -317,7 +317,7 @@ describe("open (B31, B33)", () => {
 		for (const junk of [{ v: 2, phase: "focus" }, "text", { v: 1 }, 7]) {
 			s.port.stored.set(DB, JSON.stringify(junk));
 			const svc2 = s.reload();
-			expect(await svc2.open(DB)).toBe("none");
+			expect(await svc2.open()).toBe("none");
 			expect(svc2.timer()).toBeNull();
 		}
 	});
@@ -329,12 +329,12 @@ describe("open (B31, B33)", () => {
 		await s.svc.pause();
 		s.h.clock.advance(3_600_000);
 		const svc2 = s.reload();
-		expect(await svc2.open(DB)).toBe("restored");
+		expect(await svc2.open()).toBe("restored");
 		expect(svc2.timer()).toMatchObject({ state: "paused", needsRecovery: false, unobserved: [] });
 	});
 });
 
-describe("AS-12", () => {
+describe("recovering a killed round", () => {
 	it("start, kill after 3 min, open 10 min later: 3 min focused, 10 min pending; Finish saves 3 min; Include makes 13", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
@@ -343,7 +343,7 @@ describe("AS-12", () => {
 		// The service is dropped; ten minutes pass.
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		const t = svc2.timer()!;
 		expect(t).toMatchObject({ state: "paused", needsRecovery: true });
 		expect(t.segments).toHaveLength(1);
@@ -353,7 +353,7 @@ describe("AS-12", () => {
 		]);
 		// A second open adds no second gap.
 		const svc3 = s.reload();
-		expect(await svc3.open(DB)).toBe("recovery");
+		expect(await svc3.open()).toBe("recovery");
 		expect(svc3.timer()?.unobserved).toHaveLength(1);
 		expect(sessions(s)).toEqual([]);
 		// Finish: one record, 3 minutes.
@@ -378,14 +378,14 @@ describe("AS-12", () => {
 		await ticks(s, s.svc, 60, 15);
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("resume");
 		expect(svc2.timer()).toMatchObject({ state: "running", needsRecovery: false });
 		expect(svc2.timer()?.unobserved).toHaveLength(1);
 
 		const svc3 = s.reload();
 		s.h.clock.advance(600_000);
-		await svc3.open(DB);
+		await svc3.open();
 		const writes = s.h.fs.writes.length;
 		await svc3.resolveRecovery("discard");
 		expect(svc3.timer()).toBeNull();
@@ -399,7 +399,7 @@ describe("AS-12", () => {
 	});
 });
 
-describe("split and reassign (B35)", () => {
+describe("split and reassign", () => {
 	it("split saves A as split and B continues with the same end", async () => {
 		const s = await setup();
 		const a = (await s.h.app.tasks.create({ title: "A" })).task;
@@ -437,7 +437,7 @@ describe("split and reassign (B35)", () => {
 		expect(s.svc.timer()?.taskId).toBeNull();
 	});
 
-	it("split to no task saves A and continues with no task (B2)", async () => {
+	it("split to no task saves A and continues with no task", async () => {
 		const s = await setup();
 		const a = (await s.h.app.tasks.create({ title: "A" })).task;
 		await s.svc.start(cfg(), a.id);
@@ -492,7 +492,7 @@ describe("pause, resume, skip, stop", () => {
 		expect(s.svc.timer()).toMatchObject({ phase: "focus", round: 2 });
 	});
 
-	it("stop saves the real seconds (POM-05) and ends the set without a summary", async () => {
+	it("stop saves the real seconds and ends the set without a summary", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 300, 30);
@@ -515,7 +515,7 @@ describe("pause, resume, skip, stop", () => {
 	});
 });
 
-describe("short sessions (D7)", () => {
+describe("short sessions", () => {
 	it("a stop under a minute is not saved, says so, and Undo saves it", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
@@ -534,7 +534,7 @@ describe("short sessions (D7)", () => {
 		expect(await s.svc.undoShortDiscard(id)).toBe(false);
 	});
 
-	it("A4: two short discards each keep their own Undo, and a new set does not wipe them", async () => {
+	it("two short discards each keep their own Undo, and a new set does not wipe them", async () => {
 		const s = await setup();
 		const ids: string[] = [];
 		s.svc.bus.on("short-discarded", (e) => ids.push(e.sessionId));
@@ -557,7 +557,7 @@ describe("short sessions (D7)", () => {
 		expect(sessions(s).map((x) => x.id).sort()).toEqual([first, second].sort());
 	});
 
-	it("A4: an Undo whose write fails stays available", async () => {
+	it("an Undo whose write fails stays available", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		const id = s.svc.timer()!.sessionId!;
@@ -573,7 +573,7 @@ describe("short sessions (D7)", () => {
 		expect(sessions(s)).toHaveLength(1);
 	});
 
-	it("A8: a discarded short round is not in the set's focused total", async () => {
+	it("a discarded short round is not in the set's focused total", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		await ticks(s, s.svc, 20, 10);
@@ -608,7 +608,7 @@ describe("short sessions (D7)", () => {
 		expect(sessions(s)).toHaveLength(2);
 	});
 
-	it("a split or a recovered round under a minute is saved", async () => {
+	it("a split under a minute is saved", async () => {
 		const s = await setup();
 		const b = (await s.h.app.tasks.create({ title: "B" })).task;
 		await s.svc.start(cfg(), null);
@@ -620,7 +620,7 @@ describe("short sessions (D7)", () => {
 });
 
 describe("clock and shutdown", () => {
-	it("A6: a clock that goes back persists the heartbeat and keeps the time counted", async () => {
+	it("a clock that goes back persists the heartbeat and keeps the time counted", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 30, 5);
@@ -639,7 +639,7 @@ describe("clock and shutdown", () => {
 		expect(s.svc.close()).toBeNull();
 	});
 
-	it("B1: a closed service ignores ticks and writes nothing", async () => {
+	it("a closed service ignores ticks and writes nothing", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 1470, 30);
@@ -650,7 +650,7 @@ describe("clock and shutdown", () => {
 		expect(s.port.timer).toMatchObject({ phase: "focus" });
 	});
 
-	it("D4: close() waits for a tick that is writing, and nothing is written after it resolves", async () => {
+	it("close() waits for a tick that is writing, and nothing is written after it resolves", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
 		await ticks(s, s.svc, 1470, 30);
@@ -683,7 +683,7 @@ describe("clock and shutdown", () => {
 		expect(s.h.dbText()).toBe(after);
 	});
 
-	it("B1: a tick while one is in flight joins it, and there is none without a timer", async () => {
+	it("a tick while one is in flight joins it, and there is none without a timer", async () => {
 		const s = await setup();
 		await expect(s.svc.tick()).resolves.toBeUndefined();
 		await s.svc.start(cfg(), null);
@@ -696,7 +696,7 @@ describe("clock and shutdown", () => {
 });
 
 describe("history actions", () => {
-	it("assign sets or clears the task of a record (POM-10) with its own undo label", async () => {
+	it("assign sets or clears the task of a record with its own undo label", async () => {
 		const s = await setup();
 		const t = (await s.h.app.tasks.create({ title: "Later" })).task;
 		await s.svc.start(cfg(), null);
@@ -720,7 +720,7 @@ describe("history actions", () => {
 	});
 });
 
-describe("totals survive deleted tasks (D9, B8, B9)", () => {
+describe("totals survive deleted tasks", () => {
 	it("keeps the sessions and the snapshot when the task is deleted and purged", async () => {
 		const s = await setup();
 		const t = (await s.h.app.tasks.create({ title: "Gone soon" })).task;
@@ -747,7 +747,7 @@ describe("totals survive deleted tasks (D9, B8, B9)", () => {
 	});
 });
 
-describe("set id (P3)", () => {
+describe("set id", () => {
 	it("stamps every round record with the set id and the planned rounds, and Split keeps them", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
@@ -763,7 +763,7 @@ describe("set id (P3)", () => {
 		expect(recs.map((r) => r.setRound)).toEqual([1, 1]);
 	});
 
-	it("stamps the round number; a round dropped under 60 s leaves a hole and the set still reads done (P2)", async () => {
+	it("stamps the round number; a round dropped under 60 s leaves a hole and the set still reads done", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(4), null);
 		await ticks(s, s.svc, 1500, 30); // round 1 completes, break
@@ -788,12 +788,12 @@ describe("set id (P3)", () => {
 		await s.svc.start(cfg(2), null);
 		const setId = s.svc.timer()!.setId;
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		expect(svc2.timer()?.setId).toBe(setId);
 	});
 });
 
-describe("finish (P5)", () => {
+describe("finish", () => {
 	it("mid-set: writes a completed record with the real seconds and starts the break, with the moment", async () => {
 		const s = await setup();
 		const events: string[] = [];
@@ -823,7 +823,7 @@ describe("finish (P5)", () => {
 		expect(s.svc.lastSummary()).toEqual({ rounds: 1, focusedSec: 900 });
 	});
 
-	it("under 60 s is not saved (D7) and Undo saves it, as for Stop", async () => {
+	it("under 60 s is not saved and Undo saves it, as for Stop", async () => {
 		const s = await setup();
 		const ids: string[] = [];
 		s.svc.bus.on("short-discarded", (e) => ids.push(e.sessionId));
@@ -838,7 +838,7 @@ describe("finish (P5)", () => {
 		expect(sessions(s)[0]?.status).toBe("completed");
 	});
 
-	it("a one-round set finished under 60 s is dropped by D7, with its Undo", async () => {
+	it("a one-round set finished under 60 s is dropped as a short session, with its Undo", async () => {
 		const s = await setup();
 		const ids: string[] = [];
 		s.svc.bus.on("short-discarded", (e) => ids.push(e.sessionId));
@@ -895,20 +895,12 @@ describe("finish (P5)", () => {
 		await ticks(s, s.svc, 10, 10);
 		s.h.clock.advance(600_000);
 		const svc2 = s.reload();
-		await svc2.open(DB);
+		await svc2.open();
 		await svc2.resolveRecovery("resume");
 		s.h.clock.advance(10_000);
 		await svc2.finish();
 		expect(sessions(s)).toHaveLength(2);
 		expect(svc2.timer()).toBeNull();
-	});
-
-	it("Skip and Stop on the last round under 60 s are still dropped", async () => {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 30, 10);
-		await s.svc.stop();
-		expect(sessions(s)).toHaveLength(0);
 	});
 
 	it("under 60 s is saved when the setting is off", async () => {
@@ -933,7 +925,7 @@ describe("finish (P5)", () => {
 	});
 });
 
-describe("finish runs the tick logic first (P5)", () => {
+describe("finish runs the tick logic first", () => {
 	it("a stale heartbeat opens the recovery prompt instead of saving the round", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
@@ -970,7 +962,7 @@ describe("finish runs the tick logic first (P5)", () => {
 		expect(s.svc.timer()).toMatchObject({ phase: "short-break" });
 	});
 
-	it("a failed write puts the focus round back on the timer and the port (A1)", async () => {
+	it("a failed write puts the focus round back on the timer and the port", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(2), null);
 		const id = s.svc.timer()!.sessionId!;
@@ -1004,7 +996,7 @@ describe("finish runs the tick logic first (P5)", () => {
 	});
 });
 
-describe("delete and remove task (P4)", () => {
+describe("delete and remove task", () => {
 	it("deleteRecord is refused while the database is read-only", async () => {
 		const s = await setup();
 		await s.svc.start(cfg(), null);
@@ -1057,6 +1049,18 @@ describe("delete and remove task (P4)", () => {
 	});
 });
 
+/** A one-round set ended by recovery with a 5-minute unobserved gap, finished on the next open. */
+async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
+	const s = await setup();
+	await s.svc.start(cfg(1), null);
+	await ticks(s, s.svc, 90, 30);
+	s.h.clock.advance(5 * 60_000);
+	const svc2 = s.reload();
+	await svc2.open();
+	await svc2.resolveRecovery("finish");
+	return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
+}
+
 describe("edits report whether they wrote", () => {
 	it("assign resolves true once, false for the same task again, and Undo reverts it once", async () => {
 		const s = await setup();
@@ -1070,17 +1074,6 @@ describe("edits report whether they wrote", () => {
 		expect(s.h.app.store.state.focusSessions.get(rec.id)?.taskId).toBeNull();
 		expect(s.h.app.store.undoLabel).not.toBe("Assign focus record");
 	});
-
-	async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 90, 30);
-		s.h.clock.advance(5 * 60_000);
-		const svc2 = s.reload();
-		await svc2.open(DB);
-		await svc2.resolveRecovery("finish");
-		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
-	}
 
 	it("includeGap resolves true once and false when the gap already has that resolution", async () => {
 		const { s, rec } = await withGap();
@@ -1103,17 +1096,6 @@ describe("edits report whether they wrote", () => {
 });
 
 describe("modifiedAt of an edited record", () => {
-	async function withGap(): Promise<{ s: Setup; rec: FocusSession }> {
-		const s = await setup();
-		await s.svc.start(cfg(1), null);
-		await ticks(s, s.svc, 90, 30);
-		s.h.clock.advance(5 * 60_000);
-		const svc2 = s.reload();
-		await svc2.open(DB);
-		await svc2.resolveRecovery("finish");
-		return { s: { ...s, svc: svc2 }, rec: sessions(s)[0]! };
-	}
-
 	it("finalizing does not stamp it; includeGap, assign and remove task do", async () => {
 		const { s, rec } = await withGap();
 		const t = (await s.h.app.tasks.create({ title: "T" })).task;

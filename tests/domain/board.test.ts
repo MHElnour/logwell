@@ -21,7 +21,7 @@ const titles = (cards: { entry: { task: Task }; subtasks: { task: Task }[] }[]) 
 
 const t = (id: string, patch: Partial<Task> = {}) => makeTask(id, { title: id, sortKey: id, ...patch });
 
-describe("D1: Upcoming starts tomorrow", () => {
+describe("Upcoming starts tomorrow", () => {
 	const tasks = [
 		t("overdue", { scheduled: day("2026-09-30") }),
 		t("today", { scheduled: day("2026-10-01") }),
@@ -51,7 +51,7 @@ describe("D1: Upcoming starts tomorrow", () => {
 	});
 });
 
-describe("D5: default order is the sort key", () => {
+describe("default order is the sort key", () => {
 	it("Today and Upcoming order by sortKey inside a group, not by time", () => {
 		const a = t("b-first", { sortKey: "A", scheduled: { kind: "datetime", local: "2026-10-01T20:00", tz: "Europe/Berlin" } });
 		const b = t("a-second", { sortKey: "B", scheduled: { kind: "datetime", local: "2026-10-01T08:00", tz: "Europe/Berlin" } });
@@ -209,7 +209,7 @@ describe("buildBoard: Inbox and lists", () => {
 	});
 });
 
-describe("buildBoard: subtasks across columns (D4)", () => {
+describe("buildBoard: subtasks across columns", () => {
 	it("nests only when the parent is in the same column; otherwise a Parent › card", () => {
 		const board = buildBoard(
 			db([

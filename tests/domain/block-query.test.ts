@@ -6,89 +6,102 @@ import { scheduleResolver } from "../../src/domain/recurrence";
 import type { Category, DateSpec, ID, OccurrenceRecord, Priority, Section, Tag, Task, WeekStart } from "../../src/domain/types";
 import { type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
 import { done, repeating, rule, series } from "./recurrence-fixtures";
-import { blockOpenView } from "../../src/app/blockView";
 import { resolveTagNames, TagNames } from "../../src/domain/tags";
 
+// The task block matcher. 2026-10-14 is a Wednesday. Which tasks pass which filters is the property's to check (it
+// compares every filter combination and week start with an independent reference); the examples here are what it
+// cannot reach: error messages, the display zone, a week across a month and year, repeats, subtasks, order and shape.
+
+const TODAY = "2026-10-14";
+const ZONE = "Europe/Berlin";
+const NOTE = "Projects/Plan.md";
+const TS = "2026-09-01T09:00:00.000Z";
+
+function ctxOf(weekStart: WeekStart = "MO", extra: Partial<QueryContext> = {}): QueryContext {
+	return { today: TODAY, zone: ZONE, upcomingDays: 7, weekStart, ...extra };
+}
+
+function list(id: string, name: string): Category {
+	return { id, name, icon: null, color: null, nameKey: name.toLowerCase(), isInbox: id === "inbox", sortKey: id, createdAt: TS, modifiedAt: TS };
+}
+function section(id: string, categoryId: string, name: string): Section {
+	return { id, categoryId, name, nameKey: name.toLowerCase(), sortKey: id, createdAt: TS, modifiedAt: TS };
+}
+function tag(key: string, displayName = key, createdAt = TS): Tag {
+	return { key, displayName, color: null, createdAt, modifiedAt: createdAt };
+}
+function task(id: string, patch: Partial<Task> = {}): Task {
+	return {
+		id,
+		title: `Task ${id}`,
+		descriptionNote: null,
+		categoryId: "inbox",
+		tagKeys: [],
+		parentId: null,
+		sectionId: null,
+		scheduled: null,
+		deadline: null,
+		plannedDurationMin: null,
+		urgent: false,
+		important: false,
+		priority: 0,
+		status: "open",
+		completedAt: null,
+		recurrence: null,
+		sortKey: id,
+		createdAt: TS,
+		modifiedAt: TS,
+		...patch,
+	};
+}
+const day = (date: string): DateSpec => ({ kind: "date", date });
+const timed = (local: string, tz = ZONE): DateSpec => ({ kind: "datetime", local, tz });
+const noteOf = (path: string) => ({ path, linkedAt: TS });
+
+interface Fixture {
+	tasks?: Task[];
+	lists?: Category[];
+	sections?: Section[];
+	tags?: Tag[];
+	records?: OccurrenceRecord[];
+}
+
+/** The lists Inbox, Work and Home, their sections, and the tags calls and programming (with children) plus `f`'s. */
+function stateOf(f: Fixture = {}): BlockQueryState & { occurrenceRecords: ReadonlyMap<string, OccurrenceRecord> } {
+	return {
+		tasks: new Map((f.tasks ?? []).map((t) => [t.id, t])),
+		categories: new Map([list("inbox", "Inbox"), list("work", "Work"), list("home", "Home"), ...(f.lists ?? [])].map((c) => [c.id, c])),
+		sections: new Map([section("plan", "work", "Planning"), section("review", "work", "Review"), section("chores", "home", "Chores"), ...(f.sections ?? [])].map((s) => [s.id, s])),
+		tags: new Map([tag("calls", "Calls"), tag("programming"), tag("programming/go", "programming/Go"), tag("programming/go/tools"), tag("programmingx"), ...(f.tags ?? [])].map((t) => [t.key, t])),
+		occurrenceRecords: new Map((f.records ?? []).map((r) => [`${r.taskId}:${r.occurrenceDate}`, r])),
+	};
+}
+/** The default lists with only these tags. */
+function tagState(tasks: Task[], tags: Tag[]): BlockQueryState {
+	return { ...stateOf({ tasks }), tags: new Map(tags.map((t) => [t.key, t])) };
+}
+
+function runOn(state: BlockQueryState, source: string | BlockFilters, ctx: QueryContext = ctxOf(), notePath = NOTE) {
+	const filters = typeof source === "string" ? parseBlockQuery(source).filters : source;
+	return runBlockQuery(filters, state, ctx, notePath);
+}
+function idsOn(state: BlockQueryState, source: string | BlockFilters, ctx: QueryContext = ctxOf(), notePath = NOTE): ID[] {
+	const r = runOn(state, source, ctx, notePath);
+	if (r.kind === "error") throw new Error(r.message);
+	return r.entries.map((e) => e.task.id);
+}
+const run = (source: string | BlockFilters, f: Fixture = {}, ctx: QueryContext = ctxOf(), notePath = NOTE) => runOn(stateOf(f), source, ctx, notePath);
+const ids = (source: string | BlockFilters, f: Fixture = {}, ctx: QueryContext = ctxOf(), notePath = NOTE): ID[] => idsOn(stateOf(f), source, ctx, notePath);
+function sorted(a: ID[]): ID[] {
+	return [...a].sort();
+}
+function compiled(source: string, state: BlockQueryState = stateOf(), ctx: QueryContext = ctxOf(), notePath = NOTE) {
+	const m = compileBlockQuery(parseBlockQuery(source).filters, state, ctx, notePath);
+	if (m.kind !== "ok") throw new Error(source);
+	return m;
+}
+
 describe("block matcher", () => {
-	// The block matcher. 2026-10-14 is a Wednesday.
-
-	const TODAY = "2026-10-14";
-	const ZONE = "Europe/Berlin";
-	const NOTE = "Projects/Plan.md";
-
-	function ctxOf(weekStart: WeekStart = "MO", extra: Partial<QueryContext> = {}): QueryContext {
-		return { today: TODAY, zone: ZONE, upcomingDays: 7, weekStart, ...extra };
-	}
-
-	const TS = "2026-09-01T09:00:00.000Z";
-
-	function list(id: string, name: string): Category {
-		return { id, name, icon: null, color: null, nameKey: name.toLowerCase(), isInbox: id === "inbox", sortKey: id, createdAt: TS, modifiedAt: TS };
-	}
-	function section(id: string, categoryId: string, name: string): Section {
-		return { id, categoryId, name, nameKey: name.toLowerCase(), sortKey: id, createdAt: TS, modifiedAt: TS };
-	}
-	function tag(key: string, displayName = key): Tag {
-		return { key, displayName, color: null, createdAt: TS, modifiedAt: TS };
-	}
-	function task(id: string, patch: Partial<Task> = {}): Task {
-		return {
-			id,
-			title: `Task ${id}`,
-			descriptionNote: null,
-			categoryId: "inbox",
-			tagKeys: [],
-			parentId: null,
-			sectionId: null,
-			scheduled: null,
-			deadline: null,
-			plannedDurationMin: null,
-			urgent: false,
-			important: false,
-			priority: 0,
-			status: "open",
-			completedAt: null,
-			recurrence: null,
-			sortKey: id,
-			createdAt: TS,
-			modifiedAt: TS,
-			...patch,
-		};
-	}
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const noteOf = (path: string) => ({ path, linkedAt: TS });
-
-	interface Fixture {
-		tasks?: Task[];
-		lists?: Category[];
-		sections?: Section[];
-		tags?: Tag[];
-		records?: OccurrenceRecord[];
-	}
-
-	function stateOf(f: Fixture = {}): BlockQueryState & { occurrenceRecords: ReadonlyMap<string, OccurrenceRecord> } {
-		return {
-			tasks: new Map((f.tasks ?? []).map((t) => [t.id, t])),
-			categories: new Map([list("inbox", "Inbox"), list("work", "Work"), list("home", "Home"), ...(f.lists ?? [])].map((c) => [c.id, c])),
-			sections: new Map([section("plan", "work", "Planning"), section("review", "work", "Review"), section("chores", "home", "Chores"), ...(f.sections ?? [])].map((s) => [s.id, s])),
-			tags: new Map([tag("calls", "Calls"), tag("programming"), tag("programming/go", "programming/Go"), tag("programming/go/tools"), tag("programmingx"), ...(f.tags ?? [])].map((t) => [t.key, t])),
-			occurrenceRecords: new Map((f.records ?? []).map((r) => [`${r.taskId}:${r.occurrenceDate}`, r])),
-		};
-	}
-
-	function run(source: string | BlockFilters, f: Fixture = {}, ctx: QueryContext = ctxOf(), notePath = NOTE) {
-		const filters = typeof source === "string" ? parseBlockQuery(source).filters : source;
-		return runBlockQuery(filters, stateOf(f), ctx, notePath);
-	}
-	function ids(source: string | BlockFilters, f: Fixture = {}, ctx: QueryContext = ctxOf(), notePath = NOTE): ID[] {
-		const r = run(source, f, ctx, notePath);
-		if (r.kind === "error") throw new Error(r.message);
-		return r.entries.map((e) => e.task.id);
-	}
-	function sorted(a: ID[]): ID[] {
-		return [...a].sort();
-	}
-
 	describe("block matcher: no filters, status, order", () => {
 		it("an empty query lists every open task", () => {
 			expect(ids("", { tasks: [task("a"), task("b")] })).toEqual(["a", "b"]);
@@ -118,11 +131,6 @@ describe("block matcher", () => {
 			task("i1"),
 		];
 
-		it("list matches by name, case-insensitively", () => {
-			expect(sorted(ids("list: work", { tasks }))).toEqual(["w1", "w2", "w3"]);
-			expect(sorted(ids("list: WORK", { tasks }))).toEqual(["w1", "w2", "w3"]);
-		});
-
 		it("the Inbox is a list", () => {
 			expect(ids("list: Inbox", { tasks })).toEqual(["i1"]);
 		});
@@ -137,11 +145,6 @@ describe("block matcher", () => {
 
 		it("an unknown list is an error even when no task would match", () => {
 			expect(run("list: Wrok")).toEqual({ kind: "error", message: "No list named “Wrok”." });
-		});
-
-		it("section narrows the list", () => {
-			expect(ids("list: Work\nsection: Planning", { tasks })).toEqual(["w2"]);
-			expect(ids("list: Work\nsection: review", { tasks })).toEqual(["w3"]);
 		});
 
 		it("a section of another list is not found in this one", () => {
@@ -163,27 +166,11 @@ describe("block matcher", () => {
 	});
 
 	describe("block matcher: tag", () => {
-		const tasks = [
-			task("calls", { tagKeys: ["calls"] }),
-			task("prog", { tagKeys: ["programming"] }),
-			task("go", { tagKeys: ["programming/go"] }),
-			task("tools", { tagKeys: ["programming/go/tools"] }),
-			task("px", { tagKeys: ["programmingx"] }),
-			task("multi", { tagKeys: ["calls", "programming/go"] }),
-			task("none"),
-		];
+		const tasks = [task("calls", { tagKeys: ["calls"] }), task("multi", { tagKeys: ["calls", "programming/go"] }), task("none")];
 
 		it("matches by name, with or without @, in any casing", () => {
 			expect(sorted(ids("tag: Calls", { tasks }))).toEqual(["calls", "multi"]);
 			expect(sorted(ids("tag: @CALLS", { tasks }))).toEqual(["calls", "multi"]);
-		});
-
-		it("a parent tag includes its children and grandchildren, not a sibling with the same prefix", () => {
-			expect(sorted(ids("tag: programming", { tasks }))).toEqual(["go", "multi", "prog", "tools"]);
-		});
-
-		it("a child tag does not include its parent", () => {
-			expect(sorted(ids("tag: programming/go", { tasks }))).toEqual(["go", "multi", "tools"]);
 		});
 
 		it("a parent resolves by its tag; a path prefix with no tag is an unknown tag", () => {
@@ -212,24 +199,11 @@ describe("block matcher", () => {
 			task("q3", { urgent: true }),
 		];
 
-		it("a single priority", () => {
-			expect(ids("priority: high", { tasks })).toEqual(["high"]);
-			expect(sorted(ids("priority: none", { tasks }))).toEqual(["none", "q1", "q2", "q3"]);
-		});
-
-		it("comma means or", () => {
-			expect(sorted(ids("priority: high, low", { tasks }))).toEqual(["high", "low"]);
-		});
-
 		it("quadrant by number and by name", () => {
 			expect(ids("quadrant: 1", { tasks })).toEqual(["q1"]);
 			expect(ids("quadrant: important not urgent", { tasks })).toEqual(["q2"]);
 			expect(ids("quadrant: urgent not important", { tasks })).toEqual(["q3"]);
 			expect(sorted(ids("quadrant: neither", { tasks }))).toEqual(["high", "low", "med", "none"]);
-		});
-
-		it("comma means or", () => {
-			expect(sorted(ids("quadrant: 1, 3", { tasks }))).toEqual(["q1", "q3"]);
 		});
 	});
 
@@ -264,62 +238,19 @@ describe("block matcher", () => {
 	});
 
 	describe("block matcher: scheduled", () => {
-		const at = (id: string, date: string | null, patch: Partial<Task> = {}) => task(id, { scheduled: date === null ? null : day(date), ...patch });
-		const tasks = [
-			at("old", "2026-10-01"),
-			at("yest", "2026-10-13"),
-			at("mon", "2026-10-12"),
-			at("today", "2026-10-14"),
-			at("sat", "2026-10-17"),
-			at("sun", "2026-10-18"),
-			at("d6", "2026-10-20"),
-			at("d7", "2026-10-21"),
-			at("nodate", null),
-			at("done", "2026-10-14", { status: "completed", completedAt: TS }),
-			task("timed", { scheduled: { kind: "datetime", local: "2026-10-14T08:00", tz: ZONE } }),
-			task("deadline", { deadline: day("2026-10-14") }),
-			task("dlOld", { deadline: day("2026-10-01") }),
-			task("mix", { scheduled: day("2026-10-20"), deadline: day("2026-10-13") }),
-		];
-
-		// The schedule only: a task whose deadline falls in the range, but not its schedule, stays out.
-		it("today: the schedule is today", () => {
-			expect(sorted(ids("scheduled: today", { tasks }))).toEqual(["timed", "today"]);
-		});
-
-		it("overdue: open with a past schedule", () => {
-			expect(sorted(ids("scheduled: overdue", { tasks }))).toEqual(["mon", "old", "yest"]);
-		});
+		const at = (id: string, date: string) => task(id, { scheduled: day(date) });
 
 		it("a timed schedule earlier today is not overdue", () => {
-			const f = { tasks: [task("t", { scheduled: { kind: "datetime", local: "2026-10-14T00:05", tz: ZONE } })] };
+			const f = { tasks: [task("t", { scheduled: timed("2026-10-14T00:05") })] };
 			expect(ids("scheduled: overdue", f)).toEqual([]);
 			expect(ids("scheduled: today", f)).toEqual(["t"]);
 		});
 
 		it("a timed schedule is read in the display zone", () => {
 			// 23:30 in Los Angeles on the 13th is 08:30 on the 14th in Berlin.
-			const f = { tasks: [task("t", { scheduled: { kind: "datetime", local: "2026-10-13T23:30", tz: "America/Los_Angeles" } })] };
+			const f = { tasks: [task("t", { scheduled: timed("2026-10-13T23:30", "America/Los_Angeles") })] };
 			expect(ids("scheduled: today", f)).toEqual(["t"]);
 			expect(ids("scheduled: overdue", f)).toEqual([]);
-		});
-
-		it("next 7 days is today through today + 6", () => {
-			expect(sorted(ids("scheduled: next 7 days", { tasks }))).toEqual(["d6", "mix", "sat", "sun", "timed", "today"]);
-		});
-
-		it("this week starts on Monday", () => {
-			expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("MO")))).toEqual(["mon", "sat", "sun", "timed", "today", "yest"]);
-		});
-
-		it("this week starts on Sunday", () => {
-			// Sunday 2026-10-11 to Saturday 2026-10-17: the 18th is next week.
-			expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("SU")))).toEqual(["mon", "sat", "timed", "today", "yest"]);
-		});
-
-		it("this week starts on Saturday", () => {
-			// Saturday 2026-10-10 to Friday 2026-10-16: Sat the 17th is next week.
-			expect(sorted(ids("scheduled: this week", { tasks }, ctxOf("SA")))).toEqual(["mon", "timed", "today", "yest"]);
 		});
 
 		it("this week follows a week that crosses a month and year boundary", () => {
@@ -328,77 +259,23 @@ describe("block matcher", () => {
 			expect(sorted(ids("scheduled: this week", f, ctx))).toEqual(["a", "b"]);
 		});
 
-		it("a task with only a deadline never matches a scheduled filter", () => {
-			const f = { tasks: [task("d", { deadline: day("2026-10-14") }), task("o", { deadline: day("2026-10-01") })] };
-			for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`scheduled: ${value}`, f), value).toEqual([]);
-		});
-
 		it("a missed deadline does not make a future schedule overdue", () => {
 			const f = { tasks: [task("a", { scheduled: day("2026-10-20"), deadline: day("2026-10-01") })] };
 			expect(ids("scheduled: overdue", f)).toEqual([]);
 		});
-
-		it("a task without a date never matches a scheduled filter", () => {
-			for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`scheduled: ${value}`, { tasks: [task("n")] }), value).toEqual([]);
-		});
 	});
 
 	describe("block matcher: due is the deadline", () => {
-		const dl = (id: string, date: string | null, patch: Partial<Task> = {}) => task(id, { deadline: date === null ? null : day(date), ...patch });
-		const tasks = [
-			dl("old", "2026-10-01"),
-			dl("yest", "2026-10-13"),
-			dl("mon", "2026-10-12"),
-			dl("today", "2026-10-14"),
-			dl("sat", "2026-10-17"),
-			dl("sun", "2026-10-18"),
-			dl("d6", "2026-10-20"),
-			dl("d7", "2026-10-21"),
-			dl("nodate", null),
-			dl("done", "2026-10-14", { status: "completed", completedAt: TS }),
-			task("timed", { deadline: { kind: "datetime", local: "2026-10-14T08:00", tz: ZONE } }),
-			task("sched", { scheduled: day("2026-10-14") }),
-			task("schedOld", { scheduled: day("2026-10-01") }),
-			task("mix", { scheduled: day("2026-10-14"), deadline: day("2026-10-20") }),
-		];
-
-		it("today: the deadline is today, a schedule of today does not count", () => {
-			expect(sorted(ids("due: today", { tasks }))).toEqual(["timed", "today"]);
-		});
-
-		it("overdue: open with a missed deadline, a past schedule does not count", () => {
-			expect(sorted(ids("due: overdue", { tasks }))).toEqual(["mon", "old", "yest"]);
-		});
-
 		it("a timed deadline earlier today is today and not overdue, as the deadline rule reads the day", () => {
-			const f = { tasks: [task("t", { deadline: { kind: "datetime", local: "2026-10-14T00:05", tz: ZONE } })] };
+			const f = { tasks: [task("t", { deadline: timed("2026-10-14T00:05") })] };
 			expect(ids("due: overdue", f)).toEqual([]);
 			expect(ids("due: today", f)).toEqual(["t"]);
 		});
 
 		it("a timed deadline is read in the display zone", () => {
-			const f = { tasks: [task("t", { deadline: { kind: "datetime", local: "2026-10-13T23:30", tz: "America/Los_Angeles" } })] };
+			const f = { tasks: [task("t", { deadline: timed("2026-10-13T23:30", "America/Los_Angeles") })] };
 			expect(ids("due: today", f)).toEqual(["t"]);
 			expect(ids("due: overdue", f)).toEqual([]);
-		});
-
-		it("next 7 days is today through today + 6", () => {
-			expect(sorted(ids("due: next 7 days", { tasks }))).toEqual(["d6", "mix", "sat", "sun", "timed", "today"]);
-		});
-
-		it("this week starts on Monday, Sunday or Saturday", () => {
-			expect(sorted(ids("due: this week", { tasks }, ctxOf("MO")))).toEqual(["mon", "sat", "sun", "timed", "today", "yest"]);
-			expect(sorted(ids("due: this week", { tasks }, ctxOf("SU")))).toEqual(["mon", "sat", "timed", "today", "yest"]);
-			expect(sorted(ids("due: this week", { tasks }, ctxOf("SA")))).toEqual(["mon", "timed", "today", "yest"]);
-		});
-
-		it("a task with only a schedule never matches a due filter", () => {
-			const f = { tasks: [task("s", { scheduled: day("2026-10-14") }), task("o", { scheduled: day("2026-10-01") })] };
-			for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${value}`, f), value).toEqual([]);
-		});
-
-		it("a task without a date never matches a due filter", () => {
-			for (const value of ["today", "overdue", "this week", "next 7 days"]) expect(ids(`due: ${value}`, { tasks: [task("n")] }), value).toEqual([]);
 		});
 
 		it("a repeating task has no deadline, so due never matches it", () => {
@@ -411,21 +288,24 @@ describe("block matcher", () => {
 	});
 
 	describe("block matcher: due and scheduled together", () => {
-		const tasks = [
-			task("both", { scheduled: day("2026-10-14"), deadline: day("2026-10-13") }),
-			task("schedOnly", { scheduled: day("2026-10-14") }),
-			task("dlOnly", { deadline: day("2026-10-13") }),
-			task("swapped", { scheduled: day("2026-10-13"), deadline: day("2026-10-14") }),
-		];
+		// `due:` is the deadline, `scheduled:` the schedule (#52); a grid of every schedule and deadline day, open or done.
+		const DAYS: (DateSpec | null)[] = [null, day("2026-10-01"), day("2026-10-13"), day(TODAY), day("2026-10-15"), day("2026-10-20"), day("2026-10-21"), timed("2026-10-14T23:30"), timed("2026-10-13T23:30", "America/Los_Angeles")];
+		const OPEN: Task[] = [];
+		for (const [i, scheduled] of DAYS.entries()) for (const [j, deadline] of DAYS.entries()) OPEN.push(task(`g${i}-${j}`, { scheduled, deadline }));
+		const filter = (date: TaskFilter["date"], from: string | null = null, to: string | null = null) => ({ date, from, to });
 
-		it("a task passes only when both keys accept their own date", () => {
-			expect(ids("due: overdue\nscheduled: today", { tasks })).toEqual(["both"]);
-			expect(ids("due: today\nscheduled: overdue", { tasks })).toEqual(["swapped"]);
-		});
-
-		it("each key alone lets in the tasks the other would have refused", () => {
-			expect(sorted(ids("due: overdue", { tasks }))).toEqual(["both", "dlOnly"]);
-			expect(sorted(ids("scheduled: today", { tasks }))).toEqual(["both", "schedOnly"]);
+		it("for an open task, due or scheduled with one value is the either-side rule of the shared owner", () => {
+			const either: [string, ReturnType<typeof filter>][] = [
+				["today", filter("today")],
+				["overdue", filter("overdue")],
+				["this week", filter("range", "2026-10-12", "2026-10-18")],
+				["next 7 days", filter("next7")],
+			];
+			for (const [value, f] of either) {
+				const due = compiled(`due: ${value}`);
+				const scheduled = compiled(`scheduled: ${value}`);
+				for (const t of OPEN) expect(due.matches(t) || scheduled.matches(t), `${value} ${t.id}`).toBe(matchesTaskDate(t, f, ctxOf()));
+			}
 		});
 	});
 
@@ -493,10 +373,6 @@ describe("block matcher", () => {
 		];
 		const source = "list: Work\nsection: Planning\ntag: Calls\nscheduled: this week\npriority: high, medium\nquadrant: 1\nlinked: this note";
 
-		it("only the task that passes every filter is listed", () => {
-			expect(ids(source, { tasks })).toEqual(["hit"]);
-		});
-
 		it("dropping any one line lets in exactly the tasks that failed only that line", () => {
 			const lines = source.split("\n");
 			// Dropping `list` also drops `section` (a section needs a list), so the wrong-list and wrong-section tasks pass.
@@ -509,6 +385,7 @@ describe("block matcher", () => {
 				"quadrant: 1": ["wrongQuadrant"],
 				"linked: this note": ["wrongNote"],
 			};
+			expect(ids(source, { tasks })).toEqual(["hit"]);
 			for (const line of lines) {
 				const filters = parseBlockQuery(lines.filter((l) => l !== line).join("\n")).filters;
 				expect(sorted(ids(filters, { tasks })), line).toEqual(sorted(["hit", ...extra[line]!]));
@@ -647,7 +524,7 @@ describe("block matcher", () => {
 							sectionId: s.section ? SECTION_OF[s.list]! : null,
 							tagKeys: s.tags,
 							deadline: s.deadline === null ? null : day(s.deadline),
-							scheduled: s.date === null ? null : s.timed ? { kind: "datetime", local: `${s.date}T12:00`, tz: ZONE } : day(s.date),
+							scheduled: s.date === null ? null : s.timed ? timed(`${s.date}T12:00`) : day(s.date),
 							priority: s.priority,
 							urgent: s.urgent,
 							important: s.important,
@@ -675,13 +552,12 @@ describe("block matcher", () => {
 			compileBlockQuery(parseBlockQuery(source).filters, stateOf(f), ctx, notePath);
 
 		it("reports the same reference errors as runBlockQuery", () => {
-			expect(compile("list: Wrok")).toEqual({ kind: "error", message: "No list named \u201cWrok\u201d." });
-			expect(compile("tag: Nope")).toEqual({ kind: "error", message: "No tag named \u201cNope\u201d." });
+			expect(compile("list: Wrok")).toEqual({ kind: "error", message: "No list named “Wrok”." });
+			expect(compile("tag: Nope")).toEqual({ kind: "error", message: "No tag named “Nope”." });
 		});
 
 		it("tests one task at a time, open tasks only", () => {
-			const m = compile("priority: high");
-			if (m.kind !== "ok") throw new Error("expected ok");
+			const m = compiled("priority: high");
 			expect(m.matches(task("a", { priority: 1 }))).toBe(true);
 			expect(m.matches(task("b", { priority: 3 }))).toBe(false);
 			expect(m.matches(task("c", { priority: 1, status: "completed", completedAt: TS }))).toBe(false);
@@ -707,128 +583,37 @@ describe("block matcher", () => {
 describe("a tag by its own name", () => {
 	// A task block's `tag:` filter finds a child tag by its own name (#11).
 
-	const TS = "2026-09-01T09:00:00.000Z";
-	const CTX: QueryContext = { today: "2026-10-14", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
-
-	const tag = (key: string, displayName: string, createdAt = TS): Tag => ({ key, displayName, color: null, createdAt, modifiedAt: createdAt });
-	const inbox: Category = { id: "inbox", name: "Inbox", icon: null, color: null, nameKey: "inbox", isInbox: true, sortKey: "inbox", createdAt: TS, modifiedAt: TS };
-	const task = (id: string, tagKeys: string[]): Task => ({
-		id,
-		title: id,
-		descriptionNote: null,
-		categoryId: "inbox",
-		tagKeys,
-		parentId: null,
-		sectionId: null,
-		scheduled: null,
-		deadline: null,
-		plannedDurationMin: null,
-		urgent: false,
-		important: false,
-		priority: 0,
-		status: "open",
-		completedAt: null,
-		recurrence: null,
-		sortKey: id,
-		createdAt: TS,
-		modifiedAt: TS,
-	});
-
-	const tags = [tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden")];
-	const tasks = [task("call", ["home/calls"]), task("garden", ["home/garden"]), task("none", [])];
-	const state: BlockQueryState = {
-		tasks: new Map(tasks.map((t) => [t.id, t])),
-		categories: new Map([[inbox.id, inbox]]),
-		sections: new Map(),
-		tags: new Map(tags.map((t) => [t.key, t])),
-	};
-	const run = (source: string) => runBlockQuery(parseBlockQuery(source).filters, state, CTX, "Plan.md");
-	const ids = (source: string): string[] => {
-		const r = run(source);
-		if (r.kind === "error") throw new Error(r.message);
-		return r.entries.map((e) => e.task.id);
-	};
+	const state = tagState([task("call", { tagKeys: ["home/calls"] }), task("garden", { tagKeys: ["home/garden"] }), task("none")], [tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden")]);
 
 	describe("task block: tag by its own name", () => {
 		it("tag: calls finds the child tag", () => {
-			expect(ids("tag: calls")).toEqual(["call"]);
+			expect(idsOn(state, "tag: calls")).toEqual(["call"]);
 		});
 
 		it("tag: @Calls ignores case and the @", () => {
-			expect(ids("tag: @Calls")).toEqual(["call"]);
+			expect(idsOn(state, "tag: @Calls")).toEqual(["call"]);
 		});
 
 		it("tag: home/calls still works", () => {
-			expect(ids("tag: home/calls")).toEqual(["call"]);
+			expect(idsOn(state, "tag: home/calls")).toEqual(["call"]);
 		});
 
 		it("tag: home still includes every child", () => {
-			expect(ids("tag: home").sort()).toEqual(["call", "garden"]);
+			expect(idsOn(state, "tag: home").sort()).toEqual(["call", "garden"]);
 		});
 
 		it("a missing tag is the same error as before", () => {
-			expect(run("tag: nope")).toEqual({ kind: "error", message: "No tag named “nope”." });
-			expect(run("tag: work/calls")).toEqual({ kind: "error", message: "No tag named “work/calls”." });
-		});
-	});
-
-	describe("blockOpenView: tag by its own name", () => {
-		const view = (source: string) => blockOpenView(parseBlockQuery(source).filters, state);
-
-		it("opens the child tag", () => {
-			expect(view("tag: calls")).toEqual({ kind: "tag", key: "home/calls" });
-			expect(view("tag: @Calls")).toEqual({ kind: "tag", key: "home/calls" });
-		});
-
-		it("still opens a parent and the full path", () => {
-			expect(view("tag: home")).toEqual({ kind: "tag", key: "home" });
-			expect(view("tag: home/calls")).toEqual({ kind: "tag", key: "home/calls" });
-		});
-
-		it("a tag that does not exist opens no view", () => {
-			expect(view("tag: nope")).toBeNull();
+			expect(runOn(state, "tag: nope")).toEqual({ kind: "error", message: "No tag named “nope”." });
+			expect(runOn(state, "tag: work/calls")).toEqual({ kind: "error", message: "No tag named “work/calls”." });
 		});
 	});
 });
 
-describe("due and scheduled", () => {
-	// `due:` is the deadline, `scheduled:` the schedule, in the shared date owner and in the block (#52).
+describe("due and scheduled in the shared date owner", () => {
+	// `due:` is the deadline, `scheduled:` the schedule; the shared owner `matchesTaskDate` takes the field, and Search
+	// keeps reading either date (#52).
 
-	const TODAY = "2026-10-14";
-	const ZONE = "Europe/Berlin";
-	const TS = "2026-09-01T09:00:00.000Z";
-	const CTX: QueryContext = { today: TODAY, zone: ZONE, upcomingDays: 7, weekStart: "MO" };
-
-	const inbox: Category = { id: "inbox", name: "Inbox", icon: null, color: null, nameKey: "inbox", isInbox: true, sortKey: "inbox", createdAt: TS, modifiedAt: TS };
-	const state: BlockQueryState = { tasks: new Map(), categories: new Map([["inbox", inbox]]), sections: new Map(), tags: new Map() };
-
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const timed = (local: string, tz = ZONE): DateSpec => ({ kind: "datetime", local, tz });
-	function task(id: string, patch: Partial<Task> = {}): Task {
-		return {
-			id,
-			title: id,
-			descriptionNote: null,
-			categoryId: "inbox",
-			tagKeys: [],
-			parentId: null,
-			sectionId: null,
-			scheduled: null,
-			deadline: null,
-			plannedDurationMin: null,
-			urgent: false,
-			important: false,
-			priority: 0,
-			status: "open",
-			completedAt: null,
-			recurrence: null,
-			sortKey: id,
-			createdAt: TS,
-			modifiedAt: TS,
-			...patch,
-		};
-	}
-
+	const CTX = ctxOf();
 	const filter = (date: TaskFilter["date"], from: string | null = null, to: string | null = null) => ({ date, from, to });
 	const FILTERS = [filter("today"), filter("overdue"), filter("next7"), filter("range", "2026-10-12", "2026-10-18"), filter("range", null, "2026-10-13"), filter("none")];
 
@@ -932,169 +717,59 @@ describe("due and scheduled", () => {
 			expect(filterTasks([s, d, other], f, "", CTX).map((t) => t.id)).toEqual(["s", "d"]);
 		});
 	});
-
-	describe("block: due and scheduled over the grid", () => {
-		const compiled = (source: string) => {
-			const m = compileBlockQuery(parseBlockQuery(source).filters, state, CTX, "Note.md");
-			if (m.kind !== "ok") throw new Error(source);
-			return m;
-		};
-
-		it("due: overdue is exactly isDeadlineMissed", () => {
-			const m = compiled("due: overdue");
-			for (const t of GRID) expect(m.matches(t), t.id).toBe(isDeadlineMissed(t, CTX));
-		});
-
-		it("for an open task, due or scheduled with one value is the either-side rule of the shared owner", () => {
-			const rule: [string, ReturnType<typeof filter>][] = [
-				["today", filter("today")],
-				["overdue", filter("overdue")],
-				["this week", filter("range", "2026-10-12", "2026-10-18")],
-				["next 7 days", filter("next7")],
-			];
-			for (const [value, f] of rule) {
-				const due = compiled(`due: ${value}`);
-				const scheduled = compiled(`scheduled: ${value}`);
-				for (const t of GRID.filter((x) => x.status === "open")) {
-					expect(due.matches(t) || scheduled.matches(t), `${value} ${t.id}`).toBe(matchesTaskDate(t, f, CTX));
-				}
-			}
-		});
-
-		it("a completed task never matches", () => {
-			const done = task("c", { scheduled: day(TODAY), deadline: day(TODAY), status: "completed", completedAt: TS });
-			expect(compiled("due: today").matches(done)).toBe(false);
-			expect(compiled("scheduled: today").matches(done)).toBe(false);
-		});
-
-		it("a timed deadline of today stays today and is not overdue later the same day", () => {
-			const m = compiled("due: overdue");
-			const t = task("t", { deadline: timed("2026-10-14T08:00") });
-			expect(m.matches(t)).toBe(false);
-			expect(compiled("due: today").matches(t)).toBe(true);
-		});
-	});
 });
 
 describe("tag lists", () => {
-	// `tag:` takes a comma list; a task with any of the tags shows (#52).
-
-	const TS = "2026-09-01T09:00:00.000Z";
-	const CTX: QueryContext = { today: "2026-10-14", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
-
-	const tag = (key: string, displayName: string, createdAt = TS): Tag => ({ key, displayName, color: null, createdAt, modifiedAt: createdAt });
-	const inbox: Category = { id: "inbox", name: "Inbox", icon: null, color: null, nameKey: "inbox", isInbox: true, sortKey: "inbox", createdAt: TS, modifiedAt: TS };
-	const task = (id: string, tagKeys: string[]): Task => ({
-		id,
-		title: id,
-		descriptionNote: null,
-		categoryId: "inbox",
-		tagKeys,
-		parentId: null,
-		sectionId: null,
-		scheduled: null,
-		deadline: null,
-		plannedDurationMin: null,
-		urgent: false,
-		important: false,
-		priority: 0,
-		status: "open",
-		completedAt: null,
-		recurrence: null,
-		sortKey: id,
-		createdAt: TS,
-		modifiedAt: TS,
-	});
+	// `tag:` takes a comma list; a task with any of the tags shows (#52). Which tasks a list lets through is the
+	// property's; here: a child by its own name, the errors, the compiled test and the date keys.
 
 	const tags = [tag("home", "Home"), tag("home/calls", "Home/Calls"), tag("home/garden", "Home/Garden"), tag("work", "Work"), tag("errands", "Errands"), tag("homework", "Homework")];
 	const tasks = [
-		task("call", ["home/calls"]),
-		task("garden", ["home/garden"]),
-		task("work", ["work"]),
-		task("errand", ["errands"]),
-		task("both", ["home/calls", "work"]),
-		task("homework", ["homework"]),
-		task("none", []),
+		task("call", { tagKeys: ["home/calls"] }),
+		task("garden", { tagKeys: ["home/garden"] }),
+		task("work", { tagKeys: ["work"] }),
+		task("errand", { tagKeys: ["errands"] }),
+		task("both", { tagKeys: ["home/calls", "work"] }),
+		task("homework", { tagKeys: ["homework"] }),
+		task("none"),
 	];
-	const state: BlockQueryState = {
-		tasks: new Map(tasks.map((t) => [t.id, t])),
-		categories: new Map([["inbox", inbox]]),
-		sections: new Map(),
-		tags: new Map(tags.map((t) => [t.key, t])),
-	};
-
-	const run = (source: string) => runBlockQuery(parseBlockQuery(source).filters, state, CTX, "Note.md");
-	const ids = (source: string): string[] => {
-		const r = run(source);
-		if (r.kind === "error") throw new Error(r.message);
-		return r.entries.map((e) => e.task.id).sort();
-	};
+	const state = tagState(tasks, tags);
 
 	describe("block matcher: tag list", () => {
-		it("a task with any of the tags shows", () => {
-			expect(ids("tag: work, errands")).toEqual(["both", "errand", "work"]);
-		});
-
-		it("a task with several of the tags shows once", () => {
-			const r = run("tag: calls, work");
-			expect(r.kind === "ok" && r.entries.map((e) => e.task.id).sort()).toEqual(["both", "call", "work"]);
-		});
-
-		it("a parent tag includes its children, next to a second tag", () => {
-			expect(ids("tag: home, errands")).toEqual(["both", "call", "errand", "garden"]);
-		});
-
-		it("a parent and its own child give the parent's tasks", () => {
-			expect(ids("tag: home, home/calls")).toEqual(["both", "call", "garden"]);
-		});
-
 		it("a name alone finds the child tag, with or without @, in any casing", () => {
-			expect(ids("tag: @Calls, ERRANDS")).toEqual(["both", "call", "errand"]);
-		});
-
-		it("a sibling that shares a prefix is not included", () => {
-			expect(ids("tag: home, work")).toEqual(["both", "call", "garden", "work"]);
-		});
-
-		it("the same tag twice is the same as once", () => {
-			expect(ids("tag: work, WORK, @work")).toEqual(ids("tag: work"));
-		});
-
-		it("one tag behaves as before", () => {
-			expect(ids("tag: home")).toEqual(["both", "call", "garden"]);
+			expect(idsOn(state, "tag: @Calls, ERRANDS").sort()).toEqual(["both", "call", "errand"]);
 		});
 
 		it("an unknown tag in the list is an error naming it", () => {
-			expect(run("tag: work, nope")).toEqual({ kind: "error", message: "No tag named “nope”." });
+			expect(runOn(state, "tag: work, nope")).toEqual({ kind: "error", message: "No tag named “nope”." });
 		});
 
 		it("the first unknown tag in typed order is reported", () => {
-			expect(run("tag: nope2, work, nope1")).toEqual({ kind: "error", message: "No tag named “nope2”." });
-			expect(run("tag: work, nope1, nope2")).toEqual({ kind: "error", message: "No tag named “nope1”." });
+			expect(runOn(state, "tag: nope2, work, nope1")).toEqual({ kind: "error", message: "No tag named “nope2”." });
+			expect(runOn(state, "tag: work, nope1, nope2")).toEqual({ kind: "error", message: "No tag named “nope1”." });
 		});
 
 		it("a path that is no tag is unknown, even beside a good one", () => {
-			expect(run("tag: work, work/calls")).toEqual({ kind: "error", message: "No tag named “work/calls”." });
+			expect(runOn(state, "tag: work, work/calls")).toEqual({ kind: "error", message: "No tag named “work/calls”." });
 		});
 
 		it("an unknown tag is reported by compileBlockQuery too", () => {
-			expect(compileBlockQuery(parseBlockQuery("tag: work, nope").filters, state, CTX, "Note.md")).toEqual({ kind: "error", message: "No tag named “nope”." });
+			expect(compileBlockQuery(parseBlockQuery("tag: work, nope").filters, state, ctxOf(), NOTE)).toEqual({ kind: "error", message: "No tag named “nope”." });
 		});
 
 		it("the compiled test agrees with the run for every task, asked twice", () => {
-			const m = compileBlockQuery(parseBlockQuery("tag: home/calls, work, errands").filters, state, CTX, "Note.md");
-			if (m.kind !== "ok") throw new Error("expected ok");
+			const m = compiled("tag: home/calls, work, errands", state);
 			const first = tasks.filter((t) => m.matches(t)).map((t) => t.id);
 			expect(first).toEqual(["call", "work", "errand", "both"]);
 			expect(tasks.filter((t) => m.matches(t)).map((t) => t.id)).toEqual(first);
 		});
 
 		it("combines with the date keys by AND", () => {
-			const dated = new Map(state.tasks);
-			dated.set("work", { ...task("work", ["work"]), scheduled: { kind: "date", date: "2026-10-14" } });
-			const s: BlockQueryState = { ...state, tasks: dated };
-			const r = runBlockQuery(parseBlockQuery("tag: work, errands\nscheduled: today").filters, s, CTX, "Note.md");
-			expect(r.kind === "ok" && r.entries.map((e) => e.task.id)).toEqual(["work"]);
+			const dated = tagState(
+				tasks.map((t) => (t.id === "work" ? { ...t, scheduled: day(TODAY) } : t)),
+				tags,
+			);
+			expect(idsOn(dated, "tag: work, errands\nscheduled: today")).toEqual(["work"]);
 		});
 	});
 

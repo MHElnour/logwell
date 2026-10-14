@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DELETE_LIST_LABEL } from "../../src/app/CategoryService";
 import { mergeCollections } from "../../src/app/DataService";
-import { buildBoard, buildList } from "../../src/app/views";
-import { isDomainError } from "../../src/domain/errors";
+import { buildBoard } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
-import { type AppHarness, appHarness, makeReadOnly } from "./harness";
+import { type AppHarness, appHarness, expectDomainError, makeReadOnly } from "./harness";
+import { makeTask } from "../persistence/fixtures";
 
 describe("sections", () => {
 	// SectionService, integrity rules, grouping, import and list creation.
@@ -19,15 +20,8 @@ describe("sections", () => {
 	}
 
 	const task = (h: AppHarness, id: string) => h.app.store.state.tasks.get(id)!;
-	const rejects = async (p: Promise<unknown>, code?: string) => {
-		const err = await p.then(
-			() => null,
-			(e: unknown) => e,
-		);
-		expect(isDomainError(err, code as never)).toBe(true);
-	};
 
-	describe("SectionService (D5)", () => {
+	describe("SectionService", () => {
 		it("creates trimmed sections in order and lists them per list", async () => {
 			const { h, list, other, s1, s2 } = await setup();
 			const o = await h.app.sections.create(other.id, "  Todo  ");
@@ -40,11 +34,11 @@ describe("sections", () => {
 
 		it("rejects empty and duplicate names (case-insensitive) on create and rename", async () => {
 			const { h, list, s1, s2 } = await setup();
-			await rejects(h.app.sections.create(list.id, "   "), "InvalidValue");
-			await rejects(h.app.sections.create(list.id, "TODO"), "DuplicateName");
-			await rejects(h.app.sections.rename(s2.id, " todo "), "DuplicateName");
-			await rejects(h.app.sections.rename(s2.id, ""), "InvalidValue");
-			await rejects(h.app.sections.create("missing", "X"), "NotFound");
+			await expectDomainError(h.app.sections.create(list.id, "   "), "InvalidValue");
+			await expectDomainError(h.app.sections.create(list.id, "TODO"), "DuplicateName");
+			await expectDomainError(h.app.sections.rename(s2.id, " todo "), "DuplicateName");
+			await expectDomainError(h.app.sections.rename(s2.id, ""), "InvalidValue");
+			await expectDomainError(h.app.sections.create("missing", "X"), "NotFound");
 			// Renaming to its own name in another case is fine.
 			const r = await h.app.sections.rename(s1.id, "TODO");
 			expect(r).toMatchObject({ name: "TODO", nameKey: "todo" });
@@ -91,22 +85,22 @@ describe("sections", () => {
 			const keys = [s3, s1, s2].map((s) => h.app.store.state.sections.get(s.id)!.sortKey);
 			expect(keys[0]! < keys[1]! && keys[1]! < keys[2]!).toBe(true);
 			const o = await h.app.sections.create(other.id, "Other");
-			await rejects(h.app.sections.place(s1.id, [s1.id, o.id]), "InvalidValue");
-			await rejects(h.app.sections.place(s1.id, [s2.id]), "InvalidValue");
-			await rejects(h.app.sections.place(s1.id, [s1.id, s1.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id, o.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s2.id]), "InvalidValue");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id, s1.id]), "InvalidValue");
 		});
 
 		it("every mutation throws while the database is read-only", async () => {
 			const { h, list, s1 } = await setup();
 			await makeReadOnly(h);
-			await rejects(h.app.sections.create(list.id, "X"), "ReadOnly");
-			await rejects(h.app.sections.rename(s1.id, "X"), "ReadOnly");
-			await rejects(h.app.sections.delete(s1.id), "ReadOnly");
-			await rejects(h.app.sections.place(s1.id, [s1.id]), "ReadOnly");
+			await expectDomainError(h.app.sections.create(list.id, "X"), "ReadOnly");
+			await expectDomainError(h.app.sections.rename(s1.id, "X"), "ReadOnly");
+			await expectDomainError(h.app.sections.delete(s1.id), "ReadOnly");
+			await expectDomainError(h.app.sections.place(s1.id, [s1.id]), "ReadOnly");
 		});
 	});
 
-	describe("D4 integrity", () => {
+	describe("integrity", () => {
 		it("a subtask is created with its parent's section", async () => {
 			const { h, list, s1 } = await setup();
 			const p = (await h.app.tasks.create({ title: "P", categoryId: list.id, sectionId: s1.id })).task;
@@ -117,9 +111,9 @@ describe("sections", () => {
 
 		it("create rejects a section of another list", async () => {
 			const { h, other, s1 } = await setup();
-			await rejects(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.create({ title: "X", sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: "missing" }), "NotFound");
+			await expectDomainError(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.create({ title: "X", sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.create({ title: "X", categoryId: other.id, sectionId: "missing" }), "NotFound");
 		});
 
 		it("setParent gives the task its new parent's section; making it top-level keeps its section", async () => {
@@ -167,11 +161,11 @@ describe("sections", () => {
 			const o = await h.app.sections.create(other.id, "Mine");
 			const p = (await h.app.tasks.create({ title: "P", categoryId: list.id })).task;
 			const sub = (await h.app.tasks.create({ title: "S", parentId: p.id })).task;
-			await rejects(h.app.tasks.update(p.id, { sectionId: o.id }), "InvalidValue");
-			await rejects(h.app.tasks.place(p.id, [p.id], { sectionId: o.id }), "InvalidValue");
-			await rejects(h.app.tasks.update(sub.id, { sectionId: s1.id }), "InvalidValue");
-			await rejects(h.app.tasks.place(sub.id, [sub.id], { sectionId: s2.id }), "InvalidValue");
-			await rejects(h.app.tasks.update(p.id, { sectionId: "missing" }), "NotFound");
+			await expectDomainError(h.app.tasks.update(p.id, { sectionId: o.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.place(p.id, [p.id], { sectionId: o.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.update(sub.id, { sectionId: s1.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.place(sub.id, [sub.id], { sectionId: s2.id }), "InvalidValue");
+			await expectDomainError(h.app.tasks.update(p.id, { sectionId: "missing" }), "NotFound");
 			expect(task(h, p.id).sectionId).toBeNull();
 			expect(task(h, sub.id).sectionId).toBeNull();
 		});
@@ -243,26 +237,8 @@ describe("sections", () => {
 		});
 	});
 
-	describe("D7 grouping and D6 board", () => {
-		it("an Inbox or list view returns No section first, then each section by sortKey, empty ones included", async () => {
-			const { h, list, s1, s2 } = await setup();
-			await h.app.tasks.create({ title: "Loose", categoryId: list.id });
-			const a = (await h.app.tasks.create({ title: "In doing", categoryId: list.id, sectionId: s2.id })).task;
-			await h.app.tasks.create({ title: "Its sub", parentId: a.id });
-			await h.app.tasks.create({ title: "Inbox task" });
-			const ctx = h.app.queryContext();
-			const groups = buildList(h.app.store.state, { kind: "category", id: list.id }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
-			expect(groups.map((g) => [g.section, g.entries.map((e) => e.task.title)])).toEqual([
-				[{ id: null, name: "No section" }, ["Loose"]],
-				[{ id: s1.id, name: "Todo" }, []],
-				[{ id: s2.id, name: "Doing" }, ["In doing", "Its sub"]],
-			]);
-			const inbox = buildList(h.app.store.state, { kind: "inbox" }, ctx, emptyFilter(), "", undefined, { groupBy: "section" }).groups;
-			expect(inbox.map((g) => [g.section, g.entries.length])).toEqual([[{ id: null, name: "No section" }, 1]]);
-			// Other views are untouched.
-			expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups.every((g) => g.section === undefined)).toBe(true);
-		});
-
+	// Grouping a list by section is in group-by.test.ts.
+	describe("board", () => {
 		it("the board has a No section column, then a column per section, each with its own completed group", async () => {
 			const { h, list, s1, s2 } = await setup();
 			const a = (await h.app.tasks.create({ title: "A", categoryId: list.id, sectionId: s1.id })).task;
@@ -284,20 +260,8 @@ describe("sections", () => {
 		});
 	});
 
-	describe("D8 export and import", () => {
-		it("Replace all reproduces the sections and the task section ids", async () => {
-			const { h, list, s1 } = await setup();
-			await h.app.tasks.create({ title: "T", categoryId: list.id, sectionId: s1.id });
-			const exported = h.app.data.exportJson();
-			const target = await appHarness();
-			const preview = target.app.data.previewImport(exported);
-			if (!preview.ok) throw new Error(preview.message);
-			expect(preview.preview.counts.sections).toBe(2);
-			await target.app.data.importReplace(preview.preview);
-			expect(target.app.store.state.sections).toEqual(h.app.store.state.sections);
-			expect(target.app.store.state.tasks).toEqual(h.app.store.state.tasks);
-		});
-
+	// Replace all reproducing the sections is covered in views-data.test.ts.
+	describe("export and import", () => {
 		it("a merge import adds sections by id and keeps valid section ids", async () => {
 			const { h, list, s1 } = await setup();
 			const t = (await h.app.tasks.create({ title: "T", categoryId: list.id, sectionId: s1.id })).task;
@@ -332,7 +296,7 @@ describe("sections", () => {
 		});
 	});
 
-	describe("D9 CategoryService.create", () => {
+	describe("CategoryService.create", () => {
 		it("keeps the palette rule without a color, and an explicit color or null otherwise, in one run", async () => {
 			const h = await appHarness();
 			const first = await h.app.categories.create("One");
@@ -341,30 +305,30 @@ describe("sections", () => {
 			expect(withIcon).toMatchObject({ icon: "book", color: "blue" });
 			const none = await h.app.categories.create("Three", null, null);
 			expect(none.color).toBeNull();
-			expect(h.app.store.undoLabel).toBe("Create category");
+			expect(h.app.store.undoLabel).toBe("Create list");
 			await h.app.store.undo();
 			expect(h.app.store.state.categories.has(none.id)).toBe(false);
-			await rejects(h.app.categories.create("Bad", null, "mauve" as never), "InvalidValue");
+			await expectDomainError(h.app.categories.create("Bad", null, "mauve" as never), "InvalidValue");
 		});
 	});
 });
 
-describe("categories (CAT-01..07)", () => {
-	it("CAT-01 / B15: Inbox cannot be deleted but can be renamed", async () => {
+describe("categories", () => {
+	it("Inbox cannot be deleted but can be renamed", async () => {
 		const h = await appHarness();
 		await expect(h.app.categories.delete(INBOX_ID)).rejects.toMatchObject({ code: "InboxProtected" });
 		await h.app.categories.update(INBOX_ID, { name: "Capture" });
 		expect(h.app.store.state.categories.get(INBOX_ID)?.name).toBe("Capture");
 	});
 
-	it("CAT-03: names are unique case-insensitively", async () => {
+	it("names are unique case-insensitively", async () => {
 		const h = await appHarness();
 		await h.app.categories.create("Study");
 		await expect(h.app.categories.create("study")).rejects.toMatchObject({ code: "DuplicateCategoryName" });
 		await expect(h.app.categories.create("  ")).rejects.toMatchObject({ code: "CategoryNameRequired" });
 	});
 
-	it("CAT-05: rename keeps the ID and the membership", async () => {
+	it("rename keeps the ID and the membership", async () => {
 		const h = await appHarness();
 		const cat = await h.app.categories.create("Study", "📖");
 		const { task } = await h.app.tasks.create({ title: "x", categoryId: cat.id });
@@ -373,7 +337,18 @@ describe("categories (CAT-01..07)", () => {
 		expect(h.app.store.state.categories.get(cat.id)?.name).toBe("Learning");
 	});
 
-	it("CAT-06 / B14: delete moves the tasks to Inbox; undo restores the category and memberships", async () => {
+	it("#137: the list commands' Undo labels say list, and the sidebar's Undo notice binds to the delete's", async () => {
+		const h = await appHarness();
+		const cat = await h.app.categories.create("Study");
+		expect(h.app.store.undoLabel).toBe("Create list");
+		await h.app.categories.setColor(cat.id, cat.color === "purple" ? "green" : "purple");
+		expect(h.app.store.undoLabel).toBe("Change list color");
+		await h.app.categories.delete(cat.id);
+		expect(h.app.store.undoLabel).toBe(DELETE_LIST_LABEL);
+		expect(DELETE_LIST_LABEL).toBe("Delete list");
+	});
+
+	it("delete moves the tasks to Inbox; undo restores the category and memberships", async () => {
 		const h = await appHarness();
 		const cat = await h.app.categories.create("Study");
 		const t1 = (await h.app.tasks.create({ title: "1", categoryId: cat.id })).task;
@@ -388,14 +363,87 @@ describe("categories (CAT-01..07)", () => {
 		expect(h.app.store.state.tasks.get(t2.id)?.categoryId).toBe(cat.id);
 	});
 
+	it("#128: deleting a list refuses to move open tasks into a synced Inbox past 999 open tasks, and writes nothing", async () => {
+		const h = await appHarness();
+		const cat = await h.app.categories.create("Study");
+		const read = (await h.app.tasks.create({ title: "Read", categoryId: cat.id })).task;
+		const done = (await h.app.tasks.create({ title: "Done", categoryId: cat.id })).task;
+		await h.app.tasks.complete(done.id);
+		const at = h.clock.now().toISOString();
+		await h.app.store.run(
+			"Seed",
+			(tx) => {
+				for (let i = 0; i < 999; i++) tx.put("tasks", makeTask(`inbox-${i}`, { title: `Open ${i}`, sortKey: `a${i.toString(36).padStart(3, "0")}` }));
+				tx.put("syncLinks", { kind: "list", logwellId: INBOX_ID, ttId: "p-inbox", ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: at, modifiedAt: at });
+			},
+			{ undoable: false },
+		);
+		const before = h.app.store.state;
+		await expect(h.app.categories.delete(cat.id)).rejects.toMatchObject({
+			code: "SyncedListFull",
+			message: "Can't add the task: Inbox is synced with TickTick and already has 999 open tasks.",
+		});
+		expect(h.app.store.state).toBe(before);
+		// With no open task to move in, the delete goes ahead.
+		await h.app.tasks.complete(read.id);
+		expect(await h.app.categories.delete(cat.id)).toBe(2);
+		expect(h.app.store.state.categories.has(cat.id)).toBe(false);
+	});
+
 	it("reorders categories", async () => {
 		const h = await appHarness();
 		const a = await h.app.categories.create("A");
 		const b = await h.app.categories.create("B");
 		await h.app.categories.move(b.id, -1);
 		expect(h.app.categories.list().map((c) => c.name)).toEqual(["Inbox", "B", "A"]);
-		await h.app.categories.move(b.id, -1);
-		expect(h.app.categories.list().map((c) => c.name)).toEqual(["B", "Inbox", "A"]);
+		await h.app.categories.move(b.id, 1);
+		expect(h.app.categories.list().map((c) => c.name)).toEqual(["Inbox", "A", "B"]);
 		expect(a.id).toBeDefined();
+	});
+
+	it("#129: Move up and Move down skip the Inbox, which stays first; at the ends they write nothing and add no Undo entry", async () => {
+		const h = await appHarness();
+		const a = await h.app.categories.create("A");
+		const b = await h.app.categories.create("B");
+		const names = () => h.app.categories.list().map((c) => c.name);
+		const unchanged = async (move: () => Promise<void>) => {
+			const state = h.app.store.state;
+			const label = h.app.store.undoLabel;
+			await move();
+			expect(h.app.store.state).toBe(state);
+			expect(h.app.store.undoLabel).toBe(label);
+		};
+		await unchanged(() => h.app.categories.move(a.id, -1));
+		await unchanged(() => h.app.categories.move(b.id, 1));
+		await unchanged(() => h.app.categories.move(INBOX_ID, 1));
+		await unchanged(() => h.app.categories.move(INBOX_ID, -1));
+		expect(names()).toEqual(["Inbox", "A", "B"]);
+		// One Move down is one visible step.
+		await h.app.categories.move(a.id, 1);
+		expect(names()).toEqual(["Inbox", "B", "A"]);
+		expect(h.app.store.undoLabel).toBe("Reorder lists");
+		// The pickers' order is the sidebar's, Inbox first, even when the Inbox's own key sorts after a list.
+		await h.app.store.run("Seed", (tx) => tx.put("categories", { ...tx.get("categories", INBOX_ID)!, sortKey: "zz" }), { undoable: false });
+		expect(names()).toEqual(["Inbox", "B", "A"]);
+	});
+
+	it("#129: lists that share a position (after a merge import) can still be moved, and get distinct positions", async () => {
+		const h = await appHarness();
+		const ids: string[] = [];
+		for (const name of ["A", "B", "C"]) ids.push((await h.app.categories.create(name)).id);
+		await h.app.store.run(
+			"Seed",
+			(tx) => {
+				for (const id of ids) tx.put("categories", { ...tx.get("categories", id)!, sortKey: "V" });
+			},
+			{ undoable: false },
+		);
+		const names = () => h.app.categories.list().map((c) => c.name);
+		const before = names().slice(1);
+		await h.app.categories.move(h.app.categories.list()[2]!.id, -1);
+		expect(names().slice(1)).toEqual([before[1], before[0], before[2]]);
+		const keys = h.app.categories.list().slice(1).map((c) => c.sortKey);
+		expect(new Set(keys).size).toBe(3);
+		expect([...keys].sort()).toEqual(keys);
 	});
 });

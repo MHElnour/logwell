@@ -114,4 +114,6 @@ export interface ParseContext {
 	pickedEnd?: boolean;
 	/** The rule of the repeat picked by hand: a typed end with no typed repeat is checked against it. */
 	pickedRule?: RepeatRule;
+	/** The repeat picked by hand is Never: with no typed repeat, start and end words read as without a repeat. */
+	pickedNever?: boolean;
 }

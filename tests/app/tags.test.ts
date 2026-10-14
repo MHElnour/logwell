@@ -7,8 +7,15 @@ import { makeTask } from "../persistence/fixtures";
 import { buildList, sidebarCounts, viewPreset, viewTitle } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 
+const task = (h: AppHarness, id: string): Task => h.app.store.state.tasks.get(id)!;
+const trashed = (h: AppHarness): Task[] => [...h.app.store.state.trash.values()].flatMap((e) => e.tasks);
+const snapshot = (h: AppHarness) => {
+	const s = h.app.store.state;
+	return { tags: new Map(s.tags), tasks: new Map(s.tasks), trash: new Map(s.trash) };
+};
+
 describe("Edit tag", () => {
-	// Edit a tag (Lists, sections and tags rule 24): rename, move under a top-level tag or to the top, and recolor in one
+	// Edit a tag: rename, move under a top-level tag or to the top, and recolor in one
 	// write with one Undo. Every record holding a moving key moves in that write: the tag and its children, live tasks
 	// and trashed tasks.
 
@@ -39,13 +46,6 @@ describe("Edit tag", () => {
 		h.clock.advance(60_000);
 		return Object.assign(h, { ids });
 	}
-
-	const task = (h: AppHarness, id: string): Task => h.app.store.state.tasks.get(id)!;
-	const trashed = (h: AppHarness): Task[] => [...h.app.store.state.trash.values()].flatMap((e) => e.tasks);
-	const snapshot = (h: AppHarness) => {
-		const s = h.app.store.state;
-		return { tags: new Map(s.tags), tasks: new Map(s.tasks), trash: new Map(s.trash) };
-	};
 
 	describe("TagService.edit: rename", () => {
 		it("renames a leaf: the record moves with createdAt kept, live and trashed tasks follow, one Undo restores all", async () => {
@@ -332,12 +332,18 @@ describe("unique tag names", () => {
 			expect(h.app.tags.list()).toHaveLength(0);
 		});
 
-		it("still returns an existing key, the parent made with a child too", async () => {
+		it("still returns an existing tag in any casing or with a leading @, the parent made with a child too; the first display name stays", async () => {
 			const h = await appHarness();
+			const learning = await h.app.tags.create("Learning");
+			expect(await h.app.tags.create("@learning")).toBe(learning);
+			expect(await h.app.tags.create("LEARNING")).toBe(learning);
+			expect(learning.displayName).toBe("Learning");
+			expect(h.app.tags.resolve("LEARNING")).toBe("learning");
 			await h.app.tags.create("Home/Calls");
 			const home = h.app.store.state.tags.get("home");
 			expect((await h.app.tags.create("HOME/calls")).key).toBe("home/calls");
 			expect(await h.app.tags.create("Home")).toBe(home);
+			expect(h.app.store.state.tags.size).toBe(3);
 			expect((await h.app.tags.create("home/garden")).key).toBe("home/garden");
 		});
 	});
@@ -356,13 +362,6 @@ describe("unique tag names", () => {
 			await expect(h.app.tasks.create({ title: "x", newTags: ["home/calls", "work/calls"] })).rejects.toMatchObject({ code: "InvalidTag" });
 			expect(h.app.tags.list()).toHaveLength(0);
 		});
-
-		it("an existing key is reused", async () => {
-			const h = await appHarness();
-			await h.app.tags.create("home/calls");
-			const { task } = await h.app.tasks.create({ title: "x", newTags: ["Home/Calls"] });
-			expect(task.tagKeys).toEqual(["home/calls"]);
-		});
 	});
 
 	describe("duplicates already in a database", () => {
@@ -378,10 +377,24 @@ describe("unique tag names", () => {
 			expect(h.app.store.state.tags.get("work/calls")?.color).toBe("red");
 		});
 	});
+
+	it("#137: setting a tag's color to the one it has writes nothing and leaves Undo as it was", async () => {
+		const h = await appHarness();
+		await h.app.tags.add("Home", null, null);
+		await h.app.tags.setColor("home", "red");
+		const state = h.app.store.state;
+		await h.app.tasks.create({ title: "x" });
+		const label = h.app.store.undoLabel;
+		const after = h.app.store.state;
+		await h.app.tags.setColor("home", "red");
+		expect(h.app.store.state).toBe(after);
+		expect(h.app.store.undoLabel).toBe(label);
+		expect(state.tags.get("home")?.color).toBe("red");
+	});
 });
 
 describe("New tag", () => {
-	// New tag (Lists, sections and tags rule 23b): a name, an optional top-level parent and a color, in one write with
+	// New tag: a name, an optional top-level parent and a color, in one write with
 	// Undo. Unlike Quick Add's lenient create, the dialog's create refuses a tag that already exists.
 
 	async function seeded() {
@@ -436,18 +449,10 @@ describe("New tag", () => {
 			await expect(h.app.tags.add("Garden", "gone", null)).rejects.toMatchObject({ code: "NotFound", message: "The parent tag no longer exists." });
 			await expect(h.app.tags.add("Garden", "home/calls", null)).rejects.toMatchObject({ code: "InvalidTag" });
 		});
-
-		it("the plain create keeps its label and stays lenient for an existing key", async () => {
-			const h = await seeded();
-			const tag = await h.app.tags.create("ERRANDS");
-			expect(tag.displayName).toBe("Errands");
-			await h.app.tags.create("Fresh");
-			expect(h.app.store.undoLabel).toBe(CREATE_TAG_LABEL);
-		});
 	});
 });
 
-// Lists, sections and tags rule 26: creating `home/calls` creates the tag `home` first when it is missing, in the same
+// Creating `home/calls` creates the tag `home` first when it is missing, in the same
 // write, so every tag the sidebar shows is a tag record.
 
 describe("creating a child tag creates its parent", () => {
@@ -516,7 +521,7 @@ describe("creating a child tag creates its parent", () => {
 });
 
 describe("deleting a parent tag", () => {
-	// Lists, sections and tags rule 28: deleting a parent moves its child tags to the top level (`home/calls` becomes
+	// Deleting a parent moves its child tags to the top level (`home/calls` becomes
 	// `calls`) on every task, trashed ones too, in the same write, with one Undo.
 
 	const JAN = "2026-01-01T00:00:00.000Z";
@@ -546,13 +551,6 @@ describe("deleting a parent tag", () => {
 		h.clock.advance(60_000);
 		return Object.assign(h, { ids });
 	}
-
-	const task = (h: AppHarness, id: string): Task => h.app.store.state.tasks.get(id)!;
-	const trashed = (h: AppHarness): Task[] => [...h.app.store.state.trash.values()].flatMap((e) => e.tasks);
-	const snapshot = (h: AppHarness) => {
-		const s = h.app.store.state;
-		return { tags: new Map(s.tags), tasks: new Map(s.tasks), trash: new Map(s.trash) };
-	};
 
 	describe("TagService.delete of a parent", () => {
 		it("moves the child tags to the top level in one write: records, live tasks and trashed tasks", async () => {
@@ -601,6 +599,26 @@ describe("deleting a parent tag", () => {
 			for (const [k, t] of before.tasks) expect(after.tasks.get(k)).toBe(t);
 			for (const [k, e] of before.trash) expect(after.trash.get(k)).toBe(e);
 			expect(h.app.store.undoLabel).not.toBe(DELETE_TAG);
+		});
+
+		it("#127: refuses to delete a parent whose child would land on an existing tag, as a rename would, and writes nothing", async () => {
+			const h = await seeded();
+			// Two tags of one name, side by side in a file from an older version.
+			await h.app.store.run("Seed", (tx) => tx.put("tags", { key: "calls", displayName: "Calls", color: "red", createdAt: "2020-01-01T00:00:00.000Z", modifiedAt: JAN }));
+			await h.app.tasks.create({ title: "Call the bank", tagKeys: ["calls"] });
+			const state = h.app.store.state;
+			const label = h.app.store.undoLabel;
+			await expect(h.app.tags.delete("home")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Calls" is already used by another tag.' });
+			expect(h.app.store.state).toBe(state);
+			expect(h.app.store.undoLabel).toBe(label);
+			// Two children of one parent that would land on one key (deeper keys from an older file) are refused too.
+			await h.app.store.run("Seed", (tx) => {
+				for (const [key, displayName] of [["work", "Work"], ["work/desk", "Work/Desk"], ["work/old/desk", "Work/Old/Desk"]]) {
+					tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: JAN, modifiedAt: JAN });
+				}
+			});
+			await expect(h.app.tags.delete("work")).rejects.toMatchObject({ code: "InvalidTag", message: 'The name "Desk" is already used by another tag.' });
+			expect(h.app.store.state.tags.has("work/desk")).toBe(true);
 		});
 
 		it("a leaf delete moves nothing", async () => {
@@ -709,18 +727,8 @@ describe("tag views include child tags", () => {
 	});
 });
 
-describe("tags (TAG-01..04)", () => {
-	it("B16: @Learning resolves to the existing learning tag; display name comes from the first creation", async () => {
-		const h = await appHarness();
-		const first = await h.app.tags.create("Learning");
-		const again = await h.app.tags.create("@learning");
-		expect(again).toBe(first);
-		expect(first.displayName).toBe("Learning");
-		expect(h.app.store.state.tags.size).toBe(1);
-		expect(h.app.tags.resolve("LEARNING")).toBe("learning");
-	});
-
-	it("TAG-01: a task stores a set of tag keys; delete removes the key everywhere", async () => {
+describe("tags", () => {
+	it("a task stores a set of tag keys; delete removes the key everywhere", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("a");
 		await h.app.tags.create("b");
@@ -761,7 +769,7 @@ describe("tags (TAG-01..04)", () => {
 	});
 });
 
-describe("B2 / TAG-02: newTags on create", () => {
+describe("newTags on create", () => {
 	it("creates the tags and the task in one commit with one undo entry", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "Pay rent", newTags: ["Home Stuff".replace(" ", "-"), "urgent"] });
@@ -775,12 +783,13 @@ describe("B2 / TAG-02: newTags on create", () => {
 		expect(h.app.store.canUndo).toBe(false);
 	});
 
-	it("resolves existing keys case-insensitively without duplicating (B16)", async () => {
+	it("resolves existing keys case-insensitively without duplicating, a child's too", async () => {
 		const h = await appHarness();
 		await h.app.tags.create("Work");
-		const { task } = await h.app.tasks.create({ title: "x", newTags: ["WORK", "work"], tagKeys: ["work"] });
-		expect(task.tagKeys).toEqual(["work"]);
-		expect(h.app.store.state.tags.size).toBe(1);
+		await h.app.tags.create("home/calls");
+		const { task } = await h.app.tasks.create({ title: "x", newTags: ["WORK", "work", "Home/Calls"], tagKeys: ["work"] });
+		expect(task.tagKeys).toEqual(["work", "home/calls"]);
+		expect(h.app.store.state.tags.size).toBe(3);
 		expect(h.app.store.state.tags.get("work")?.displayName).toBe("Work");
 	});
 

@@ -1,47 +1,13 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { cssSection, uncommented } from "./styles-helpers";
 
-// The Habits stylesheet section. happy-dom has no layout, so the rules are checked as text; the visual pass
-// (dark and light, 1400 / 980 / 560 px) is done in real Obsidian.
+// The Habits stylesheet section; the visual pass (dark and light, 1400 / 980 / 560 px) is done in real Obsidian.
+// Its scoping and hygiene are checked with the other sections in layout-styles.test.ts.
 
-const css = readFileSync("styles.css", "utf8");
-const MARK = "/* == M6 habits == */";
-const END = "/* == end M6 habits == */";
-const section = css.slice(css.indexOf(MARK), css.indexOf(END) + END.length);
-const bare = section.replace(/\/\*[\s\S]*?\*\//g, "");
-
-function selectors(text: string): string[] {
-	const out: string[] = [];
-	const re = /([^{}]+)\{/g;
-	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-		const prelude = m[1]!.trim();
-		if (prelude.startsWith("@")) continue;
-		// A comma inside :is(...) does not start another selector.
-		for (const s of prelude.replace(/\([^)]*\)/g, (g) => g.replace(/,/g, "|")).split(",")) out.push(s.trim());
-	}
-	return out;
-}
+const section = cssSection("M6 habits");
+const bare = uncommented(section);
 
 describe("habits stylesheet section", () => {
-	it("is present once and closed", () => {
-		expect(css.split(MARK)).toHaveLength(2);
-		expect(css.split(END)).toHaveLength(2);
-		expect(css.indexOf(MARK)).toBeLessThan(css.indexOf(END));
-	});
-
-	it("scopes every rule to the view or to the habit dialog", () => {
-		const bad = selectors(bare).filter((s) => !s.startsWith(".checkpoint-view") && !s.startsWith(".checkpoint-habit-dialog"));
-		expect(bad).toEqual([]);
-	});
-
-	it("uses no !important, no :has, no lookbehind and no hex or rgb colors", () => {
-		expect(bare).not.toMatch(/!important/);
-		expect(bare).not.toMatch(/:has\(/);
-		expect(bare).not.toMatch(/\(\?<[=!]/);
-		expect(bare).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-		expect(bare).not.toMatch(/\brgba?\(/);
-	});
-
 	it("outlines every control of the page, the Today block, the column and the dialog on :focus-visible", () => {
 		for (const scope of [".checkpoint-view .cp-habits", ".checkpoint-view .cp-today-habits", ".checkpoint-view .cp-board-habits", ".checkpoint-habit-dialog"]) {
 			expect(section, scope).toMatch(new RegExp(`${scope.replace(/\./g, "\\.")} :is\\(button, input, select\\):focus-visible`));

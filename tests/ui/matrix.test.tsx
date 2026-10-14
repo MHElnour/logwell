@@ -1,37 +1,19 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Quadrant } from "../../src/domain/queries";
-import type { DateSpec, Task } from "../../src/domain/types";
 import type { MenuItemSpec } from "../../src/ui/host";
-import { ICON } from "../../src/ui/icons";
 import { routeMatrixMove } from "../../src/ui/matrix/keys";
-import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
-import { byLabel } from "./calendar-helpers";
+import { type AppMount, at, byLabel, click, day, dragTo, mountApp, pressKey, quickModel, releaseAt, settle, taskOf } from "./app-helpers";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
-import { type CalMount, card, cardsIn, click, completedToggle, dragTo, groupLabels, matrix, mountMatrix, openMatrix, press, quadrantEl, quadrantOfCard, releaseAt, settle, stubQuadrantRects, titlesIn } from "./matrix-helpers";
+import { card, cardsIn, completedToggle, groupLabels, matrix, openMatrix, quadrantEl, quadrantOfCard, stubQuadrantRects, titlesIn } from "./matrix-helpers";
 import { QUADRANT_ORDER, quadrantFlags } from "../../src/domain/matrix";
 import { QUADRANT_INFO, QUADRANT_LIST, quadrantWords } from "../../src/ui/matrix/quadrants";
+import { css } from "./styles-helpers";
 
 describe("matrix section", () => {
 	// The Eisenhower matrix section. Today is 2026-10-01 (Europe/Berlin).
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-	async function mount() {
-		const m = await mountMatrix();
-		mounted.push(m);
-		return m;
-	}
-
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const at = (date: string, time: string): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz: "Europe/Berlin" });
-	const iconOf = (el: Element | null) => el?.querySelector("[data-icon]")?.getAttribute("data-icon");
-
-	async function seed(m: CalMount) {
+	async function seed(m: AppMount) {
 		const T = m.h.app.tasks;
 		await T.create({ title: "Ship report", urgent: true, important: true, scheduled: day("2026-09-30") });
 		const study = await T.create({ title: "Study", urgent: true, important: true, scheduled: at("2026-10-01", "19:00") });
@@ -44,37 +26,14 @@ describe("matrix section", () => {
 		await settle();
 	}
 
-	const task = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
-	const flags = (m: CalMount, title: string) => {
-		const t = task(m, title);
+	const flags = (m: AppMount, title: string) => {
+		const t = taskOf(m, title);
 		return { urgent: t.urgent, important: t.important };
 	};
 
 	describe("rail and section state", () => {
-		it("puts Matrix after Calendar and before Search, with the layout-grid icon", async () => {
-			const m = await mount();
-			const rail = [...m.root.querySelectorAll<HTMLElement>(".cp-rail > *")];
-			expect(rail.map((k) => k.getAttribute("aria-label") ?? k.className)).toEqual(["Tasks", "Calendar", "Focus", "Habits", "Matrix", "Search", "cp-rail-spacer", "Data"]);
-			expect(iconOf(byLabel(m.root, "Matrix"))).toBe("layout-grid");
-			expect(ICON.railMatrix).toBe("layout-grid");
-		});
-
-		it("shows the section only when its rail button is active, and opens from the app handle", async () => {
-			const m = await mount();
-			const section = () => matrix(m.root).closest<HTMLElement>(".cp-section")!;
-			expect(section().hidden).toBe(true);
-			await openMatrix(m);
-			expect(section().hidden).toBe(false);
-			expect(byLabel(m.root, "Matrix")!.getAttribute("aria-pressed")).toBe("true");
-			await click(byLabel(m.root, "Tasks"));
-			expect(section().hidden).toBe(true);
-			m.handle.current!.showSection("matrix");
-			await settle();
-			expect(section().hidden).toBe(false);
-		});
-
 		it("keeps the view menu, the Completed group and the selection while another section is shown", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			await click(completedToggle(m.root, "urgent"));
@@ -93,9 +52,9 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("layout (D1, D2, D5)", () => {
+	describe("layout", () => {
 		it("draws four named quadrants in the grid order with badges, subtitles and add buttons", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			expect(matrix(m.root).querySelector(".cp-main-title")!.textContent).toBe("Eisenhower matrix");
@@ -119,7 +78,7 @@ describe("matrix section", () => {
 		});
 
 		it("puts tasks in their quadrant and date group, hides completed, and shows the empty line", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			expect(titlesIn(m.root, "urgent-important")).toEqual(["Ship report", "Study"]);
@@ -132,7 +91,7 @@ describe("matrix section", () => {
 		});
 
 		it("shows 'No tasks' in an empty quadrant", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Only one", urgent: true });
 			await settle();
 			await openMatrix(m);
@@ -140,8 +99,8 @@ describe("matrix section", () => {
 			expect(quadrantEl(m.root, "neither").querySelector('[role="listbox"]')).toBeNull();
 		});
 
-		it("a subtask is a flat card in its own quadrant with the parent prefix (B42)", async () => {
-			const m = await mount();
+		it("a subtask is a flat card in its own quadrant with the parent prefix", async () => {
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const child = card(m.root, "Child");
@@ -150,8 +109,8 @@ describe("matrix section", () => {
 			expect(child.classList.contains("is-subtask")).toBe(false);
 		});
 
-		it("ends each quadrant with a collapsed Completed group, and Show completed hides it (spec §7)", async () => {
-			const m = await mount();
+		it("ends each quadrant with a collapsed Completed group, and Show completed hides it", async () => {
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const menu = await openViewMenu(m, matrix(m.root));
@@ -167,7 +126,7 @@ describe("matrix section", () => {
 		});
 
 		it("Lists and Tags narrow the matrix, with the dot on the button", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const study = await m.h.app.categories.create("Study", null);
 			await m.h.app.tags.create("focus", "red");
 			await m.h.app.tasks.create({ title: "Essay", categoryId: study.id, urgent: true });
@@ -186,7 +145,7 @@ describe("matrix section", () => {
 		});
 
 		it("shows more than 20 completed cards 20 at a time", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			for (let i = 0; i < 25; i++) {
 				const t = await m.h.app.tasks.create({ title: `Done ${String(i).padStart(2, "0")}`, urgent: true });
 				m.h.clock.advance(1000);
@@ -202,8 +161,8 @@ describe("matrix section", () => {
 			expect(quadrantEl(m.root, "urgent").querySelector(".cp-completed-more")).toBeNull();
 		});
 
-		it("has no sort in the matrix (PRI-04, MAT-06) but has it in Tasks", async () => {
-			const m = await mount();
+		it("has no sort in the matrix but has it in Tasks", async () => {
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			expect(menuTitles(await openViewMenu(m, matrix(m.root)))).not.toContain("Sort: by priority");
@@ -213,7 +172,7 @@ describe("matrix section", () => {
 		});
 
 		it("selecting a card opens the shared details inside the matrix", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			await click(card(m.root, "Reply"));
@@ -222,20 +181,20 @@ describe("matrix section", () => {
 		});
 
 		it("arrows without Alt move between cards inside the quadrant", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const [first, second] = cardsIn(m.root, "urgent-important");
 			first!.focus();
-			await press(first!, "ArrowDown");
+			await pressKey(first!, "ArrowDown");
 			expect(document.activeElement).toBe(second);
-			expect(task(m, "Study").urgent).toBe(true);
+			expect(taskOf(m, "Study").urgent).toBe(true);
 		});
 	});
 
-	describe("per-quadrant add button (D6)", () => {
+	describe("per-quadrant add button", () => {
 		it("opens Quick Add with the quadrant's flags", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			const spy = vi.fn();
 			m.host.quickAdd = spy;
 			await openMatrix(m);
@@ -245,22 +204,8 @@ describe("matrix section", () => {
 		});
 
 		it("the model starts from the preset flags, keeps them after a keep-open reset, and saves them", async () => {
-			const m = await mount();
-			const model = new QuickAddModel(
-				{
-					app: m.h.app,
-					preset: { urgent: true, important: true },
-					locale: () => "en",
-					resolveNote: () => [],
-					onSaved: () => undefined,
-					onError: (e) => {
-						throw e;
-					},
-					keepOpen: () => true,
-					onClose: () => undefined,
-				},
-				() => undefined,
-			);
+			const m = await mountApp();
+			const { m: model } = await quickModel({ h: m.h, preset: { urgent: true, important: true } });
 			expect([model.urgent, model.important]).toEqual([true, true]);
 			model.setFlag("important", false);
 			model.setInput("Call Sam");
@@ -270,12 +215,12 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("menu moves (D7, MAT-03, AS-13)", () => {
+	describe("menu moves", () => {
 		const quadrantItems = (items: readonly (MenuItemSpec | "separator")[]) =>
 			items.filter((i): i is MenuItemSpec => i !== "separator" && i.title.startsWith("Move to quadrant"));
 
 		it("retitles the four items and checks the current quadrant", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			card(m.root, "Reply").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
@@ -289,18 +234,18 @@ describe("matrix section", () => {
 			expect(items.map((i) => i.checked)).toEqual([false, false, true, false]);
 		});
 
-		it("AS-13: the menu move keeps the ID, sets both flags, and the chip and details show it", async () => {
-			const m = await mount();
+		it("the menu move keeps the ID, sets both flags, and the chip and details show it", async () => {
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
-			const id = task(m, "Sort photos").id;
+			const id = taskOf(m, "Sort photos").id;
 			card(m.root, "Sort photos").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
 			quadrantItems(m.host.menus.at(-1)!)[0]!.run();
 			await settle();
 			const moved = card(m.root, "Sort photos");
 			expect(quadrantOfCard(moved)).toBe("urgent-important");
 			expect(moved.dataset.taskId).toBe(id);
-			expect(task(m, "Sort photos")).toMatchObject({ id, urgent: true, important: true });
+			expect(taskOf(m, "Sort photos")).toMatchObject({ id, urgent: true, important: true });
 			expect(moved.querySelector(".cp-meta-matrix")).toBeNull();
 			await click(moved);
 			await click(matrix(m.root).querySelector(".cp-details .cp-due-chip"));
@@ -310,12 +255,12 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("keyboard moves (D8)", () => {
+	describe("keyboard moves", () => {
 		it("keys 1 to 4 move the focused card and keep focus on it in the new quadrant", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
-			const id = task(m, "Reply").id;
+			const id = taskOf(m, "Reply").id;
 			const expected: [string, Quadrant][] = [
 				["1", "urgent-important"],
 				["2", "important"],
@@ -326,7 +271,7 @@ describe("matrix section", () => {
 				const row = card(m.root, "Reply");
 				row.focus();
 				if (quadrantOfCard(row) === q) continue;
-				await press(row, key);
+				await pressKey(row, key);
 				const now = card(m.root, "Reply");
 				expect(quadrantOfCard(now)).toBe(q);
 				expect(now.dataset.taskId).toBe(id);
@@ -336,85 +281,85 @@ describe("matrix section", () => {
 		});
 
 		it("announces the move in a polite live region", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const row = card(m.root, "Reply");
 			row.focus();
-			await press(row, "2");
+			await pressKey(row, "2");
 			const live = matrix(m.root).querySelector('[aria-live="polite"]')!;
 			expect(live.textContent).toBe("Moved to Important, not urgent");
 		});
 
 		it("Alt+Arrow moves to the adjacent quadrant, with no wrap and no move between cards", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			let row = card(m.root, "Reply"); // III, bottom left
 			row.focus();
-			await press(row, "ArrowLeft", { altKey: true });
+			await pressKey(row, "ArrowLeft", { altKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("urgent");
-			await press(row, "ArrowRight", { altKey: true });
+			await pressKey(row, "ArrowRight", { altKey: true });
 			row = card(m.root, "Reply");
 			expect(quadrantOfCard(row)).toBe("neither");
 			expect(document.activeElement).toBe(row);
-			await press(row, "ArrowRight", { altKey: true });
+			await pressKey(row, "ArrowRight", { altKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("neither");
-			await press(card(m.root, "Reply"), "ArrowUp", { altKey: true });
+			await pressKey(card(m.root, "Reply"), "ArrowUp", { altKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("important");
-			await press(card(m.root, "Reply"), "ArrowLeft", { altKey: true });
+			await pressKey(card(m.root, "Reply"), "ArrowLeft", { altKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("urgent-important");
-			await press(card(m.root, "Reply"), "ArrowUp", { altKey: true });
+			await pressKey(card(m.root, "Reply"), "ArrowUp", { altKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("urgent-important");
 			expect(document.activeElement).toBe(card(m.root, "Reply"));
 		});
 
 		it("a key for the current quadrant writes nothing", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
-			const before = task(m, "Reply").modifiedAt;
+			const before = taskOf(m, "Reply").modifiedAt;
 			const row = card(m.root, "Reply");
 			row.focus();
-			await press(row, "3");
-			expect(task(m, "Reply").modifiedAt).toBe(before);
+			await pressKey(row, "3");
+			expect(taskOf(m, "Reply").modifiedAt).toBe(before);
 			expect(matrix(m.root).querySelector('[aria-live="polite"]')!.textContent).toBe("");
 		});
 
 		it("ignores the keys with Ctrl or Meta", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const row = card(m.root, "Reply");
 			row.focus();
-			await press(row, "1", { ctrlKey: true });
-			await press(row, "1", { metaKey: true });
+			await pressKey(row, "1", { ctrlKey: true });
+			await pressKey(row, "1", { metaKey: true });
 			expect(quadrantOfCard(card(m.root, "Reply"))).toBe("urgent");
 		});
 	});
 
-	describe("drag (D10, AS-13)", () => {
+	describe("drag", () => {
 		it("dragging a card onto a quadrant moves it, same ID, one undo entry", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
-			const id = task(m, "Sort photos").id;
+			const id = taskOf(m, "Sort photos").id;
 			const row = card(m.root, "Sort photos");
 			await dragTo(row, centers.neither, centers["urgent-important"]);
 			const moved = card(m.root, "Sort photos");
 			expect(quadrantOfCard(moved)).toBe("urgent-important");
-			expect(task(m, "Sort photos")).toMatchObject({ id, urgent: true, important: true });
+			expect(taskOf(m, "Sort photos")).toMatchObject({ id, urgent: true, important: true });
 			expect(moved.querySelector(".cp-meta-matrix")).toBeNull();
 			expect(m.host.messages.at(-1)).toBe('Moved "Sort photos" to Urgent and important.');
 			expect(matrix(m.root).querySelector(".cp-matrix-ghost")).toBeNull();
 			await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 			expect(flags(m, "Sort photos")).toEqual({ urgent: false, important: false });
-			expect(task(m, "Sort photos").id).toBe(id);
+			expect(taskOf(m, "Sort photos").id).toBe(id);
 		});
 
 		it("moves a card to each of the four quadrants", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
@@ -425,16 +370,16 @@ describe("matrix section", () => {
 			}
 			expect(flags(m, "Read book")).toEqual({ urgent: false, important: false });
 			// A schedule or a deadline never moved the task by itself.
-			expect(task(m, "Read book").scheduled).toEqual(day("2026-10-03"));
+			expect(taskOf(m, "Read book").scheduled).toEqual(day("2026-10-03"));
 		});
 
 		it("marks the target quadrant and the card while dragging; Escape cancels and writes nothing", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
 			const row = card(m.root, "Sort photos");
-			const before = task(m, "Sort photos").modifiedAt;
+			const before = taskOf(m, "Sort photos").modifiedAt;
 			await dragTo(row, centers.neither, centers.important, false);
 			expect(row.classList.contains("is-dragging")).toBe(true);
 			expect(quadrantEl(m.root, "important").classList.contains("is-drop-target")).toBe(true);
@@ -446,23 +391,23 @@ describe("matrix section", () => {
 			expect(matrix(m.root).querySelector(".cp-matrix-ghost")).toBeNull();
 			expect(matrix(m.root).querySelector(".is-drop-target")).toBeNull();
 			expect(quadrantOfCard(card(m.root, "Sort photos"))).toBe("neither");
-			expect(task(m, "Sort photos").modifiedAt).toBe(before);
+			expect(taskOf(m, "Sort photos").modifiedAt).toBe(before);
 			expect(matrix(m.root).querySelector(".cp-details")).toBeNull();
 		});
 
 		it("a drop on the card's own quadrant or outside every quadrant writes nothing", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
-			const before = task(m, "Sort photos").modifiedAt;
+			const before = taskOf(m, "Sort photos").modifiedAt;
 			await dragTo(card(m.root, "Sort photos"), centers.neither, { x: 900, y: 700 });
 			await dragTo(card(m.root, "Sort photos"), centers.neither, { x: 5000, y: 5000 });
-			expect(task(m, "Sort photos").modifiedAt).toBe(before);
+			expect(taskOf(m, "Sort photos").modifiedAt).toBe(before);
 		});
 
 		it("a press that barely moves is a click and opens the details", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			stubQuadrantRects(m.root);
@@ -475,7 +420,7 @@ describe("matrix section", () => {
 		});
 
 		it("does not start a drag from the checkbox", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
@@ -489,7 +434,7 @@ describe("matrix section", () => {
 		const alt = (key: string) => new KeyboardEvent("keydown", { key, altKey: true, bubbles: true, cancelable: true });
 
 		it("a focused card gets the move and the key is consumed", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const row = card(m.root, "Reply"); // III
@@ -501,7 +446,7 @@ describe("matrix section", () => {
 		});
 
 		it("focus elsewhere in the view or outside the matrix leaves the key to Obsidian", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			(document.activeElement as HTMLElement | null)?.blur();
@@ -518,7 +463,7 @@ describe("matrix section", () => {
 		});
 
 		it("a key the Scope handled is not moved a second time by the page's own handler", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const row = card(m.root, "Reply");
@@ -533,7 +478,7 @@ describe("matrix section", () => {
 
 	describe("matrix live region, drag state and overlays", () => {
 		it("announces every move, also two identical messages in a row", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const live = matrix(m.root).querySelector('[aria-live="polite"]')!;
@@ -542,13 +487,13 @@ describe("matrix section", () => {
 			observer.observe(live, { childList: true, characterData: true, subtree: true });
 			let row = card(m.root, "Reply");
 			row.focus();
-			await press(row, "2");
+			await pressKey(row, "2");
 			expect(live.textContent).toBe("Moved to Important, not urgent");
 			await new Promise<void>((r) => queueMicrotask(r));
 			seen.length = 0;
 			row = card(m.root, "Sort photos");
 			row.focus();
-			await press(row, "2");
+			await pressKey(row, "2");
 			await new Promise<void>((r) => queueMicrotask(r));
 			observer.disconnect();
 			// Cleared, then set again: the second identical message is a real DOM change.
@@ -557,7 +502,7 @@ describe("matrix section", () => {
 		});
 
 		it("a right press during a drag does not cancel it", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
@@ -572,7 +517,7 @@ describe("matrix section", () => {
 		});
 
 		it("is-dragging and is-drop-target come from state: a re-render during the drag keeps them", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
@@ -594,7 +539,7 @@ describe("matrix section", () => {
 		});
 
 		it("a drop whose point is over the details pane is refused", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);
@@ -603,18 +548,18 @@ describe("matrix section", () => {
 			const doc = document as unknown as { elementFromPoint?: unknown };
 			doc.elementFromPoint = () => pane;
 			try {
-				const before = task(m, "Sort photos").modifiedAt;
+				const before = taskOf(m, "Sort photos").modifiedAt;
 				await dragTo(card(m.root, "Sort photos"), centers.neither, centers.important, false);
 				expect(quadrantEl(m.root, "important").classList.contains("is-drop-target")).toBe(false);
 				await dragTo(card(m.root, "Sort photos"), centers.neither, centers.important);
-				expect(task(m, "Sort photos").modifiedAt).toBe(before);
+				expect(taskOf(m, "Sort photos").modifiedAt).toBe(before);
 			} finally {
 				delete doc.elementFromPoint;
 			}
 		});
 
 		it("tasks in the trash are not shown", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			const gone = await m.h.app.tasks.create({ title: "Binned", urgent: true });
 			await m.h.app.tasks.delete(gone.task.id);
@@ -624,13 +569,12 @@ describe("matrix section", () => {
 		});
 
 		it("the drag ghost has its own card styles (it lives outside the quadrant)", () => {
-			const css = readFileSync(join(process.cwd(), "styles.css"), "utf8");
 			const block = /\.cp-matrix-ghost \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "height: 46px", "box-shadow"]) expect(block).toContain(prop);
 		});
 
 		it("cards have no matrix chip, the header holds the view menu, and the row meta thins out per quadrant", async () => {
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			expect(card(m.root, "Ship report").querySelector(".cp-meta-matrix")).toBeNull();
@@ -638,7 +582,6 @@ describe("matrix section", () => {
 			expect(header.querySelector(".cp-main-title")).not.toBeNull();
 			expect(header.querySelector(".cp-view-menu-button")).not.toBeNull();
 			expect(header.querySelector(".cp-filter-bar")).toBeNull();
-			const css = readFileSync(join(process.cwd(), "styles.css"), "utf8");
 			const body = /\.cp-matrix-q-body \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			expect(body).toContain("container-type: inline-size");
 			expect(body).toContain("container-name: cp-list");
@@ -647,10 +590,10 @@ describe("matrix section", () => {
 		});
 	});
 
-	describe("D8: autoscroll in a quadrant", () => {
+	describe("autoscroll in a quadrant", () => {
 		it("scrolls the quadrant body while a card is held near its bottom edge, and stops on drop", async () => {
 			const frames: FrameRequestCallback[] = [];
-			const m = await mount();
+			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
 			const centers = stubQuadrantRects(m.root);

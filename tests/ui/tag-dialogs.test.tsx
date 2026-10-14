@@ -1,18 +1,16 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { newTagProblem } from "../../src/domain/tags";
 import type { Tag, TagColor } from "../../src/domain/types";
 import { buildTagForm } from "../../src/obsidian/tagDialog";
 import type { TagDialogOptions, TagDialogValues } from "../../src/ui/host";
 import { EDIT_TAG_LABEL } from "../../src/app/CategoryService";
-import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
 import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { appHarness } from "../app/harness";
-import { type CalMount, click, mountCal, settle } from "./calendar-helpers";
-import { menuItem } from "./app-helpers";
+import { type AppMount, click, contextMenu, fill, menuItem, mountApp, mountNode, q as qIn, quickModel, settle, tagLabels, tagRow } from "./app-helpers";
 
 describe("the tag form", () => {
-	// The New tag / Edit tag form (Lists, sections and tags rule 23b). Plain DOM, tested without Obsidian's Modal: the name
+	// The New tag / Edit tag form. Plain DOM, tested without Obsidian's Modal: the name
 	// is checked as typed through the caller's check, the first problem shows, and the submit button stays off until the
 	// name is valid.
 
@@ -29,8 +27,7 @@ describe("the tag form", () => {
 	function form(
 		options: { initial?: TagDialogValues; submitLabel?: "Create" | "Save"; parentLock?: string | null; except?: string | null; result?: string | null } = {},
 	) {
-		const container = document.createElement("div");
-		document.body.appendChild(container);
+		const container = mountNode(null);
 		const onSubmit = vi.fn<(v: TagDialogValues) => Promise<string | null>>(async () => options.result ?? null);
 		const onCancel = vi.fn();
 		const f = buildTagForm(container, {
@@ -45,39 +42,17 @@ describe("the tag form", () => {
 			onSubmit,
 			onCancel,
 		});
-		const q = <T extends HTMLElement>(sel: string) => container.querySelector<T>(sel)!;
+		const q = <T extends HTMLElement>(sel: string) => qIn<T>(container, sel);
 		const name = () => q<HTMLInputElement>("input.cp-new-list-name");
 		const select = () => q<HTMLSelectElement>("select");
 		const error = () => q(".cp-new-list-error");
 		const submitButton = () => q<HTMLButtonElement>('button[type="submit"]');
-		const type = (v: string) => {
-			name().value = v;
-			name().dispatchEvent(new Event("input", { bubbles: true }));
-		};
-		const pick = (v: string) => {
-			select().value = v;
-			select().dispatchEvent(new Event("change", { bubbles: true }));
-		};
+		const type = (v: string) => fill(name(), v);
+		const pick = (v: string) => fill(select(), v, "change");
 		const submit = () => q("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 		const colors = () => [...container.querySelectorAll<HTMLButtonElement>(".cp-color-choice")];
 		return { container, f, q, name, select, error, submitButton, type, pick, submit, colors, onSubmit, onCancel };
 	}
-
-	const settle = async () => {
-		for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
-	};
-
-	beforeAll(() => {
-		// Obsidian's createEl, which happy-dom does not have.
-		(HTMLElement.prototype as unknown as { createEl: unknown }).createEl = function (this: HTMLElement, tag: string, o: { cls?: string; attr?: Record<string, string> } = {}) {
-			const node = this.ownerDocument.createElement(tag);
-			if (o.cls !== undefined) node.className = o.cls;
-			for (const [k, v] of Object.entries(o.attr ?? {})) node.setAttribute(k, v);
-			this.appendChild(node);
-			return node;
-		};
-	});
-	afterEach(() => document.body.replaceChildren());
 
 	describe("tag form: fields", () => {
 		it("has a labelled name with maxlength 64 and the hint, a Parent select (None first) and a color row", () => {
@@ -226,17 +201,11 @@ describe("the tag form", () => {
 });
 
 describe("Edit tag", () => {
-	// Edit in a tag's menu (Lists, sections and tags rule 24): the New tag dialog filled in. One write with an Undo
+	// Edit in a tag's menu: the New tag dialog filled in. One write with an Undo
 	// notice; an open tag view follows the new key.
 
-	const mounted: CalMount[] = [];
-	afterEach(() => {
-		for (const m of mounted.splice(0)) m.unmount();
-	});
-
 	async function mount(...submits: (TagDialogValues | null)[]) {
-		const m = await mountCal();
-		mounted.push(m);
+		const m = await mountApp();
 		const t = m.h.app.tasks;
 		await m.h.app.tags.create("Home", "red");
 		await t.create({ title: "Ring mum", newTags: ["Home/Calls"] });
@@ -258,17 +227,9 @@ describe("Edit tag", () => {
 		return { m, opened, outcomes, tagDialog };
 	}
 
-	const sidebar = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-sidebar")!;
-	const rows = (m: CalMount) => [...sidebar(m).querySelectorAll<HTMLElement>(".cp-tag-tree .cp-sidebar-item")];
-	const rowFor = (m: CalMount, label: string) => rows(m).find((r) => r.querySelector(".cp-sidebar-label")!.textContent === label)!;
-	const labels = (m: CalMount) => rows(m).map((r) => r.querySelector(".cp-sidebar-label")!.textContent);
-	const title = (m: CalMount) => m.root.querySelector(".cp-main-title")!.textContent;
-	const menuOf = async (m: CalMount, label: string) => {
-		rowFor(m, label).dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-		await settle();
-		return m.host.menus.at(-1)!;
-	};
-	const edit = async (m: CalMount, label: string) => {
+	const title = (m: AppMount) => m.root.querySelector(".cp-main-title")!.textContent;
+	const menuOf = (m: AppMount, label: string) => contextMenu(m, tagRow(m, label));
+	const edit = async (m: AppMount, label: string) => {
 		menuItem(await menuOf(m, label), "Edit").run();
 		await settle();
 	};
@@ -316,14 +277,14 @@ describe("Edit tag", () => {
 			expect(outcomes).toEqual([null]);
 			expect(m.host.messages.at(-1)).toBe("Renamed tag @Calls to @Phone.");
 			expect(m.h.app.store.undoLabel).toBe(EDIT_TAG_LABEL);
-			expect(labels(m)).toEqual(["Errands", "Home", "Garden", "Phone"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Home", "Garden", "Phone"]);
 			// The task row shows the new name.
-			await click(rowFor(m, "Phone"));
+			await click(tagRow(m, "Phone"));
 			expect(m.root.querySelector(".cp-tasks .cp-task-row .cp-tag-pill")!.textContent).toBe("@Phone");
 			await m.host.undoButtons.at(-1)!();
 			await settle();
 			expect(m.h.app.store.state.tags).toEqual(before.tags);
-			expect(labels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
+			expect(tagLabels(m)).toEqual(["Errands", "Home", "Calls", "Garden"]);
 		});
 
 		it("a color or parent change alone says 'Updated tag'", async () => {
@@ -356,16 +317,16 @@ describe("Edit tag", () => {
 
 		it("an open tag view follows the rename, also of its parent", async () => {
 			const { m } = await mount({ name: "Phone", parent: "home", color: null }, null);
-			await click(rowFor(m, "Calls"));
+			await click(tagRow(m, "Calls"));
 			expect(title(m)).toBe("@Calls");
 			await edit(m, "Calls");
 			expect(title(m)).toBe("@Phone");
-			expect(rowFor(m, "Phone").getAttribute("aria-current")).toBe("page");
+			expect(tagRow(m, "Phone").getAttribute("aria-current")).toBe("page");
 			(m.host as unknown as { tagDialog: (o: TagDialogOptions) => Promise<void> }).tagDialog = async (o) => void (await o.save({ name: "House", parent: null, color: "red" }));
 			await edit(m, "Home");
 			expect(title(m)).toBe("@Phone");
 			expect(m.h.app.store.state.tags.has("house/phone")).toBe(true);
-			expect(rowFor(m, "Phone").getAttribute("aria-current")).toBe("page");
+			expect(tagRow(m, "Phone").getAttribute("aria-current")).toBe("page");
 		});
 	});
 
@@ -374,21 +335,7 @@ describe("Edit tag", () => {
 			const h = await appHarness();
 			await h.app.tags.create("Calls");
 			await h.app.tags.create("Home");
-			const m = new QuickAddModel(
-				{
-					app: h.app,
-					preset: {},
-					locale: () => "en",
-					resolveNote: () => [],
-					onSaved: () => undefined,
-					onError: (e) => {
-						throw e;
-					},
-					keepOpen: () => true,
-					onClose: () => undefined,
-				},
-				() => undefined,
-			);
+			const { m } = await quickModel({ h });
 			m.setTags(["calls", "home"]);
 			await h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
 			m.refresh();
@@ -407,21 +354,7 @@ describe("Edit tag", () => {
 		it("a manual tag whose tag was renamed is never saved, even before a refresh", async () => {
 			const h = await appHarness();
 			await h.app.tags.create("Calls");
-			const m = new QuickAddModel(
-				{
-					app: h.app,
-					preset: {},
-					locale: () => "en",
-					resolveNote: () => [],
-					onSaved: () => undefined,
-					onError: (e) => {
-						throw e;
-					},
-					keepOpen: () => true,
-					onClose: () => undefined,
-				},
-				() => undefined,
-			);
+			const { m } = await quickModel({ h });
 			m.setTags(["calls"]);
 			await h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
 			expect(m.tagKeysValue()).toEqual([]);
@@ -431,27 +364,10 @@ describe("Edit tag", () => {
 	});
 
 	describe("Quick Add after a delete, and picking again", () => {
-		const model = (h: Awaited<ReturnType<typeof appHarness>>) =>
-			new QuickAddModel(
-				{
-					app: h.app,
-					preset: {},
-					locale: () => "en",
-					resolveNote: () => [],
-					onSaved: () => undefined,
-					onError: (e) => {
-						throw e;
-					},
-					keepOpen: () => true,
-					onClose: () => undefined,
-				},
-				() => undefined,
-			);
-
 		it("a deleted tag leaves the pills, and the message names it as its pill did", async () => {
 			const h = await appHarness();
 			await h.app.tags.create("Home/Phone-Calls");
-			const m = model(h);
+			const { m } = await quickModel({ h });
 			m.setTags(["home/phone-calls"]);
 			expect(manualPills(m).find((p) => p.kind === "tag")?.label).toBe("@Phone-Calls");
 			await h.app.tags.delete("home/phone-calls");
@@ -463,7 +379,7 @@ describe("Edit tag", () => {
 		it("picking a tag again clears the message", async () => {
 			const h = await appHarness();
 			await h.app.tags.create("Calls");
-			const m = model(h);
+			const { m } = await quickModel({ h });
 			m.setTags(["calls"]);
 			await h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
 			m.refresh();

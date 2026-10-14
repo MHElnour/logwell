@@ -9,6 +9,11 @@ export function normalizeTagKey(raw: string): string {
 	return tagDisplayName(raw).toLowerCase();
 }
 
+/** The key of a tag named `leaf` (already a key segment) under the tag key `parent`, or at the top for null. */
+export function childTagKey(parent: string | null, leaf: string): string {
+	return parent === null ? leaf : `${parent}/${leaf}`;
+}
+
 export function isValidTagKey(key: string): boolean {
 	return TAG_KEY_RE.test(key);
 }
@@ -358,7 +363,7 @@ export function newTagProblem(tags: ReadonlyMap<string, Tag>, name: string, pare
 		const text = tagNameTextProblem(name);
 		if (text !== null) return text;
 	}
-	const key = parent === null ? leaf : `${parent}/${leaf}`;
+	const key = childTagKey(parent, leaf);
 	// The same key (a new casing or color only): the tree's names do not change, so even an older duplicate is kept.
 	if (key === except) return null;
 	let pool = tags;

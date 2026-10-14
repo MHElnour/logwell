@@ -1,5 +1,7 @@
+import { expect } from "vitest";
 import { CheckpointApp } from "../../src/app/App";
 import type { NotePort, RenameQueuePort } from "../../src/app/ports";
+import { type DomainErrorCode, isDomainError } from "../../src/domain/errors";
 import { basenameOf, joinPath, noteNameCandidate } from "../../src/domain/notes";
 import { readHeader } from "../../src/persistence/serializer";
 import type { DbFile } from "../../src/persistence/gateway";
@@ -85,6 +87,20 @@ export async function makeReadOnly(h: Harness): Promise<void> {
 	if (h.store.readOnlyState === null) throw new Error("expected the store to be read-only");
 }
 
+/**
+ * Awaits a command that must be refused with a DomainError (of `code`, and with `message`, when given) and returns
+ * the error's message.
+ */
+export async function expectDomainError(p: Promise<unknown>, code?: DomainErrorCode, message?: string): Promise<string> {
+	const err = await p.then(
+		() => null,
+		(e: unknown) => e,
+	);
+	expect(isDomainError(err, code), `expected a DomainError ${code ?? ""}, got ${String(err)}`).toBe(true);
+	if (message !== undefined) expect((err as Error).message).toBe(message);
+	return (err as Error).message;
+}
+
 /** Waits until a condition holds, without depending on an exact number of ticks. */
 export async function waitFor(condition: () => boolean, timeoutMs = 1000): Promise<void> {
 	const start = Date.now();
@@ -136,6 +152,6 @@ export async function reopen(h: AppHarness, renames: RenameQueuePort): Promise<A
 	const store = h.newStore();
 	await store.open();
 	const app = new CheckpointApp(store, h.clock, sequentialIds("b"), h.app.settings, h.notes, renames);
-	await app.tasks.resumeRenames();
+	await app.noteRenames.resumeRenames();
 	return { ...h, store, app };
 }

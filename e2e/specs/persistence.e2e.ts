@@ -27,7 +27,7 @@ describe("Persistence in Obsidian", function () {
 		expect(await readVaultFile(DB_PATH)).toContain(id);
 	});
 
-	it("reloads silently on an external fast-forward edit (B39)", async function () {
+	it("reloads silently on an external fast-forward edit", async function () {
 		const conflictsBefore = await conflictCount();
 		const id = await createTask("Original title");
 		await flush();
@@ -57,7 +57,7 @@ describe("Persistence in Obsidian", function () {
 		expect(await conflictCount()).toBe(conflictsBefore);
 	});
 
-	it("keeps a conflict copy when an external edit forks from pending changes (B40)", async function () {
+	it("keeps a conflict copy when an external edit forks from pending changes", async function () {
 		const before = await conflictCount();
 		await browser.executeObsidian(
 			async ({ app, plugins }, dbPath) => {
@@ -95,7 +95,7 @@ describe("Persistence in Obsidian", function () {
 		expect(await getTask("f0f0f0f0-0000-4000-8000-000000000001")).not.toBeNull();
 	});
 
-	it("opens read-only on git merge markers and restores a backup (B37)", async function () {
+	it("opens read-only on git merge markers and restores a backup", async function () {
 		await createTask("Before the merge");
 		await flush();
 		await browser.executeObsidian(async ({ app }, dbPath) => {

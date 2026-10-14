@@ -5,6 +5,15 @@ import { type ActiveTimer, startSet } from "../../src/domain/focus";
 import { FocusHost, type FocusHostUi, type FocusLike, formatStatus, statusLabel } from "../../src/obsidian/focusHost";
 import { LocalStorageActiveTimer } from "../../src/obsidian/activeTimer";
 
+const shown = vi.hoisted(() => [] as string[]);
+vi.mock("../../src/obsidian/notices", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	actionNotice: (message: string) => {
+		shown.push(message);
+		return {};
+	},
+}));
+
 describe("focus host", () => {
 	const NOW = "2026-10-04T10:00:00.000Z";
 	const config = { rounds: 4, focusSec: 1500, breakSec: 300, longBreakSec: 900 };
@@ -120,7 +129,7 @@ describe("focus host", () => {
 		});
 	});
 
-	describe("starting focus (B34, B35)", () => {
+	describe("starting focus", () => {
 		it("a free timer starts and opens the Focus page", async () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
@@ -197,7 +206,7 @@ describe("focus host", () => {
 			});
 		});
 
-		it("no task during a focus round of a task offers Split and Reassign too (B2, B9)", async () => {
+		it("no task during a focus round of a task offers Split and Reassign too", async () => {
 			const h = harness();
 			h.focus.current = base();
 			(h.focus.start as ReturnType<typeof vi.fn>).mockResolvedValue({ kind: "busy", sameTask: true });
@@ -212,7 +221,7 @@ describe("focus host", () => {
 			expect(h.focus.calls).toEqual(["split:null", "reassign:null"]);
 		});
 
-		it("no task while a no-task round runs is the running-timer notice (B34)", async () => {
+		it("no task while a no-task round runs is the running-timer notice", async () => {
 			const h = harness();
 			h.focus.current = base(null);
 			(h.focus.start as ReturnType<typeof vi.fn>).mockResolvedValue({ kind: "busy", sameTask: true });
@@ -245,7 +254,7 @@ describe("focus host", () => {
 		});
 	});
 
-	describe("recovery prompt (B31, D5)", () => {
+	describe("recovery prompt", () => {
 		const recovering = (h: Harness) => {
 			h.focus.current = { ...base(), state: "paused", needsRecovery: true };
 		};
@@ -289,7 +298,7 @@ describe("focus host", () => {
 			expect(h.focus.restoreDiscardedTimer).toHaveBeenCalledTimes(1);
 		});
 
-		it("Discard shows no Undo when nothing was discarded, and says so when the Undo finds nothing (B4)", async () => {
+		it("Discard shows no Undo when nothing was discarded, and says so when the Undo finds nothing", async () => {
 			const h = harness();
 			recovering(h);
 			h.ui.choose.mockResolvedValue("discard");
@@ -310,7 +319,7 @@ describe("focus host", () => {
 			expect(h2.ui.notify).toHaveBeenCalledWith("Nothing to undo.");
 		});
 
-		it("closes the open prompt when the question was answered elsewhere (B4)", async () => {
+		it("closes the open prompt when the question was answered elsewhere", async () => {
 			const h = harness();
 			recovering(h);
 			h.ui.choose.mockImplementation((async (...args: unknown[]) => {
@@ -360,7 +369,7 @@ describe("focus host", () => {
 			release(null);
 		});
 
-		it("a recovery event during a run (B32) opens the prompt", async () => {
+		it("a recovery event during a run opens the prompt", async () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
 			recovering(h);
@@ -370,7 +379,7 @@ describe("focus host", () => {
 	});
 
 	describe("open results and notices", () => {
-		it("already-saved tells the user the round was saved and the set ended (D4)", () => {
+		it("already-saved tells the user the round was saved and the set ended", () => {
 			const h = harness();
 			h.host.attach(h.focus, "already-saved");
 			expect(h.ui.notify).toHaveBeenCalledTimes(1);
@@ -386,7 +395,7 @@ describe("focus host", () => {
 			}
 		});
 
-		it("a short discard offers Undo, which saves it (D7)", async () => {
+		it("a short discard offers Undo, which saves it", async () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
 			h.focus.bus.emit("short-discarded", { sessionId: "s-1" });
@@ -432,7 +441,7 @@ describe("focus host", () => {
 		});
 	});
 
-	describe("moments (B36, D14)", () => {
+	describe("moments", () => {
 		it("every moment plays its sound", () => {
 			const h = harness();
 			h.host.attach(h.focus, "none");
@@ -491,7 +500,7 @@ describe("the active timer in local storage", () => {
 	const config = { rounds: 4, focusSec: 1500, breakSec: 300, longBreakSec: 900 };
 	const timer = () => startSet(config, null, "2026-10-04T10:00:00.000Z", () => "s-1").timer!;
 
-	describe("LocalStorageActiveTimer (D11)", () => {
+	describe("LocalStorageActiveTimer", () => {
 		it("stores the timer under logwell-active-timer-<dbId> and reads it back", () => {
 			const f = fakeLocal();
 			const port = new LocalStorageActiveTimer(f.app as never);
@@ -554,6 +563,24 @@ describe("the active timer in local storage", () => {
 			} as never);
 			expect(port.load("db-1")).toBeNull();
 			expect(() => port.save("db-1", timer())).not.toThrow();
+			warn.mockRestore();
+		});
+
+		it("#134: a timer that cannot be saved is told once per session, with what is at risk", () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			shown.length = 0;
+			const port = new LocalStorageActiveTimer({
+				loadLocalStorage: () => null,
+				saveLocalStorage: () => {
+					throw new Error("quota exceeded");
+				},
+			} as never);
+			port.save("db-1", timer());
+			port.save("db-1", timer());
+			expect(shown).toHaveLength(1);
+			expect(shown[0]).toContain("quota exceeded");
+			expect(shown[0]).toMatch(/focus timer/);
+			expect(shown[0]).toMatch(/restarts/);
 			warn.mockRestore();
 		});
 	});

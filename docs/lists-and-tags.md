@@ -21,8 +21,8 @@ Right-click a list in the sidebar, or focus it and press the context-menu key or
 - **Edit** renames it. Its tasks stay in it.
 - **Change icon…** and **Change color…** open the pickers. **None** clears either.
 - **Sync with TickTick…** and **Unlink from TickTick**: see [TickTick sync](ticktick-sync.md).
-- **Move up** and **Move down** change its place in the sidebar.
-- **Delete** asks first and says how many tasks will move to Inbox. Its sections are deleted too. The notice offers **Undo**.
+- **Move up** and **Move down** change its place in the sidebar and in every list picker. Inbox always comes first and has neither, and they are off where the list cannot move further.
+- **Delete** asks first and says how many tasks will move to Inbox. Its sections are deleted too. The notice offers **Undo**. If Inbox is [synced with TickTick](ticktick-sync.md#limits) and the move would give it more than 999 open tasks, the delete is refused. A list synced with TickTick is unlinked when you delete it; see [TickTick sync](ticktick-sync.md#stop-syncing-a-list).
 
 ## Put a task in a list
 
@@ -118,6 +118,6 @@ Renaming a tag does not change `tag:` lines in your notes; edit them yourself. S
 
 Right-click a tag in the sidebar, or focus it and press the context-menu key or Shift+F10. Choose **No color** or a color, such as **Color: green**, or **Delete**.
 
-Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent moves its child tags to the top level: `@home/garden` becomes `@garden` on every task, in the same step. If a child's view is open, it stays open under the child's new place.
+Delete asks first, then removes the tag from every task, including tasks in the Trash, with **Undo**. Deleting a parent moves its child tags to the top level: `@home/garden` becomes `@garden` on every task, in the same step. If a child's view is open, it stays open under the child's new place. If a child would land on a tag that already has its name, as `@home/calls` beside an older `@calls`, the delete is refused with "The name "calls" is already used by another tag." Rename one of them first.
 
 To show only tasks with chosen tags in Search, the calendar or the matrix, see [Views](views.md).

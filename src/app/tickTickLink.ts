@@ -1,12 +1,16 @@
+import { DomainError } from "../domain/errors";
 import { isInboxProjectId } from "../domain/ticktick/inbox";
-import type { ID } from "../domain/types";
+import { type ID, syncLinkId } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { TickTickApi } from "./ports";
-import type { TaskIndex } from "./taskIndex";
+import { isListSynced } from "./syncMarks";
+import { type TaskIndex, SYNCED_LIST_OPEN_MAX } from "./taskIndex";
 import { INBOX_ALIAS, canonicalProjectId } from "./tickTickInbox";
+import type { Tx } from "./tx";
 
-// What the "Sync with TickTick" link dialog offers for one list. Pure over the TickTick
-// client and the database; the dialogs and the flow that use it are in src/obsidian.
+// What the "Sync with TickTick" link dialog offers for one list, and the link rules the dialog's flow, the engine and
+// the task commands share. Pure over the TickTick client and the database; the dialogs and the flow that use it are in
+// src/obsidian.
 
 /** Where the list is linked to: an existing TickTick project, or a new one with the list's name. */
 export type LinkTarget = { kind: "existing"; projectId: string; name: string } | { kind: "create"; name: string };
@@ -63,6 +67,38 @@ export async function loadLinkOptions(api: Pick<TickTickApi, "listProjects">, st
 export function defaultOption(options: readonly LinkOption[], listName: string): LinkOption | undefined {
 	const same = options.find((o) => !o.disabled && o.target.kind === "existing" && o.label.toLowerCase() === listName.toLowerCase());
 	return same ?? options.find((o) => !o.disabled);
+}
+
+/**
+ * What refuses a link: the list is gone, is already linked, or has more than 999 open tasks (completed tasks do not
+ * count); with `projectId`, also a TickTick list already linked to another list. The flow checks before anything is
+ * created in TickTick, the engine again when it links.
+ */
+export function assertLinkable(state: DbData, index: Pick<TaskIndex, "openCount">, listId: ID, projectId?: string): void {
+	const list = state.categories.get(listId);
+	if (list === undefined) throw new DomainError("NotFound", "The list no longer exists.");
+	if (isListSynced(state.syncLinks, listId)) throw new DomainError("InvalidValue", "This list is already linked to TickTick.");
+	if (index.openCount(listId) > SYNCED_LIST_OPEN_MAX) {
+		throw new DomainError(
+			"SyncedListFull",
+			`Can't link the list: ${list.name} has more than ${SYNCED_LIST_OPEN_MAX} open tasks, the most a list synced with TickTick can hold.`,
+		);
+	}
+	if (projectId === undefined) return;
+	for (const l of state.syncLinks.values()) {
+		if (l.kind === "list" && canonicalProjectId(l.ttId) === canonicalProjectId(projectId)) throw new DomainError("InvalidValue", "That TickTick list is already linked to another list.");
+	}
+}
+
+/**
+ * Marks the link of a task that no longer exists `pendingDelete`, so the next sync deletes its TickTick copy and then
+ * the link. Nothing for a task that still exists, has no link or is marked already.
+ */
+export function markGoneTaskLink(tx: Tx, taskId: ID): void {
+	if (tx.get("tasks", taskId) !== undefined) return;
+	const link = tx.get("syncLinks", syncLinkId("task", taskId));
+	if (link === undefined || link.pendingDelete === true) return;
+	tx.put("syncLinks", { ...link, pendingDelete: true, modifiedAt: tx.now });
 }
 
 /** The open tasks of the list that a first sync sends (repeating tasks do not sync). */

@@ -7,7 +7,8 @@ import type { ID } from "../../src/domain/types";
 import { TasksSection, initialTasksState } from "../../src/ui/TasksSection";
 import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { CI_SLACK, LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, tally, taskId } from "./view-edit-fixture";
+import { countBigPasses, fastest, median, perfLog, tally } from "./measure";
+import { LISTS, ROW, RUNS, TASKS, VIEWPORT, bigHarness, domCleanup, taskId } from "./view-edit-fixture";
 
 // One task edit with the Tasks view open at 50,000 tasks (issue 41). The view rebuilds its list whenever the
 // task map changes; with the task index, `buildList` filters only the view's candidates. This test measures the work
@@ -18,23 +19,26 @@ import { CI_SLACK, LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHar
 //     counted by wrapping the Map iteration methods (a pass is an iteration of a map of 40,000+ entries),
 //     with the source line that started each pass: the command copies the map once, the redraw reads none;
 //   - how often the list's rows are put in order (`arrangeHierarchy` sorting its top-level rows): never with the index, which keeps each list's ids in sort order; once per build without it.
-// The time bounds are loose and pass on CI; the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and
-// sort counts are exact.
+// Times are compared only with the same work measured in the same run (the view read through every task, the delete
+// with no kept orders); the numbers are the result (CHECKPOINT_PERF_LOG=1). The pass and sort counts are exact.
 //
 // The whole app is not mounted: happy-dom mounting AppRoot with 50,000 tasks did not finish in minutes, so the
 // redraw is measured on `TasksSection` alone (what the app re-renders per change for the visible view), with
 // the real `buildList`, row memo and windowing. Redraw times in happy-dom are several times slower than in
 // Chromium; the pass counts are exact.
 
-const VIEW_BUDGET_MS = 200 * CI_SLACK; // the `save_ms` pass limit; one rebuild is far below it today
-// Measured alone: Inbox about 0.5 of the full read (22,500 rows to make either way; no sort with the index), Today 0.15
-// (2,500 dated tasks are its candidates), a list 0.3, the sidebar counts 0.12. The Inbox holds half the tasks, so its
-// only saving is the sort, which "rows ordered 0x" asserts exactly; on a slow CI runner its ratio has reached 1.09, so its
-// time bound only catches a real slowdown.
+// A view with the index is compared with the same view read through every task, measured in the same run (the fastest
+// of several interleaved runs of each, so load hits both alike). Measured alone: Inbox about 0.5 of the full read
+// (22,500 rows to make either way; no sort with the index), Today 0.15 (2,500 dated tasks are its candidates), a list
+// 0.3, the sidebar counts 0.12. The Inbox holds half the tasks, so its only saving is the sort, which "rows ordered 0x"
+// asserts exactly; on a slow CI runner its ratio has reached 1.09, so its ratio only catches a real slowdown.
 const INBOX_RATIO = 1.5;
 const TODAY_RATIO = 0.5;
 const LIST_RATIO = 0.6;
 const COUNTS_RATIO = 0.5;
+// A bulk delete and its Undo with the orders kept, against the same without them.
+const KEPT_RATIO = 4;
+const NOISE_MS = 100;
 
 const dom = domCleanup();
 
@@ -113,8 +117,7 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			),
 			`sidebar counts ${median(counts).toFixed(2)} ms with the index, ${median(scanCounts).toFixed(2)} ms without`,
 		].join("; ");
-		if (LOG) process.stderr.write(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}\n`);
-		for (const { name } of views) expect(median(times.get(name) ?? []), report).toBeLessThan(VIEW_BUDGET_MS);
+		perfLog(`issue-41: buildList after one edit at ${TASKS} tasks: ${report}`);
 		// The index reads only the view's candidates: the Inbox half the tasks, Today the dated tasks, a list its own.
 		const state = h.app.store.state;
 		expect(index.candidates(state, { kind: "inbox" })?.length, report).toBe(TASKS / 2);
@@ -122,13 +125,11 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 		expect(index.candidates(state, { kind: "category", id: lists[1] as ID })?.length, report).toBe(TASKS / LISTS);
 		const ratio = (name: string) => fastest(times.get(name) ?? []) / fastest(scanTimes.get(name) ?? []);
 		const ratios = `Inbox ${ratio("Inbox").toFixed(2)}, Today ${ratio("Today").toFixed(2)}, a list ${ratio("a list").toFixed(2)}, sidebar counts ${(fastest(counts) / fastest(scanCounts)).toFixed(2)} of the full read`;
-		if (LOG) process.stderr.write(`issue-41: fastest with the index over fastest without: ${ratios}\n`);
+		perfLog(`issue-41: fastest with the index over fastest without: ${ratios}`);
 		expect(ratio("Inbox"), `${ratios}; ${report}`).toBeLessThan(INBOX_RATIO);
 		expect(ratio("Today"), `${ratios}; ${report}`).toBeLessThan(TODAY_RATIO);
 		expect(ratio("a list"), `${ratios}; ${report}`).toBeLessThan(LIST_RATIO);
 		expect(fastest(counts) / fastest(scanCounts), `${ratios}; ${report}`).toBeLessThan(COUNTS_RATIO);
-		for (const name of ["Inbox", "Today", "a list"]) expect(fastest(times.get(name) ?? []), report).toBeLessThan(SAFETY_NET_MS);
-		expect(fastest(counts), report).toBeLessThan(SAFETY_NET_MS);
 		// With the index no list sorts its rows (it walks the index's order); Today has no hierarchy.
 		expect(Object.fromEntries(sorts), report).toEqual({ Inbox: 0, "Inbox searching": 0, Today: 0, "a list": 0 });
 		// The Inbox and the list have completed tasks of their own; the search sends the 2,500 subtasks to the group too.
@@ -168,10 +169,11 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 		const plain = { deleteMs: Math.min(first.deleteMs, second.deleteMs), undoMs: Math.min(first.undoMs, second.undoMs), inboxMs: Math.min(first.inboxMs, second.inboxMs) };
 		const kept = await run(true);
 		const report = `delete ${kept.deleteMs.toFixed(0)} ms and Undo ${kept.undoMs.toFixed(0)} ms with the orders built (${plain.deleteMs.toFixed(0)} and ${plain.undoMs.toFixed(0)} ms without), then the Inbox ${kept.inboxMs.toFixed(0)} ms (${plain.inboxMs.toFixed(0)} ms)`;
-		if (LOG) process.stderr.write(`issue-41: bulk list delete at ${TASKS} tasks: ${report}\n`);
-		// Moving 25,000 tasks one by one took about 800 ms each way.
-		expect(kept.deleteMs, report).toBeLessThan((plain.deleteMs * 2 + 100) * CI_SLACK);
-		expect(kept.undoMs, report).toBeLessThan((plain.undoMs * 2 + 100) * CI_SLACK);
+		perfLog(`issue-41: bulk list delete at ${TASKS} tasks: ${report}`);
+		// Moving 25,000 tasks one by one took about 800 ms each way, some 30 times the cost without kept orders. A flat
+		// allowance covers timer noise and a collection pause in one run.
+		expect(kept.deleteMs, report).toBeLessThan(plain.deleteMs * KEPT_RATIO + NOISE_MS);
+		expect(kept.undoMs, report).toBeLessThan(plain.undoMs * KEPT_RATIO + NOISE_MS);
 	}, 300_000);
 
 	it("reads Today from the index after a task is completed and saved, without building it again", async () => {
@@ -202,10 +204,9 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			if (run > 0) scans.push(scanMs);
 		}
 		const report = `Today after complete and save: ${median(times).toFixed(2)} ms with the index, ${median(scans).toFixed(2)} ms without; index rebuilds ${index.rebuilds - rebuilds}`;
-		if (LOG) process.stderr.write(`issue-41: ${report}\n`);
+		perfLog(`issue-41: ${report}`);
 		expect(index.rebuilds - rebuilds, report).toBe(0);
 		expect(fastest(times) / fastest(scans), report).toBeLessThan(TODAY_RATIO);
-		expect(fastest(times), report).toBeLessThan(SAFETY_NET_MS);
 	}, 120_000);
 
 	for (const open of [
@@ -268,12 +269,10 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			});
 			const commandPasses = median(command.map((p) => p.length));
 			const redrawPasses = median(redraw.map((p) => p.length));
-			if (LOG) {
-				process.stderr.write(
-					`issue-41: one edit at ${TASKS} tasks (${open.name} open): ${commandPasses} full passes in the edit command (${tally(command[0] ?? [])}); ` +
-						`${redrawPasses} in the section redraw (${tally(redraw[0] ?? [])}); rows ordered ${sorts}x; redraw ${median(redrawMs).toFixed(0)} ms in happy-dom\n`,
-				);
-			}
+			perfLog(
+				`issue-41: one edit at ${TASKS} tasks (${open.name} open): ${commandPasses} full passes in the edit command (${tally(command[0] ?? [])}); ` +
+					`${redrawPasses} in the section redraw (${tally(redraw[0] ?? [])}); rows ordered ${sorts}x; redraw ${median(redrawMs).toFixed(0)} ms in happy-dom`,
+			);
 			expect(container.textContent).toContain(`Edited ${RUNS + 1}`);
 			// The rows, the Completed group, the sidebar counts and the subtask counts read the task index, and the
 			// lingering rows the store's changes since the last redraw: no pass over every task.

@@ -35,6 +35,8 @@ Click a row to open its details. From top to bottom you see:
 - **Subtasks**, with the **Add subtask** bar.
 - The list button, the time focused and **Focus**, which starts a [focus timer](focus.md).
 
+Selecting another task closes an open repeat picker and empties the tag box, so nothing you started for one task is saved to the next.
+
 **More task actions** holds **Duplicate**, **Make subtask of…**, **Make top-level task**, **Urgent**, **Important**, **Show ID and timestamps** and **Delete**.
 
 Right-click a row for the row menu: **Open details**, **Complete**, **Start focus**, the **Schedule for** items, **Clear schedule**, the priorities, **Move to list…**, **Move to section…**, the **Move to quadrant** items, **Duplicate** and **Delete**.
@@ -68,7 +70,7 @@ A task can link one note in your vault for its long description. The note stays 
 - **Create description note** makes an empty note named after the task in the **Description note folder** ("Task notes" unless you change it) and opens it. The folder is created when needed. A taken name gets a number, such as "Pay rent (2)".
 - The details pane shows the note and updates as you edit it. **Open note** opens it in a tab; hold Alt for a split.
 - **Change** links another note and **Unlink** removes the link.
-- When you rename or move the note in Obsidian, the link follows.
+- When you rename or move the note in Obsidian, the link follows, also in a database you are switching away from at that moment.
 - When the note is gone, the pane says "Description note not found" with **Relink** and **Unlink**. If one note has the same name, **Relink to** offers it.
 - Several tasks can link one note. The pane lists the others under "Also linked from".
 

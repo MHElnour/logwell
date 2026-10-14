@@ -72,7 +72,7 @@ Not supported yet. These show "Recurrence not supported yet" and set nothing:
 
 These stay plain title text: `3 times a day`, `twice a week`, `biweekly`, `bimonthly`, `each monday`, `each day`, `the 1st of the month` without `each` or `every` (write `the 1st of each month`), and a day part after a weekday (`every sunday evening` repeats on Sunday; "evening" stays text). `every monday 9am` repeats on Monday and reads `9am` as a time on its own. Counting from completion is set in the picker.
 
-A value you pick by hand wins: the typed one is offered as a "Replace …?" chip. Without a repeat, `until Dec 1` is a deadline, a range such as `Oct 12 to Dec 1` is one suggested date, and `ending`, `starting`, `till`, `beginning` and `from` stay part of the title. If you picked the repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement. The title keeps everything that was not read, with no stray comma: `Read every day, 20 pages` becomes "Read 20 pages".
+A value you pick by hand wins: the typed one is offered as a "Replace …?" chip. Without a repeat, `until Dec 1` is a deadline, a range such as `Oct 12 to Dec 1` is one suggested date, and `ending`, `starting`, `till`, `beginning` and `from` stay part of the title. Picking **Never** counts as no repeat here, so `until Dec 1` is then a deadline. If you picked a repeat in the picker, a typed `until` date ends it (`for …` stays text), and an end that leaves the picked repeat no occurrence is refused the same way; when the picked repeat already has an end, the typed one is offered as a replacement. The title keeps everything that was not read, with no stray comma: `Read every day, 20 pages` becomes "Read 20 pages".
 
 ## Set a custom repeat
 
@@ -99,6 +99,8 @@ By default the schedule is fixed: "every Monday" stays on Mondays however late y
 
 Tick the checkbox, press Cmd+Enter (Ctrl+Enter) on the row, or choose **Complete** in the row menu. The task moves to its next date.
 
+A task whose repeat has ended but which is still open, after an edit of the database file or a sync, shows no repeat chip and completes like any other task, from its row, its menu or a task block.
+
 If you fall behind on a fixed schedule, completing marks the earliest missed date done and skips the others before today, and the notice says how many. A repeat that counts from completion never skips dates on its own.
 
 **Skip this occurrence** in the row menu records the date as skipped. Every notice has an Undo button.
@@ -111,7 +113,7 @@ If you fall behind on a fixed schedule, completing marks the earliest missed dat
 
 ## Move a repeating task to another day
 
-Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date.
+Changing the date in the **Scheduled** field, with **Schedule for today**, **Schedule for tomorrow** or **Schedule for next week**, or by dragging on a board or list moves the whole series to repeat from that date. An end that leaves no occurrence is removed. You cannot move one occurrence alone or clear the date. A repeat that has ended, after **Stop repeating** or at its end, cannot get a new date: reopen the task first.
 
 ## Review and reopen past occurrences
 

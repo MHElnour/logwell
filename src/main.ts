@@ -81,22 +81,24 @@ export default class CheckpointPlugin extends Plugin {
 		this.registerDomEvent(document, "visibilitychange", () => void this.session?.store.flush());
 		this.registerDomEvent(window, "blur", () => void this.session?.store.flush());
 		// Quitting does not always unload plugins first; Obsidian waits for these tasks.
+		// A database being closed or opened by a switch is saved too. What cannot be
+		// written is kept as a conflict copy, since no retry runs after the quit.
 		this.registerEvent(
 			this.app.workspace.on("quit", (tasks) =>
 				tasks.add(async () => {
 					try {
-						this.session?.app.tasks.flushRenames();
+						this.session?.app.noteRenames.flushRenames();
 					} catch (err) {
 						showError(err);
 					}
-					await this.session?.store.flush();
+					const sessions = new Set([this.session, this.closingSession, this.openingSession]);
+					await Promise.all([...sessions].filter((s) => s !== null).map((s) => s.store.flushBeforeQuit()));
 				}),
 			),
 		);
 		this.registerInterval(
 			window.setInterval(() => {
-				const app = this.session?.app;
-				if (app !== undefined) void app.tasks.purgeExpired().then(() => app.recurrence.endExhaustedSeries());
+				void this.session?.hourlyCleanup();
 			}, 60 * 60 * 1000),
 		);
 		// The focus heartbeat. FocusService.tick saves lastHeartbeat every 15 s and detects gaps.
@@ -217,7 +219,8 @@ export default class CheckpointPlugin extends Plugin {
 
 	private queueOpen(body: () => Promise<void>, guard: () => boolean = () => true): Promise<void> {
 		const run = async () => {
-			if (!guard()) return;
+			// Nothing opens once the plugin is unloaded: no one would close it.
+			if (this.unloaded || !guard()) return;
 			this.openingNow = true;
 			try {
 				await body();
@@ -254,6 +257,8 @@ export default class CheckpointPlugin extends Plugin {
 				this.events.emit("session", undefined);
 			}
 		}
+		// Unloaded while the old database closed (a switch waits for its sync request): open nothing.
+		if (this.unloaded) return;
 		const path = this.settings.activeDatabasePath;
 		if (path === "") return;
 		if (this.app.vault.getFileByPath(path) === null) {
@@ -283,7 +288,11 @@ export default class CheckpointPlugin extends Plugin {
 			session.startSync();
 		} catch (err) {
 			// Unloaded meanwhile: onunload closed this session, and the rest of its open failing is expected.
-			if (!this.unloaded) showError(err);
+			if (!this.unloaded) {
+				showError(err);
+				// A session the plugin does not keep is closed, saving what its open already wrote.
+				await session.close().catch((closeErr: unknown) => showError(closeErr));
+			}
 		} finally {
 			this.openingSession = null;
 		}
@@ -297,9 +306,13 @@ export default class CheckpointPlugin extends Plugin {
 	forwardRename(oldPath: string, newPath: string, isFolder: boolean): void {
 		if (this.session !== null && !this.openingNow) {
 			// Exact match for files, prefix rewrite for folders. Idempotent.
-			void this.session.app.tasks.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
+			void this.session.app.noteRenames.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 			return;
 		}
+		// The database a switch is closing takes it too: once closed it never hears of it. A rename that
+		// arrives after its store closed waits in its rename queue for its next open.
+		const closing = this.closingSession;
+		if (closing !== null) void closing.app.noteRenames.rewriteNotePaths(oldPath, newPath, isFolder).catch((err: unknown) => showError(err));
 		if (this.openingNow) this.renamesDuringOpen.push({ oldPath, newPath, isFolder });
 	}
 
@@ -310,7 +323,7 @@ export default class CheckpointPlugin extends Plugin {
 		while (this.renamesDuringOpen.length > 0) {
 			const pending = this.renamesDuringOpen;
 			this.renamesDuringOpen = [];
-			for (const r of pending) await session.app.tasks.rewriteNotePaths(r.oldPath, r.newPath, r.isFolder);
+			for (const r of pending) await session.app.noteRenames.rewriteNotePaths(r.oldPath, r.newPath, r.isFolder);
 		}
 	}
 
@@ -332,7 +345,7 @@ export default class CheckpointPlugin extends Plugin {
 		]);
 	}
 
-	/** "Create database": a new `.cpbase` file in a folder the user chooses. */
+	/** "Create database": a new `.cpbase` file in a folder the user chooses. A failure is shown, never thrown. */
 	async createDatabase(): Promise<void> {
 		const folder = await pickFolder(this.app, "Choose a folder for the new database");
 		if (folder === null) return;
@@ -350,14 +363,24 @@ export default class CheckpointPlugin extends Plugin {
 		const content = serializeDb(
 			createEmptyDb({ dbId: randomId(), revision: newRevision(randomId), deviceId: this.deviceId, now }),
 		);
-		await this.app.vault.create(path, content);
-		await this.setActiveDatabase(path);
-		if (!this.settings.syncNoticeShown) {
-			syncNotice();
-			this.settings.syncNoticeShown = true;
-			await this.saveSettings();
+		try {
+			await this.app.vault.create(path, content);
+		} catch (err) {
+			// A name the system refuses, or a disk error.
+			showError(err, `Could not create the database ${path}`);
+			return;
 		}
-		await this.openApp("tasks");
+		try {
+			await this.setActiveDatabase(path);
+			if (!this.settings.syncNoticeShown) {
+				syncNotice();
+				this.settings.syncNoticeShown = true;
+				await this.saveSettings();
+			}
+			await this.openApp("tasks");
+		} catch (err) {
+			showError(err, `The database ${path} was created but could not be opened`);
+		}
 	}
 
 	private noDatabaseNotice(): void {
@@ -394,6 +417,8 @@ export default class CheckpointPlugin extends Plugin {
 			vault.on("modify", (file) => {
 				if (!(file instanceof TFile)) return;
 				if (file.path === this.session?.path) void this.session.store.handleExternalChange();
+				// A session still opening reads the change once its open has read the file (the store queues it).
+				else if (file.path === this.openingSession?.path) void this.openingSession.store.handleExternalChange();
 				else if (file.extension === "md") this.events.emit("note", file.path);
 			}),
 		);
@@ -448,7 +473,8 @@ export default class CheckpointPlugin extends Plugin {
 		}
 		if (this.settings.activeDatabasePath === oldPath) {
 			this.settings.activeDatabasePath = newPath;
-			void this.saveSettings();
+			// Unsaved, the setting would point at the old path on the next start.
+			void this.saveSettings().catch((err: unknown) => showError(err, `Could not save the moved database path ${newPath} in the settings`));
 			followed = true;
 		}
 		if (followed) this.events.emit("session", undefined);

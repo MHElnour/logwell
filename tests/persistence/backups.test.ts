@@ -81,7 +81,7 @@ describe("BackupStore listing", () => {
 		expect(kinds.filter((k) => k === "daily")).toHaveLength(1);
 	});
 
-	it("still understands day-only daily names (before R6)", async () => {
+	it("still understands day-only daily names", async () => {
 		const { fs, clock, backups } = setup();
 		fs.files.set("root/snapshots/daily-2026-10-01.cpbase", dbText("r-today", "2026-10-01T08:00:00.000Z"));
 		fs.files.set("root/snapshots/daily-2026-09-01.cpbase", dbText("r-old", "2026-09-01T08:00:00.000Z"));

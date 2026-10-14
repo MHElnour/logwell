@@ -1,3 +1,4 @@
+import { Settings } from "luxon";
 import { describe, expect, it } from "vitest";
 import {
 	dateFromTt,
@@ -33,7 +34,7 @@ function task(key: string, index = 0): TtTask {
 const date = (d: string): DateSpec => ({ kind: "date", date: d });
 const timed = (local: string, tz: string): DateSpec => ({ kind: "datetime", local, tz });
 
-describe("priority (SYNC-04)", () => {
+describe("priority", () => {
 	it("maps TickTick 5/3/1/0 to Logwell high/medium/low/none", () => {
 		expect([5, 3, 1, 0].map(priorityFromTt)).toEqual([1, 2, 3, 0]);
 	});
@@ -51,7 +52,7 @@ describe("priority (SYNC-04)", () => {
 	});
 });
 
-describe("status (SYNC-04 and the won't do decision)", () => {
+describe("status (and the won't do decision)", () => {
 	it("maps 0 to open, 2 and -1 to completed", () => {
 		expect(statusFromTt(0)).toBe("open");
 		expect(statusFromTt(2)).toBe("completed");
@@ -83,7 +84,7 @@ describe("status (SYNC-04 and the won't do decision)", () => {
 	});
 });
 
-describe("isSyncable (SYNC-06)", () => {
+describe("isSyncable", () => {
 	it("syncs a normal task", () => {
 		expect(isSyncable(task("10-tasks/01-create-all-day-task"))).toBe(true);
 	});
@@ -109,7 +110,7 @@ describe("isSyncable (SYNC-06)", () => {
 	});
 });
 
-describe("syncDateOf (SYNC-05 push)", () => {
+describe("syncDateOf (push)", () => {
 	const a = date("2026-10-08");
 	const b = date("2026-10-12");
 	it("is the deadline when set", () => {
@@ -166,18 +167,31 @@ describe("dateToTt (push)", () => {
 	});
 });
 
+describe("dates on a device whose language writes other digits", () => {
+	it("#100: a timed date goes up and comes down with the digits 0 to 9", () => {
+		const before = Settings.defaultLocale;
+		Settings.defaultLocale = "ar-EG";
+		try {
+			expect(dateToTt(timed("2026-10-21T07:45", "Europe/Moscow"), "UTC").dueDate).toBe("2026-10-21T07:45:00+0300");
+			expect(dateFromTt({ dueDate: "2026-10-22T04:15:00.000+0000", isAllDay: false, timeZone: "Europe/Moscow" }, "UTC")).toEqual(timed("2026-10-22T07:15", "Europe/Moscow"));
+		} finally {
+			Settings.defaultLocale = before;
+		}
+	});
+});
+
 describe("dateFromTt (pull)", () => {
-	it("reads the recorded all-day task as the date in its own zone (V5)", () => {
+	it("reads the recorded all-day task as the date in its own zone", () => {
 		const t = task("10-tasks/01-create-all-day-task");
 		expect(t.dueDate).toBe("2026-10-07T21:00:00.000+0000");
 		expect(dateFromTt(t, "UTC")).toEqual(date("2026-10-08"));
 	});
 
-	it("reads the recorded timed task as wall time in its zone with that tz (V7)", () => {
+	it("reads the recorded timed task as wall time in its zone with that tz", () => {
 		expect(dateFromTt(task("10-tasks/03-create-timed-task"), "UTC")).toEqual(timed("2026-10-08T10:00", "Europe/Moscow"));
 	});
 
-	it("keeps one instant for a span sent as start and due (V7b): the span is lost", () => {
+	it("keeps one instant for a span sent as start and due: the span is lost", () => {
 		const t = task("probe/05-v7b-read-span");
 		expect(t.startDate).toBe(t.dueDate);
 		expect(dateFromTt(t, "UTC")).toEqual(timed("2026-10-09T10:00", "Europe/Moscow"));
@@ -249,7 +263,7 @@ describe("dateFromTt (pull)", () => {
 	});
 });
 
-describe("pulledDatePatch (SYNC-05 pull)", () => {
+describe("pulledDatePatch (pull)", () => {
 	const a = date("2026-10-08");
 	const b = date("2026-10-12");
 	const c = date("2026-10-15");
@@ -301,8 +315,9 @@ describe("pulledDatePatch (SYNC-05 pull)", () => {
 		expect(pulledDatePatch({ scheduled: null, deadline: null }, a)).toEqual({ scheduled: a, deadline: a });
 	});
 
-	it("a date cleared in TickTick clears the sent date, and the schedule when they were equal", () => {
-		expect(pulledDatePatch({ scheduled: a, deadline: b }, null)).toEqual({ deadline: null });
+	it("#120: a date cleared in TickTick clears both dates, equal or not", () => {
+		expect(pulledDatePatch({ scheduled: a, deadline: b }, null)).toEqual({ scheduled: null, deadline: null });
+		expect(pulledDatePatch({ scheduled: null, deadline: b }, null)).toEqual({ deadline: null });
 		expect(pulledDatePatch({ scheduled: b, deadline: b }, null)).toEqual({ scheduled: null, deadline: null });
 		expect(pulledDatePatch({ scheduled: a, deadline: null }, null)).toEqual({ scheduled: null });
 	});

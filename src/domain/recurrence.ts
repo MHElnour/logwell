@@ -184,10 +184,9 @@ function ruleNext(c: Compiled, span: Span, n: number, weekStart: WeekStart): num
 	const off = monthIndexOf(n).mi - c.anchorMonth;
 	let j = Math.max(0, Math.ceil(off / step) * step);
 	const form = r.freq === "monthly" ? r.monthly : null;
+	// `n` is a finite day (the callers stop before a span's end), and each step's day is later: the loop ends.
 	for (;;) {
 		const d = monthlyDay(c.anchorMonth + j, form, c.anchorDay);
-		// Past the representable dates there is no occurrence (never an endless loop).
-		if (!Number.isFinite(d)) return Infinity;
 		if (d >= n) return d;
 		j += step;
 	}
@@ -646,7 +645,7 @@ export function restartedSeries(task: Task & { recurrence: Recurrence }, records
 		if (next.done !== true) anchor = dateOf(next.value);
 	}
 	// A yearly rule takes its month and day from the anchor: a copy of a Feb 29 series is anchored on its clamped
-	// date (Feb 28), so it falls on Feb 28 in leap years too (Repeating tasks rule 17).
+	// date (Feb 28), so it falls on Feb 28 in leap years too.
 	const versions = [{ effectiveFrom: anchor, rule: explicitRule(ruleAt(rec, anchor), rec.anchor) }];
 	// An end date that leaves the copy no date of its own is dropped: the sweep would end the copy at once.
 	const end: RepeatEnd = rec.end.kind === "date" && repeatEndProblem(rec.end, { anchor, versions }, weekStart) !== null ? { kind: "never" } : rec.end;
@@ -787,7 +786,7 @@ export function singleVersionRecurrence(anchor: LocalDate, rule: RepeatRule, end
 }
 
 /**
- * The anchor of a new series from its start date (Repeating tasks rules 11 and 19): a weekly rule with picked weekdays
+ * The anchor of a new series from its start date (a task made to repeat, or a repeat typed in Quick Add): a weekly rule with picked weekdays
  * starts on the first of them on or after `start`, so `every 2 weeks on Monday` made on a Wednesday first falls on the
  * coming Monday, not the one two weeks after it; every other rule starts on `start`. Quick Add, setRepeat and the
  * picker's checks all go through it.

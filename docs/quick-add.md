@@ -9,6 +9,8 @@ You can type a new task in two places. Both read your text the same way.
 - **The add bar** at the top of a list view. Press Enter to add the task; the bar stays for the next one. The view fills in defaults: in Today the task gets today's date, in a list it goes into that list, and in a tag view it gets that tag.
 - **The Quick add task window.** Open it with the command **Quick add task** or the plus button in the list header. Enter adds the task and closes the window, unless **Keep quick add open after saving** is on.
 
+Text you type while a task is still being saved stays in the field for the next task, and the window stays open with it.
+
 The **Add subtask** bar in the details pane reads text the same way. See [Tasks](tasks.md).
 
 <picture>
@@ -23,6 +25,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - Press × on a chip to keep its words in the title as plain text.
 - When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value".
 - Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
+- A range, such as `Friday until midnight` or `Oct 12 to Oct 20`, is also a suggestion. Its date is the start as you would get it typed alone: `Friday until midnight` typed on a Wednesday suggests the coming Friday.
 - Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.

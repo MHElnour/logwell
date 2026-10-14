@@ -2,30 +2,15 @@
 import { Modal } from "obsidian";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type HabitInput, validateHabitInput } from "../../src/domain/habits";
-import { HabitModal, buildHabitForm } from "../../src/obsidian/habitDialog";
+import { buildHabitForm, habitDialog } from "../../src/obsidian/habitDialog";
 import { habitDialogOptions } from "../../src/ui/habits/actions";
 import type { HabitDialogOptions } from "../../src/ui/host";
 import { appHarness } from "../app/harness";
-import { U1Host } from "./app-helpers";
+import { fill, mountNode, obsidianElement, type ObsidianElement, q as qIn, recordNotices, text, U1Host } from "./app-helpers";
 
 // The New habit / Edit habit dialog (period coupling, rules and messages, prefill, Save, the Modal).
 // The form is plain DOM (buildHabitForm), so it is tested without Obsidian's Modal, as buildNewListForm is.
 
-const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/gu, " ").trim() ?? "";
-
-beforeAll(() => {
-	// Obsidian's createEl and empty, which happy-dom does not have.
-	(HTMLElement.prototype as unknown as { createEl: unknown }).createEl = function (this: HTMLElement, tag: string, o: { cls?: string; attr?: Record<string, string> } = {}) {
-		const node = this.ownerDocument.createElement(tag);
-		if (o.cls !== undefined) node.className = o.cls;
-		for (const [k, v] of Object.entries(o.attr ?? {})) node.setAttribute(k, v);
-		this.appendChild(node);
-		return node;
-	};
-	(HTMLElement.prototype as unknown as { empty: () => void }).empty = function (this: HTMLElement) {
-		this.replaceChildren();
-	};
-});
 afterEach(() => document.body.replaceChildren());
 
 const empty: HabitInput = {
@@ -39,8 +24,7 @@ const empty: HabitInput = {
 };
 
 function form(patch: { initial?: HabitInput | null; defaultColor?: "red" | null; result?: string | null; pick?: string | null | undefined } = {}) {
-	const container = document.createElement("div");
-	document.body.appendChild(container);
+	const container = mountNode(null);
 	const onSubmit = vi.fn<(v: HabitInput) => Promise<string | null>>(async () => patch.result ?? null);
 	const onCancel = vi.fn();
 	const pickIcon = vi.fn<(current: string | null) => Promise<string | null | undefined>>(async () => patch.pick);
@@ -53,11 +37,7 @@ function form(patch: { initial?: HabitInput | null; defaultColor?: "red" | null;
 		onSubmit,
 		onCancel,
 	});
-	const q = <T extends HTMLElement>(sel: string) => {
-		const found = container.querySelector<T>(sel);
-		if (found === null) throw new Error(`no ${sel}`);
-		return found;
-	};
+	const q = <T extends HTMLElement>(sel: string) => qIn<T>(container, sel);
 	const group = (label: string) => {
 		const labelEl = [...container.querySelectorAll<HTMLElement>("[id]")].find((e) => text(e) === label);
 		if (labelEl === undefined) throw new Error(`no label ${label}`);
@@ -66,10 +46,7 @@ function form(patch: { initial?: HabitInput | null; defaultColor?: "red" | null;
 	const buttons = (label: string) => [...group(label).querySelectorAll<HTMLButtonElement>("button")];
 	const pressed = (label: string) => buttons(label).filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => text(b.querySelector("b") ?? b));
 	const pick = (label: string, title: string) => buttons(label).find((b) => text(b.querySelector("b") ?? b) === title)!.click();
-	const type = (el: HTMLInputElement, v: string) => {
-		el.value = v;
-		el.dispatchEvent(new Event("input", { bubbles: true }));
-	};
+	const type = fill;
 	const submit = async () => {
 		q("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 		await new Promise((r) => setTimeout(r, 0));
@@ -132,8 +109,8 @@ describe("the form", () => {
 	});
 });
 
-describe("weekday label, reminder default and goal digits (F6, F10, D7)", () => {
-	it("F6: the weekday chips have their own Weekdays label, not the When segment's", () => {
+describe("weekday label, reminder default and goal digits", () => {
+	it("the weekday chips have their own Weekdays label, not the When segment's", () => {
 		const t = form();
 		const chips = t.q(".cp-habit-chips");
 		const when = [...t.container.querySelectorAll<HTMLElement>("[id]")].find((e) => text(e) === "When")!;
@@ -146,12 +123,12 @@ describe("weekday label, reminder default and goal digits (F6, F10, D7)", () => 
 		expect(new Set(ids).size).toBe(ids.length);
 	});
 
-	it("F10: a new habit's reminder time starts at 20:00", () => {
+	it("a new habit's reminder time starts at 20:00", () => {
 		const t = form();
 		expect(t.q<HTMLInputElement>('input[type="time"]').value).toBe("20:00");
 	});
 
-	it("D7: the goal target takes digits with a point or a decimal comma only", async () => {
+	it("the goal target takes digits with a point or a decimal comma only", async () => {
 		const t = form();
 		t.type(t.name(), "Read");
 		t.pick("How do you track it?", "Amount");
@@ -164,7 +141,7 @@ describe("weekday label, reminder default and goal digits (F6, F10, D7)", () => 
 	});
 });
 
-describe("D4: the period follows the schedule", () => {
+describe("the period follows the schedule", () => {
 	it("Times a week sets the period to week; Every day and Some days set it to day", async () => {
 		const t = form();
 		t.pick("How do you track it?", "Count");
@@ -271,7 +248,7 @@ describe("the Goal line", () => {
 	});
 });
 
-describe("D20 validation, inline", () => {
+describe("validation, inline", () => {
 	const cases: [string, (t: ReturnType<typeof form>) => void, string, string][] = [
 		["a name", (t) => t.type(t.name(), "  "), "Enter a name.", "name"],
 		[
@@ -520,16 +497,24 @@ describe("Edit: prefilled", () => {
 });
 
 describe("the Modal", () => {
-	type Dom = HTMLElement & { addClass(...c: string[]): void; empty(): void };
-	const dom = (): Dom => {
-		const el = document.createElement("div") as Dom;
-		el.addClass = (...c) => el.classList.add(...c);
-		el.empty = () => el.replaceChildren();
-		return el;
-	};
 	const superClose = vi.fn();
+	/** The modal `habitDialog` opened last, with the titles it set. */
+	let opened: { modal: Modal; titles: string[] } | null = null;
 	beforeAll(() => {
-		(Modal as unknown as { prototype: { close: () => void } }).prototype.close = superClose;
+		const proto = (Modal as unknown as { prototype: Record<string, unknown> }).prototype;
+		proto.close = superClose;
+		// Obsidian's open(): the elements, then onOpen.
+		proto.open = function (this: Modal & { onOpen(): void }) {
+			const m = this as unknown as { modalEl: ObsidianElement; contentEl: ObsidianElement; setTitle: (t: string) => void };
+			const titles: string[] = [];
+			m.modalEl = obsidianElement();
+			m.contentEl = obsidianElement();
+			m.modalEl.appendChild(m.contentEl);
+			document.body.appendChild(m.modalEl);
+			m.setTitle = (t) => void titles.push(t);
+			opened = { modal: this, titles };
+			void this.onOpen();
+		};
 	});
 	afterEach(() => superClose.mockClear());
 
@@ -543,15 +528,9 @@ describe("the Modal", () => {
 			...options,
 		};
 		let resolved = 0;
-		const modal = new HabitModal({} as never, full, () => void resolved++, accent);
-		const m = modal as unknown as { modalEl: Dom; contentEl: Dom; setTitle: (t: string) => void };
-		const titles: string[] = [];
-		m.modalEl = dom();
-		m.contentEl = dom();
-		m.modalEl.appendChild(m.contentEl);
-		document.body.appendChild(m.modalEl);
-		m.setTitle = (t) => void titles.push(t);
-		modal.onOpen();
+		void habitDialog({} as never, full, accent).then(() => void resolved++);
+		const { modal, titles } = opened!;
+		const m = modal as unknown as { modalEl: ObsidianElement; contentEl: ObsidianElement };
 		return { modal, modalEl: m.modalEl, contentEl: m.contentEl, titles, resolved: () => resolved, options: full };
 	}
 
@@ -580,19 +559,26 @@ describe("the Modal", () => {
 		expect(modal).toBeDefined();
 	});
 
-	it("Cancel closes; closing (Escape goes through close()) empties the content and resolves the promise once", () => {
+	it("Cancel closes; closing (Escape goes through close()) empties the content and resolves the promise once", async () => {
 		const { modal, contentEl, resolved } = open();
 		[...contentEl.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Cancel")!.click();
 		expect(superClose).toHaveBeenCalledTimes(1);
 		modal.onClose();
+		modal.onClose();
+		await new Promise((r) => setTimeout(r, 0));
 		expect(contentEl.childElementCount).toBe(0);
 		expect(resolved()).toBe(1);
 	});
 
-	it("keeps Obsidian's own fields apart: the class adds only cp-prefixed members and overrides onOpen and onClose", () => {
-		const own = Object.getOwnPropertyNames(HabitModal.prototype).filter((n) => n !== "constructor").sort();
-		expect(own).toEqual(["onClose", "onOpen"]);
+	it("keeps Obsidian's own fields apart: the modal classes add only cp-prefixed members besides onOpen and onClose", () => {
 		const { modal } = open();
+		const own: string[] = [];
+		for (let p = Object.getPrototypeOf(modal) as object; p !== Modal.prototype; p = Object.getPrototypeOf(p) as object) {
+			own.push(...Object.getOwnPropertyNames(p).filter((n) => n !== "constructor"));
+		}
+		expect(own).toContain("onOpen");
+		expect(own).toContain("onClose");
+		for (const k of own) expect(k === "onOpen" || k === "onClose" || k.startsWith("cp"), k).toBe(true);
 		const fields = Object.keys(modal).filter((k) => !["modalEl", "contentEl", "setTitle"].includes(k));
 		expect(fields.length).toBeGreaterThan(0);
 		for (const k of fields) expect(k.startsWith("cp"), k).toBe(true);
@@ -603,13 +589,7 @@ describe("habitDialogOptions (what the page hands the dialog)", () => {
 	async function host() {
 		const h = await appHarness();
 		const u = new U1Host(h);
-		const notices: [string, string][] = [];
-		Object.assign(u, {
-			notifyUndo: (m: string, label: string, mark: number) => {
-				notices.push([m, label]);
-				u.bindUndo(label, mark);
-			},
-		});
+		const notices = recordNotices(u);
 		let gestures = 0;
 		u.reminderGesture = () => void gestures++;
 		return { h, u, notices, gestures: () => gestures };
@@ -621,7 +601,7 @@ describe("habitDialogOptions (what the page hands the dialog)", () => {
 		expect(o).toMatchObject({ title: "New habit", submit: "Create habit", initial: null, defaultColor: "red" });
 		expect(await o.save({ ...empty, name: "Stretch" })).toBeNull();
 		expect(h.app.habits.list().map((x) => x.name)).toEqual(["Stretch"]);
-		expect(notices).toEqual([["Created Stretch.", "New habit"]]);
+		expect(notices).toEqual([{ message: "Created Stretch.", label: "New habit" }]);
 		expect(habitDialogOptions(u, {}).defaultColor).toBe("orange");
 	});
 
@@ -640,7 +620,7 @@ describe("habitDialogOptions (what the page hands the dialog)", () => {
 		const o2 = habitDialogOptions(u, { habit, onSaved: (id) => void saved.push(id) });
 		expect(await o2.save({ ...o.initial!, name: "Read daily" })).toBeNull();
 		expect(h.app.habits.list()[0]!.name).toBe("Read daily");
-		expect(notices).toEqual([["Saved Read daily.", "Edit habit"]]);
+		expect(notices).toEqual([{ message: "Saved Read daily.", label: "Edit habit" }]);
 		expect(saved).toEqual([habit.id]);
 		// Unchanged: no notice.
 		expect(await o2.save({ ...o.initial!, name: "Read daily" })).toBeNull();

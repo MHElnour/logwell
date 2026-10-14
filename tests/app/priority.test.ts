@@ -9,7 +9,7 @@ import { appHarness } from "./harness";
 
 // Priority defaults, its independence from the matrix, sort and filter, and the list icon and color commands.
 
-describe("PRI-01: priority defaults", () => {
+describe("priority defaults", () => {
 	it("every created task and subtask, and a duplicate of a prioritised task, has the right priority", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "A" });
@@ -24,7 +24,7 @@ describe("PRI-01: priority defaults", () => {
 	});
 });
 
-describe("PRI-04: priority is independent of the matrix", () => {
+describe("priority is independent of the matrix", () => {
 	it("setPriority changes only priority and modifiedAt, and can be undone", async () => {
 		const h = await appHarness();
 		const { task } = await h.app.tasks.create({ title: "A", urgent: true });
@@ -64,7 +64,7 @@ describe("PRI-04: priority is independent of the matrix", () => {
 	});
 });
 
-describe("PRI-05: sort and filter by priority", () => {
+describe("sort and filter by priority", () => {
 	async function seed() {
 		const h = await appHarness();
 		const mk = async (title: string, priority: Priority) => (await h.app.tasks.create({ title, priority })).task;
@@ -145,7 +145,7 @@ describe("category icon and color commands", () => {
 	});
 });
 
-describe("PRI-05: global search honors the priority sort and filter", () => {
+describe("global search honors the priority sort and filter", () => {
 	it("orders open results by priority, then title, and filters by priority", async () => {
 		const { globalSearch } = await import("../../src/app/views");
 		const h = await appHarness();
@@ -160,7 +160,7 @@ describe("PRI-05: global search honors the priority sort and filter", () => {
 	});
 });
 
-describe("PRI-01: importing a v1 backup", () => {
+describe("importing a v1 backup", () => {
 	it("migrates it forward: priority 0, color null, and the import applies", async () => {
 		const text = readFileSync(join(import.meta.dirname, "..", "fixtures", "schema-v1.cpbase"), "utf8");
 		const h = await appHarness();

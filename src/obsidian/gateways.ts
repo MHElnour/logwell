@@ -2,7 +2,7 @@ import { type App, type DataAdapter, TFile, normalizePath } from "obsidian";
 import type { NotePort } from "../app/ports";
 import { basenameOf, joinPath, noteNameCandidate } from "../domain/notes";
 import type { StoreLocalState } from "../persistence/CpbaseStore";
-import type { DbFile, FileGateway, WriteResult } from "../persistence/gateway";
+import type { DbFile, FileGateway, FileWriteResult } from "../persistence/gateway";
 
 // Obsidian implementations of the persistence and note ports.
 
@@ -26,7 +26,7 @@ export class VaultDbFile implements DbFile {
 		return file === null ? null : this.app.vault.read(file);
 	}
 
-	async write(content: string, expected: (current: string) => boolean): Promise<WriteResult> {
+	async write(content: string, expected: (current: string) => boolean): Promise<FileWriteResult> {
 		const file = this.file();
 		// Never recreate a database file the user deleted or moved away.
 		if (file === null) return { written: false, current: null };

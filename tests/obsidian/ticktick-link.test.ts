@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { type PendingTrash, TICKTICK_TRASH_LABEL } from "../../src/app/SyncService";
+import { type PendingTrash, TICKTICK_TRASH_LABEL } from "../../src/app/syncModel";
 import { TickTickError } from "../../src/app/ports";
 import type { LinkOption } from "../../src/app/tickTickLink";
 import { syncLinkId } from "../../src/domain/types";
 import { ConfirmationPrompter, type LinkFlowDeps, linkListFlow, NOT_READY_TEXT, type PrompterDeps, unlinkListFlow } from "../../src/obsidian/tickTickFlow";
-import { linkedList, type SyncHarness, syncHarness } from "../app/sync-harness";
+import { linkedList, type SyncHarness, syncHarness, syncTwice } from "../app/sync-harness";
 import { buildLinkForm, buildMissingForm, buildPreviewForm, missingTitle } from "../../src/obsidian/tickTickDialogs";
 
 describe("linking and unlinking", () => {
@@ -111,6 +111,19 @@ describe("linking and unlinking", () => {
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 			expect(s.tt.projects.size).toBe(0);
 			expect(t.notices).toEqual([]);
+		});
+
+		it("#136: TickTick failing to answer for the preview is told like a failed sync, naming the list, and links nothing", async () => {
+			const { s, list } = await setup();
+			const project = s.tt.addProject("Work");
+			const t = flowDeps(s);
+			t.deps.pick = async (d) => optionFor(d, project.id);
+			s.tt.fail("getProjectData", new TickTickError("server", "TickTick: server error (HTTP 500)", { status: 500 }));
+			await linkListFlow(t.deps, list.id);
+			expect(t.previews).toHaveLength(0);
+			expect(t.errors).toEqual([]);
+			expect(t.notices).toEqual(['TickTick sync stopped in "Work": server error (HTTP 500)']);
+			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 
 		it("dismissing the preview changes nothing", async () => {
@@ -254,7 +267,9 @@ describe("linking and unlinking", () => {
 				return chosen;
 			};
 			await linkListFlow(t.deps, list.id);
-			expect(t.errors).toHaveLength(1);
+			// Told as a failed sync is (#136), once.
+			expect(t.errors).toEqual([]);
+			expect(t.notices).toHaveLength(1);
 			expect(s.h.app.store.state.syncLinks.size).toBe(0);
 		});
 
@@ -272,7 +287,7 @@ describe("linking and unlinking", () => {
 		});
 	});
 
-	describe("unlink (SYNC-02)", () => {
+	describe("unlink", () => {
 		it("removes the link, keeps every task on both sides and says so", async () => {
 			const s = await syncHarness();
 			const { listId, projectId } = await linkedList(s);
@@ -328,7 +343,7 @@ describe("linking and unlinking", () => {
 		it("Move to Trash moves the listed tasks, in one undo step, with an Undo notice", async () => {
 			const { s, ids, listId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			const t = prompter(s, ["trash"]);
 			t.p.handle(r.needsConfirmation);
 			await settle();
@@ -346,12 +361,12 @@ describe("linking and unlinking", () => {
 			const size = () => s.h.app.store.state.tasks.size;
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
 			const t = prompter(s, ["trash", "trash"]);
-			t.p.handle((await s.sync.sync()).needsConfirmation);
+			t.p.handle((await syncTwice(s)).needsConfirmation);
 			await settle();
 			expect(size()).toBe(1);
 			s.tt.remove(s.link("task", ids[5]!)!.ttId);
 			s.tick();
-			t.p.handle((await s.sync.sync()).needsConfirmation);
+			t.p.handle((await syncTwice(s)).needsConfirmation);
 			await settle();
 			expect(size()).toBe(0);
 			expect(t.undo.map(([, label]) => label)).toEqual([TICKTICK_TRASH_LABEL, TICKTICK_TRASH_LABEL]);
@@ -374,7 +389,7 @@ describe("linking and unlinking", () => {
 				keepMissing: (...args) => s.sync.keepMissing(...args),
 			};
 			const t = prompter(s, ["trash"], sync);
-			t.p.handle((await s.sync.sync()).needsConfirmation);
+			t.p.handle((await syncTwice(s)).needsConfirmation);
 			await settle();
 			expect(s.h.app.store.state.tasks.size).toBe(1);
 			await expect(t.undoButtons[0]!()).resolves.toBe(true);
@@ -385,7 +400,7 @@ describe("linking and unlinking", () => {
 		it("Keep leaves the tasks in Logwell, marks them Not synced (localOnly) and never sends them again", async () => {
 			const { s, ids, projectId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			const t = prompter(s, ["keep"]);
 			t.p.handle(r.needsConfirmation);
 			await settle();
@@ -402,7 +417,7 @@ describe("linking and unlinking", () => {
 		it("Keep on an emptied list unlinks the list and keeps every task", async () => {
 			const { s, ids, listId } = await withTasks(2);
 			for (const id of ids) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			expect(r.needsConfirmation[0]).toMatchObject({ reason: "emptied" });
 			const t = prompter(s, ["keep"]);
 			t.p.handle(r.needsConfirmation);
@@ -415,7 +430,7 @@ describe("linking and unlinking", () => {
 		it("Move to Trash on an emptied list trashes all of its tasks", async () => {
 			const { s, ids } = await withTasks(2);
 			for (const id of ids) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			const t = prompter(s, ["trash"]);
 			t.p.handle(r.needsConfirmation);
 			await settle();
@@ -426,7 +441,7 @@ describe("linking and unlinking", () => {
 		it("closing the dialog decides nothing and does not ask again for the same set", async () => {
 			const { s, ids } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const r = await s.sync.sync();
+			const r = await syncTwice(s);
 			const t = prompter(s, [null, null]);
 			t.p.handle(r.needsConfirmation);
 			await settle();
@@ -448,11 +463,11 @@ describe("linking and unlinking", () => {
 			const { s, ids } = await withTasks(7);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
 			const t = prompter(s, [null, null]);
-			t.p.handle((await s.sync.sync()).needsConfirmation);
+			t.p.handle((await syncTwice(s)).needsConfirmation);
 			await settle();
 			s.tt.remove(s.link("task", ids[5]!)!.ttId);
 			s.tick();
-			t.p.handle((await s.sync.sync()).needsConfirmation);
+			t.p.handle((await syncTwice(s)).needsConfirmation);
 			await settle();
 			expect(t.asked.map((a) => a.pending.tasks.length)).toEqual([5, 6]);
 		});
@@ -460,7 +475,7 @@ describe("linking and unlinking", () => {
 		it("asks one dialog at a time, and skips a question a later sync already settled", async () => {
 			const { s, ids, listId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const first = (await s.sync.sync()).needsConfirmation;
+			const first = (await syncTwice(s)).needsConfirmation;
 			let release!: (v: "keep") => void;
 			const open = new Promise<"keep">((r) => (release = r));
 			const asked: string[] = [];
@@ -491,7 +506,7 @@ describe("linking and unlinking", () => {
 		it("a task that came back while the dialog was open is neither trashed nor kept as missing", async () => {
 			const { s, ids, listId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const pending = (await s.sync.sync()).needsConfirmation;
+			const pending = (await syncTwice(s)).needsConfirmation;
 			let answer!: (v: "trash") => void;
 			const asked: PendingTrash[] = [];
 			const p = new ConfirmationPrompter({
@@ -525,7 +540,7 @@ describe("linking and unlinking", () => {
 		it("a list deleted meanwhile is not asked about", async () => {
 			const { s, ids, listId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const pending = (await s.sync.sync()).needsConfirmation;
+			const pending = (await syncTwice(s)).needsConfirmation;
 			await s.h.app.categories.delete(listId);
 			const t = prompter(s, ["trash"]);
 			t.p.handle(pending);
@@ -536,7 +551,7 @@ describe("linking and unlinking", () => {
 		it("an error from the engine is reported and the next question still comes", async () => {
 			const { s, ids, listId } = await withTasks(6);
 			for (const id of ids.slice(0, 5)) s.tt.remove(s.link("task", id)!.ttId);
-			const pending = (await s.sync.sync()).needsConfirmation;
+			const pending = (await syncTwice(s)).needsConfirmation;
 			const t = prompter(s, ["trash", "keep"]);
 			vi.spyOn(s.sync, "trashMissing").mockRejectedValueOnce(new Error("read-only"));
 			const second: PendingTrash = { listId, reason: "many", tasks: pending[0]!.tasks.slice(0, 2) };

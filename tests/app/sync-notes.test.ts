@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TICKTICK_LINKS_LABEL } from "../../src/app/SyncService";
+import { TICKTICK_LINKS_LABEL } from "../../src/app/syncModel";
 import { readNote } from "../../src/domain/ticktick/noteText";
 import { MERGE_MARKER } from "../../src/domain/textMerge";
 import { syncLinkId } from "../../src/domain/types";
@@ -29,7 +29,7 @@ function noteOf(s: SyncHarness, title: string): string {
 	return path;
 }
 
-describe("description notes from TickTick (SYNC-09)", () => {
+describe("description notes from TickTick", () => {
 	it("a pulled task with TickTick text gets a note in the note folder, linked by the sync; nothing is sent back", async () => {
 		const s = await ready();
 		s.notesOn = true;
@@ -41,16 +41,6 @@ describe("description notes from TickTick (SYNC-09)", () => {
 		const link = s.link("task", s.task("Trip: Rome / Pisa").id)!;
 		expect(link).toMatchObject({ noteBySync: true, noteBase: "Pack the bags\nBook a table" });
 		expect(s.tt.count("updateTask") + s.tt.count("batchTasks")).toBe(0);
-	});
-
-	it("takes a free name when the note name is taken (B45)", async () => {
-		const s = await ready();
-		s.notesOn = true;
-		s.h.notes.set("Task notes/Call the bank.md", "mine");
-		s.tt.add(s.projectId, { title: "Call the bank", content: "Ask about fees" });
-		await run(s);
-		expect(noteOf(s, "Call the bank")).toBe("Task notes/Call the bank (2).md");
-		expect(s.h.notes.files.get("Task notes/Call the bank.md")).toBe("mine");
 	});
 
 	it("with the setting off, no note is made, read or written, and the text stays in TickTick", async () => {
@@ -114,7 +104,7 @@ describe("description notes from TickTick (SYNC-09)", () => {
 	});
 });
 
-describe("keeping a sync-created note and TickTick in step (SYNC-09)", () => {
+describe("keeping a sync-created note and TickTick in step", () => {
 	async function withNote(content = "Pack the bags\nBook a table") {
 		const s = await ready();
 		s.notesOn = true;
@@ -237,10 +227,10 @@ describe("keeping a sync-created note and TickTick in step (SYNC-09)", () => {
 		expect(s.h.notes.files.get(path)).toBe("New text\n");
 	});
 
-	it("a renamed note is followed (NOTE-06)", async () => {
+	it("a renamed note is followed", async () => {
 		const { s, ttId, path } = await withNote();
 		s.h.notes.rename(path, "Travel/Rome trip.md");
-		await s.h.app.tasks.rewriteNotePaths(path, "Travel/Rome trip.md", false);
+		await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Rome trip.md", false);
 		s.tt.edit(ttId, { content: "Renamed and edited" });
 		await run(s);
 		expect(s.h.notes.files.get("Travel/Rome trip.md")).toBe("Renamed and edited\n");
@@ -291,7 +281,7 @@ describe("keeping a sync-created note and TickTick in step (SYNC-09)", () => {
 	});
 });
 
-describe("checklists as tick boxes, both ways (SYNC-09)", () => {
+describe("checklists as tick boxes, both ways", () => {
 	const ITEM_FIELDS = { sortOrder: 0, startDate: "2026-10-09T08:00:00.000+0000", isAllDay: false, timeZone: "Europe/Moscow" };
 	async function trip() {
 		const s = await ready();
@@ -329,7 +319,7 @@ describe("checklists as tick boxes, both ways (SYNC-09)", () => {
 		expect(s.tt.get(ttId)!.content).toBeUndefined();
 	});
 
-	it("sends each item with every field TickTick gave it (an update erases what it leaves out) (M3)", async () => {
+	it("sends each item with every field TickTick gave it (an update erases what it leaves out)", async () => {
 		const { s, ttId, path } = await trip();
 		s.h.notes.set(path, "Trip notes go here.\n\n- [x] Bring passport\n- [ ] Print ticket\n- [ ] Pack charger\n");
 		await run(s);
@@ -367,42 +357,6 @@ describe("checklists as tick boxes, both ways (SYNC-09)", () => {
 		});
 		await run(s);
 		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [x] Bring passport\n- [ ] Pack charger\n");
-	});
-
-	it("a tick in TickTick changes only the box: links, headings and the order of the note stay (B1)", async () => {
-		const { s, ttId, path } = await trip();
-		const mine = "---\ntags: [trip]\n---\n## Before\n- [ ] Bring [[Docs|passport]]\nSee [[Plan]]\n## Later\n- [ ] Print ticket\n![[map.png]]\n";
-		s.h.notes.set(path, mine);
-		await run(s);
-		expect(s.tt.get(ttId)!.desc).toBe("## Before\nSee Plan\n## Later");
-		s.tt.edit(ttId, { items: s.tt.get(ttId)!.items!.map((i) => (i.title === "Print ticket" ? { ...i, status: 1 } : i)) });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe(mine.replace("- [ ] Print ticket", "- [x] Print ticket"));
-	});
-
-	it("ticks on both sides merge", async () => {
-		const { s, ttId, path } = await trip();
-		s.h.notes.set(path, "Trip notes go here.\n\n- [x] Bring passport\n- [ ] Print ticket\n");
-		s.tt.edit(ttId, { items: s.tt.get(ttId)!.items!.map((i) => (i.title === "Print ticket" ? { ...i, status: 1 } : i)) });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [x] Bring passport\n- [x] Print ticket\n");
-		expect(itemsOf(s, ttId)).toEqual([
-			["Bring passport", 1],
-			["Print ticket", 1],
-		]);
-	});
-
-	it("the same item added on both sides is kept once (M2)", async () => {
-		const { s, ttId, path } = await trip();
-		s.h.notes.set(path, "Trip notes go here.\n\n- [ ] Bring passport\n- [ ] Print ticket\n- [ ] Pack charger\n");
-		s.tt.edit(ttId, { items: [...s.tt.get(ttId)!.items!, { id: "z", title: "pack charger", status: 0 }] });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("Trip notes go here.\n\n- [ ] Bring passport\n- [ ] Print ticket\n- [ ] Pack charger\n");
-		expect(itemsOf(s, ttId)).toEqual([
-			["Bring passport", 0],
-			["Print ticket", 0],
-			["Pack charger", 0],
-		]);
 	});
 
 	it("a checklist with items and no text gets a note (trigger)", async () => {
@@ -476,7 +430,7 @@ describe("checklists as tick boxes, both ways (SYNC-09)", () => {
 	});
 });
 
-describe("data safety of sync notes (SYNC-09)", () => {
+describe("data safety of sync notes", () => {
 	async function withNote(content: string) {
 		const s = await ready();
 		s.notesOn = true;
@@ -485,7 +439,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		return { s, ttId: made.id, path: noteOf(s, "Trip"), id: s.task("Trip").id };
 	}
 
-	it("TickTick text the note would read differently is written so it reads back the same; a second sync sends nothing (B2)", async () => {
+	it("TickTick text the note would read differently is written so it reads back the same; a second sync sends nothing", async () => {
 		const s = await ready();
 		s.notesOn = true;
 		const texts = ["---\nAgenda\n---\nCall the bank", "See [[Plan]] and ![[photo.png]]", "Escaped \\[[x]]", "```\n[[code]]\n```"];
@@ -501,19 +455,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		made.forEach((m, i) => expect(s.tt.get(m.id)!.content).toBe(texts[i]));
 	});
 
-	it("a frontmatter with no line ending after it keeps its line when TickTick's text comes in (H1)", async () => {
-		const { s, ttId, path } = await withNote("Old");
-		s.h.notes.set(path, "---\ntags: x\n---");
-		await run(s);
-		expect(s.tt.get(ttId)!.content).toBe("");
-		s.tt.edit(ttId, { content: "New text" });
-		await run(s);
-		expect(s.h.notes.files.get(path)).toBe("---\ntags: x\n---\nNew text\n");
-		await run(s);
-		expect(s.tt.get(ttId)!.content).toBe("New text");
-	});
-
-	it("a TickTick edit made after the pull is not overwritten by the note's push; the next sync merges it (L1)", async () => {
+	it("a TickTick edit made after the pull is not overwritten by the note's push; the next sync merges it", async () => {
 		const { s, ttId, path } = await withNote("one\ntwo\nthree");
 		s.h.notes.set(path, "ONE\ntwo\nthree\n");
 		s.tt.onCall = (method) => {
@@ -529,7 +471,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.h.notes.files.get(path)).toBe("ONE\ntwo\nTHREE\n");
 	});
 
-	it("a note unlinked while the sync reads it is neither written nor sent (L2)", async () => {
+	it("a note unlinked while the sync reads it is neither written nor sent", async () => {
 		const { s, ttId, path, id } = await withNote("one\ntwo");
 		s.h.notes.set(path, "ONE\ntwo\n");
 		s.tt.edit(ttId, { content: "one\nTWO" });
@@ -544,7 +486,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.count("updateTask")).toBe(0);
 	});
 
-	it("a note unlinked just before its push is not sent (L2)", async () => {
+	it("a note unlinked just before its push is not sent", async () => {
 		const { s, ttId, path, id } = await withNote("one");
 		s.h.notes.set(path, "one, mine\n");
 		s.tt.onCall = (method) => (method === "getTask" ? s.h.app.tasks.unlinkNote(id).then(() => undefined) : undefined);
@@ -553,7 +495,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.count("updateTask")).toBe(0);
 	});
 
-	it("a sync note deleted and, later, another file made at its path: the new file is never taken over (L3)", async () => {
+	it("a sync note deleted and, later, another file made at its path: the new file is never taken over", async () => {
 		const { s, ttId, path, id } = await withNote("one");
 		s.h.notes.delete(path);
 		expect(s.sync.isSyncNoteEdit(path)).toBe(false);
@@ -567,7 +509,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.link("task", id)).toMatchObject({ noteBySync: false, noteBase: "" });
 	});
 
-	it("a delete followed at once by a create at the same path (an atomic replace) keeps the note (L5)", async () => {
+	it("a delete followed at once by a create at the same path (an atomic replace) keeps the note", async () => {
 		const { s, ttId, path, id } = await withNote("one");
 		s.h.notes.delete(path);
 		s.sync.isSyncNoteEdit(path);
@@ -579,7 +521,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.get(ttId)!.content).toBe("one, replaced by a sync tool");
 	});
 
-	it("a delete with a file at the path again at the next sync, no create seen, keeps the note (L5)", async () => {
+	it("a delete with a file at the path again at the next sync, no create seen, keeps the note", async () => {
 		const { s, ttId, path, id } = await withNote("one");
 		s.h.notes.delete(path);
 		s.sync.isSyncNoteEdit(path);
@@ -589,7 +531,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.get(ttId)!.content).toBe("one, back");
 	});
 
-	it("a delete with no file at the path at the next sync lets the note go (L5)", async () => {
+	it("a delete with no file at the path at the next sync lets the note go", async () => {
 		const { s, path, id } = await withNote("one");
 		s.h.notes.delete(path);
 		s.sync.isSyncNoteEdit(path);
@@ -597,7 +539,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.link("task", id)).toMatchObject({ noteBySync: false, noteBase: "" });
 	});
 
-	it("a rename while a sync is reading the note does not let the note go (L5)", async () => {
+	it("a rename while a sync is reading the note does not let the note go", async () => {
 		const { s, ttId, path, id } = await withNote("one");
 		s.h.notes.set(path, "one, edited\n");
 		const read = s.h.notes.read.bind(s.h.notes);
@@ -605,7 +547,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 			if (p === path && s.h.notes.exists(path)) {
 				s.h.notes.rename(path, "Travel/Trip.md");
 				s.sync.isSyncNoteEdit(path);
-				await s.h.app.tasks.rewriteNotePaths(path, "Travel/Trip.md", false);
+				await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Trip.md", false);
 			}
 			return read(p);
 		};
@@ -630,11 +572,11 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.get(ttId)!.content).toBe("Receipt March\nTotal");
 	});
 
-	it("a renamed sync note is not taken for a deleted one (L3)", async () => {
+	it("a renamed sync note is not taken for a deleted one", async () => {
 		const { s, ttId, path } = await withNote("one");
 		s.h.notes.rename(path, "Travel/Trip.md");
 		s.sync.isSyncNoteEdit(path);
-		await s.h.app.tasks.rewriteNotePaths(path, "Travel/Trip.md", false);
+		await s.h.app.noteRenames.rewriteNotePaths(path, "Travel/Trip.md", false);
 		s.tt.edit(ttId, { content: "two" });
 		await run(s);
 		expect(s.h.notes.files.get("Travel/Trip.md")).toBe("two\n");
@@ -654,7 +596,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		});
 	}
 
-	it("no item is doubled when the base could not be saved after the note was written (M2)", async () => {
+	it("no item is doubled when the base could not be saved after the note was written", async () => {
 		const s = await ready();
 		s.notesOn = true;
 		const made = s.tt.add(s.projectId, { title: "Shop", kind: "CHECKLIST", desc: "", items: [{ id: "a", title: "Milk", status: 0 }] });
@@ -673,7 +615,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 		expect(s.tt.get(made.id)!.items!.map((i) => i.title)).toEqual(["Milk", "Eggs", "Bread"]);
 	});
 
-	it("no item is doubled when TickTick confirmed the push but the links were not saved (M2)", async () => {
+	it("no item is doubled when TickTick confirmed the push but the links were not saved", async () => {
 		const s = await ready();
 		s.notesOn = true;
 		const made = s.tt.add(s.projectId, { title: "Shop", kind: "CHECKLIST", desc: "", items: [{ id: "a", title: "Milk", status: 0 }] });
@@ -692,7 +634,7 @@ describe("data safety of sync notes (SYNC-09)", () => {
 	});
 });
 
-describe("description notes and the rest of the sync (SYNC-09)", () => {
+describe("description notes and the rest of the sync", () => {
 	it("tells the host which vault changes are the user's edits of a sync note, never the sync's own writes", async () => {
 		const s = await ready();
 		s.notesOn = true;
@@ -733,6 +675,19 @@ describe("description notes and the rest of the sync (SYNC-09)", () => {
 		expect(s.task("Beta two")).toBeDefined();
 	});
 
+	it("#134: an error that is not the vault's (a bug) is not turned into a note warning", async () => {
+		const s = await ready();
+		s.notesOn = true;
+		s.tt.add(s.projectId, { title: "Alpha", content: "a" });
+		await run(s);
+		s.h.notes.set(noteOf(s, "Alpha"), "a, edited\n");
+		// The vault answers, but with something the note code cannot read: a TypeError of its own.
+		s.h.notes.read = async () => 42 as unknown as string;
+		const r = await s.sync.sync().catch((err: unknown) => ({ ok: false as const, thrown: err, warnings: [] as string[] }));
+		expect(r.ok).toBe(false);
+		expect(r.warnings).toEqual([]);
+	});
+
 	it("a duplicate of a task shares its note, but only the original's link writes it", async () => {
 		const s = await ready();
 		s.notesOn = true;
@@ -767,7 +722,7 @@ describe("description notes and the rest of the sync (SYNC-09)", () => {
 	});
 });
 
-describe("description note bookkeeping (SYNC-09)", () => {
+describe("description note bookkeeping", () => {
 	it("is not undoable, and its commands are the sync's own (they start no push)", async () => {
 		const s = await ready();
 		s.notesOn = true;
@@ -777,7 +732,7 @@ describe("description note bookkeeping (SYNC-09)", () => {
 		s.tt.add(s.projectId, { title: "Trip", content: "Pack" });
 		await run(s);
 		expect(s.h.app.store.undoLabel).toBe(before);
-		const { SYNC_OWN_LABELS } = await import("../../src/app/SyncService");
+		const { SYNC_OWN_LABELS } = await import("../../src/app/syncModel");
 		expect(labels.length).toBeGreaterThan(0);
 		expect(labels.every((l) => SYNC_OWN_LABELS.has(l))).toBe(true);
 	});

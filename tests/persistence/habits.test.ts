@@ -59,7 +59,7 @@ function loaded(text: string) {
 
 const lineOf = (text: string, id: string) => text.split("\n").find((l) => l.includes(`"id":"${id}"`))!;
 
-describe("habits and check-ins in the file (D1)", () => {
+describe("habits and check-ins in the file", () => {
 	it("adds no schema version of its own, and the empty database is unchanged", () => {
 		expect(CURRENT_SCHEMA_VERSION).toBe(6);
 		expect(emptyDbText()).toBe(
@@ -141,7 +141,7 @@ describe("habits and check-ins in the file (D1)", () => {
 	});
 });
 
-describe("habit repairs on load (D1)", () => {
+describe("habit repairs on load", () => {
 	it("drops a habit without an id, with an issue", () => {
 		const { id: _id, ...noId } = habit("x");
 		const r = loaded(withRaw([noId, habit("h-1")]));
@@ -213,7 +213,7 @@ describe("habit repairs on load (D1)", () => {
 	});
 });
 
-describe("check-in repairs on load (D1)", () => {
+describe("check-in repairs on load", () => {
 	it.each([
 		["no id", { id: undefined }],
 		["no habit", { habitId: "" }],

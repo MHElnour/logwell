@@ -119,8 +119,7 @@ export async function seededState(seed = 41, count = 240): Promise<SeededState> 
 		tasks.set(t.id, t);
 		ops.push({ c: "tasks", id: t.id, v: t });
 	}
-	// Completed subtasks dated in a date view whose open parent that view does not list (App shell and views
-	// rule 21): each goes to the view's Completed group, not under the parent.
+	// Completed subtasks dated in a date view whose open parent that view does not list: each goes to the view's Completed group, not under the parent.
 	let added = 0;
 	const add = (patch: Partial<Task>): Task => {
 		added++;

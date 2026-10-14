@@ -216,14 +216,27 @@ export class BackupStore {
 		return this.fs.read(path);
 	}
 
+	/** True once this store knows the journal ends with a line break, so an append starts a line of its own. */
+	private journalEndsLine = false;
+
 	async appendJournal(entry: JournalEntry): Promise<void> {
 		await this.fs.mkdir(this.root);
-		await this.fs.append(this.journalPath, journalLine(entry));
+		let line = journalLine(entry);
+		if (!this.journalEndsLine) {
+			// A crash during an earlier append can leave a torn line without its end.
+			const text = await this.fs.read(this.journalPath);
+			if (text !== null && text !== "" && !text.endsWith("\n")) line = `\n${line}`;
+		}
+		this.journalEndsLine = false;
+		await this.fs.append(this.journalPath, line);
+		this.journalEndsLine = true;
 	}
 
 	async resetJournal(): Promise<void> {
 		await this.fs.mkdir(this.root);
+		this.journalEndsLine = false;
 		await this.fs.write(this.journalPath, "");
+		this.journalEndsLine = true;
 	}
 
 	async readJournal(): Promise<JournalEntry[]> {

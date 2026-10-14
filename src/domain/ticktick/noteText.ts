@@ -66,13 +66,13 @@ function oneLine(s: string): string {
 	return s.replace(/\s*\r?\n\s*/gu, " ").trim();
 }
 
-export function itemLine(title: string, done: boolean): string {
+function itemLine(title: string, done: boolean): string {
 	const t = oneLine(title);
 	return `- [${done ? "x" : " "}]${t === "" ? "" : ` ${t}`}`;
 }
 
 /** An item line's tick and title; null for a line that is not an item. */
-export function parseItemLine(line: string): { done: boolean; title: string } | null {
+function parseItemLine(line: string): { done: boolean; title: string } | null {
 	const m = ITEM_RE.exec(line);
 	return m === null ? null : { done: m[2] !== " ", title: (m[3] ?? "").trim() };
 }
@@ -137,7 +137,7 @@ export function splitFrontmatter(note: string): { front: string; body: string } 
 }
 
 /** A note body read for TickTick, line by line, with where each line came from. */
-export interface RenderedBody {
+interface RenderedBody {
 	/** The body's own lines (endings removed). */
 	raw: string[];
 	/** The lines TickTick sees, in order, before the blank lines at the ends of the text are dropped. */
@@ -171,7 +171,7 @@ function renderLine(line: string): { text: string; embed: boolean } {
  * like any line: a fence's place in the note depends on the user's layout (items between lines), so treating it
  * apart would break the round trip; TickTick's `[[` inside code is escaped like anywhere else.
  */
-export function renderBody(body: string, checklist: boolean): RenderedBody {
+function renderBody(body: string, checklist: boolean): RenderedBody {
 	const raw = body.replace(/\r\n?/gu, "\n").split("\n");
 	const out: RenderedBody = { raw, lines: [], at: [], item: [] };
 	raw.forEach((line, i) => {
@@ -187,14 +187,14 @@ export function renderBody(body: string, checklist: boolean): RenderedBody {
 }
 
 /** The note as TickTick's text: its text lines (blank ones at the ends dropped) and its items, with their raw lines. */
-export interface NoteView {
+interface NoteView {
 	text: string[];
 	textAt: number[];
 	items: string[];
 	itemAt: number[];
 }
 
-export function viewOf(r: RenderedBody): NoteView {
+function viewOf(r: RenderedBody): NoteView {
 	const v: NoteView = { text: [], textAt: [], items: [], itemAt: [] };
 	r.lines.forEach((line, k) => {
 		if (r.item[k]) {
@@ -218,7 +218,7 @@ export function viewOf(r: RenderedBody): NoteView {
 	return v;
 }
 
-export function docOfView(v: NoteView): NoteDoc {
+function docOfView(v: NoteView): NoteDoc {
 	return { text: v.text.join("\n"), items: [...v.items] };
 }
 

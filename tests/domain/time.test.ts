@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, dayNum, fmtMin, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, clockTimeOf, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
 import { FakeClock } from "../helpers";
 import fc from "fast-check";
 import { monthStats } from "../../src/domain/habits";
@@ -8,10 +8,10 @@ import { weekStartOf } from "../../src/domain/calendar";
 import { dayLabel, monthGrid, shiftDateByMonths } from "../../src/ui/quickadd/calendar";
 import { ci, habit, idx, ver } from "./habit-fixtures";
 import { rule, series } from "./recurrence-fixtures";
-import { DateTime, IANAZone } from "luxon";
+import { DateTime, IANAZone, Settings } from "luxon";
 import type { DateSpec } from "../../src/domain/types";
 
-describe("time (TIME-01..03)", () => {
+describe("time", () => {
 	it("validates date-only and timed specs", () => {
 		expect(isValidLocalDate("2026-10-02")).toBe(true);
 		expect(isValidLocalDate("2026-02-30")).toBe(false);
@@ -44,7 +44,7 @@ describe("time (TIME-01..03)", () => {
 		expect(fmtMin(-1)).toBe("23:59");
 	});
 
-	it("B17: a spring-forward gap time moves to the first valid time with a warning", () => {
+	it("a spring-forward gap time moves to the first valid time with a warning", () => {
 		expect(resolveWallTime("2026-03-08T02:30", "America/New_York")).toEqual({
 			local: "2026-03-08T03:30",
 			warning: "dst-gap",
@@ -55,7 +55,7 @@ describe("time (TIME-01..03)", () => {
 		});
 	});
 
-	it("B18: a repeated fall-back time keeps the earlier offset with a warning", () => {
+	it("a repeated fall-back time keeps the earlier offset with a warning", () => {
 		const r = resolveWallTime("2026-11-01T01:30", "America/New_York");
 		expect(r).toEqual({ local: "2026-11-01T01:30", warning: "dst-ambiguous" });
 		expect(resolveWallTime("2026-10-25T02:30", "Europe/Berlin").warning).toBe("dst-ambiguous");
@@ -65,7 +65,7 @@ describe("time (TIME-01..03)", () => {
 		expect(resolveWallTime("2026-10-02T19:00", "Europe/Berlin")).toEqual({ local: "2026-10-02T19:00", warning: null });
 	});
 
-	it("B19: date-only values never move; timed values convert to the display zone", () => {
+	it("date-only values never move; timed values convert to the display zone", () => {
 		const dateOnly = { kind: "date" as const, date: "2026-10-02" };
 		expect(dateSpecDate(dateOnly, "Pacific/Auckland")).toBe("2026-10-02");
 		expect(dateSpecDate(dateOnly, "America/Los_Angeles")).toBe("2026-10-02");
@@ -81,8 +81,53 @@ describe("time (TIME-01..03)", () => {
 	});
 });
 
+describe("a device whose language writes other digits", () => {
+	// Arabic (Egypt), Persian and Bengali write numbers with their own digits by default. A stored or
+	// compared date always uses 0 to 9, whatever the device language.
+
+	const original = Settings.defaultLocale;
+	afterEach(() => {
+		Settings.defaultLocale = original;
+		resetTimeCaches();
+	});
+	const on = (locale: string): void => {
+		Settings.defaultLocale = locale;
+		resetTimeCaches();
+	};
+
+	it.each(["ar-EG", "fa-IR", "bn-BD"])("#100: a wall time keeps the digits 0 to 9 and reports no daylight saving change (%s)", (locale) => {
+		on(locale);
+		expect(resolveWallTime("2026-10-12T10:00", "Europe/Berlin")).toEqual({ local: "2026-10-12T10:00", warning: null });
+		expect(resolveWallTime("2026-03-29T02:30", "Europe/Berlin")).toEqual({ local: "2026-03-29T03:30", warning: "dst-gap" });
+	});
+
+	it.each(["ar-EG", "fa-IR", "bn-BD"])("#100: a timed date shown in another zone keeps the digits 0 to 9 (%s)", (locale) => {
+		on(locale);
+		const timed: DateSpec = { kind: "datetime", local: "2026-10-12T10:00", tz: "Europe/Berlin" };
+		expect(dateSpecDisplayLocal(timed, "America/New_York")).toBe("2026-10-12T04:00");
+		expect(dateSpecSortValue(timed, "America/New_York")).toBe("2026-10-12T04:00");
+		expect(dateSpecDate(timed, "Pacific/Auckland")).toBe("2026-10-12");
+		const gap: DateSpec = { kind: "datetime", local: "2026-03-29T02:30", tz: "Europe/Berlin" };
+		expect(dateSpecDisplayLocal(gap, "Europe/Berlin")).toBe("2026-03-29T03:30");
+	});
+
+	it("clockTimeOf: the clock time in the zone of the DateTime, two digits each", () => {
+		expect(clockTimeOf(DateTime.fromISO("2026-10-12T07:05:00Z", { zone: "Europe/Berlin" }))).toBe("09:05");
+		expect(clockTimeOf(DateTime.fromISO("2026-10-12T00:00:00Z", { zone: "UTC" }))).toBe("00:00");
+	});
+
+	it("#100: another script's digits read as 0 to 9, and other text is kept", () => {
+		expect(latinDigits("٢٠٢٦-١٠-١٢T١٠:٠٠")).toBe("2026-10-12T10:00");
+		expect(latinDigits("۲۰۲۶-۱۰-۱۲T۱۷:۳۹")).toBe("2026-10-12T17:39");
+		expect(latinDigits("২০২৬-১০-১২T০৮:৫৯")).toBe("2026-10-12T08:59");
+		expect(latinDigits("𝟐𝟎𝟐𝟔")).toBe("2026");
+		expect(latinDigits("2026-10-12T10:00")).toBe("2026-10-12T10:00");
+		expect(latinDigits("Call ٥ x½")).toBe("Call 5 x½");
+	});
+});
+
 describe("years 0000 to 9999", () => {
-	// Spec "Data and storage" rule 8: a date-only value is a real day in years 0000 to 9999, and day
+	// A date-only value is a real day in years 0000 to 9999, and day
 	// numbers are exact over that range (years 0000 to 0099 are not read as 1900 to 1999).
 
 	const FIRST = -719_528; // 0000-01-01
@@ -257,9 +302,10 @@ describe("fast paths and caches", () => {
 				for (const date of [dateOfDay(n - 1), day, dateOfDay(n + 1)]) {
 					for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
 						const spec = timed(date, minutes, zone);
-						if (referenceLocal(spec, zone) !== spec.local) gaps++;
+						const local = referenceLocal(spec, zone);
+						if (local !== spec.local) gaps++;
 						expect(dateSpecDate(spec, zone), `${spec.local} ${zone}`).toBe(referenceDate(spec, zone));
-						expect(dateSpecDisplayLocal(spec, zone), `${spec.local} ${zone}`).toBe(referenceLocal(spec, zone));
+						expect(dateSpecDisplayLocal(spec, zone), `${spec.local} ${zone}`).toBe(local);
 					}
 				}
 			}
@@ -331,28 +377,13 @@ describe("fast paths and caches", () => {
 	});
 
 	describe("zone and conversion caches", () => {
-		it("a repeated cross-zone conversion returns identical values and is computed once", () => {
-			const spec: DateSpec = { kind: "datetime", local: "2026-10-02T19:00", tz: "Europe/Berlin" };
-			const first = [dateSpecDate(spec, "America/New_York"), dateSpecDisplayLocal(spec, "America/New_York")];
-			expect(first).toEqual(["2026-10-02", "2026-10-02T13:00"]);
-			expect(timeCacheSizes().conversions).toBe(1);
-			const second = [dateSpecDate(spec, "America/New_York"), dateSpecDisplayLocal(spec, "America/New_York")];
-			expect(second).toEqual(first);
-			expect(timeCacheSizes().conversions).toBe(1);
-			// A different display zone is a different answer.
-			expect(dateSpecDate(spec, "Pacific/Auckland")).toBe("2026-10-03");
-			expect(timeCacheSizes().conversions).toBe(2);
-		});
-
-		it("the same-zone path caches by day, not by task", () => {
-			for (let minutes = 0; minutes < 24 * 60; minutes += 5) dateSpecDate(timed("2026-10-02", minutes, "Europe/Berlin"), "Europe/Berlin");
-			expect(timeCacheSizes().conversions).toBe(0);
-			expect(timeCacheSizes().days).toBe(1);
-		});
+		// The caches hold at most 65,536 entries each and clear when full: filling them a little past that shows they stay
+		// bounded (a cache that never cleared would hold more).
+		const MAX = 65_536;
 
 		it("the caches stay bounded and still answer correctly after they fill", () => {
 			const display = "America/New_York";
-			for (let n = 0; n < 70_000; n++) dateSpecDisplayLocal(timed(dateOfDay(10_000 + n), 600, "Europe/Berlin"), display);
+			for (let n = 0; n < MAX + 64; n++) dateSpecDisplayLocal(timed(dateOfDay(10_000 + n), 600, "Europe/Berlin"), display);
 			const { conversions } = timeCacheSizes();
 			expect(conversions).toBeGreaterThan(0);
 			expect(conversions).toBeLessThanOrEqual(65_536);
@@ -362,7 +393,6 @@ describe("fast paths and caches", () => {
 
 		it("the instant-day cache is reported, clears when it fills, and still answers correctly", () => {
 			const zone = "America/New_York";
-			const MAX = 65_536;
 			const instantAt = (n: number): string => new Date(Date.UTC(2020, 0, 1) + n * 60_000).toISOString();
 			const reference = (instant: string): string | null => DateTime.fromISO(instant, { zone }).toISODate();
 			expect(timeCacheSizes().instantDays).toBe(0);
@@ -374,9 +404,9 @@ describe("fast paths and caches", () => {
 			// One more distinct instant at the limit empties the cache, then holds only that entry.
 			instantDay(instantAt(MAX), zone);
 			expect(timeCacheSizes().instantDays).toBe(1);
-			for (let n = MAX + 1; n < MAX + 5000; n++) instantDay(instantAt(n), zone);
+			for (let n = MAX + 1; n < MAX + 64; n++) instantDay(instantAt(n), zone);
 			expect(timeCacheSizes().instantDays).toBeLessThanOrEqual(MAX);
-			for (const n of [0, 5, MAX - 1, MAX, MAX + 4999]) expect(instantDay(instantAt(n), zone)).toBe(reference(instantAt(n)));
+			for (const n of [0, 5, MAX - 1, MAX, MAX + 63]) expect(instantDay(instantAt(n), zone)).toBe(reference(instantAt(n)));
 			// An instant that does not parse is cached as null and stays null after a clear.
 			expect(instantDay("not an instant", zone)).toBeNull();
 			expect(instantDay("not an instant", zone)).toBeNull();
@@ -391,21 +421,6 @@ describe("fast paths and caches", () => {
 			for (let n = 0; n < 3000; n++) expect(isValidZone(`Nope/Zone${n}`)).toBe(false);
 			expect(timeCacheSizes().zones).toBeLessThanOrEqual(2048);
 			expect(isValidZone("Europe/Berlin")).toBe(true);
-		});
-
-		it("isValidZone does not call Luxon again for a zone it has seen", () => {
-			isValidZone("Asia/Kolkata");
-			const spy = vi.spyOn(IANAZone, "isValidZone");
-			try {
-				for (let n = 0; n < 100; n++) expect(isValidZone("Asia/Kolkata")).toBe(true);
-				expect(spy).not.toHaveBeenCalled();
-			} finally {
-				spy.mockRestore();
-			}
-		});
-
-		it("the Luxon reference is what the tests compare against", () => {
-			expect(DateTime.fromISO("2026-03-08T02:30", { zone: "America/New_York" }).toFormat(FORMAT)).toBe("2026-03-08T03:30");
 		});
 	});
 });

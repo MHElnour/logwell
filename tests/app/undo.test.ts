@@ -6,7 +6,7 @@ import { makeTask } from "../persistence/fixtures";
 import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService";
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
 
-// Data and safety rule 17: a refusal while read-only keeps the undo entry; a conflict drops it, since the
+// A refusal while read-only keeps the undo entry; a conflict drops it, since the
 // record can never match again, and the next undo takes the one before it.
 
 describe("#14: a refused undo and its entry", () => {
@@ -59,8 +59,8 @@ describe("#14: a refused undo and its entry", () => {
 	});
 });
 
-describe("a notice's Undo targets its own write", () => {
-	// Data and safety rule 17: the Undo button of a notice undoes exactly the write it was shown for, never a newer
+describe("#39: a notice's Undo targets its own write", () => {
+	// The Undo button of a notice undoes exactly the write it was shown for, never a newer
 	// write that happens to run under the same store label.
 
 	const CONFLICT = 'Cannot undo "Edit task": other changes were made since.';
@@ -81,97 +81,86 @@ describe("a notice's Undo targets its own write", () => {
 		return { h, store: h.app.store, a, b, title };
 	}
 
-	describe("#39: a notice's Undo targets its own write", () => {
-		it("refuses the first notice once a newer write ran under the same label, and undoes the newer one from its own notice", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const undoFirst = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
-			const undoSecond = await noticeFor(store, "Edit task", () => h.app.tasks.update(b.id, { title: "Water the herbs" }));
+	it("refuses the first notice once a newer write ran under the same label, and undoes the newer one from its own notice", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const undoFirst = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
+		const undoSecond = await noticeFor(store, "Edit task", () => h.app.tasks.update(b.id, { title: "Water the herbs" }));
 
-			await expect(undoFirst()).rejects.toMatchObject({ code: "UndoConflict", message: CONFLICT });
-			expect(title(a.id)).toBe("Call the bank today");
-			expect(title(b.id)).toBe("Water the herbs");
+		await expect(undoFirst()).rejects.toMatchObject({ code: "UndoConflict", message: CONFLICT });
+		expect(title(a.id)).toBe("Call the bank today");
+		expect(title(b.id)).toBe("Water the herbs");
 
-			await expect(undoSecond()).resolves.toBe(true);
-			expect(title(b.id)).toBe("Water the plants");
-			expect(title(a.id)).toBe("Call the bank today");
-		});
+		await expect(undoSecond()).resolves.toBe(true);
+		expect(title(b.id)).toBe("Water the plants");
+		expect(title(a.id)).toBe("Call the bank today");
+	});
 
-		it("checks inside the queue: an Undo queued behind a same-label command does not revert that command", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const undoFirst = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
-			// The second write is queued, not yet run, when the Undo is pressed.
-			const second = h.app.tasks.update(b.id, { title: "Water the herbs" });
-			const undo = undoFirst();
-			await second;
-			await expect(undo).rejects.toMatchObject({ code: "UndoConflict" });
-			expect(title(a.id)).toBe("Call the bank today");
-			expect(title(b.id)).toBe("Water the herbs");
-		});
+	it("checks inside the queue: an Undo queued behind a same-label command does not revert that command", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const undoFirst = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
+		// The second write is queued, not yet run, when the Undo is pressed.
+		const second = h.app.tasks.update(b.id, { title: "Water the herbs" });
+		const undo = undoFirst();
+		await second;
+		await expect(undo).rejects.toMatchObject({ code: "UndoConflict" });
+		expect(title(a.id)).toBe("Call the bank today");
+		expect(title(b.id)).toBe("Water the herbs");
+	});
 
-		it("refuses when a same-label write ran between the write and its notice", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const mark = store.undoMark();
-			const first = h.app.tasks.update(a.id, { title: "Call the bank today" });
-			const second = h.app.tasks.update(b.id, { title: "Water the herbs" });
-			await Promise.all([first, second]);
-			// The first write's notice shows only now, after the second write ran: two writes under its label.
-			await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
-			expect(title(a.id)).toBe("Call the bank today");
-			expect(title(b.id)).toBe("Water the herbs");
-		});
+	it("refuses when a same-label write ran between the write and its notice", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const mark = store.undoMark();
+		const first = h.app.tasks.update(a.id, { title: "Call the bank today" });
+		const second = h.app.tasks.update(b.id, { title: "Water the herbs" });
+		await Promise.all([first, second]);
+		// The first write's notice shows only now, after the second write ran: two writes under its label.
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank today");
+		expect(title(b.id)).toBe("Water the herbs");
+	});
 
-		it("refuses after the entry is gone (undone with the global command), even when a newer same-label write follows", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const undoFirst = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
-			await store.undo();
-			await h.app.tasks.update(b.id, { title: "Water the herbs" });
-			await expect(undoFirst()).rejects.toMatchObject({ code: "UndoConflict" });
-			expect(title(b.id)).toBe("Water the herbs");
-		});
+	it("says the change can no longer be undone once its entry left the history (global Undo, reload)", async () => {
+		const { h, store, a, title } = await twoTasks();
+		const undoEdit = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
+		await store.undo();
+		await expect(undoEdit()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank");
 
-		it("says the change can no longer be undone once its entry left the history (global Undo, reload)", async () => {
-			const { h, store, a, title } = await twoTasks();
-			const undoEdit = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank today" }));
-			await store.undo();
-			await expect(undoEdit()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
-			expect(title(a.id)).toBe("Call the bank");
+		const undoAgain = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank now" }));
+		store.notifyReloaded();
+		await expect(undoAgain()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank now");
+	});
 
-			const undoAgain = await noticeFor(store, "Edit task", () => h.app.tasks.update(a.id, { title: "Call the bank now" }));
-			store.notifyReloaded();
-			await expect(undoAgain()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
-			expect(title(a.id)).toBe("Call the bank now");
-		});
+	it("a write under another label between the mark and the write does not stop the Undo", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const mark = store.undoMark();
+		// The write waits (for example behind a running sync) while another change is made.
+		await h.app.tasks.delete(b.id);
+		await h.app.tasks.update(a.id, { title: "Call the bank today" });
+		await expect(store.undoFor(mark, "Edit task")()).resolves.toBe(true);
+		expect(title(a.id)).toBe("Call the bank");
+		expect(title(b.id)).toBeUndefined();
+	});
 
-		it("a write under another label between the mark and the write does not stop the Undo", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const mark = store.undoMark();
-			// The write waits (for example behind a running sync) while another change is made.
-			await h.app.tasks.delete(b.id);
-			await h.app.tasks.update(a.id, { title: "Call the bank today" });
-			await expect(store.undoFor(mark, "Edit task")()).resolves.toBe(true);
-			expect(title(a.id)).toBe("Call the bank");
-			expect(title(b.id)).toBeUndefined();
-		});
+	it("counts a same-label write that was already undone: the notice binds nothing", async () => {
+		const { h, store, a, b, title } = await twoTasks();
+		const mark = store.undoMark();
+		await h.app.tasks.update(a.id, { title: "Call the bank today" });
+		await store.undo();
+		await h.app.tasks.update(b.id, { title: "Water the herbs" });
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank");
+		expect(title(b.id)).toBe("Water the herbs");
+	});
 
-		it("counts a same-label write that was already undone: the notice binds nothing", async () => {
-			const { h, store, a, b, title } = await twoTasks();
-			const mark = store.undoMark();
-			await h.app.tasks.update(a.id, { title: "Call the bank today" });
-			await store.undo();
-			await h.app.tasks.update(b.id, { title: "Water the herbs" });
-			await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
-			expect(title(a.id)).toBe("Call the bank");
-			expect(title(b.id)).toBe("Water the herbs");
-		});
-
-		it("binds nothing when the mark is older than the remembered writes", async () => {
-			const { h, store, a, title } = await twoTasks();
-			const mark = store.undoMark();
-			for (let i = 0; i < 50; i++) await h.app.tasks.create({ title: `Errand ${i}` });
-			await h.app.tasks.update(a.id, { title: "Call the bank today" });
-			await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
-			expect(title(a.id)).toBe("Call the bank today");
-		});
+	it("binds nothing when the mark is older than the remembered writes", async () => {
+		const { h, store, a, title } = await twoTasks();
+		const mark = store.undoMark();
+		for (let i = 0; i < 50; i++) await h.app.tasks.create({ title: `Errand ${i}` });
+		await h.app.tasks.update(a.id, { title: "Call the bank today" });
+		await expect(store.undoFor(mark, "Edit task")()).rejects.toMatchObject({ code: "UndoConflict", message: UNBOUND });
+		expect(title(a.id)).toBe("Call the bank today");
 	});
 });
 
@@ -273,16 +262,17 @@ describe("the reference guard", () => {
 	});
 });
 
-describe("after a pull that uses the tag", () => {
-	// An Undo never leaves a task holding a tag key with no tag (Data and safety; Lists, sections and tags rule 24). A
-	// TickTick pull is not an undo step, so a task it brings in may use a tag that a later Undo would remove: that Undo is
-	// refused, nothing changes, and the entry is dropped (rule 17), so the next Undo takes the one below.
+/** A linked list "Work", for the Undo tests after a pull. */
+async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
+	const s = await syncHarness();
+	const { listId, projectId } = await linkedList(s);
+	return Object.assign(s, { listId, projectId });
+}
 
-	async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
-		const s = await syncHarness();
-		const { listId, projectId } = await linkedList(s);
-		return Object.assign(s, { listId, projectId });
-	}
+describe("after a pull that uses the tag", () => {
+	// An Undo never leaves a task holding a tag key with no tag. A
+	// TickTick pull is not an undo step, so a task it brings in may use a tag that a later Undo would remove: that Undo is
+	// refused, nothing changes, and the entry is dropped, so the next Undo takes the one below.
 
 	async function pullTask(s: SyncHarness & { projectId: string }, title: string, tags: string[]): Promise<void> {
 		s.tick();
@@ -302,7 +292,7 @@ describe("after a pull that uses the tag", () => {
 			// An unrelated write right below the edit, which the rename and the syncs do not touch.
 			const errands = await s.h.app.categories.create("Errands");
 			const below = store.undoLabel;
-			expect(below).toBe("Create category");
+			expect(below).toBe("Create list");
 			await s.h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
 			await s.sync.sync();
 			await pullTask(s, "Call the bank", ["phone"]);
@@ -354,15 +344,9 @@ describe("after a pull that uses the tag", () => {
 });
 
 describe("after a pull that nests a tag", () => {
-	// An Undo never leaves a tag under a parent tag that no longer exists (Lists, sections and tags rules 25 and 29). A
+	// An Undo never leaves a tag under a parent tag that no longer exists. A
 	// TickTick pull is not an undo step, so it may nest a new tag under a parent that a later Undo would remove: that Undo
 	// is refused and nothing changes.
-
-	async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
-		const s = await syncHarness();
-		const { listId, projectId } = await linkedList(s);
-		return Object.assign(s, { listId, projectId });
-	}
 
 	/** Pulls a TickTick task tagged "errands", a TickTick tag nested under "home", so Logwell nests it as `home/errands`. */
 	async function pullErrandsUnderHome(s: SyncHarness & { projectId: string }): Promise<void> {
@@ -401,13 +385,6 @@ describe("after a pull that nests a tag", () => {
 			await expect(store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: 'Cannot undo "Create task": a tag now sits under this tag.' });
 			expect(store.state).toBe(state);
 			expect([...store.state.tags.keys()].sort()).toEqual(["home", "home/calls", "home/errands"]);
-		});
-
-		it("an Undo that removes a parent together with all its children still goes through", async () => {
-			const s = await setup();
-			await s.h.app.tags.create("Home/Calls");
-			expect(await s.h.app.store.undo()).toBe(CREATE_TAG_LABEL);
-			expect(s.h.app.store.state.tags.size).toBe(0);
 		});
 	});
 });

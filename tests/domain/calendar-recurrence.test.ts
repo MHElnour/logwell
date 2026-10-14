@@ -119,7 +119,7 @@ describe("month grids", () => {
 		return Object.fromEntries(cells.filter((c) => c.count > 0 && c.inMonth).map((c) => [c.date, c.count]));
 	}
 
-	it("monthly on the 31st: February and April fall on their last day (B21), never chained", () => {
+	it("monthly on the 31st: February and April fall on their last day, never chained", () => {
 		const t = repeating(series("2026-01-31", rule({ freq: "monthly" })));
 		expect(monthCounts(t, "2026-02-01")).toEqual({ "2026-02-28": 1 });
 		expect(monthCounts(t, "2026-03-01")).toEqual({ "2026-03-31": 1 });

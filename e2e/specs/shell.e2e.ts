@@ -12,7 +12,7 @@ describe("App shell and .cpbase file type", function () {
 		expect(loaded).toBe(true);
 	});
 
-	it("crypto.randomUUID is available in the renderer (spec §2)", async function () {
+	it("crypto.randomUUID is available in the renderer", async function () {
 		const id = await browser.execute(() => crypto.randomUUID());
 		expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 	});

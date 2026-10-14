@@ -35,7 +35,7 @@ describe("diffLines", () => {
 	});
 });
 
-describe("mergeLines (D30)", () => {
+describe("mergeLines", () => {
 	it("one side changed: that side wins", () => {
 		expect(mergeLines(L("a|b"), L("a|b"), L("a|B"))).toEqual(L("a|B"));
 		expect(mergeLines(L("a|b"), L("a|X"), L("a|b"))).toEqual(L("a|X"));
@@ -78,11 +78,20 @@ describe("mergeLines (D30)", () => {
 		expect(mergeLines(base, once, theirs)).toEqual(once);
 	});
 
-	it("an insertion that extends the other side's is taken whole, not marked (L4)", () => {
+	it("an insertion that extends the other side's is taken whole, not marked", () => {
 		expect(mergeLines(L("A"), L("A|B"), L("A|B|C"))).toEqual(L("A|B|C"));
 		expect(mergeLines(L("A"), L("A|B|C"), L("A|B"))).toEqual(L("A|B|C"));
 		// Only the differing middle is marked.
 		expect(mergeLines(L("A"), L("A|B|x|D"), L("A|B|y|D"))).toEqual(["A", "B", "x", MERGE_MARKER, "y", "D"]);
+	});
+
+	it("#133: a line one side deleted next to a change both made stays deleted", () => {
+		expect(mergeText("P\nQ\nR", "P\nQ2", "P\nQ2\nR")).toBe("P\nQ2");
+		expect(mergeText("P\nQ\nR", "P\nQ2\nR", "P\nQ2")).toBe("P\nQ2");
+		// A line the longer side wrote stays; only the base line the other side deleted goes.
+		expect(mergeLines(L("P|Q|R"), L("P|Q2"), L("P|Q2|X|R"))).toEqual(L("P|Q2|X"));
+		// The same before the shared lines.
+		expect(mergeLines(L("P|Q|R"), L("Q2|R"), L("P|Q2|R"))).toEqual(L("Q2|R"));
 	});
 
 	it("merging again over any earlier merge whose base was not saved gives the same text", () => {
