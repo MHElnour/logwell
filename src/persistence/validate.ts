@@ -1,4 +1,5 @@
 import { isValidTagKey } from "../domain/tags";
+import { clamp } from "../domain/text";
 import { isInstant, isValidDateSpec, isValidLocalDate, isValidZone, latinDigits } from "../domain/time";
 import { isClockTime } from "../domain/habits";
 import type {
@@ -380,7 +381,7 @@ function readMonthly(raw: unknown, fix: (what: string) => void): MonthlyOn | nul
 	}
 	if (raw.kind === "lastDay") return { ...raw, kind: "lastDay" };
 	if (raw.kind === "day" && typeof raw.day === "number" && Number.isFinite(raw.day)) {
-		const day = Math.min(31, Math.max(1, Math.round(raw.day)));
+		const day = clamp(Math.round(raw.day), 1, 31);
 		if (day !== raw.day) fix(`day of the month ${raw.day}, which was set to ${day}`);
 		return { ...raw, kind: "day", day };
 	}

@@ -2,7 +2,7 @@ import { type App, FuzzySuggestModal, Setting, type TFile, type TFolder, getIcon
 import { TAG_COLORS, type TagColor } from "../domain/types";
 import type { ButtonSpec, NewListOptions, NewListValues } from "../ui/host";
 import { LIST_ICONS } from "../ui/icons";
-import { capitalize } from "../domain/text";
+import { capitalize, clamp } from "../domain/text";
 import { el } from "./dom";
 import { openFormModal } from "./formModal";
 import { ResolvingModal } from "./resolvingModal";
@@ -196,7 +196,7 @@ function gridKey(e: KeyboardEvent, el: HTMLElement, list: HTMLElement[]): boolea
 	else if (e.key === "End") next = list.length - 1;
 	else return false;
 	e.preventDefault();
-	list[Math.min(Math.max(next, 0), list.length - 1)]?.focus();
+	list[clamp(next, 0, list.length - 1)]?.focus();
 	return true;
 }
 

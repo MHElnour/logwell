@@ -1,3 +1,4 @@
+import { clamp } from "../domain/text";
 import { charBefore, isTokenChar, tokenRunEnd, tokenStartAllowed } from "./text";
 import type { Span } from "./types";
 
@@ -43,6 +44,6 @@ function wordTokenAt(input: string, c: number): CursorToken | null {
 
 /** The #, @ or [[ token that contains or ends at the cursor, for the suggesters. */
 export function tokenAtCursor(input: string, cursor: number): CursorToken | null {
-	const c = Math.min(Math.max(Math.trunc(Number.isFinite(cursor) ? cursor : 0), 0), input.length);
+	const c = clamp(Math.trunc(Number.isFinite(cursor) ? cursor : 0), 0, input.length);
 	return noteTokenAt(input, c) ?? wordTokenAt(input, c);
 }

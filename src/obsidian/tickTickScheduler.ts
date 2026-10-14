@@ -1,3 +1,4 @@
+import { clamp } from "../domain/text";
 import { EventBus } from "../app/events";
 import { type TickTickDevicePort, TickTickError, type TickTickSecretPort } from "../app/ports";
 import { TICKTICK_PULL_RANGE } from "../app/settings";
@@ -248,7 +249,7 @@ export class TickTickScheduler {
 		if (this.disposed || !this.started) return;
 		const raw = this.deps.pullMinutes();
 		const { min, max } = TICKTICK_PULL_RANGE;
-		const minutes = Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : min;
+		const minutes = Number.isFinite(raw) ? clamp(raw, min, max) : min;
 		const now = this.deps.now();
 		const due = Math.max(this.anchor + minutes * 60_000, this.notBefore);
 		this.pullTimer = this.deps.timers.set(() => {

@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import { isDayMissed, isDeadlineMissed, isOpenWork } from "./queries";
 import { occurrenceSpec, projectOccurrences } from "./recurrence";
 import { compareTasksBySortKey } from "./tasks";
+import { clamp } from "./text";
 import { addDays, clockTimeOf, DAY_MIN, dateOf, monthStart, shiftMonth, yearMonthOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallClockOf, wallDateOf, wallMinutesOf, wallTimeToDateTime, weekStartOfDay } from "./time";
 import type { DateSpec, ID, LocalDate, OccurrenceRecord, Task, WeekStart } from "./types";
 
@@ -369,7 +370,7 @@ export function layoutMonth(
 const DRAG_SNAP_MIN = 15;
 const LAST_SLOT_MIN = DAY_MIN - DRAG_SNAP_MIN;
 
-const snapSlot = (min: number): number => Math.min(LAST_SLOT_MIN, Math.max(0, Math.floor(min / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN));
+const snapSlot = (min: number): number => clamp(Math.floor(min / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN, 0, LAST_SLOT_MIN);
 
 const wallAt = (date: LocalDate, min: number): string => `${date}T${fmtMin(min)}`;
 
@@ -405,6 +406,8 @@ export function moveSameMoment(current: DateSpec | null, next: DateSpec, zone: s
 /**
  * The planned duration after dragging the bottom edge to `rawEndMin` (minutes since midnight of
  * the start day): end snapped to 15 minutes, at least 15 minutes long, at most up to 24:00.
+ * Not `clamp`: when the start is within 15 minutes of 24:00 the end stops at 24:00 (a shorter
+ * block), so the day end wins over the 15-minute minimum; `clamp` would let the minimum win.
  */
 export function resizedDuration(startMin: number, rawEndMin: number): number {
 	const snapped = Math.floor(rawEndMin / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN;

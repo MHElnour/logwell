@@ -1,5 +1,5 @@
 import type { QueryContext } from "./queries";
-import { plural } from "./text";
+import { clamp, plural } from "./text";
 import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidLocalDate, isValidZone, monthLength, wallClockOf, wallDateOf, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
@@ -51,7 +51,7 @@ export const MAX_INTERVAL = 999;
 /** The interval the engine uses: a whole number in 1..MAX_INTERVAL, whatever is stored. */
 function intervalOf(r: RepeatRule): number {
 	const k = Math.floor(r.interval);
-	return Number.isFinite(k) ? Math.min(MAX_INTERVAL, Math.max(1, k)) : MAX_INTERVAL;
+	return Number.isFinite(k) ? clamp(k, 1, MAX_INTERVAL) : MAX_INTERVAL;
 }
 
 /** The step in months of a monthly or yearly rule: a year is 12 months on the anchor's day, clamped like a month. */

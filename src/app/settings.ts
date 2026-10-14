@@ -1,5 +1,6 @@
 import { isClockTime } from "../domain/habits";
 import { deviceZone } from "../domain/ports";
+import { clamp } from "../domain/text";
 import { isValidZone } from "../domain/time";
 import type { DateLocale, WeekStart } from "../domain/types";
 
@@ -132,7 +133,7 @@ export function sanitizeSettings(raw: unknown): CheckpointSettings {
 	const pull = r.tickTickPullMinutes;
 	// A number outside 5 to 60 (0 included) is brought to the nearest end.
 	if (typeof pull === "number" && Number.isFinite(pull)) {
-		s.tickTickPullMinutes = Math.min(TICKTICK_PULL_RANGE.max, Math.max(TICKTICK_PULL_RANGE.min, Math.round(pull)));
+		s.tickTickPullMinutes = clamp(Math.round(pull), TICKTICK_PULL_RANGE.min, TICKTICK_PULL_RANGE.max);
 	}
 	if (typeof r.tickTickNotes === "boolean") s.tickTickNotes = r.tickTickNotes;
 	// Obsidian's secret ids: lowercase letters, digits and single dashes. "" means none chosen.

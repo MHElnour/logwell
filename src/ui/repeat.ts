@@ -1,6 +1,6 @@
 import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, seriesAnchor, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
-import { canonical } from "../persistence/serializer";
+import { canonical } from "../domain/text";
 import {
 	type LocalDate,
 	type MonthlyOn,

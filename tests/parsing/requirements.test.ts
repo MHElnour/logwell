@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeRepeatRule, repeatRuleProblem } from "../../src/domain/recurrence";
 import { parseQuickAdd } from "../../src/parsing";
 import type { SpanDecision } from "../../src/parsing/types";
+import { elapsed, measured } from "../perf/measure";
 import { NY, TOKYO, BERLIN, at, chipLines, makeCtx, parse } from "./helpers";
 
 // One block per parser requirement. A plain example (one input, the default context, the whole reading) is a row of
@@ -304,17 +305,14 @@ describe("robustness", () => {
 	it("parses a 5,000 character input in reasonable time", () => {
 		const unit = "Buy milk tomorrow at 7pm #Study @home [[Big]] for 45m every monday by Friday ";
 		const input = unit.repeat(Math.ceil(5000 / unit.length)).slice(0, 5000);
-		const started = performance.now();
-		const r = parse(input);
-		expect(performance.now() - started).toBeLessThan(2000);
+		const { result: r, ms } = measured(() => parse(input));
+		expect(ms).toBeLessThan(2000);
 		expect(r.chips.length).toBeGreaterThan(10);
 	});
 
 	it("parses a long run of one character in reasonable time", () => {
 		for (const ch of ["#", "@", "[", "a", " ", "1", "e"]) {
-			const started = performance.now();
-			parse(ch.repeat(5000));
-			expect(performance.now() - started, ch).toBeLessThan(2000);
+			expect(elapsed(() => parse(ch.repeat(5000))), ch).toBeLessThan(2000);
 		}
 	});
 
@@ -335,16 +333,12 @@ describe("robustness", () => {
 			long("Pay every day, 12 Oct every month on the 15th Mon-Fri "),
 			long("every May 5 to May 10 "),
 		]) {
-			const started = performance.now();
-			parse(input);
-			expect(performance.now() - started, input.slice(0, 12)).toBeLessThan(2000);
+			expect(elapsed(() => parse(input)), input.slice(0, 12)).toBeLessThan(2000);
 		}
 	});
 
 	it("parses long pathological runs of for and every in reasonable time", () => {
-		const started = performance.now();
-		parse("for 1h ".repeat(700) + "every mon, ".repeat(400));
-		expect(performance.now() - started).toBeLessThan(2000);
+		expect(elapsed(() => parse("for 1h ".repeat(700) + "every mon, ".repeat(400)))).toBeLessThan(2000);
 	});
 });
 

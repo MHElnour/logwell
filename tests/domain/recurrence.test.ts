@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { QueryContext } from "../../src/domain/queries";
 import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatEndProblem, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, seriesAnchor, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
 import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type RepeatRule, type Task } from "../../src/domain/types";
+import { elapsed, measured } from "../perf/measure";
 import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-fixtures";
 
 const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
@@ -165,9 +166,9 @@ describe("currentOccurrence (fixed mode)", () => {
 	it("stays cheap with three years of daily records", () => {
 		const records = dateRange("2023-10-01", "2026-10-04").map((d) => done(d));
 		const rec = series("2023-10-01", rule());
-		const start = performance.now();
-		expect(currentOccurrence(repeating(rec), records, "2026-10-05", "MO")).toBe("2026-10-05");
-		expect(performance.now() - start).toBeLessThan(200);
+		const { result, ms } = measured(() => currentOccurrence(repeating(rec), records, "2026-10-05", "MO"));
+		expect(result).toBe("2026-10-05");
+		expect(ms).toBeLessThan(200);
 	});
 });
 
@@ -222,10 +223,11 @@ describe("currentOccurrence (after completion)", () => {
 			{ ...done("9970-01-01"), resolvedAt: "1975-01-01T00:00:00.000Z" },
 			{ ...done("1976-01-01"), resolvedAt: "2026-01-01T09:00:00.000Z" },
 		];
-		const start = performance.now();
-		for (let i = 0; i < 100; i++) expect(currentOccurrence(repeating(rec), records, "2026-01-01", "MO")).toBe("9970-01-02");
+		const ms = elapsed(() => {
+			for (let i = 0; i < 100; i++) expect(currentOccurrence(repeating(rec), records, "2026-01-01", "MO")).toBe("9970-01-02");
+		});
 		// Walking ~2.9 million days per call took about 0.75 s for the 100 calls; the arithmetic takes a few ms.
-		expect(performance.now() - start).toBeLessThan(250);
+		expect(ms).toBeLessThan(250);
 	});
 
 	it("the anchor is no floor: the first occurrence done early counts from the completion day", () => {
