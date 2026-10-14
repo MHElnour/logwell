@@ -1411,7 +1411,7 @@ body.is-mobile .checkpoint-view .cp-app {
 .cp-add-bar .cp-qa-span-suggestion,
 .cp-add-bar .cp-qa-span-choice {
 	background: var(--background-modifier-hover);
-	text-decoration: underline dashed var(--text-muted);
+	border-bottom: 1px dashed var(--text-muted);
 }
 
 .checkpoint-quick-add-modal .cp-qa-span-unresolved,
@@ -1419,7 +1419,7 @@ body.is-mobile .checkpoint-view .cp-app {
 .cp-add-bar .cp-qa-span-unresolved,
 .cp-add-bar .cp-qa-span-collision {
 	background: var(--background-modifier-hover);
-	text-decoration: underline wavy var(--text-warning);
+	border-bottom: 1px solid var(--text-warning);
 }
 
 .checkpoint-quick-add-modal .cp-qa-span-missing,
@@ -1431,7 +1431,7 @@ body.is-mobile .checkpoint-view .cp-app {
 .cp-add-bar .cp-qa-span-superseded,
 .cp-add-bar .cp-qa-span-unsupported {
 	background: transparent;
-	text-decoration: underline dotted var(--text-faint);
+	border-bottom: 1px dotted var(--text-faint);
 }
 
 .checkpoint-quick-add-modal .cp-qa-chips,
