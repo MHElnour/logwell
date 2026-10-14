@@ -82,7 +82,7 @@ const CASES: Golden[] = [
 	{ in: "Taxes in a month", title: "Taxes in a month", chips: [`suggestion|scheduled|in a month|d=2026-11-01|n=${U}`] },
 	{ in: "Sort this evening", title: "Sort this evening", chips: [`suggestion|scheduled|this evening|d=2026-10-01|n=${U}`] },
 	{ in: "Finish by the end of the day", title: "Finish by the end of the day", chips: [`suggestion|scheduled|the day|d=2026-10-02|n=${U}`] },
-	{ in: "Trip Oct 5 - Oct 9", title: "Trip Oct 5 - Oct 9", chips: [`suggestion|scheduled|Oct 5 - Oct 9|d=2026-10-05|n=${U}`] },
+	{ in: "Trip Oct 5 - Oct 9", title: "Trip", s: "2026-10-05", d: "2026-10-09", chips: ["applied|scheduled|Oct 5", "applied|deadline|- Oct 9"] },
 	{ in: "Finish by may", title: "Finish by may" },
 	{ in: "Finish by in may", title: "Finish by in may", chips: [`suggestion|scheduled|may|d=2027-05-01|n=${U}`] },
 
@@ -172,7 +172,7 @@ const CASES: Golden[] = [
 	{ in: "Report by noon", title: "Report", d: "2026-10-01T12:00", chips: ["applied|deadline|by noon"] },
 	{ in: "Finish by sat", title: "Finish by sat", chips: [`suggestion|deadline|by sat|d=2026-10-03|n=${U}`] },
 	{ in: "Report BY friday", title: "Report", d: "2026-10-02", chips: ["applied|deadline|BY friday"] },
-	{ in: "Report due friday", title: "Report due", s: "2026-10-02", chips: ["applied|scheduled|friday"] },
+	{ in: "Report due friday", title: "Report", d: "2026-10-02", chips: ["applied|deadline|due friday"] },
 	{ in: "Drive by tomorrow", title: "Drive", d: "2026-10-02", chips: ["applied|deadline|by tomorrow"] },
 	{ in: "Essay tomorrow by Oct 9", title: "Essay", s: "2026-10-02", d: "2026-10-09", chips: ["applied|scheduled|tomorrow", "applied|deadline|by Oct 9"] },
 	{ in: "Essay by Oct 9 tomorrow", title: "Essay", s: "2026-10-02", d: "2026-10-09", chips: ["applied|deadline|by Oct 9", "applied|scheduled|tomorrow"] },

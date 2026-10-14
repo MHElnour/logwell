@@ -379,7 +379,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	};
 	// The ends typed as a bare weekday or a month and day with no year: before the start they move past it (bindEnds).
 	const rolling = new Map<string, RollKind>();
-	const readings = dates.flatMap((c) => (c.range !== undefined && built && isPart(c) && !onWeekly(c) && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
+	// A range read as the task's schedule and deadline (no typed repeat) splits unless a repeat is picked by hand.
+	const splits = (range: NonNullable<DateCandidate["range"]>, c: DateCandidate): boolean => (range.end.kind === "deadline" ? !picked : built && isPart(c) && !onWeekly(c) && (range.led || afterRepeat(c.span.start)));
+	const readings = dates.flatMap((c) => (c.range !== undefined && splits(c.range, c) ? [c.range.start, rangeEnd(c.range)] : [c]));
 	// With no typed repeat the task's first time wins: a later time alone stays title text, with no chip ("Call at 4pm and
 	// at 5pm"). A time that is only a suggestion is not the first one; a later date keeps the rule below that the later
 	// value wins.
@@ -431,6 +433,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const chips = kept.map((d) => d.chip);
 	const open = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
+	// A weekday typed with a day that is another weekday (the choice's notice says so) blocks saving until chosen, unless
+	// that date is set by hand.
+	for (const c of chips) if ((c.kind === "scheduled" || c.kind === "deadline") && c.status === "choice" && c.notice !== undefined && !ctx.manual.has(c.kind) && !open.includes(c.id)) open.push(c.id);
 	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
@@ -465,7 +470,7 @@ function offerDraft(input: string, c: DateCandidate): Draft {
 }
 
 function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome): Draft {
-	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives });
+	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives, ...(outcome.notice === undefined ? {} : { notice: outcome.notice }) });
 	const extra: Partial<Chip> = { date: outcome.date };
 	if (outcome.warning) extra.warning = outcome.warning;
 	if (outcome.status === "suggestion") extra.notice = NOTICE.useAsDate;
