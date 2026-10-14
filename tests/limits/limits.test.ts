@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { classify, LIMITS } from "../../e2e/limits/classify";
-import { type Cell, formatCsv, parseCsv } from "../../e2e/limits/csv";
-import { generateDb } from "../../e2e/limits/generate";
+import { classify, LIMITS } from "../../e2e-tests/limits/classify";
+import { type Cell, formatCsv, parseCsv } from "../../e2e-tests/limits/csv";
+import { generateDb } from "../../e2e-tests/limits/generate";
 import { loadWithIssues } from "../persistence/fixtures";
 import { INBOX_ID } from "../../src/domain/types";
 import { CURRENT_SCHEMA_VERSION, type DbData } from "../../src/persistence/schema";
 
 // The limits harness (docs/development/performance.md): its generator must produce valid current-schema databases, and its CSV
-// and result helpers must keep the matrix file intact. The e2e run itself is local only (e2e/limits).
+// and result helpers must keep the matrix file intact. The e2e run itself is local only (e2e-tests/limits).
 
 const TODAY = "2026-10-06";
 const OPTS = { today: TODAY, zone: "Europe/Berlin", dbId: "limits-test-db" };

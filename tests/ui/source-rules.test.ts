@@ -53,7 +53,7 @@ describe("comments say the rule, never its number", () => {
 	const REPO = join(__dirname, "..", "..");
 	const SELF = join(__dirname, "source-rules.test.ts");
 
-	for (const dir of ["src", "tests", "e2e"]) {
+	for (const dir of ["src", "tests", "e2e-tests"]) {
 		it(`#137: no line in ${dir} cites a rule by number, such as (rule 28) or Repeating tasks rule 19`, () => {
 			const found: string[] = [];
 			for (const file of files(join(REPO, dir))) {

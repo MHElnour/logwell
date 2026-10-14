@@ -21,7 +21,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
-- (#201) Quick Add's suggested, unknown and unsupported chips are marked with a line under them that every Obsidian version draws the same way.
 ## Fixed
+
+- (#201) Fixed Quick Add's chip underlines using a style that some Obsidian versions draw only partly; they are now plain lines in the same colors.
 
 ## Security

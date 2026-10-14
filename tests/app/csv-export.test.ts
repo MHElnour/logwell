@@ -3,7 +3,7 @@ import { csvField, exportFolderName, toCsv } from "../../src/app/DataService";
 import { isDomainError } from "../../src/domain/errors";
 import { rule } from "../domain/recurrence-fixtures";
 import { makeReadOnly, appHarness, type AppHarness } from "./harness";
-import { csvValues } from "../../e2e/limits/csv";
+import { csvValues } from "../../e2e-tests/limits/csv";
 
 // One CSV per entity, RFC 4180, UTF-8 with a BOM.
 

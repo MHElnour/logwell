@@ -7,7 +7,7 @@ import * as path from "node:path";
 export const config: WebdriverIO.Config = {
 	runner: "local",
 	framework: "mocha",
-	specs: ["./e2e/specs/**/*.e2e.ts"],
+	specs: ["./e2e-tests/specs/**/*.e2e.ts"],
 	maxInstances: 1,
 
 	capabilities: [
@@ -36,11 +36,11 @@ export const config: WebdriverIO.Config = {
 	logLevel: "warn",
 
 	// test-vault/.obsidian/ is gitignored, so a fresh clone has none. Write the
-	// config the suite needs (e2e/vault-config/) into it before Obsidian copies
+	// config the suite needs (e2e-tests/vault-config/) into it before Obsidian copies
 	// the vault. The written files win over any local ones of the same name.
 	onPrepare() {
 		fs.cpSync(
-			path.resolve("e2e/vault-config"),
+			path.resolve("e2e-tests/vault-config"),
 			path.resolve("test-vault/.obsidian"),
 			{ recursive: true, force: true },
 		);

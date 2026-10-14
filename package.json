@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:parser-grid": "node scripts/parser-oracle.mjs",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc -p e2e/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc -p e2e-tests/tsconfig.json",
     "e2e": "npm run build && wdio run ./wdio.conf.mts",
     "preversion": "node scripts/release-check.mjs pre && npm run typecheck && npm run lint && npm test",
     "version": "node scripts/release-check.mjs version $npm_package_version"

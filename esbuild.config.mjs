@@ -9,7 +9,7 @@ Source: https://github.com/ (see repository README)
 `;
 
 const production = process.argv[2] === "production";
-// Profiling build for the limits harness (e2e/limits/profile.e2e.ts): production settings, but not minified, with an external
+// Profiling build for the limits harness (e2e-tests/limits/profile.e2e.ts): production settings, but not minified, with an external
 // source map, so CPU profiles show real function names. Never used for a release: `npm run build` does not set it.
 const profiling = process.env.LOGWELL_PROFILE_BUILD === "1";
 
