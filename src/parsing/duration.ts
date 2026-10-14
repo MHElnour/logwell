@@ -1,12 +1,12 @@
 import { MAX_DURATION_MIN } from "../domain/tasks";
-import { isSpaceChar, LIST_SEP_PATTERN, scanFor, sticky } from "./text";
+import { DURATION_UNIT_PATTERN, isSpaceChar, LIST_SEP_PATTERN, scanFor, sticky } from "./text";
 
 // "for <duration>". Matched by hand-written sticky regexes
 // so a long input cannot cause catastrophic backtracking.
 
 const MIN_DURATION = 1;
 
-const UNIT = "(hours?|hrs?|h|minutes?|mins?|m)";
+const UNIT = `(${DURATION_UNIT_PATTERN})`;
 // A digit may follow a unit ("1h30m"); a letter may not ("5 meetings").
 const NOT_LETTER = "(?![\\p{L}])";
 const PART_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${UNIT}${NOT_LETTER}`, "iyu");

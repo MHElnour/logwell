@@ -28,3 +28,17 @@ describe("Quick Add on long runs of repeat lead words (#12)", () => {
 		},
 	);
 });
+
+// #69: quotes, backslashes and opening parentheses are each looked at once, so a long run of them parses in time that
+// grows with the text.
+describe("Quick Add on long runs of quotes, backslashes and parentheses (#69)", () => {
+	it.each(['"', "\\", "(", '"a" ', "\\a ", "(#a) "])("%j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
+		const ctx = makeCtx();
+		const short = long(unit, 5000);
+		const longer = long(unit, 20000);
+		const { small, large } = timeBoth(() => parseQuickAdd(short, ctx), () => parseQuickAdd(longer, ctx));
+		const report = `${small.toFixed(2)} ms -> ${large.toFixed(2)} ms`;
+		perfLog(`quick add ${JSON.stringify(unit)} 5,000 -> 20,000 characters: ${report}`);
+		expect(large, report).toBeLessThan(small * GROWTH + NOISE_MS);
+	});
+});

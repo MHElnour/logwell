@@ -27,6 +27,7 @@ import {
 	scanFor,
 	sticky,
 	tokenStartAllowed,
+	withoutTrailingMarks,
 	wordBoundaryBefore,
 } from "./text";
 
@@ -90,6 +91,51 @@ export function findNoteTokens(s: string, taken: Taken): NoteToken[] {
 		}
 		out.push({ span: { start: open, end }, linktext });
 		pos = end;
+	}
+	return out;
+}
+
+export interface LiteralToken {
+	span: Span;
+	/** A word or token after a backslash: the backslash leaves the title. */
+	escape: boolean;
+}
+
+/** The quote that closes each opening quote: straight and curly double quotes. */
+const CLOSING_QUOTE: Readonly<Record<string, string>> = { '"': '"', "\u201c": "\u201d" };
+
+/**
+ * Text Quick Add never reads, found before every other token: a phrase in double quotes, straight or curly (kept in the
+ * title with its quotes), and a word or token right after a backslash at a token start (`\today`, `\#Work`, `\!1`; the
+ * backslash leaves the title). A quote opens at a word start and closes before a word end; an unclosed quote, a quote
+ * inside a word (`5" screen`) and single quotes are plain text.
+ */
+export function findLiteralTokens(s: string, taken: Taken): LiteralToken[] {
+	const out: LiteralToken[] = [];
+	// The next closing quote of each kind found so far, so every quote is looked for once.
+	const next = new Map<string, number>();
+	for (let i = 0; i < s.length; i++) {
+		const ch = s.charAt(i);
+		if (ch === "\\") {
+			if (!tokenStartAllowed(s, i)) continue;
+			const trigger = s.charAt(i + 1);
+			const from = trigger === "#" || trigger === "@" || trigger === "!" ? i + 2 : i + 1;
+			const end = tokenRunEnd(s, from);
+			if (end === from || taken(i, end)) continue;
+			out.push({ span: { start: i, end }, escape: true });
+			i = end - 1;
+			continue;
+		}
+		const close = CLOSING_QUOTE[ch];
+		if (close === undefined || !wordBoundaryBefore(s, i)) continue;
+		let j = next.get(close);
+		if (j === undefined || (j !== -1 && j <= i)) {
+			j = s.indexOf(close, i + 1);
+			next.set(close, j);
+		}
+		if (j === -1 || isWordChar(charAt(s, j + 1)) || taken(i, j + 1)) continue;
+		out.push({ span: { start: i, end: j + 1 }, escape: false });
+		i = j;
 	}
 	return out;
 }
@@ -410,9 +456,9 @@ export function findDurationTokens(s: string, taken: Taken): DurationToken[] {
 }
 
 /**
- * `!1 !2 !3 !high !medium !low` (case-insensitive) at the start of the text or after
- * whitespace, ending at whitespace or the end of the text. `Wow!`, `!important`, `!4`, `a!1`,
- * `!!1` and `!1x` are not priorities.
+ * `!1 !2 !3 !high !medium !low` (case-insensitive) at the start of the text, after whitespace or after `(`, ending at
+ * whitespace or the end of the text, without the marks that may follow it (`!1.`, `(!2)`). `Wow!`, `!important`,
+ * `!4`, `a!1`, `!!1` and `!1x` are not priorities.
  */
 export function findPriorityTokens(s: string, taken: Taken): PriorityToken[] {
 	const out: PriorityToken[] = [];
@@ -424,6 +470,7 @@ export function findPriorityTokens(s: string, taken: Taken): PriorityToken[] {
 		if (!tokenStartAllowed(s, i)) continue;
 		let end = i + 1;
 		while (end < s.length && !isSpaceChar(charAt(s, end))) end += charAt(s, end).length;
+		end = withoutTrailingMarks(s, i + 1, end);
 		const word = s.slice(i + 1, end).toLowerCase();
 		const priority = Object.hasOwn(PRIORITY_WORDS, word) ? PRIORITY_WORDS[word] : undefined;
 		if (priority === undefined || taken(i, end)) continue;

@@ -20,7 +20,7 @@ export type SpanDecision =
 	| { span: Span; text: string; kind: "accept" } // apply a suggestion, or replace a manual field
 	| { span: Span; text: string; kind: "date"; value: DateSpec } // chosen alternative or edited value
 	| { span: Span; text: string; kind: "rule"; rule: RepeatRule } // chosen reading of a typed repeat's bare hour
-	| { span: Span; text: string; kind: "category"; categoryId: string } // suggester binding or unresolved pick
+	| { span: Span; text: string; kind: "category"; categoryId: string; sectionId?: string } // suggester binding (a list, or a list and one of its sections) or unresolved pick
 	| { span: Span; text: string; kind: "tag"; key: string } // suggester binding to an existing tag
 	| { span: Span; text: string; kind: "note"; path: string }; // suggester binding or collision pick
 
@@ -48,10 +48,13 @@ export interface Chip {
 	date?: DateSpec;
 	alternatives?: ChipAlternative[];
 	warning?: WallTimeWarning;
+	/** A duration chip's minutes, or a time range's on its date chip (`3-4pm`); a typed `for` duration wins over it. */
 	durationMin?: number;
 	/** 1 high, 2 medium, 3 low (a chip never carries 0). */
 	priority?: 1 | 2 | 3;
 	categoryId?: string;
+	/** The section of the list a `#list/section` names. */
+	sectionId?: string;
 	tagKey?: string;
 	newTag?: boolean;
 	notePath?: string;
@@ -71,6 +74,8 @@ export interface ParsedFields {
 	/** Set only when a priority chip is applied; absent means "no typed priority". */
 	priority?: Exclude<Priority, 0>;
 	categoryId?: string;
+	/** Set only with `categoryId`, when the applied `#list/section` names a section of that list. */
+	sectionId?: string;
 	tagKeys: string[]; // existing tags
 	newTags: string[]; // names to create on save, as typed; deduped by key, first casing wins
 	notePath?: string;
@@ -87,7 +92,7 @@ export interface ParseResult {
 	title: string;
 	titleFallback: boolean;
 	fields: ParsedFields;
-	/** Ids of chips that block saving: unresolved categories, invalid repeat ends. */
+	/** Ids of chips that block saving: unresolved categories, unknown sections, invalid repeat ends. */
 	blocking: string[];
 }
 
@@ -98,6 +103,8 @@ export interface ParseContext {
 	/** "tonight" is today at this "HH:mm" local time; default "20:00". */
 	eveningTime?: string;
 	categories: readonly { id: string; name: string }[];
+	/** The sections of every list, for `#list/section`; absent means none. */
+	sections?: readonly { id: string; categoryId: string; name: string }[];
 	/** `createdAt` decides who owns a name that two tags use: the oldest. */
 	tags: readonly { key: string; displayName: string; createdAt?: string }[];
 	resolveNote: (linktext: string) => string[];

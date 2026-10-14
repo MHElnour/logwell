@@ -8,10 +8,10 @@ import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
 import { parseRepeatText } from "./recurrence";
-import { MASK_CHAR, isWordChar } from "./text";
+import { MASK_CHAR, atClockLength, isWordChar } from "./text";
 import { type Draft, NOTICE, draft } from "./chipDraft";
 import { bindEnds, endDraft, partsStart, pickedEndDraft, requireStartDate } from "./repeatBinding";
-import { findDurationTokens, findNoteTokens, findPriorityTokens, findRecurrence, findRepeatCounts, findWordTokens, type RepeatCount } from "./tokens";
+import { findDurationTokens, findLiteralTokens, findNoteTokens, findPriorityTokens, findRecurrence, findRepeatCounts, findWordTokens, type RepeatCount } from "./tokens";
 import type {
 	Chip,
 	ChipKind,
@@ -25,8 +25,8 @@ import type {
 export { rebaseDecisions, tokenAtCursor };
 
 // The Quick Add parser. Pipeline:
-//   1. plugin tokens ([[note]], #category, @tag, every …, for <duration>) and
-//      the spans bound by decisions are found and masked;
+//   1. the spans bound by decisions, literal text ("…", \word), then plugin tokens ([[note]], #category, @tag,
+//      every …, for <duration>) are found and masked;
 //   2. chrono reads the masked text, and `by` turns its span into a deadline;
 //   3. each span becomes a chip: applied, suggestion, choice, unresolved …;
 //   4. manual fields and one-value-per-field rules are applied;
@@ -64,6 +64,7 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 		latest.set(`${start}:${end}`, d);
 	}
 	const categoryIds = new Set(ctx.categories.map((c) => c.id));
+	const sectionLists = new Map((ctx.sections ?? []).map((x) => [x.id, x.categoryId]));
 	const tagKeys = new Set(ctx.tags.map((t) => normalizeTagKey(t.key)));
 	const literal: Span[] = [];
 	const boundAll: Decisions["bound"] = [];
@@ -71,7 +72,8 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 	for (const d of latest.values()) {
 		if (d.kind === "literal") literal.push(d.span);
 		else if (d.kind === "category") {
-			if (categoryIds.has(d.categoryId)) boundAll.push(d);
+			// A section deleted or moved since the binding: the span is read again.
+			if (categoryIds.has(d.categoryId) && (d.sectionId === undefined || sectionLists.get(d.sectionId) === d.categoryId)) boundAll.push(d);
 		} else if (d.kind === "tag") {
 			// A tag deleted since the binding is not bound any more: the span is recognized again (a new tag).
 			const key = normalizeTagKey(d.key);
@@ -87,6 +89,29 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 		bound.push(d);
 	}
 	return { literal, bound, byChip };
+}
+
+type ListReading = { kind: "list"; categoryId: string; sectionId?: string } | { kind: "unresolved" | "invalid"; notice: string };
+
+/**
+ * What a typed `#name` names: the list of that whole name; else, split at the first `/`, a list and one of its sections
+ * (`#Work/Admin`, `#Work/` alone is the list), each matched as list names are. A list with no such section is invalid;
+ * no list at all is unresolved, by the whole name.
+ */
+function readListName(ctx: ParseContext, name: string): ListReading {
+	const whole = resolveListName(ctx.categories, name);
+	if (whole.kind === "one") return { kind: "list", categoryId: whole.list.id };
+	const slash = name.indexOf("/");
+	const list = slash === -1 ? null : resolveListName(ctx.categories, name.slice(0, slash));
+	if (list?.kind === "one") {
+		const sectionName = name.slice(slash + 1);
+		if (sectionName === "") return { kind: "list", categoryId: list.list.id };
+		const section = resolveListName((ctx.sections ?? []).filter((x) => x.categoryId === list.list.id), sectionName);
+		if (section.kind === "one") return { kind: "list", categoryId: list.list.id, sectionId: section.list.id };
+		return { kind: "invalid", notice: `No section named ${sectionName} in ${list.list.name}` };
+	}
+	const notice = whole.kind === "several" ? `\u201c${name}\u201d matches several lists. Use the exact name.` : `No list named ${name}`;
+	return { kind: "unresolved", notice };
 }
 
 function plainResult(input: string): ParseResult {
@@ -114,10 +139,16 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const drafts: Draft[] = [];
 
+	// Quoted phrases and escaped words are never read; the title keeps them (an escape without its backslash).
+	const literalTokens = findLiteralTokens(input, isTaken);
+	for (const t of literalTokens) take(t.span);
+	const keptText = [...decisions.literal, ...literalTokens.map((t) => t.span)];
+	const escapes = literalTokens.filter((t) => t.escape).map((t) => t.span.start);
+
 	// Bound spans first: they define a token even when it contains spaces.
 	for (const d of decisions.bound) {
 		if (d.kind === "category") {
-			drafts.push(draft(input, "category", d.span, "applied", { categoryId: d.categoryId }));
+			drafts.push(draft(input, "category", d.span, "applied", { categoryId: d.categoryId, ...(d.sectionId === undefined ? {} : { sectionId: d.sectionId }) }));
 		} else if (d.kind === "tag") {
 			drafts.push(draft(input, "tag", d.span, "applied", { tagKey: d.key }));
 		} else {
@@ -148,12 +179,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const categoryExists = (name: string): boolean => resolveListName(ctx.categories, name).kind !== "none";
 	for (const t of findWordTokens(input, "#", isTaken, (name) => !digitsOnly(name) || categoryExists(name))) {
 		take(t.span);
-		const match = resolveListName(ctx.categories, t.name);
-		if (match.kind === "one") drafts.push(draft(input, "category", t.span, "applied", { categoryId: match.list.id }));
-		else {
-			const notice = match.kind === "several" ? `\u201c${t.name}\u201d matches several lists. Use the exact name.` : `No list named ${t.name}`;
-			drafts.push(draft(input, "category", t.span, "unresolved", { notice }));
-		}
+		const found = readListName(ctx, t.name);
+		if (found.kind === "list") drafts.push(draft(input, "category", t.span, "applied", { categoryId: found.categoryId, ...(found.sectionId === undefined ? {} : { sectionId: found.sectionId }) }));
+		else drafts.push(draft(input, "category", t.span, found.kind, { notice: found.notice }));
 	}
 
 	// The names in use: the existing tags, then each new tag this input accepts, in order. Built when a tag is not found by its key.
@@ -171,6 +199,8 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		// So is a new key whose name another tag (or an earlier new tag of this input) already uses
 		// under another parent, or that repeats its parent's name.
 		if (tagFor(key) !== undefined) return true;
+		// A clock time ("@4pm", "@noon") is a time, unless a tag of that name exists.
+		if (atClockLength(name, 0) === name.length) return false;
 		if (digitsOnly(key) || !hasAllowedTagDepth(key) || hasRepeatedTagName(key)) return false;
 		const names = namesOfTags();
 		// A new name longer than 64 characters stays in the title too.
@@ -316,7 +346,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words. `until <date>`
 			// without a repeat is a deadline (decision 8).
 			if (c.repeatOnly) drafts.push(dateDraft(input, "scheduled", { start: c.textStart, end: c.span.end }, c.outcome));
-			else drafts.push(dateDraft(input, c.kind === "end" ? "deadline" : c.kind, c.span, c.outcome));
+			else drafts.push(dateDraft(input, c.kind === "end" ? "deadline" : c.kind, c.span, c.outcome, c.durationMin));
 		} else if (typed && !built && (c.kind === "end" || c.lead?.kind === "schedule" || c.lead?.kind === "end")) {
 			// A start or end part of a repeat Quick Add cannot build applies nothing.
 			drafts.push(draft(input, c.kind === "end" ? "repeatEnd" : "scheduled", c.span, "unsupported", { notice: NOTICE.recurrence }));
@@ -333,7 +363,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			// A time after an end word (`until 5pm`: an end must be a date) and a date after a weekly form's `on` are
 			// visible offers, never applied as typed.
 			drafts.push(offerDraft(input, c));
-		} else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
+		} else drafts.push(dateDraft(input, c.kind, c.span, c.outcome, c.durationMin));
 	}
 
 	drafts.sort((a, b) => a.chip.span.start - b.chip.span.start);
@@ -355,7 +385,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
-	return finish(input, chips, open, decisions.literal);
+	return finish(input, chips, open, keptText, escapes);
 }
 
 /**
@@ -385,9 +415,10 @@ function offerDraft(input: string, c: DateCandidate): Draft {
 	return d;
 }
 
-function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome): Draft {
-	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives });
-	const extra: Partial<Chip> = { date: outcome.date };
+function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome, durationMin?: number): Draft {
+	const minutes: Partial<Chip> = durationMin === undefined ? {} : { durationMin };
+	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives, ...minutes });
+	const extra: Partial<Chip> = { date: outcome.date, ...minutes };
 	if (outcome.warning) extra.warning = outcome.warning;
 	if (outcome.status === "suggestion") extra.notice = NOTICE.useAsDate;
 	return draft(input, kind, span, outcome.status, extra);
@@ -451,28 +482,37 @@ function supersede(drafts: Draft[]): void {
 			d.chip.notice = NOTICE.superseded;
 		}
 	}
-	// An unresolved category before a later applied one no longer blocks: the later value wins.
+	// An unresolved list or an unknown section before a later applied one no longer blocks: the later value wins.
 	const lastCategory = lastOf.get("category");
 	for (const d of drafts) {
-		if (d.chip.kind === "category" && d.chip.status === "unresolved" && lastCategory && d.chip.span.start < lastCategory.chip.span.start) {
+		if (d.chip.kind === "category" && (d.chip.status === "unresolved" || d.chip.status === "invalid") && lastCategory && d.chip.span.start < lastCategory.chip.span.start) {
 			d.chip.status = "superseded";
 			d.chip.notice = NOTICE.superseded;
 		}
 	}
 }
 
-// A lone "," or ";" right before or after a removed span: it belonged to the span ("Read every day, 20 pages").
-const COMMA_AFTER_RE = /^\s*[,;]/u;
-const COMMA_BEFORE_RE = /[,;]\s*$/u;
+// A lone mark right before or after a removed span belonged to it ("Read every day, 20 pages", "Pay rent !1.", "Call
+// Ann - tomorrow"): a comma, semicolon, period, colon, exclamation or question mark, hyphen or en dash, not one of a
+// run of marks. A dash joined to words on both sides stays ("Meeting 4-3pm").
+const MARK_AFTER_RE = /^\s*[,;.:!?\-\u2013](?![,;.:!?\-\u2013])/u;
+const MARK_BEFORE_RE = /[,;.:!?\-\u2013]\s*$/u;
+const isMarkChar = (ch: string): boolean => ch !== "" && ",;.:!?-\u2013".includes(ch);
+// The two halves of a pair of parentheses with only removed spans between them ("Pay rent (#Work)").
+const OPEN_PAREN_RE = /\(\s*$/u;
+const CLOSE_PAREN_RE = /^\s*\)/u;
+const BLANK_RE = /^\s*$/u;
 
 /**
- * The title: the input without the applied spans, or the full text if nothing remains. A lone comma or semicolon left next to a
- * removed span goes with it, as does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
- * every sunday."): no stray punctuation or spaces. Text the user kept as it is (`literal`, a
- * dismissed chip) is never touched.
+ * The title: the input without the applied spans, or the full text if nothing remains. A lone mark left next to a
+ * removed span goes with it, as do the parentheses around removed spans only, and a sentence's last punctuation after a
+ * repeat that leaves the title ("Plan meals every sunday."): no stray punctuation or spaces. An escaped word loses its
+ * backslash (`escapes`, their indexes). Text the user kept as it is (`literal`: a dismissed chip, a quoted phrase, an
+ * escaped word) is never touched.
  */
-function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]): string {
+function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[], escapes: readonly number[]): string {
 	const parts: string[] = [];
+	// Where each part starts in the input; moved on when a part loses its first characters.
 	const starts: number[] = [];
 	let at = 0;
 	for (const c of chips) {
@@ -484,27 +524,67 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 	parts.push(input.slice(at));
 	starts.push(at);
 	const kept = (index: number): boolean => literal.some((l) => l.start <= index && index < l.end);
+	// A hyphen or en dash between two word characters joins them ("4-3pm"): not a lone mark.
+	const joins = (mark: number): boolean => "-\u2013".includes(input.charAt(mark)) && isWordChar(input.charAt(mark - 1)) && isWordChar(input.charAt(mark + 1));
+	const dropHead = (i: number, n: number): void => {
+		parts[i] = parts[i]!.slice(n);
+		starts[i] = starts[i]! + n;
+	};
 	for (let i = 0; i + 1 < parts.length; i++) {
-		const before = COMMA_BEFORE_RE.exec(parts[i]!);
-		if (before !== null && !kept(starts[i]! + before.index)) parts[i] = parts[i]!.slice(0, before.index);
-		const after = COMMA_AFTER_RE.exec(parts[i + 1]!);
-		if (after !== null && !kept(starts[i + 1]! + after[0].length - 1)) parts[i + 1] = parts[i + 1]!.slice(after[0].length);
+		const open = OPEN_PAREN_RE.exec(parts[i]!);
+		if (open === null || kept(starts[i]! + open.index)) continue;
+		let j = i + 1;
+		while (j + 1 < parts.length && BLANK_RE.test(parts[j]!)) j++;
+		const close = CLOSE_PAREN_RE.exec(parts[j]!);
+		if (close === null || kept(starts[j]! + close[0].length - 1)) continue;
+		parts[i] = parts[i]!.slice(0, open.index);
+		dropHead(j, close[0].length);
+	}
+	for (let i = 0; i + 1 < parts.length; i++) {
+		const before = MARK_BEFORE_RE.exec(parts[i]!);
+		if (before !== null) {
+			const mark = starts[i]! + before.index;
+			if (!kept(mark) && !isMarkChar(input.charAt(mark - 1)) && !joins(mark)) parts[i] = parts[i]!.slice(0, before.index);
+		}
+		const after = MARK_AFTER_RE.exec(parts[i + 1]!);
+		if (after !== null) {
+			const mark = starts[i + 1]! + after[0].length - 1;
+			if (!kept(mark) && !joins(mark)) dropHead(i + 1, after[0].length);
+		}
 	}
 	const lastKind = chips.filter((c) => c.status === "applied").at(-1)?.kind;
 	const tail = parts.at(-1)!;
 	if (parts.length > 1 && (lastKind === "recurrence" || lastKind === "repeatEnd") && /^[.,;:!?]+\s*$/u.test(tail) && /\s$/u.test(parts.at(-2)!)) parts[parts.length - 1] = "";
-	return collapseWhitespace(parts.join(""));
+	if (escapes.length === 0) return collapseWhitespace(parts.join(""));
+	// An escaped word sits inside one part, its backslash never touched by the cleanup above.
+	return collapseWhitespace(parts.map((p, i) => withoutIndexes(p, starts[i]!, escapes)).join(""));
 }
 
-function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[]): ParseResult {
+/** `text`, which starts at `start` in the input, without the characters at the input indexes `drop`. */
+function withoutIndexes(text: string, start: number, drop: readonly number[]): string {
+	let out = "";
+	let from = 0;
+	for (const index of drop) {
+		const k = index - start;
+		if (k < from || k >= text.length) continue;
+		out += text.slice(from, k);
+		from = k + 1;
+	}
+	return out + text.slice(from);
+}
+
+function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[]): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
+	// A time range's duration (`3-4pm`); a typed `for` duration wins.
+	let rangeMinutes: number | undefined;
 	for (const c of chips) {
 		if (c.status !== "applied") continue;
 		appliedCount++;
 		switch (c.kind) {
 			case "scheduled":
 				if (c.date) fields.scheduled = c.date;
+				if (c.durationMin !== undefined) rangeMinutes = c.durationMin;
 				break;
 			case "deadline":
 				if (c.date) fields.deadline = c.date;
@@ -517,6 +597,7 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 			case "category":
 				if (c.categoryId !== undefined) fields.categoryId = c.categoryId;
+				if (c.sectionId !== undefined) fields.sectionId = c.sectionId;
 				break;
 			case "note":
 				if (c.notePath !== undefined) fields.notePath = c.notePath;
@@ -539,16 +620,17 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 		}
 	}
-	const collapsed = titleOf(input, chips, literal);
+	if (fields.plannedDurationMin === undefined && rangeMinutes !== undefined) fields.plannedDurationMin = rangeMinutes;
+	const collapsed = titleOf(input, chips, literal, escapes);
 	return {
 		input,
 		chips,
 		title: collapsed === "" ? input : collapsed,
 		titleFallback: collapsed === "" && appliedCount > 0,
 		fields,
-		// An unresolved list, an invalid repeat end, and a typed repeat or a yearly repeat's start whose hour is still a
-		// choice (`open`) block saving until fixed, chosen or dismissed.
-		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
+		// An unresolved list, an unknown section, an invalid repeat end, and a typed repeat or a yearly repeat's start whose
+		// hour is still a choice (`open`) block saving until fixed, chosen or dismissed.
+		blocking: chips.filter((c) => c.status === "unresolved" || ((c.kind === "repeatEnd" || c.kind === "category") && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
 	};
 }
 

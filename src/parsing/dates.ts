@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
 import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
-import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
+import { atClockLength, DAY_PART_PATTERN, DURATION_UNIT_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, tokenStartAllowed, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -28,6 +28,10 @@ const THIS_WORD_RE = /\bthis\b/iu;
 // No lookbehind (iOS): the character before is matched and ignored.
 const LEADING_ZERO_TIME_RE = /(?:^|[^\d:.])0[1-9]:[0-5]\d(?!\d)/u;
 const PAST_WORD_RE = /^(?:last|past|previous)\b/iu;
+// A planned duration without `for` ("2h", "30 min"): no date at all, and no chip.
+const DURATION_TEXT_RE = new RegExp(`^\\d+(?:\\.\\d+)?\\s*${DURATION_UNIT_PATTERN}$`, "iu");
+// What joins the two times of a time range: "-", an en dash or "to" ("3-4pm", "from 3pm to 5pm").
+const TIME_RANGE_JOIN_RE = /\s*(?:\bto\b|[-\u2013])\s*/giu;
 
 export type DateOutcome =
 	| { status: "applied" | "suggestion"; date: DateSpec; warning?: WallTimeWarning }
@@ -53,6 +57,8 @@ export interface DateCandidate {
 	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
 	rolls: RollKind | null;
 	outcome: DateOutcome;
+	/** A time range's minutes from its start to its end (`3-4pm`): the date is its start time. */
+	durationMin?: number;
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
@@ -75,6 +81,8 @@ interface Lead {
 	kind: LeadKind;
 	/** Only next to a repeat: these are also everyday words ("the movie ending", "the starting lineup"). */
 	repeatOnly?: true;
+	/** Written right before the date, with no space, at a token start: `@` before a clock time ("@4pm", "@noon"). */
+	attached?: true;
 }
 
 /**
@@ -86,6 +94,7 @@ interface Lead {
 const LEADS: readonly Lead[] = [
 	{ words: "by", kind: "deadline" },
 	{ words: "at", kind: "time" },
+	{ words: "@", kind: "time", attached: true },
 	{ words: "until", kind: "end" },
 	{ words: "till", kind: "end", repeatOnly: true },
 	{ words: "ending on", kind: "end", repeatOnly: true },
@@ -114,7 +123,8 @@ function leadBefore(s: string, index: number): LeadFound | null {
 	let best: LeadFound | null = null;
 	for (const lead of LEADS) {
 		let at = index;
-		const words = lead.words.split(" ");
+		if (lead.attached === true) at = s.startsWith(lead.words, index - lead.words.length) && tokenStartAllowed(s, index - lead.words.length) && atClockLength(s, index) > 0 ? index - lead.words.length : -1;
+		const words = lead.attached === true ? [] : lead.words.split(" ");
 		for (let w = words.length - 1; w >= 0 && at !== -1; w--) at = wordBefore(s, at, words[w]!);
 		if (at !== -1 && (best === null || at < best.start)) best = { start: at, words: lead.words, kind: lead.kind, repeatOnly: lead.repeatOnly === true };
 	}
@@ -211,16 +221,31 @@ const dateOverTime: chrono.Refiner = {
 	},
 };
 
+// Four digits after `at` are a 24-hour time, hours 00 to 23 and minutes 00 to 59 ("at 0900", "at 1730"), read with the
+// `at`. Without `at` ("Call 0900") they stay text.
+const AT_24_HOUR_RE = /\bat\s+([01]\d|2[0-3])([0-5]\d)(?![\p{L}\p{N}])/iu;
+const at24Hour: chrono.Parser = {
+	pattern: () => AT_24_HOUR_RE,
+	extract: (_context, match) => {
+		const hour = Number(match[1]);
+		return { hour, minute: Number(match[2]), meridiem: hour < 12 ? 0 : 1 };
+	},
+};
+
 /**
- * chrono's casual English and en-GB readers with `dateOverTime` first, and `shortYear` and `impliedYear` right before
- * the filter of impossible dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is.
- * Clones: chrono's shared instances stay as they are.
+ * chrono's casual English and en-GB readers with `dateOverTime` first, `shortYear` and `impliedYear` right before the
+ * filter of impossible dates (the one refiner with a `strictMode` field), and the `at 0900` reader. en-GB reads a month
+ * name before a two-digit day as that day ("Oct 15", "Feb 29"), as English does: its month-name-first reader is replaced
+ * by a copy that does not skip a day that looks like a year (the one parser with a `shouldSkipYearLikeDate` field).
+ * chrono's date range merge stays as it is. Clones: chrono's shared instances stay as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
 	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
 	reader.refiners.unshift(dateOverTime);
+	reader.parsers = reader.parsers.map((p) => (Object.hasOwn(p, "shouldSkipYearLikeDate") ? Object.assign(Object.create(Object.getPrototypeOf(p) as object) as chrono.Parser, p, { shouldSkipYearLikeDate: false }) : p));
+	reader.parsers.push(at24Hour);
 	return reader;
 }
 
@@ -324,7 +349,7 @@ function componentsIn(c: chrono.ParsedComponents, zone: "utc"): DateTime {
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
  * `fixed`: the day to use instead of chrono's, a certain one (a range's end moved past its start).
  */
-function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { date: LocalDate; dayCertain: boolean; hourCertain: boolean; outcome: DateOutcome } | null {
+function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate, timeRange = false): { date: LocalDate; dayCertain: boolean; hourCertain: boolean; outcome: DateOutcome } | null {
 	const { env, today, nowLocal, todayWeekday } = clock;
 	const start = r.start;
 	const dayKnown = fixed !== undefined || start.isCertain("day");
@@ -366,8 +391,9 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 				: { kind: "date", date: d };
 
 	let outcome: DateOutcome | null = null;
-	const lowConfidence = r.end != null || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
-	const meridiemKnown = start.isCertain("meridiem") || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
+	// A time range (`timeRange`, "3-4pm") is read by its start, whose half of the day follows the end's.
+	const lowConfidence = (r.end != null && !timeRange) || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
+	const meridiemKnown = start.isCertain("meridiem") || (timeRange && r.end?.isCertain("meridiem") === true) || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
 	if (lowConfidence) {
 		const res = resolveDateSpec(mkValue(date));
 		if (!res) return null;
@@ -524,6 +550,35 @@ function startAlone(r: chrono.ParsedResult, masked: string, parser: chrono.Chron
 	return chronoDay.isValid && aloneDay.isValid && isoDate(chronoDay) === isoDate(aloneDay) ? null : last;
 }
 
+/**
+ * A range of two times on one day joined by "-", an en dash or "to" ("3-4pm", "10am-11am", "from 3pm to 5pm", "2-3pm
+ * tomorrow"): the minutes from its start to its end; when the end is not after the start ("4-3pm"), the end read alone,
+ * placed where it is in the text. Null for any other reading, a date range or `until` included.
+ */
+function timeRangeOf(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock): { minutes: number } | { end: chrono.ParsedResult } | null {
+	const end = r.end;
+	if (end == null || !r.start.isCertain("hour") || !end.isCertain("hour")) return null;
+	if (dayCertainOf(end) || end.isCertain("month")) {
+		const startDay = componentsIn(r.start, "utc");
+		const endDay = componentsIn(end, "utc");
+		if (!startDay.isValid || !endDay.isValid || isoDate(startDay) !== isoDate(endDay)) return null;
+	}
+	const text = r.text.trimEnd();
+	for (const m of text.matchAll(TIME_RANGE_JOIN_RE)) {
+		const at = m.index + m[0].length;
+		const right = text.slice(at);
+		if (m.index === 0 || right === "") continue;
+		const found = parser.parse(right, clock.ref, optionOf(clock));
+		const alone = found.length === 1 ? found[0] : undefined;
+		if (alone === undefined || alone.index !== 0 || alone.text.trimEnd() !== right || alone.end != null) continue;
+		if (alone.start.get("hour") !== end.get("hour") || alone.start.get("minute") !== end.get("minute")) continue;
+		const minutes = (end.get("hour") ?? 0) * 60 + (end.get("minute") ?? 0) - ((r.start.get("hour") ?? 0) * 60 + (r.start.get("minute") ?? 0));
+		if (minutes > 0) return { minutes };
+		return { end: Object.assign(alone, { index: r.index + at }) };
+	}
+	return null;
+}
+
 export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const zoneNow = zoneNowOf(env.now, env.zone);
 	const parser = DATE_READERS[env.locale];
@@ -534,14 +589,19 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
-	for (const r of results) {
-		// A span that reaches into a mask, or one introduced by "for" ("for 2 days" is not a date).
-		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text)) continue;
+	for (const result of results) {
+		// A span that reaches into a mask, one introduced by "for" ("for 2 days" is not a date), or a duration without
+		// `for` ("Gym 2h").
+		if (result.text.includes(MASK_CHAR) || /^for\s/iu.test(result.text) || DURATION_TEXT_RE.test(result.text.trim())) continue;
+		// A time range is its start time and a duration, or its end time alone when the end is not after the start.
+		const range = timeRangeOf(result, parser, clock);
+		const r = range !== null && "end" in range ? range.end : result;
+		const timeRange = range !== null && "minutes" in range;
 		// A range with a side that is only a time: its start as typed alone, still only a suggestion (a choice keeps chrono's reading).
-		const alone = startAlone(r, masked, parser, clock);
+		const alone = range === null ? startAlone(r, masked, parser, clock) : null;
 		const aloneRead = alone === null ? null : readResult(alone, clock);
 		const fromAlone = alone !== null && !alone.text.includes(MASK_CHAR) && aloneRead !== null && aloneRead.outcome.status !== "choice" ? { head: alone, read: aloneRead } : null;
-		const read = fromAlone?.read ?? readResult(r, clock);
+		const read = fromAlone?.read ?? readResult(r, clock, undefined, timeRange);
 		if (read === null) continue;
 		const { dayCertain, hourCertain } = read;
 		const outcome = fromAlone === null ? read.outcome : asSuggestion(read.outcome);
@@ -578,6 +638,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,
 			outcome,
+			...(timeRange ? { durationMin: range.minutes } : {}),
 		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start

@@ -55,18 +55,47 @@ function applied(r: ParseResult) {
 	return r.chips.filter((c) => c.status === "applied");
 }
 
-/** The title the parser owes: the segments between applied spans, a lone "," or ";" next to a removed span dropped. */
+const MARKS = ",;.:!?-\u2013";
+const isWord = (ch: string): boolean => /^[\p{L}\p{N}\p{M}_]$/u.test(ch);
+
+/**
+ * The title the parser owes: the segments between applied spans; parentheses around removed spans only dropped; a lone
+ * mark (`, ; . : ! ? -` or an en dash, not one of a run, not a dash joined to words on both sides) next to a removed span
+ * dropped.
+ */
 function titleSegments(input: string, r: ParseResult): string[] {
 	const parts: string[] = [];
+	const starts: number[] = [];
 	let at0 = 0;
 	for (const c of applied(r)) {
 		parts.push(input.slice(at0, c.span.start));
+		starts.push(at0);
 		at0 = c.span.end;
 	}
 	parts.push(input.slice(at0));
+	starts.push(at0);
+	const glued = (mark: number): boolean => "-\u2013".includes(input.charAt(mark)) && isWord(input.charAt(mark - 1)) && isWord(input.charAt(mark + 1));
 	for (let i = 0; i + 1 < parts.length; i++) {
-		parts[i] = parts[i]!.replace(/[,;]\s*$/u, "");
-		parts[i + 1] = parts[i + 1]!.replace(/^\s*[,;]/u, "");
+		if (!/\(\s*$/u.test(parts[i]!)) continue;
+		let j = i + 1;
+		while (j + 1 < parts.length && parts[j]!.trim() === "") j++;
+		const close = /^\s*\)/u.exec(parts[j]!);
+		if (close === null) continue;
+		parts[i] = parts[i]!.replace(/\(\s*$/u, "");
+		parts[j] = parts[j]!.slice(close[0].length);
+		starts[j] = starts[j]! + close[0].length;
+	}
+	for (let i = 0; i + 1 < parts.length; i++) {
+		const before = /[,;.:!?\-\u2013]\s*$/u.exec(parts[i]!);
+		if (before !== null) {
+			const mark = starts[i]! + before.index;
+			if (!MARKS.includes(input.charAt(mark - 1) || "x") && !glued(mark)) parts[i] = parts[i]!.slice(0, before.index);
+		}
+		const after = /^\s*[,;.:!?\-\u2013](?![,;.:!?\-\u2013])/u.exec(parts[i + 1]!);
+		if (after !== null && !glued(starts[i + 1]! + after[0].length - 1)) {
+			parts[i + 1] = parts[i + 1]!.slice(after[0].length);
+			starts[i + 1] = starts[i + 1]! + after[0].length;
+		}
 	}
 	return parts;
 }
@@ -150,6 +179,8 @@ describe("parser properties", () => {
 	it("the title is the input without applied spans, whitespace collapsed, or the input when that is empty", () => {
 		fc.assert(
 			fc.property(arbText, arbZone, arbNow, arbManual, (input, zone, now, manual) => {
+				// Quoted and escaped text is found by the parser alone: the title of such input is checked by the phrase table.
+				fc.pre(!/["\u201c\\]/u.test(input));
 				const r = parseUnguarded(input, ctxFrom(zone, now, "en", manual, []));
 				expect(r.title).toBe(expectedTitle(input, r));
 				expect(r.titleFallback).toBe(applied(r).length > 0 && expectedTitleIsEmpty(input, r));
@@ -166,8 +197,10 @@ describe("parser properties", () => {
 				const last = (kind: string) => a.filter((c) => c.kind === kind).at(-1);
 				expect(r.fields.scheduled).toEqual(last("scheduled")?.date);
 				expect(r.fields.deadline).toEqual(last("deadline")?.date);
-				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin);
+				// A typed `for` duration wins over a time range's (`3-4pm`, on its date chip).
+				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin ?? last("scheduled")?.durationMin);
 				expect(r.fields.categoryId).toBe(last("category")?.categoryId);
+				expect(r.fields.sectionId).toBe(last("category")?.sectionId);
 				expect(r.fields.notePath).toBe(last("note")?.notePath);
 				expect(r.fields.priority).toBe(last("priority")?.priority);
 				expect(r.fields.recurrence).toBe(last("recurrence")?.rule);
@@ -175,7 +208,7 @@ describe("parser properties", () => {
 				expect(new Set(r.fields.newTags).size).toBe(r.fields.newTags.length);
 				// The fragments type no repeat end and no yearly start: what blocks is an unresolved list and, unless a repeat is
 				// picked by hand, a typed repeat whose hour is a choice.
-				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
+				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || (c.kind === "category" && c.status === "invalid") || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
 				expect(r.blocking).toEqual(r.chips.filter(blocks).map((c) => c.id));
 				// Per field at most one applied chip.
 				for (const k of ["scheduled", "deadline", "duration", "category", "note", "priority", "recurrence"]) {

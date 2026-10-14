@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { occurrencesBetween, plainRule, startRecurrence } from "../../src/domain/recurrence";
 import type { RepeatRule } from "../../src/domain/types";
 import type { Chip, DateLocale, ParseResult, ParsedField } from "../../src/parsing/types";
-import { blockingKinds, briefChips, chipLines, chipOf, dateSpecOf, deadlineOf, endOf, inZones, parseAt, recOf, scheduledOf } from "./helpers";
+import { blockingKinds, briefChips, chipLines, chipOf, dateSpecOf, deadlineOf, endOf, inZones, parseAt, recOf, scheduledOf, type ParseOptions } from "./helpers";
 
 // #12: the closed table of repeat phrases
 // Quick Add reads, and the one home for "typed text to rule, start and end". Every row runs in New York, Berlin and
@@ -50,10 +50,20 @@ interface Row {
 	startDate?: string;
 	/** A repeat picked by hand. */
 	pickedRule?: RepeatRule;
+	/** The planned duration in minutes, the list id, the section id and the priority; null means none, absent means not checked. */
+	dur?: number | null;
+	cat?: string | null;
+	sec?: string | null;
+	pri?: 1 | 2 | 3 | null;
+	/** The existing tag keys and the new tag names; absent means not checked. */
+	tags?: string[];
+	nt?: string[];
+	/** The vault's lists, sections and tags, in place of the test vault's. */
+	vault?: Pick<ParseOptions, "categories" | "sections" | "tags">;
 }
 
 function check(row: Row, zone: string, locale: DateLocale = row.locale === "any" || row.locale === undefined ? "en" : row.locale): void {
-	const r = parseAt(row.in, zone, { locale, local: row.local, manual: row.manual, startDate: row.startDate, pickedRule: row.pickedRule });
+	const r = parseAt(row.in, zone, { ...row.vault, locale, local: row.local, manual: row.manual, startDate: row.startDate, pickedRule: row.pickedRule });
 	const because = `${JSON.stringify(row.in)} ${locale} ${zone}: ${briefChips(r).join(" ; ")}`;
 	expect(r.title, because).toBe(row.title);
 	expect(recOf(r), because).toBe(row.rec);
@@ -61,6 +71,13 @@ function check(row: Row, zone: string, locale: DateLocale = row.locale === "any"
 	expect(deadlineOf(r), because).toBe(row.d);
 	expect(endOf(r), because).toBe(row.end);
 	expect(blockingKinds(r), because).toEqual(row.blocking ?? []);
+	const absent = <T>(v: T | null | undefined): T | undefined => v ?? undefined;
+	if (row.dur !== undefined) expect(r.fields.plannedDurationMin, because).toBe(absent(row.dur));
+	if (row.cat !== undefined) expect(r.fields.categoryId, because).toBe(absent(row.cat));
+	if (row.sec !== undefined) expect(r.fields.sectionId, because).toBe(absent(row.sec));
+	if (row.pri !== undefined) expect(r.fields.priority, because).toBe(absent(row.pri));
+	if (row.tags !== undefined) expect(r.fields.tagKeys, because).toEqual(row.tags);
+	if (row.nt !== undefined) expect(r.fields.newTags, because).toEqual(row.nt);
 	if (row.chips !== undefined) expect(chipLines(r), because).toEqual(row.chips);
 	if (row.brief !== undefined) expect(briefChips(r), because).toEqual(row.brief);
 	if (row.dates !== undefined) expect(briefChips(r).filter((_, i) => DATE_KINDS.includes(r.chips[i]!.kind)), because).toEqual(row.dates);
@@ -606,10 +623,6 @@ describe("4b. Date ranges", () => {
 		{ in: "Meeting today until 5pm", text: "today until 5pm", value: "2026-10-07" },
 		{ in: "Meeting in 3 days until noon", text: "in 3 days until noon", value: "2026-10-10" },
 		{ in: "Meeting Oct 12 until noon", text: "Oct 12 until noon", value: "2026-10-12" },
-		{ in: "Meeting Friday 3pm-5pm", text: "Friday 3pm-5pm", value: "2026-10-09T15:00" },
-		{ in: "Meeting Friday 3-5pm", text: "Friday 3-5pm", value: "2026-10-09T15:00" },
-		{ in: "Meeting Friday from 3pm to 5pm", text: "Friday from 3pm to 5pm", value: "2026-10-09T15:00" },
-		{ in: "Meeting Saturday 10am-2pm", text: "Saturday 10am-2pm", value: "2026-10-10T10:00" },
 	])("$in suggests its start as typed alone", (row) => {
 		inZones((zone) => {
 			const r = parseAt(row.in, zone);
@@ -866,5 +879,131 @@ describe("6. Rules that always hold", () => {
 				check({ in: `Party ${jun3}, 2025 people`, locale, title: "Party people", s: "2025-06-03" }, zone);
 			}
 		});
+	});
+});
+
+// #69: everyday phrasings Quick Add reads, from the approved table; outside it nothing changes. Wednesday 2026-10-07
+// 10:00 in each zone.
+describe("7. Everyday phrasings", () => {
+	const WORK = "cat-work-0006";
+	const ADMIN = "sec-admin-0001";
+
+	describe("times after @", () => {
+		it.each<Row>([
+			{ in: "Call mom @4pm", title: "Call mom", s: "2026-10-07T16:00", brief: ["scheduled|applied|@4pm"], tags: [], nt: [] },
+			{ in: "Call mom @4:30pm", title: "Call mom", s: "2026-10-07T16:30", brief: ["scheduled|applied|@4:30pm"] },
+			{ in: "Call mom @noon", title: "Call mom", s: "2026-10-07T12:00", brief: ["scheduled|applied|@noon"], nt: [] },
+			// a time with no date is the next such time, as after `at`
+			{ in: "Call mom @9am", title: "Call mom", s: "2026-10-08T09:00", brief: ["scheduled|applied|@9am"] },
+			// a tag of that name wins
+			{ in: "Call mom @4pm", title: "Call mom", tags: ["4pm"], vault: { tags: [{ key: "4pm", displayName: "4pm" }] }, brief: ["tag|applied|@4pm"] },
+			// everything else after @ follows the tag rules
+			{ in: "Call mom @home", title: "Call mom", tags: ["home"] },
+			{ in: "Call mom @0900", title: "Call mom @0900", brief: [] },
+			{ in: "File the forms @2024", title: "File the forms @2024", brief: [] },
+			{ in: "Call mom @4p", title: "Call mom", nt: ["4p"], brief: ["tag|applied|@4p"] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("24-hour clock after at", () => {
+		it.each<Row>([
+			{ in: "Call at 0900", title: "Call", s: "2026-10-08T09:00", brief: ["scheduled|applied|at 0900"] },
+			{ in: "Call at 0920", title: "Call", s: "2026-10-08T09:20" },
+			{ in: "Call at 1730", title: "Call", s: "2026-10-07T17:30" },
+			{ in: "Call at 2460", title: "Call at 2460", brief: [] },
+			{ in: "Call at 0975", title: "Call at 0975", brief: [] },
+			{ in: "Call 0900", title: "Call 0900", brief: [] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("time ranges: the start time and a duration from start to end", () => {
+		it.each<Row>([
+			{ in: "Meeting 3-4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60, brief: ["scheduled|applied|3-4pm"] },
+			{ in: "Meeting 3pm-4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60 },
+			{ in: "Meeting 3–4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60 },
+			{ in: "Meeting 10am-11am", title: "Meeting", s: "2026-10-07T10:00", dur: 60 },
+			{ in: "Call from 3pm to 5pm", title: "Call", s: "2026-10-07T15:00", dur: 120 },
+			{ in: "Meeting 2-3pm tomorrow", title: "Meeting", s: "2026-10-08T14:00", dur: 60 },
+			{ in: "Meeting Friday 3pm-5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120, brief: ["scheduled|applied|Friday 3pm-5pm"] },
+			{ in: "Meeting Friday 3-5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120 },
+			{ in: "Meeting Friday from 3pm to 5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120 },
+			{ in: "Meeting Saturday 10am-2pm", title: "Meeting", s: "2026-10-10T10:00", dur: 240 },
+			// a typed `for` wins
+			{ in: "Meeting 3-4pm for 45m", title: "Meeting", s: "2026-10-07T15:00", dur: 45 },
+			// an end not after the start: the end time alone, the rest stays text
+			{ in: "Meeting 4-3pm", title: "Meeting 4-", s: "2026-10-07T15:00", dur: null, brief: ["scheduled|applied|3pm"] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("durations need for", () => {
+		it.each<Row>([
+			{ in: "Gym for 2h", title: "Gym", dur: 120 },
+			{ in: "Gym for 45m", title: "Gym", dur: 45 },
+			{ in: "Gym for 1h 30m", title: "Gym", dur: 90 },
+			{ in: "Gym 2h", title: "Gym 2h", dur: null, brief: [] },
+			{ in: "Gym 30 min", title: "Gym 30 min", dur: null, brief: [] },
+			{ in: "Gym 45m", title: "Gym 45m", dur: null, brief: [] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("literal text", () => {
+		it.each<Row>([
+			{ in: 'Read "Friday night lights"', title: 'Read "Friday night lights"', brief: [] },
+			{ in: "Read “Friday night lights”", title: "Read “Friday night lights”", brief: [] },
+			{ in: "Buy \\today paper", title: "Buy today paper", brief: [] },
+			{ in: "Call \\#Work", title: "Call #Work", cat: null, brief: [] },
+			{ in: "Fix \\!1", title: "Fix !1", pri: null, brief: [] },
+			{ in: "Call \\@home", title: "Call @home", tags: [], brief: [] },
+			// an unclosed quote, a quote inside a word and single quotes are not literal
+			{ in: 'Read "Friday', title: 'Read "', s: "2026-10-09" },
+			{ in: 'Buy 5" screen tomorrow', title: 'Buy 5" screen', s: "2026-10-08" },
+			{ in: "Read 'Friday' book", title: "Read '' book", s: "2026-10-09" },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("list and section", () => {
+		const SLASHED = [
+			{ id: "cat-slash-0007", name: "Work/Admin" },
+			{ id: WORK, name: "Work" },
+		];
+		it.each<Row>([
+			{ in: "Report #Work/Admin", title: "Report", cat: WORK, sec: ADMIN, brief: ["category|applied|#Work/Admin"] },
+			// sections are matched like list names
+			{ in: "Report #work/ADMIN", title: "Report", cat: WORK, sec: ADMIN },
+			// a list named with the slash wins
+			{ in: "Report #Work/Admin", title: "Report", cat: "cat-slash-0007", sec: null, vault: { categories: SLASHED } },
+			{ in: "Report #Work/Nope", title: "Report #Work/Nope", cat: null, blocking: ["category"], chips: ["invalid|category|#Work/Nope|n=No section named Nope in Work"] },
+			{ in: "Report #Nope/Admin", title: "Report #Nope/Admin", cat: null, blocking: ["category"], chips: ["unresolved|category|#Nope/Admin|n=No list named Nope/Admin"] },
+			{ in: "Report #Work/", title: "Report", cat: WORK, sec: null },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("punctuation beside tokens", () => {
+		it.each<Row>([
+			{ in: "Pay rent !1.", title: "Pay rent", pri: 1, brief: ["priority|applied|!1"] },
+			{ in: "Pay rent !1,", title: "Pay rent", pri: 1 },
+			{ in: "Fix the sink @urgent!", title: "Fix the sink", tags: ["work/urgent"] },
+			{ in: "Call #Work;", title: "Call", cat: WORK },
+			{ in: "Pay rent (#Work)", title: "Pay rent", cat: WORK, brief: ["category|applied|#Work"] },
+			{ in: "Pay rent (!2)", title: "Pay rent", pri: 2 },
+			{ in: "Pay rent (@home)", title: "Pay rent", tags: ["home"] },
+			// a lone mark beside a removed token goes with it
+			{ in: "Pay rent tomorrow.", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent tomorrow!", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent tomorrow?", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent: tomorrow", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent - tomorrow", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent – tomorrow", title: "Pay rent", s: "2026-10-08" },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("en-GB month and day", () => {
+		it.each<Row>([
+			{ in: "Dentist Oct 15", locale: "en-GB", title: "Dentist", s: "2026-10-15", brief: ["scheduled|applied|Oct 15"] },
+			{ in: "Dentist October 15", locale: "en-GB", title: "Dentist", s: "2026-10-15" },
+			{ in: "Dentist 15 Oct", locale: "any", title: "Dentist", s: "2026-10-15" },
+			{ in: "Feb 29 party", locale: "en-GB", title: "party", s: "2028-02-29" },
+			{ in: "Feb 29 9am party", locale: "en-GB", title: "party", s: "2028-02-29T09:00" },
+		])("#69: $in", (row) => checkRow(row));
 	});
 });

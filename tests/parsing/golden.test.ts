@@ -74,8 +74,9 @@ const CASES: Golden[] = [
 	{ in: "   ", title: "   " },
 	{ in: "Stand by", title: "Stand by" },
 	{ in: "Sunday brunch", title: "brunch", s: "2026-10-04", chips: ["applied|scheduled|Sunday"] },
-	{ in: "Gym 1h", title: "Gym 1h", chips: [`suggestion|scheduled|1h|d=2026-10-01T07:00|n=${U}`] },
-	{ in: "Gym 45m", title: "Gym 45m", chips: [`suggestion|scheduled|45m|d=2026-10-01T06:45|n=${U}`] },
+	// #69: a duration without `for` is title text, not a date.
+	{ in: "Gym 1h", title: "Gym 1h" },
+	{ in: "Gym 45m", title: "Gym 45m" },
 	{ in: "Pay rent next month", title: "Pay rent next month", chips: [`suggestion|scheduled|next month|d=2026-11-01|n=${U}`] },
 	{ in: "Pay rent next year", title: "Pay rent next year", chips: [`suggestion|scheduled|next year|d=2027-10-01|n=${U}`] },
 	{ in: "Taxes in a month", title: "Taxes in a month", chips: [`suggestion|scheduled|in a month|d=2026-11-01|n=${U}`] },
@@ -161,7 +162,8 @@ const CASES: Golden[] = [
 	{ in: "Call Oct 5 at 3pm", title: "Call", s: "2026-10-05T15:00", chips: ["applied|scheduled|Oct 5 at 3pm"] },
 	{ in: "Call Oct 5 7:15pm", title: "Call", s: "2026-10-05T19:15", chips: ["applied|scheduled|Oct 5 7:15pm"] },
 	{ in: "Call Oct 5 at 3", title: "Call Oct 5 at 3", chips: ["choice|scheduled|Oct 5 at 3|a=03:00=2026-10-05T03:00/15:00=2026-10-05T15:00"] },
-	{ in: "Call from 3pm to 5pm", title: "Call from 3pm to 5pm", chips: [`suggestion|scheduled|from 3pm to 5pm|d=2026-10-01T15:00|n=${U}`] },
+	// #69: a time range is its start time and a duration.
+	{ in: "Call from 3pm to 5pm", title: "Call", s: "2026-10-01T15:00", dur: 120, chips: ["applied|scheduled|from 3pm to 5pm"] },
 
 	// --- deadlines (ny) ---
 	{ in: "Report by Friday", title: "Report", d: "2026-10-02", chips: ["applied|deadline|by Friday"] },
@@ -195,7 +197,8 @@ const CASES: Golden[] = [
 	{ in: "Study for 1 minute", title: "Study", dur: 1, chips: ["applied|duration|for 1 minute"] },
 	{ in: "Study for 10 minutes", title: "Study", dur: 10, chips: ["applied|duration|for 10 minutes"] },
 	// A decimal comma is no duration: chrono reads "5 hours" from now.
-	{ in: "Study for 1,5 hours", title: "Study for 1,5 hours", chips: [`suggestion|scheduled|5 hours|d=2026-10-01T11:00|n=${U}`] },
+	// #69: "5 hours" without `for` is title text, not a date.
+	{ in: "Study for 1,5 hours", title: "Study for 1,5 hours" },
 	{ in: "Study for 45 minutes", title: "Study", dur: 45, chips: ["applied|duration|for 45 minutes"] },
 	{ in: "Study for 1 hour 30 minutes", title: "Study", dur: 90, chips: ["applied|duration|for 1 hour 30 minutes"] },
 	{ in: "Study for 1h 30m", title: "Study", dur: 90, chips: ["applied|duration|for 1h 30m"] },
@@ -246,7 +249,8 @@ const CASES: Golden[] = [
 	{ in: "Oct 5 at noon x", title: "x", s: "2026-10-05T12:00", chips: ["applied|scheduled|Oct 5 at noon"] },
 	{ in: "Read C#", title: "Read C#" },
 	{ in: "Read price#1", title: "Read price#1" },
-	{ in: "Read (#Study)", title: "Read (#Study)" },
+	// #69: `(` starts a token, and the empty `()` leaves the title.
+	{ in: "Read (#Study)", title: "Read", cat: CAT.study, chips: ["applied|category|#Study"] },
 	{ in: "Read https://x.com/#frag", title: "Read https://x.com/#frag" },
 	{ in: "Read #", title: "Read #" },
 
@@ -503,7 +507,8 @@ const CASES: Golden[] = [
 	{ in: "!10", title: "!10" },
 	{ in: "!highest", title: "!highest" },
 	{ in: "!", title: "!" },
-	{ in: "Pay (!1)", title: "Pay (!1)" },
+	// #69: `(` starts a token, and the empty `()` leaves the title.
+	{ in: "Pay (!1)", title: "Pay", pri: 1, chips: ["applied|priority|!1"] },
 	{ in: "Pay [[Plan]] !1", title: "Pay [[Plan]]", pri: 1, chips: [`collision|note|[[Plan]]|c=Projects/Plan.md+Archive/Plan.md|n=2 matches`, "applied|priority|!1"], block: 0 },
 ];
 

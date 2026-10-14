@@ -79,9 +79,21 @@ export function scanFor<T>(
 	return out;
 }
 
-/** `#` and `@` start a token only at the start of the text or after whitespace. */
+/** `#`, `@`, `!` and a backslash start a token only at the start of the text, after whitespace or after an opening parenthesis. */
 export function tokenStartAllowed(s: string, index: number): boolean {
-	return index === 0 || isSpaceChar(charBefore(s, index));
+	if (index === 0) return true;
+	const ch = charBefore(s, index);
+	return ch === "(" || isSpaceChar(ch);
+}
+
+/** The marks that end a token without being part of it (`!1.`, `(!2)`, `@urgent!`). */
+const TRAILING_MARKS = ".,;:!?)]";
+
+/** Where a run of non-space text from `start` to `end` ends without its trailing marks. */
+export function withoutTrailingMarks(s: string, start: number, end: number): number {
+	let i = end;
+	while (i > start && TRAILING_MARKS.includes(s.charAt(i - 1))) i--;
+	return i;
 }
 
 /** The end of the run of token characters that starts at `from`. */
@@ -250,6 +262,18 @@ export function dayNumber(text: string): number | null {
 
 /** A clock time: "9", "9:30pm", "5 p.m.", "17:00", "noon", "midnight". */
 export const CLOCK_PATTERN = "(?:\\d{1,2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?|noon|midnight)";
+
+// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon".
+const AT_CLOCK_RE = /(?:\d{1,2}(?::\d{2})?[ap]m|noon)(?![\p{L}\p{N}_])/iuy;
+
+/** The length of the clock time `@` reads at `at` ("4pm", "4:30pm", "noon"), or 0 when none starts there. */
+export function atClockLength(s: string, at: number): number {
+	const m = sticky(AT_CLOCK_RE, s, at);
+	return m !== null && readClock(m[0]) !== null ? m[0].length : 0;
+}
+
+/** The units of a planned duration: "h", "hrs", "hours", "m", "mins", "minutes". */
+export const DURATION_UNIT_PATTERN = "(?:hours?|hrs?|h|minutes?|mins?|m)";
 
 /** A clock time as "HH:mm", and whether its hour could be either half of the day (1 to 12 without am or pm). */
 export function readClock(text: string): { time: string; ambiguous: boolean } | null {
