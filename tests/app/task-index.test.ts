@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FEED_LIMIT } from "../../src/app/store";
 import type { TaskIndex } from "../../src/app/taskIndex";
 import type { Change } from "../../src/app/tx";
-import { buildBoard, buildList, calendarTasks, menuTasks, type SidebarCounts, sidebarCounts, type TaskView, unscheduledTasks } from "../../src/app/views";
+import { buildBoard, buildList, calendarTasks, menuTasks, type SidebarCounts, sidebarCounts, type TaskView, unscheduledRows, unscheduledTasks } from "../../src/app/views";
 import { type CalendarContext, layoutMonth, layoutWeek, monthGrid, weekDays } from "../../src/domain/calendar";
 import { DomainError } from "../../src/domain/errors";
 import { groupByOptions } from "../../src/domain/groupBy";
@@ -130,6 +130,7 @@ describe("the task index", () => {
 			const unscheduled = unscheduledTasks(state, ctx, filter, index);
 			if (ids(unscheduled).join() !== ids(unscheduledTasks(state, ctx, filter)).join()) out.push(`calendar unscheduled ${name}`);
 			if (serialize(drawer(unscheduled)) !== serialize(drawerBefore)) out.push(`calendar unscheduled drawer ${name}`);
+			if (serialize(unscheduledRows(state, ctx, filter, index)) !== serialize(drawerBefore)) out.push(`calendar unscheduled rows ${name}`);
 			if (cal.unscheduledCount !== drawerBefore.length || scan.unscheduledCount !== drawerBefore.length) out.push(`calendar unscheduled count ${name}: ${cal.unscheduledCount}, ${scan.unscheduledCount} ≠ ${drawerBefore.length}`);
 			for (const hs of [new Set<ID>(), held]) {
 				const matrix = matrixQuadrants(menuTasks(state, ctx, filter, { index }), state.tasks, ctx, hs);

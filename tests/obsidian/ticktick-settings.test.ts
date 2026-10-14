@@ -201,8 +201,8 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect(t.render("Sync with TickTick on this device").toggle).toMatchObject({ value: false, disabled: true });
 	});
 
-	it("syncing on this device (screen 3): status, the interval, and the linked lists with Unlink", () => {
-		const t = setup({ device: true, linked: [WORK, HOME], status: { lastSyncAt: Date.parse(NOW), error: null } });
+	it("syncing on this device (screen 3): status, the interval, and the linked lists with Unlink, in sidebar order", () => {
+		const t = setup({ device: true, linked: [HOME, WORK], status: { lastSyncAt: Date.parse(NOW), error: null } });
 		expect(t.shown()).toEqual([
 			"TickTick token",
 			"Sync with TickTick on this device",
@@ -210,8 +210,8 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 			"Pull from TickTick every",
 			"Create notes from TickTick descriptions",
 			"Linked lists",
-			"Home",
 			"Work",
+			"Home",
 		]);
 		expect(t.render("Sync status").name).toBe("Synced 2 minutes ago · 2 lists");
 	});

@@ -48,6 +48,10 @@ describe("filterByQuery", () => {
 	it("no match gives nothing", () => {
 		expect(filterByQuery(names, (n) => n, "zzz")).toEqual([]);
 	});
+	it("compares names as list names are matched: spaces, - and _ ignored, a decomposed accent equal to a composed one", () => {
+		expect(filterByQuery(["Side_projects", "Café plans"], (n) => n, "side-pro")).toEqual(["Side_projects"]);
+		expect(filterByQuery(["Side_projects", "Café plans"], (n) => n, "café")).toEqual(["Café plans"]);
+	});
 });
 
 describe("noteInsertName", () => {

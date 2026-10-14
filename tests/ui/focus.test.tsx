@@ -3,10 +3,10 @@ import { render } from "preact";
 import { describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
 import { useFocus } from "../../src/ui/hooks";
-import { type AppMount, click, menuItem, mountApp, settle } from "./app-helpers";
+import { type AppMount, click, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
 import type { MenuSpec } from "../../src/ui/host";
 import { makeReadOnly } from "../app/harness";
-import { stepFor } from "../../src/ui/focus/Controls";
+import { SetLine, stepFor } from "../../src/ui/focus/Controls";
 
 describe("Focus page", () => {
 	// The Focus page, the focus chip, the details total and the entry points.
@@ -86,7 +86,7 @@ describe("Focus page", () => {
 			expect(text(page, ".cp-focus-round")).toBe("Round 1 of 4");
 			// The settings panel gives way to a static summary line while the set runs.
 			expect(page.querySelector(".cp-focus-settings")).toBeNull();
-			expect(text(page, ".cp-focus-setline")).toBe("4 rounds · 25 min focus · 5 min break");
+			expect(text(page, ".cp-focus-setline")).toBe("4 rounds · 25m focus · 5m break");
 			expect(buttonByText(page, "Start")).toBeUndefined();
 			expect(buttonByText(page, "Pause")).toBeDefined();
 			expect(buttonByText(page, "Finish")).toBeDefined();
@@ -829,6 +829,14 @@ describe("Focus page", () => {
 			render(null, root);
 			expect(offs.every((o) => o.mock.calls.length === 1)).toBe(true);
 		});
+	});
+});
+
+describe("the set line", () => {
+	it("writes the minutes as every duration is written", () => {
+		const root = mountNode(<SetLine minutes={{ rounds: 2, focusMin: 90, breakMin: 5, longBreakMin: 15 }} />);
+		expect(root.textContent).toBe("2 rounds · 1h 30m focus · 5m break");
+		unmountAll();
 	});
 });
 

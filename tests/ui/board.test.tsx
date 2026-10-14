@@ -97,8 +97,8 @@ describe("columns and cards", () => {
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const titles = columnTitles(m.root);
-		expect(titles[0]).toBe("Friday, Tomorrow");
-		expect(titles[1]).toBe("Saturday, Oct 3");
+		expect(titles[0]).toBe("Tomorrow");
+		expect(titles[1]).toBe("Sat, Oct 3");
 		expect(titles).toHaveLength(14);
 		expect(cardTitles(m.root, "2026-10-02")).toEqual(["Tomorrow A", "Tomorrow B"]);
 		expect(cardTitles(m.root, "2026-10-03")).toEqual([]);
@@ -167,7 +167,7 @@ describe("drag", () => {
 		expect(moved.scheduled).toEqual(at("2026-10-03", "09:30"));
 		expect(undoDepth(m)).toBe(before + 1);
 		expect(m.h.app.store.undoLabel).toBe("Move task");
-		expect(m.host.messages.at(-1)).toBe('Moved "Tomorrow A" to Saturday, Oct 3.');
+		expect(m.host.messages.at(-1)).toBe('Moved "Tomorrow A" to Sat, Oct 3.');
 		expect(cardTitles(m.root, "2026-10-03")).toEqual(["Tomorrow A"]);
 		await m.h.app.store.undo();
 		expect(m.h.app.store.state.tasks.get(a.id)!.scheduled).toEqual(at("2026-10-02", "09:30"));
@@ -296,7 +296,7 @@ describe("Alt+Arrow", () => {
 		expect(m.h.app.store.state.tasks.get(a.id)!.scheduled).toEqual(at("2026-10-03", "09:30"));
 		expect(cardTitles(m.root, "2026-10-03")).toEqual(["Tomorrow A"]);
 		expect(document.activeElement).toBe(item(m.root, "Tomorrow A"));
-		expect(board(m.root).querySelector('[role="status"]')!.textContent).toContain("Saturday, Oct 3");
+		expect(board(m.root).querySelector('[role="status"]')!.textContent).toContain("Sat, Oct 3");
 		await pressKey(document.activeElement!, "ArrowLeft", { altKey: true });
 		expect(m.h.app.store.state.tasks.get(a.id)!.scheduled).toEqual(at("2026-10-02", "09:30"));
 		expect(document.activeElement).toBe(item(m.root, "Tomorrow A"));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayTitle } from "../../src/domain/board";
+import { columnTitle } from "../../src/ui/board/BoardView";
 import { type QueryContext, emptyFilter, upcomingGroups, todayEntries, flatEntries } from "../../src/domain/queries";
 import type { DateSpec, Task } from "../../src/domain/types";
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
@@ -70,12 +70,7 @@ describe("default order is the sort key", () => {
 	});
 });
 
-describe("dayTitle", () => {
-	it("names tomorrow and later days", () => {
-		expect(dayTitle("2026-10-02", ctx)).toBe("Friday, Tomorrow");
-		expect(dayTitle("2026-10-05", ctx)).toBe("Monday, Oct 5");
-	});
-});
+
 
 describe("buildBoard: Today", () => {
 	it("has Overdue then Today, with titles, tones and drop rules; sorted by sortKey", () => {
@@ -137,16 +132,17 @@ describe("buildBoard: Upcoming", () => {
 		t("over", { scheduled: day("2026-09-30") }),
 		t("done-fri", { status: "completed", completedAt: "2026-10-01T09:00:00.000Z", scheduled: day("2026-10-02") }),
 	];
-	it("has one column per day from tomorrow, empty ones included, with day titles", () => {
+	it("has one column per day from tomorrow, empty ones included, named by their dates as rows show them", () => {
 		const board = buildBoard(db(tasks), { kind: "upcoming" }, ctx, emptyFilter(), "");
-		expect(board.map((c) => [c.id, c.title, c.tone, c.date, c.acceptsDrop])).toEqual([
-			["2026-10-02", "Friday, Tomorrow", "tomorrow", "2026-10-02", true],
-			["2026-10-03", "Saturday, Oct 3", undefined, "2026-10-03", true],
-			["2026-10-04", "Sunday, Oct 4", undefined, "2026-10-04", true],
+		expect(board.map((c) => [c.id, columnTitle(c, ctx.today), c.tone, c.date, c.acceptsDrop])).toEqual([
+			["2026-10-02", "Tomorrow", "tomorrow", "2026-10-02", true],
+			["2026-10-03", "Sat, Oct 3", undefined, "2026-10-03", true],
+			["2026-10-04", "Sun, Oct 4", undefined, "2026-10-04", true],
 		]);
+		expect(board.map((c) => c.title)).toEqual([null, null, null]);
 		expect(board.map((c) => titles(c.cards))).toEqual([[["fri"]], [], [["sun"]]]);
 		const longer = buildBoard(db(tasks), { kind: "upcoming" }, { ...ctx, upcomingDays: 4 }, emptyFilter(), "");
-		expect(longer.at(-1)).toMatchObject({ id: "2026-10-05", title: "Monday, Oct 5" });
+		expect(columnTitle(longer.at(-1)!, ctx.today)).toBe("Mon, Oct 5");
 	});
 	it("each column has its own Completed group", () => {
 		const board = buildBoard(db(tasks), { kind: "upcoming" }, ctx, emptyFilter(), "");

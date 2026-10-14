@@ -375,46 +375,46 @@ describe("more menu", () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));
 		const flags = [...m.root.querySelectorAll<HTMLButtonElement>(".cp-pri-flags button")];
-		expect(flags.map((f) => f.getAttribute("aria-label"))).toEqual(["High priority", "Medium priority", "Low priority", "No priority"]);
+		expect(flags.map((f) => f.getAttribute("aria-label"))).toEqual(["High", "Medium", "Low", "None"]);
 		expect(flags.map((f) => f.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "true"]);
 		expect(flags[3]!.classList.contains("is-on")).toBe(true);
 		expect(m.root.querySelector(".cp-more-pop .cp-pop-label")!.textContent).toBe("Priority");
 	});
 
-	it("picking High priority marks it .is-on, shows a pill and saves priority 1", async () => {
+	it("picking High marks it .is-on, shows a pill and saves priority 1", async () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));
-		await click(m.root.querySelector('.cp-pri-flags [aria-label="High priority"]'));
-		const flag = m.root.querySelector('.cp-pri-flags [aria-label="High priority"]')!;
+		await click(m.root.querySelector('.cp-pri-flags [aria-label="High"]'));
+		const flag = m.root.querySelector('.cp-pri-flags [aria-label="High"]')!;
 		expect(flag.classList.contains("is-on")).toBe(true);
 		expect(flag.getAttribute("aria-pressed")).toBe("true");
 		const pill = m.root.querySelector('.cp-qa-manual[data-kind="priority"]')!;
-		expect(pill.textContent).toContain("High priority");
+		expect(pill.textContent).toContain("High");
 		expect(pill.getAttribute("data-priority")).toBe("1");
 		await typeInto(titleInput(m.root), "Pay rent");
 		await pressKey(titleInput(m.root), "Enter");
 		expect(formTasks(m)[0]!.priority).toBe(1);
 	});
 
-	it("choosing No priority after a pick saves 0 and removes the pill", async () => {
+	it("choosing None after a pick saves 0 and removes the pill", async () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));
-		await click(m.root.querySelector('.cp-pri-flags [aria-label="Low priority"]'));
-		await click(m.root.querySelector('.cp-pri-flags [aria-label="No priority"]'));
+		await click(m.root.querySelector('.cp-pri-flags [aria-label="Low"]'));
+		await click(m.root.querySelector('.cp-pri-flags [aria-label="None"]'));
 		expect(m.root.querySelector('.cp-qa-manual[data-kind="priority"]')).toBeNull();
 		await typeInto(titleInput(m.root), "Pay rent");
 		await pressKey(titleInput(m.root), "Enter");
 		expect(formTasks(m)[0]!.priority).toBe(0);
 	});
 
-	it("a typed !2 shows a priority chip, 'Medium priority', and marks the flag", async () => {
+	it("a typed !2 shows a priority chip, 'Medium', and marks the flag", async () => {
 		const m = await mountQuickForm();
 		await typeInto(titleInput(m.root), "Pay rent !2");
 		const chip = m.root.querySelector('.cp-qa-chip[data-kind="priority"]')!;
-		expect(chip.textContent).toContain("Medium priority");
+		expect(chip.textContent).toContain("Medium");
 		expect(chip.getAttribute("data-priority")).toBe("2");
 		await click(moreTool(m.root));
-		expect(m.root.querySelector('.cp-pri-flags [aria-label="Medium priority"]')!.classList.contains("is-on")).toBe(true);
+		expect(m.root.querySelector('.cp-pri-flags [aria-label="Medium"]')!.classList.contains("is-on")).toBe(true);
 	});
 
 	it("lists List, Tags, Description note and Matrix quadrant rows, 44px rows with chevrons", async () => {
@@ -538,18 +538,18 @@ describe("token highlighting and chips", () => {
 		expect(mirror.textContent).toBe(text);
 	});
 
-	it("priority chip labels read 'High priority', 'Medium priority' and 'Low priority'", () => {
+	it("priority chip labels read 'High priority', 'Medium' and 'Low priority'", () => {
 		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: new Map() };
 		const chip = (priority: 1 | 2 | 3) => ({ kind: "priority", status: "applied", priority, text: `!${priority}` }) as never;
-		expect(chipLabel(chip(1), env)).toBe("High priority");
-		expect(chipLabel(chip(2), env)).toBe("Medium priority");
-		expect(chipLabel(chip(3), env)).toBe("Low priority");
+		expect(chipLabel(chip(1), env)).toBe("High");
+		expect(chipLabel(chip(2), env)).toBe("Medium");
+		expect(chipLabel(chip(3), env)).toBe("Low");
 	});
 
 	it("manual pills are removable and do not count as parsed chips", async () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));
-		await click(m.root.querySelector('.cp-pri-flags [aria-label="High priority"]'));
+		await click(m.root.querySelector('.cp-pri-flags [aria-label="High"]'));
 		expect(m.root.querySelectorAll(".cp-qa-chip")).toHaveLength(0);
 		const remove = m.root.querySelector<HTMLButtonElement>('.cp-qa-manual[data-kind="priority"] .cp-qa-manual-remove')!;
 		expect(remove.getAttribute("aria-label")).toMatch(/Remove/);

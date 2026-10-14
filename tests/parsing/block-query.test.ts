@@ -328,6 +328,10 @@ describe("scheduled and tag lists", () => {
 			expect(parseBlockQuery("tag: Home, work, HOME, @home").filters.tags).toEqual(["Home", "work"]);
 		});
 
+		it("#190: a repeat is found by the tag key, so a name typed composed and decomposed is one tag", () => {
+			expect(parseBlockQuery("tag: Café, CAFÉ, work").filters.tags).toEqual(["Café", "work"]);
+		});
+
 		it("an empty item is one error for the line and the line is left out", () => {
 			for (const value of ["home,", ",home", "home,,work", "home, @", ","]) {
 				const r = parseBlockQuery(`tag: ${value}`);

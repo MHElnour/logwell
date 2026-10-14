@@ -51,6 +51,7 @@ describe("focus host", () => {
 		const ui = {
 			notify: vi.fn(),
 			actionNotice: vi.fn(),
+			notifyUndo: vi.fn(),
 			systemNotify: vi.fn(),
 			requestNotifyPermission: vi.fn(),
 			choose: vi.fn(async () => null),
@@ -67,25 +68,25 @@ describe("focus host", () => {
 
 	describe("formatStatus", () => {
 		it("reads Round r/N with the task while a focus runs", () => {
-			expect(formatStatus(base(), NOW_1842)).toBe("◎ 18:42 · Round 1/4 · Write report");
+			expect(formatStatus(base(), NOW_1842)).toBe("◎ 18:42 · Round 1 of 4 · Write report");
 		});
 		it("cuts a long task title so the status bar stays on one line", () => {
 			const t = { ...base(), taskTitleSnapshot: "Write chapter 3 of the thesis on distributed systems and consensus" };
-			expect(formatStatus(t, NOW_1842)).toBe("◎ 18:42 · Round 1/4 · Write chapter 3 of the thesis…");
+			expect(formatStatus(t, NOW_1842)).toBe("◎ 18:42 · Round 1 of 4 · Write chapter 3 of the thesis…");
 		});
 		it("shows the paused state", () => {
-			expect(formatStatus({ ...base(), state: "paused" }, NOW_1842)).toBe("◎ 18:42 (paused) · Round 1/4 · Write report");
+			expect(formatStatus({ ...base(), state: "paused" }, NOW_1842)).toBe("◎ 18:42 (paused) · Round 1 of 4 · Write report");
 		});
 		it("omits the task when there is none", () => {
-			expect(formatStatus(base(null), NOW_1842)).toBe("◎ 18:42 · Round 1/4");
+			expect(formatStatus(base(null), NOW_1842)).toBe("◎ 18:42 · Round 1 of 4");
 		});
 		it("names the break", () => {
 			const t = { ...base(), phase: "short-break" as const, sessionId: null, plannedSec: 300, startedAt: NOW, round: 2 };
-			expect(formatStatus(t, "2026-10-04T10:01:00.000Z")).toBe("◎ 4:00 · Short break · Round 2/4 · Write report");
+			expect(formatStatus(t, "2026-10-04T10:01:00.000Z")).toBe("◎ 4:00 · Short break · Round 2 of 4 · Write report");
 		});
 		it("flags a pending recovery prompt", () => {
 			expect(formatStatus({ ...base(), state: "paused", needsRecovery: true }, NOW_1842)).toBe(
-				"◎ 18:42 (paused) · Round 1/4 · Write report · Needs your answer",
+				"◎ 18:42 (paused) · Round 1 of 4 · Write report · Needs your answer",
 			);
 		});
 	});
@@ -104,7 +105,7 @@ describe("focus host", () => {
 			expect(h.ui.setStatus).toHaveBeenLastCalledWith(null);
 			h.focus.current = base();
 			h.focus.bus.emit("focus", undefined);
-			expect(h.ui.setStatus).toHaveBeenLastCalledWith("◎ 18:42 · Round 1/4 · Write report", "Open focus, 18:42 left");
+			expect(h.ui.setStatus).toHaveBeenLastCalledWith("◎ 18:42 · Round 1 of 4 · Write report", "Open focus, 18:42 left");
 			h.focus.current = null;
 			h.focus.bus.emit("focus", undefined);
 			expect(h.ui.setStatus).toHaveBeenLastCalledWith(null);
@@ -282,6 +283,7 @@ describe("focus host", () => {
 				h.host.attach(h.focus, "recovery");
 				await vi.waitFor(() => expect(h.focus.calls).toEqual([`recovery:${choice}`]));
 				expect(h.ui.actionNotice).not.toHaveBeenCalled();
+				expect(h.ui.notifyUndo).not.toHaveBeenCalled();
 			}
 		});
 
@@ -290,11 +292,11 @@ describe("focus host", () => {
 			recovering(h);
 			h.ui.choose.mockResolvedValue("discard");
 			h.host.attach(h.focus, "recovery");
-			await vi.waitFor(() => expect(h.ui.actionNotice).toHaveBeenCalledTimes(1));
+			await vi.waitFor(() => expect(h.ui.notifyUndo).toHaveBeenCalledTimes(1));
 			expect(h.focus.calls).toEqual(["recovery:discard"]);
-			const [, actions] = h.ui.actionNotice.mock.calls[0] as [string, { label: string; run: () => unknown }[]];
-			expect(actions.map((a) => a.label)).toEqual(["Undo"]);
-			await actions[0]!.run();
+			const [message, undo] = h.ui.notifyUndo.mock.calls[0] as [string, () => Promise<boolean>];
+			expect(message).toBe("Focus timer discarded");
+			expect(await undo()).toBe(true);
 			expect(h.focus.restoreDiscardedTimer).toHaveBeenCalledTimes(1);
 		});
 
@@ -307,16 +309,17 @@ describe("focus host", () => {
 			await vi.waitFor(() => expect(h.focus.resolveRecovery).toHaveBeenCalledTimes(1));
 			await new Promise((r) => setTimeout(r, 0));
 			expect(h.ui.actionNotice).not.toHaveBeenCalled();
+			expect(h.ui.notifyUndo).not.toHaveBeenCalled();
 
+			// The Undo notice says "Nothing to undo." when its undo resolves false (boundUndoNotice).
 			const h2 = harness();
 			recovering(h2);
 			h2.ui.choose.mockResolvedValue("discard");
 			(h2.focus.restoreDiscardedTimer as ReturnType<typeof vi.fn>).mockResolvedValue(false);
 			h2.host.attach(h2.focus, "recovery");
-			await vi.waitFor(() => expect(h2.ui.actionNotice).toHaveBeenCalledTimes(1));
-			const [, actions] = h2.ui.actionNotice.mock.calls[0] as [string, { run: () => unknown }[]];
-			await actions[0]!.run();
-			expect(h2.ui.notify).toHaveBeenCalledWith("Nothing to undo.");
+			await vi.waitFor(() => expect(h2.ui.notifyUndo).toHaveBeenCalledTimes(1));
+			const [, undo] = h2.ui.notifyUndo.mock.calls[0] as [string, () => Promise<boolean>];
+			expect(await undo()).toBe(false);
 		});
 
 		it("closes the open prompt when the question was answered elsewhere", async () => {
@@ -338,6 +341,7 @@ describe("focus host", () => {
 			await new Promise((r) => setTimeout(r, 0));
 			expect(h.focus.calls).toEqual([]);
 			expect(h.ui.actionNotice).not.toHaveBeenCalled();
+			expect(h.ui.notifyUndo).not.toHaveBeenCalled();
 		});
 
 		it("dismissing leaves the timer pending and the status bar click asks again", async () => {
@@ -392,6 +396,7 @@ describe("focus host", () => {
 				h.host.attach(h.focus, r);
 				expect(h.ui.notify).not.toHaveBeenCalled();
 				expect(h.ui.actionNotice).not.toHaveBeenCalled();
+				expect(h.ui.notifyUndo).not.toHaveBeenCalled();
 			}
 		});
 
@@ -400,17 +405,14 @@ describe("focus host", () => {
 			h.host.attach(h.focus, "none");
 			h.focus.bus.emit("short-discarded", { sessionId: "s-1" });
 			h.focus.bus.emit("short-discarded", { sessionId: "s-2" });
-			const [message, actions] = h.ui.actionNotice.mock.calls[0] as [string, { label: string; run: () => unknown }[]];
+			const [message, undo] = h.ui.notifyUndo.mock.calls[0] as [string, () => Promise<boolean>];
 			expect(message).toBe("Focus under a minute was not saved");
-			expect(actions.map((a) => a.label)).toEqual(["Undo"]);
-			await actions[0]!.run();
+			expect(await undo()).toBe(true);
 			expect(h.focus.undoShortDiscard).toHaveBeenCalledWith("s-1");
-			expect(h.ui.notify).not.toHaveBeenCalled();
 			(h.focus.undoShortDiscard as ReturnType<typeof vi.fn>).mockResolvedValue(false);
-			const second = h.ui.actionNotice.mock.calls[1]![1] as { run: () => unknown }[];
-			await second[0]!.run();
+			const second = h.ui.notifyUndo.mock.calls[1]![1] as () => Promise<boolean>;
+			expect(await second()).toBe(false);
 			expect(h.focus.undoShortDiscard).toHaveBeenLastCalledWith("s-2");
-			expect(h.ui.notify).toHaveBeenCalledWith("Nothing to undo.");
 		});
 	});
 

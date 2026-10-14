@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { isDomainError } from "../../src/domain/errors";
-import { basenameOf, noteDisplayName, noteNameCandidate, rewriteNotePath, sanitizeNoteName } from "../../src/domain/notes";
+import { basenameOf, fileNameOf, joinPath, noteDisplayName, noteLinkPath, noteNameCandidate, rewriteNotePath, sanitizeNoteName } from "../../src/domain/notes";
 import { compareSortKeys, keyAfter, keyBetween, rekeyOrder } from "../../src/domain/sortKey";
 import { isValidTagKey, normalizeTagKey, requireTagKey, tagDisplayName } from "../../src/domain/tags";
 import { assertCanBecomeSubtask, assertUniqueCategoryName, requireTitle } from "../../src/domain/tasks";
@@ -119,6 +119,20 @@ describe("rules", () => {
 			expect(noteNameCandidate("Plan", 2)).toBe("Plan (2).md");
 		});
 
+		it("probes another extension, or a folder name with none", () => {
+			expect(noteNameCandidate("Backup", 1, ".json")).toBe("Backup.json");
+			expect(noteNameCandidate("Backup", 3, ".json")).toBe("Backup (3).json");
+			expect(noteNameCandidate("Export", 1, "")).toBe("Export");
+			expect(noteNameCandidate("Export", 2, "")).toBe("Export (2)");
+		});
+
+		it("joins a folder and a name; the vault root and stray slashes add nothing", () => {
+			expect(joinPath("Notes/Work", "Plan.md")).toBe("Notes/Work/Plan.md");
+			expect(joinPath("/", "Plan.md")).toBe("Plan.md");
+			expect(joinPath("", "Plan.md")).toBe("Plan.md");
+			expect(joinPath("/Notes/", "Plan.md")).toBe("Notes/Plan.md");
+		});
+
 		it("rewrites exact file paths and folder prefixes", () => {
 			expect(rewriteNotePath("Plan.md", "Plan.md", "Plan v2.md", false)).toBe("Plan v2.md");
 			expect(rewriteNotePath("Other.md", "Plan.md", "Plan v2.md", false)).toBeNull();
@@ -203,6 +217,13 @@ describe("noteDisplayName", () => {
 		expect(noteDisplayName("Notes/Budget.md")).toBe("Budget");
 		expect(noteDisplayName("Budget.MD")).toBe("Budget");
 		expect(noteDisplayName("Budget")).toBe("Budget");
+	});
+
+	it("a link path keeps the folders and hides only .md; a file name keeps its extension", () => {
+		expect(noteLinkPath("Notes/Budget.MD")).toBe("Notes/Budget");
+		expect(noteLinkPath("Files/report.pdf")).toBe("Files/report.pdf");
+		expect(fileNameOf("a/b/archive.tar.gz")).toBe("archive.tar.gz");
+		expect(fileNameOf("Budget.md")).toBe("Budget.md");
 	});
 
 	it("keeps any other extension", () => {
