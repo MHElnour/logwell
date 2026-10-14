@@ -587,7 +587,8 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		// `for` ("Gym 2h").
 		if (result.text.includes(MASK_CHAR) || /^for\s/iu.test(result.text) || bareDuration(result.text) === "planned") continue;
 		// A time range is its start time and a duration, or its end time alone when the end is not after the start.
-		const range = timeRangeOf(result, parser, clock);
+		// Not right after `@`: a range there is not in the table ("@4:30pm-5pm") and stays a suggestion.
+		const range = masked.charAt(result.index - 1) === "@" ? null : timeRangeOf(result, parser, clock);
 		const r = range !== null && "end" in range ? range.end : result;
 		const timeRange = range !== null && "minutes" in range;
 		// A range with a side that is only a time: its start as typed alone, still only a suggestion (a choice keeps chrono's reading).

@@ -910,6 +910,15 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Gym every monday @4:30pm", title: "Gym", rec: "weekly:MO@16:30" },
 			{ in: "Gym every day @9am starting tomorrow", title: "Gym", rec: "daily@09:00", s: "2026-10-08" },
 			{ in: "Gym every day @9am", title: "Gym", rec: "daily", tags: ["9am"], vault: { tags: [{ key: "9am", displayName: "9am" }] }, brief: ["recurrence|applied|every day", "tag|applied|@9am"] },
+			// a range after @ is not in the table: read as before (a tag, or a time range only offered)
+			{ in: "Call @4pm-5pm", title: "Call", nt: ["4pm-5pm"], brief: ["tag|applied|@4pm-5pm"] },
+			{ in: "Call @9am-5pm", title: "Call", nt: ["9am-5pm"], brief: ["tag|applied|@9am-5pm"] },
+			{ in: "Call @noon-1pm", title: "Call", nt: ["noon-1pm"], brief: ["tag|applied|@noon-1pm"] },
+			{ in: "Call @4:30pm-5pm", title: "Call @4:30pm-5pm", nt: [], brief: ["scheduled|suggestion|4:30pm-5pm"] },
+			// (the dash left alone between the two goes, as any lone mark does)
+			{ in: "Call @4pm\u20135pm", title: "Call", s: "2026-10-07T17:00", nt: ["4pm"], brief: ["tag|applied|@4pm", "scheduled|applied|5pm"] },
+			{ in: "Call @4pm to 5pm", title: "Call to", s: "2026-10-07T17:00", nt: ["4pm"], brief: ["tag|applied|@4pm", "scheduled|applied|5pm"] },
+			{ in: "Call @4pm - 5pm", title: "Call", s: "2026-10-07T17:00", nt: ["4pm"], brief: ["tag|applied|@4pm", "scheduled|applied|5pm"] },
 		])("#69: $in", (row) => checkRow(row));
 	});
 
@@ -950,6 +959,17 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Meeting 3-4pm for 45m", title: "Meeting", s: "2026-10-07T15:00", dur: 45 },
 			// an end not after the start: the end time alone, the rest stays text
 			{ in: "Meeting 4-3pm", title: "Meeting 4-", s: "2026-10-07T15:00", dur: null, brief: ["scheduled|applied|3pm"] },
+			{ in: "Work 9-5pm", title: "Work 9-", s: "2026-10-07T17:00", dur: null },
+			{ in: "Lunch 11-1pm", title: "Lunch 11-", s: "2026-10-07T13:00", dur: null },
+			{ in: "Shift 10pm-2am", title: "Shift 10pm-", s: "2026-10-08T02:00", dur: null },
+			// after a repeat: the repeat's time and a duration, no date of its own
+			{ in: "Gym every monday at 1730-1830", title: "Gym", rec: "weekly:MO@17:30", dur: 60, brief: ["recurrence|applied|every monday at 1730-1830"] },
+			{ in: "Gym every day at 0900-1000", title: "Gym", rec: "daily@09:00", dur: 60 },
+			{ in: "Gym every day at 9am-10am", title: "Gym", rec: "daily@09:00", dur: 60 },
+			{ in: "Gym daily at 9am-10am", title: "Gym", rec: "daily@09:00", dur: 60 },
+			{ in: "Gym every day at 3-4pm", title: "Gym", rec: "daily@15:00", dur: 60 },
+			// … and an end not after the start: the end time alone, the rest stays text
+			{ in: "Gym every day at 10am-9am", title: "Gym at 10am-", rec: "daily", s: "2026-10-08T09:00", dur: null },
 		])("#69: $in", (row) => checkRow(row));
 	});
 
@@ -1029,6 +1049,18 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Done tomorrow!", title: "Done", s: "2026-10-08" },
 			{ in: "Is it Friday?", title: "Is it", s: "2026-10-09" },
 			{ in: "Q&A: Friday?", title: "Q&A:", s: "2026-10-09" },
+			{ in: "Call - - tomorrow", title: "Call -", s: "2026-10-08" },
+			// a closing bracket split off a removed token goes like a lone mark
+			{ in: "Pay rent !1)", title: "Pay rent", pri: 1 },
+			{ in: "Pay rent !1]", title: "Pay rent", pri: 1 },
+			{ in: "Note (see #Work)", title: "Note (see )", cat: WORK },
+			// nothing left: the title is the whole input
+			{ in: "Tomorrow!", title: "Tomorrow!", s: "2026-10-08" },
+			{ in: "tomorrow.", title: "tomorrow.", s: "2026-10-08" },
+			{ in: "Friday?", title: "Friday?", s: "2026-10-09" },
+			{ in: "#Work.", title: "#Work.", cat: WORK },
+			{ in: "every day.", title: "every day.", rec: "daily" },
+			{ in: "- tomorrow", title: "- tomorrow", s: "2026-10-08" },
 			{ in: "Pay rent – tomorrow", title: "Pay rent", s: "2026-10-08" },
 			{ in: "Call mom, tomorrow", title: "Call mom", s: "2026-10-08" },
 			{ in: "Pills every day, until Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },

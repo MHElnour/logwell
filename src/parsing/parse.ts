@@ -209,7 +209,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		const resolved = resolveTagName(namesOfTags(), key);
 		return resolved === null ? undefined : ctx.tags.find((x) => normalizeTagKey(x.key) === resolved);
 	};
-	for (const t of findWordTokens(input, "@", isTaken, (name) => {
+	for (const t of findWordTokens(input, "@", isTaken, (name, at) => {
 		const key = normalizeTagKey(name);
 		if (!isValidTagKey(key)) return false;
 		// A key too deep to create is not a token (it stays in the title) unless the tag already exists.
@@ -217,7 +217,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		// under another parent, or that repeats its parent's name.
 		if (tagFor(key) !== undefined) return true;
 		// A clock time ("@4pm", "@noon") is a time, unless a tag of that name exists.
-		if (atClockLength(name, 0) === name.length) return false;
+		if (atClockLength(input, at + 1) === name.length) return false;
 		if (digitsOnly(key) || !hasAllowedTagDepth(key) || hasRepeatedTagName(key)) return false;
 		const names = namesOfTags();
 		// A new name longer than 64 characters stays in the title too.
@@ -276,7 +276,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 					{ label: label(built.other), rule: built.other },
 				],
 			});
-		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule });
+		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule, ...(built.durationMin === undefined ? {} : { durationMin: built.durationMin }) });
 		drafts.push(repeat);
 		const end = t.end === null ? null : endDraftOf(t.end);
 		if (t.bare) bare.set(repeat, end);
@@ -594,6 +594,23 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 		// "Pay rent (#Work).": the mark after the parentheses is beside removed text too.
 		if (pairs > 0) markAfter(closes[pairs - 1]! + 1);
 	}
+	// A closing bracket a removed `#`, `@` or `!` token left unpaired ("Pay rent !1)") goes like a lone mark; one that
+	// closes a bracket of the title stays ("Note (see #Work)").
+	// How many brackets of the title are open before each index: one pass; removing an unpaired one changes none.
+	const openRound = new Int32Array(n + 1);
+	const openSquare = new Int32Array(n + 1);
+	for (let i = 0; i < n; i++) {
+		const ch = gone[i] === 1 ? "" : input.charAt(i);
+		openRound[i + 1] = Math.max(0, openRound[i]! + (ch === "(" ? 1 : ch === ")" ? -1 : 0));
+		openSquare[i + 1] = Math.max(0, openSquare[i]! + (ch === "[" ? 1 : ch === "]" ? -1 : 0));
+	}
+	for (const c of applied) {
+		const m = c.span.end;
+		const ch = input.charAt(m);
+		if (m >= n || !")]".includes(ch) || (c.kind !== "category" && c.kind !== "tag" && c.kind !== "priority")) continue;
+		const opened = (ch === ")" ? openRound : openSquare)[m]! > 0;
+		if (gone[m] === 0 && !kept(m) && !opened && lone(m) && (m > last || m < first)) gone[m] = 1;
+	}
 	// A sentence's last punctuation after a repeat that ends the chips, with a space before the repeat.
 	const lastChip = applied.at(-1);
 	if (lastChip !== undefined && (lastChip.kind === "recurrence" || lastChip.kind === "repeatEnd") && lastChip.span.start > 0 && gone[lastChip.span.start - 1] === 0 && space(lastChip.span.start - 1)) {
@@ -612,7 +629,7 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[]): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
-	// A time range's duration (`3-4pm`); a typed `for` duration wins.
+	// A time range's duration (`3-4pm`, `every monday at 5pm-6pm`); a typed `for` duration wins.
 	let rangeMinutes: number | undefined;
 	for (const c of chips) {
 		if (c.status !== "applied") continue;
@@ -650,6 +667,7 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 			case "recurrence":
 				if (c.rule !== undefined) fields.recurrence = c.rule;
+				if (c.durationMin !== undefined) rangeMinutes = c.durationMin;
 				break;
 			case "repeatEnd":
 				if (c.end !== undefined) fields.recurrenceEnd = c.end;

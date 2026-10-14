@@ -32,7 +32,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 ## Changed
 
 - (#69) In Quick Add, `@4pm`, `@4:30pm` and `@noon` are times unless you have such a tag; `at 0900` is 09:00.
-- (#69) In Quick Add, a time range like `Meeting 3-4pm` sets the start time and a one-hour duration instead of only suggesting a date.
+- (#69) In Quick Add, a time range like `Meeting 3-4pm` sets the start time and a one-hour duration instead of only suggesting a date; after a repeat, as in `every monday at 5pm-6pm`, it sets the repeat's time and the duration.
 - (#69) In Quick Add, a duration without `for`, like `Gym 2h`, now stays in the title instead of being offered as a date.
 - (#190) Priority pickers, menus, groups and filters all list High, Medium, Low, None, and Quick Add names priorities the same way.
 - (#190) Upcoming board columns name days as rows do, like "Mon, Oct 5"; Focus writes "1h 30m focus" and "Round 2 of 4".

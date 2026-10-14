@@ -62,19 +62,23 @@ const isSpace = (ch: string): boolean => /^\s$/u.test(ch);
 const isWord = (ch: string): boolean => /^[\p{L}\p{N}\p{M}_]$/u.test(ch);
 
 /**
- * Whether every character of the input outside the applied spans is in the title, in order, apart from whitespace, a
- * backslash, and a mark or parenthesis that only whitespace, other such marks and removed spans separate from an
- * applied span; a mark other than a comma or semicolon that a word character of the title touches is never dropped
- * (`Wow! tomorrow` keeps "Wow!"). An
- * independent reading of what the title may drop, not a copy of the parser's rule.
+ * Whether the title is what the input leaves once the applied spans are gone, read character by character, independent
+ * of the parser's code. Whitespace and a backslash may go. A mark or parenthesis that only whitespace, other such marks
+ * and removed spans separate from an applied span may go, unless a word character of the title touches it (a comma or
+ * a semicolon may go even then). Some must go: a comma or semicolon right beside a removed span (over spaces); another
+ * mark right beside one that only whitespace, the text's edge or removed text touches and that no word of the title
+ * comes before, or none after; and a pair of parentheses with only removed text, spaces and such commas between them.
  */
 function titleKeepsTheRest(input: string, r: ParseResult): boolean {
-	const removed = new Uint8Array(input.length);
+	const n = input.length;
+	const removed = new Uint8Array(n);
 	for (const c of applied(r)) removed.fill(1, c.span.start, c.span.end);
+	const gone = (j: number): boolean => j >= 0 && j < n && removed[j] === 1;
+	const blank = (j: number): boolean => j < 0 || j >= n || isSpace(input.charAt(j));
 	// Whether an applied span is reachable from `i` over whitespace, marks and removed text.
 	const besideRemoved = (i: number): boolean => {
 		for (const step of [-1, 1]) {
-			for (let j = i + step; j >= 0 && j < input.length; j += step) {
+			for (let j = i + step; j >= 0 && j < n; j += step) {
 				if (removed[j] === 1) return true;
 				const ch = input.charAt(j);
 				if (!isSpace(ch) && !TITLE_MARKS.includes(ch)) break;
@@ -82,19 +86,52 @@ function titleKeepsTheRest(input: string, r: ParseResult): boolean {
 		}
 		return false;
 	};
+	// Whether an applied span is reachable from `i` over whitespace alone.
+	const rightBeside = (i: number): boolean => {
+		for (const step of [-1, 1]) {
+			let j = i + step;
+			while (j >= 0 && j < n && removed[j] === 0 && isSpace(input.charAt(j))) j += step;
+			if (gone(j)) return true;
+		}
+		return false;
+	};
+	const titleWord = (j: number): boolean => j >= 0 && j < n && removed[j] === 0 && isWord(input.charAt(j));
+	let firstWord = -1;
+	let lastWord = -1;
+	for (let j = 0; j < n; j++) {
+		if (!titleWord(j)) continue;
+		if (firstWord === -1) firstWord = j;
+		lastWord = j;
+	}
+	const mustGo = new Uint8Array(n);
+	for (let i = 0; i < n; i++) {
+		const ch = input.charAt(i);
+		if (removed[i] === 1 || !rightBeside(i)) continue;
+		if (",;".includes(ch)) mustGo[i] = 1;
+		else if (".:!?-\u2013".includes(ch) && (blank(i - 1) || gone(i - 1)) && (blank(i + 1) || gone(i + 1)) && (i < firstWord || i > lastWord)) mustGo[i] = 1;
+	}
+	for (let i = 0; i < n; i++) {
+		if (input.charAt(i) !== "(" || removed[i] === 1) continue;
+		let j = i + 1;
+		let inside = false;
+		while (j < n && (removed[j] === 1 || isSpace(input.charAt(j)) || mustGo[j] === 1)) {
+			if (removed[j] === 1) inside = true;
+			j++;
+		}
+		if (inside && input.charAt(j) === ")") mustGo[i] = mustGo[j] = 1;
+	}
 	const title = r.title.split("").filter((ch) => !isSpace(ch));
-	const titleWord = (j: number): boolean => j >= 0 && j < input.length && removed[j] === 0 && isWord(input.charAt(j));
 	// How much of the title the input read so far can account for, every way (a droppable mark may match or go).
 	let at = new Set([0]);
-	for (let i = 0; i < input.length; i++) {
+	for (let i = 0; i < n; i++) {
 		const ch = input.charAt(i);
 		if (removed[i] === 1 || isSpace(ch)) continue;
 		// A comma or semicolon goes even after a word ("Call mom, tomorrow"); parentheses pair by what is between them.
 		const touched = !",;()".includes(ch) && (titleWord(i - 1) || titleWord(i + 1));
-		const droppable = ch === "\\" || (TITLE_MARKS.includes(ch) && besideRemoved(i) && !touched);
+		const droppable = mustGo[i] === 1 || ch === "\\" || (TITLE_MARKS.includes(ch) && besideRemoved(i) && !touched);
 		const next = new Set<number>();
 		for (const t of at) {
-			if (title[t] === ch) next.add(t + 1);
+			if (title[t] === ch && mustGo[i] === 0) next.add(t + 1);
 			if (droppable) next.add(t);
 		}
 		at = next;
@@ -176,7 +213,7 @@ describe("parser properties", () => {
 		);
 	});
 
-	it("the title keeps every character outside the applied spans but whitespace runs, a lone mark beside a removed span and an emptied ()", () => {
+	it("the title keeps every character outside the applied spans but whitespace runs, a lone mark beside a removed span and an emptied (), and drops those", () => {
 		fc.assert(
 			fc.property(arbText, arbZone, arbNow, arbManual, (input, zone, now, manual) => {
 				const r = parseUnguarded(input, ctxFrom(zone, now, "en", manual, []));
@@ -217,8 +254,9 @@ describe("parser properties", () => {
 				const last = (kind: string) => a.filter((c) => c.kind === kind).at(-1);
 				expect(r.fields.scheduled).toEqual(last("scheduled")?.date);
 				expect(r.fields.deadline).toEqual(last("deadline")?.date);
-				// A typed `for` duration wins over a time range's (`3-4pm`, on its date chip).
-				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin ?? last("scheduled")?.durationMin);
+				// A typed `for` duration wins over a time range's (`3-4pm`, on its date or repeat chip).
+				const ranged = a.filter((c) => (c.kind === "scheduled" || c.kind === "recurrence") && c.durationMin !== undefined).at(-1);
+				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin ?? ranged?.durationMin);
 				expect(r.fields.categoryId).toBe(last("category")?.categoryId);
 				expect(r.fields.sectionId).toBe(last("category")?.sectionId);
 				expect(r.fields.notePath).toBe(last("note")?.notePath);

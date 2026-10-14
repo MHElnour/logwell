@@ -4,6 +4,7 @@ import { findDurations } from "./duration";
 import type { Span } from "./types";
 import {
 	CLOCK_PATTERN,
+	readClockRange,
 	DAY_NUMBER_PATTERN,
 	LIST_SEP_PATTERN,
 	MONTH_PATTERN,
@@ -149,12 +150,12 @@ export function findLiteralTokens(s: string, taken: Taken, phraseEnd: (from: num
 	return out;
 }
 
-/** `#name` or `@name` tokens. `accept` can reject a candidate (for example an invalid tag key). */
+/** `#name` or `@name` tokens. `accept` can reject a candidate (for example an invalid tag key), given its name and where its trigger is. */
 export function findWordTokens(
 	s: string,
 	trigger: "#" | "@",
 	taken: Taken,
-	accept: (name: string) => boolean,
+	accept: (name: string, start: number) => boolean,
 ): WordToken[] {
 	const out: WordToken[] = [];
 	let from = 0;
@@ -166,7 +167,7 @@ export function findWordTokens(
 		const end = tokenRunEnd(s, i + 1);
 		if (end === i + 1) continue;
 		const name = s.slice(i + 1, end);
-		if (taken(i, end) || !accept(name)) continue;
+		if (taken(i, end) || !accept(name, i)) continue;
 		out.push({ span: { start: i, end }, name });
 		from = end;
 	}
@@ -248,7 +249,7 @@ const DAY_ABBR = `(?!${RANGE_START})${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}`;
 const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
 // Joined by plain spaces, `sat` and `sun` continue a list only when nothing but more weekdays, a time and punctuation
 // follows ("every mon wed sat", not "every monday sun cream"); joined by a comma, "and" or "&", they always do.
-const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN})?[\\s\\p{P}]*$)`;
+const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN}(?:${RANGE_TO_PATTERN}${CLOCK_PATTERN})?)?[\\s\\p{P}]*$)`;
 const WEEKDAY_LIST = `(?:${WEEKDAY_RANGE}|${DAY})(?:${LIST_SEP_PATTERN}${DAY}|\\s+${DAY_FULL}|\\s+${DAY_ABBR}${LIST_ENDS_HERE})*`;
 const OF_MONTH = "\\s+of\\s+(?:the|each|every)\\s+month";
 // "on the 15th", "on day 15", "on 15", "on the last day": the day of a monthly repeat; a bare number before a month
@@ -277,7 +278,23 @@ const EVERY_RE = new RegExp(
 	"iyu",
 );
 // A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
-const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+const EVERY_TIME_RE = new RegExp(`\\s+at\\s+(${CLOCK_PATTERN})${NOT_WORD_AFTER}`, "iyu");
+// The end of a time range after that time ("every monday at 5pm-6pm").
+const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}(${CLOCK_PATTERN})${NOT_WORD_AFTER}`, "iyu");
+
+/**
+ * The length of the time typed at `at` right after a form, with the end of its range: a range gives the repeat its start
+ * time and the task a duration (`readClockRange`). A range whose end is not after its start is no time of the repeat
+ * (0): the date reader reads it, its end time alone.
+ */
+function repeatTimeLength(s: string, at: number): number {
+	const time = sticky(EVERY_TIME_RE, s, at);
+	if (time === null) return 0;
+	const range = sticky(TIME_END_RE, s, at + time[0].length);
+	const read = range === null ? null : readClockRange(time[1]!, range[1]!);
+	if (range === null || read === null) return time[0].length;
+	return read.minutes > 0 ? time[0].length + range[0].length : 0;
+}
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
 const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
@@ -383,8 +400,7 @@ function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | 
 	}
 	let end = start + form[0].length;
 	if (ON_DATE_TAIL_RE.test(form[0])) return phrase(end, true, true);
-	const time = sticky(EVERY_TIME_RE, s, end);
-	if (time !== null) end += time[0].length;
+	end += repeatTimeLength(s, end);
 	const join = sticky(JOIN_RE, s, end);
 	const joined = join === null ? end : end + join[0].length;
 	const more = join === null ? end : repeatWordsEnd(s, joined);
@@ -434,8 +450,7 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		let end = found.index + found[0].length;
 		if (!wordBoundaryBefore(s, found.index)) return;
 		const onDate = ON_DATE_TAIL_RE.test(found[0]);
-		const time = onDate ? null : sticky(EVERY_TIME_RE, s, end);
-		if (time !== null) end += time[0].length;
+		if (!onDate) end += repeatTimeLength(s, end);
 		if (!free(found.index, end)) return;
 		// "on mondays", "on weekends", "on the last friday of the month": the "on" goes with the repeat; not "on daily".
 		const on = bare && !/s$/iu.test(found[0]) ? -1 : wordBefore(s, found.index, "on");

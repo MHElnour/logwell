@@ -26,7 +26,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value".
 - Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
 - A date range, such as `Friday until midnight` or `Oct 12 to Oct 20`, is also a suggestion. Its date is the start as you would get it typed alone: `Friday until midnight` typed on a Wednesday suggests the coming Friday.
-- A time range on one day, such as `Meeting 3-4pm`, `10am-11am`, `from 3pm to 5pm` or `2-3pm tomorrow`, sets the start time and the duration between the two times. A `for` duration you type wins. If the end is not after the start, as in `4-3pm`, only the end time is used.
+- A time range on one day, such as `Meeting 3-4pm`, `10am-11am`, `from 3pm to 5pm` or `2-3pm tomorrow`, sets the start time and the duration between the two times. A `for` duration you type wins. If the end is not after the start, as in `4-3pm`, only the end time is used. After a repeat, as in `Gym every monday at 5pm-6pm`, the start is the repeat's time and the task gets the duration.
 - Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.

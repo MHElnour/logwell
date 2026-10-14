@@ -48,7 +48,7 @@ export interface Chip {
 	date?: DateSpec;
 	alternatives?: ChipAlternative[];
 	warning?: WallTimeWarning;
-	/** A duration chip's minutes, or a time range's on its date chip (`3-4pm`); a typed `for` duration wins over it. */
+	/** A duration chip's minutes, or a time range's on its date or repeat chip (`3-4pm`, `every day at 9am-10am`); a typed `for` duration wins over it. */
 	durationMin?: number;
 	/** 1 high, 2 medium, 3 low (a chip never carries 0). */
 	priority?: 1 | 2 | 3;

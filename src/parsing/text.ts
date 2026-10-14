@@ -92,15 +92,17 @@ export function tokenStartAllowed(s: string, index: number): boolean {
 /** A comma or a semicolon: beside a removed span it goes with it, even right after a word ("Call mom, tomorrow"). */
 export const SEPARATOR_MARKS = ",;";
 
-/** Sentence punctuation: the separators, a period, a colon, an exclamation or a question mark. */
-export const SENTENCE_MARKS = `${SEPARATOR_MARKS}.:!?`;
+/** A period, a colon, an exclamation or a question mark: the part both sets below share. */
+const STOP_MARKS = ".:!?";
+
+/** Sentence punctuation: the separators and the stops. */
+export const SENTENCE_MARKS = `${SEPARATOR_MARKS}${STOP_MARKS}`;
 
 /**
- * The marks a removed span may leave alone in the title, besides the separators: a period, a colon, an exclamation or
- * a question mark, a hyphen or an en dash ("Pay rent - tomorrow"). Not a closing bracket, which pairs with its
- * opening one.
+ * The marks a removed span may leave alone in the title, besides the separators: the stops, a hyphen or an en dash
+ * ("Pay rent - tomorrow"). Not a closing bracket, which pairs with its opening one.
  */
-export const LONE_MARKS = ".:!?-\u2013";
+export const LONE_MARKS = `${STOP_MARKS}-\u2013`;
 
 /**
  * The marks that end a token without being part of it (`!1.`, `(!2)`, `@urgent!`): sentence punctuation and a closing
@@ -282,8 +284,9 @@ export function dayNumber(text: string): number | null {
 /** A clock time: "9", "9:30pm", "5 p.m.", "17:00", "noon", "midnight". */
 export const CLOCK_PATTERN = "(?:\\d{1,2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?|noon|midnight)";
 
-// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon".
-const AT_CLOCK_RE = /(?:\d{1,2}(?::\d{2})?[ap]m|noon)(?![\p{L}\p{N}_])/iuy;
+// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon"; not the start of a
+// range ("@4pm-5pm", "@4pm to 5pm"), which the table does not read after `@`.
+const AT_CLOCK_RE = new RegExp(`(?:\\d{1,2}(?::\\d{2})?[ap]m|noon)(?![\\p{L}\\p{N}_])(?!${RANGE_TO_PATTERN}(?:\\d|noon))`, "iuy");
 
 /** The length of the clock time `@` reads at `at` ("4pm", "4:30pm", "noon"), or 0 when none starts there. */
 export function atClockLength(s: string, at: number): number {
@@ -378,6 +381,22 @@ export function readingOf(s: string, free: (start: number, end: number) => boole
 
 /** The units of a planned duration: "h", "hrs", "hours", "m", "mins", "minutes". */
 export const DURATION_UNIT_PATTERN = "(?:hours?|hrs?|h|minutes?|mins?|m)";
+
+/**
+ * A time range of two clock times on one day ("5pm-6pm", "17:30-18:30", "3-4pm": a start without am or pm takes the
+ * end's): its start as "HH:mm" and the minutes to its end, zero or less when the end is not after the start. Null
+ * unless both read as clock times and both halves of the day are certain.
+ */
+export function readClockRange(start: string, end: string): { time: string; minutes: number } | null {
+	const to = readClock(end);
+	if (to === null || to.ambiguous) return null;
+	const half = /([ap])\.?m\.?$/iu.exec(end.trim());
+	let from = readClock(start);
+	if (from?.ambiguous === true && half !== null) from = readClock(`${start.trim()}${half[1]!}m`);
+	if (from === null || from.ambiguous) return null;
+	const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+	return { time: from.time, minutes: minutesOf(to.time) - minutesOf(from.time) };
+}
 
 /** A clock time as "HH:mm", and whether its hour could be either half of the day (1 to 12 without am or pm). */
 export function readClock(text: string): { time: string; ambiguous: boolean } | null {

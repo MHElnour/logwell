@@ -45,7 +45,7 @@ describe("Quick Add on long runs of quotes, backslashes, parentheses and clock t
 		expect(large, report).toBeLessThan(small * GROWTH + NOISE_MS);
 	});
 
-	it.each(['"', "\\", "(", '"a" ', "\\a ", "(#a) ", "((#a)) ", "at 0900-1000 ", "\\by friday "])("%j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
+	it.each(['"', "\\", "(", '"a" ', "\\a ", "(#a) ", "((#a)) ", "#a) ", "every day at 9am-10am ", "at 0900-1000 ", "\\by friday "])("%j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
 		const ctx = makeCtx();
 		const short = long(unit, 5000);
 		const longer = long(unit, 20000);

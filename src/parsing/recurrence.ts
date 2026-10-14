@@ -2,7 +2,7 @@ import { EVERY_WEEKDAY, MAX_INTERVAL, normalizeRepeatRule, plainRule, repeatRule
 import { collapseWhitespace } from "../domain/text";
 import { pad2 } from "../domain/time";
 import { WEEKDAYS, type MonthlyOn, type RepeatRule, type Weekday } from "../domain/types";
-import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, RANGE_TO_PATTERN, WEEKDAY_PATTERN, dayNumber, readClock, weekdayWord } from "./text";
+import { BARE_REPEAT_WORDS, DAY_PART_PATTERN, LIST_SEP_PATTERN, ORDINAL_WORDS, RANGE_TO_PATTERN, WEEKDAY_PATTERN, dayNumber, readClock, readClockRange, weekdayWord } from "./text";
 
 // Quick Add repeats. The tokenizer (tokens.ts) finds the span; this file turns its text into a RepeatRule.
 // Pure; no chrono, no clock.
@@ -26,7 +26,12 @@ export interface ParsedRepeat {
 	 * 12:00 for "12"; this is 21:00 and 00:00. Null when the time is certain or absent.
 	 */
 	other: RepeatRule | null;
+	/** A time range's minutes from its start (the rule's time) to its end ("every monday at 5pm-6pm"); absent without one. */
+	durationMin?: number;
 }
+
+// The two times of a time range after `at`.
+const TIME_RANGE_RE = new RegExp(`^(.+?)${RANGE_TO_PATTERN}(.+)$`, "u");
 
 /** A rule without its time: what the body of a phrase says. */
 type Body = Pick<RepeatRule, "freq" | "interval" | "weekdays" | "monthly">;
@@ -176,13 +181,18 @@ export function parseRepeatText(text: string, zone: string): ParsedRepeat | null
 	let phrase = collapseWhitespace(text.toLowerCase());
 	let time: string | null = null;
 	let ambiguous = false;
+	let durationMin: number | undefined;
 	const at = /^(.*?) at (.+)$/u.exec(phrase);
 	if (at !== null) {
-		const clock = readClock(at[2]!);
+		const range = TIME_RANGE_RE.exec(at[2]!);
+		const clock = readClock(at[2]!) ?? (range === null ? null : readClockRange(range[1]!, range[2]!));
 		if (clock === null) return null;
 		phrase = at[1]!;
 		time = clock.time;
-		ambiguous = clock.ambiguous;
+		if ("minutes" in clock) {
+			if (clock.minutes <= 0) return null;
+			durationMin = clock.minutes;
+		} else ambiguous = clock.ambiguous;
 	}
 	const parsed = parseBody(bodyOf(phrase));
 	if (parsed === null) return null;
@@ -194,5 +204,5 @@ export function parseRepeatText(text: string, zone: string): ParsedRepeat | null
 		const second = `${pad2(hour === 12 ? 0 : hour + 12)}${time.slice(2)}`;
 		other = normalizeRepeatRule({ ...rule, time: second });
 	}
-	return { rule, other };
+	return durationMin === undefined ? { rule, other } : { rule, other, durationMin };
 }
