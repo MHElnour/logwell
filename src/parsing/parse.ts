@@ -381,12 +381,13 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const rolling = new Map<string, RollKind>();
 	const readings = dates.flatMap((c) => (c.range !== undefined && built && isPart(c) && !onWeekly(c) && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
 	// With no typed repeat the task's first time wins: a later time alone stays title text, with no chip ("Call at 4pm and
-	// at 5pm"). A later date keeps the rule below that the later value wins.
+	// at 5pm"). A time that is only a suggestion is not the first one; a later date keeps the rule below that the later
+	// value wins.
 	let timed = false;
 	const firstTime = (c: DateCandidate): boolean => {
 		if (typed || c.kind !== "scheduled" || c.time === undefined) return true;
 		const keep = !timed || c.time !== "alone";
-		timed = true;
+		if (c.outcome.status === "applied" || c.outcome.status === "choice") timed = true;
 		return keep;
 	};
 	for (const c of readings.filter(firstTime)) {

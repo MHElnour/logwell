@@ -984,6 +984,8 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Call @4pm and @5pm", title: "Call and @5pm", s: "2026-10-07T16:00", nt: [], brief: ["scheduled|applied|@4pm"] },
 			{ in: "Call at 0900 or at 1000", title: "Call or at 1000", s: "2026-10-08T09:00", brief: ["scheduled|applied|at 0900"] },
 			{ in: "Call tomorrow at 4pm, at 5pm", title: "Call at 5pm", s: "2026-10-08T16:00", brief: ["scheduled|applied|tomorrow at 4pm"] },
+			// a time that is only a suggestion is not the first time: the later time applies, as before
+			{ in: "Meeting 3-4pm tomorrow at 5pm", title: "Meeting 3-4pm tomorrow", s: "2026-10-07T17:00", brief: ["scheduled|suggestion|3-4pm tomorrow", "scheduled|applied|at 5pm"] },
 			// two dates, and a date with one time, as before
 			{ in: "Meet Friday tomorrow", title: "Meet", s: "2026-10-08", brief: ["scheduled|applied|Friday tomorrow"] },
 			{ in: "Call tomorrow at 4pm", title: "Call", s: "2026-10-08T16:00", brief: ["scheduled|applied|tomorrow at 4pm"] },
