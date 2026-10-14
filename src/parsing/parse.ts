@@ -381,7 +381,13 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const rolling = new Map<string, RollKind>();
 	// A range read as the task's schedule and deadline (no typed repeat) splits unless a repeat is picked by hand.
 	const splits = (range: NonNullable<DateCandidate["range"]>, c: DateCandidate): boolean => (range.end.kind === "deadline" ? !picked : built && isPart(c) && !onWeekly(c) && (range.led || afterRepeat(c.span.start)));
-	const readings = dates.flatMap((c) => (c.range !== undefined && splits(c.range, c) ? [c.range.start, rangeEnd(c.range)] : [c]));
+	// The starts of the ranges read as the task's schedule and deadline, by span.
+	const taskRangeStarts = new Set<string>();
+	const readings = dates.flatMap((c) => {
+		if (c.range === undefined || !splits(c.range, c)) return [c];
+		if (c.range.end.kind === "deadline") taskRangeStarts.add(`${c.range.start.span.start}:${c.range.start.span.end}`);
+		return [c.range.start, rangeEnd(c.range)];
+	});
 	// With no typed repeat the task's first time wins: a later time alone stays title text, with no chip ("Call at 4pm and
 	// at 5pm"). A time that is only a suggestion is not the first one; a later date keeps the rule below that the later
 	// value wins.
@@ -433,13 +439,25 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const chips = kept.map((d) => d.chip);
 	const open = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
-	// A weekday typed with a day that is another weekday (the choice's notice says so) blocks saving until chosen, unless
-	// that date is set by hand.
-	for (const c of chips) if ((c.kind === "scheduled" || c.kind === "deadline") && c.status === "choice" && c.notice !== undefined && !ctx.manual.has(c.kind) && !open.includes(c.id)) open.push(c.id);
+	// A weekday typed with a day that is another weekday (the choice's notice says so) and the start of a task's range that
+	// is a choice (`Oct 20 to Oct 25 at 5`: its end is already applied) block saving until chosen, unless that date is set
+	// by hand or a later date of the same kind replaces it. Such a start's text leaves the title with its end.
+	const leaving = new Set<string>();
+	// Where the last applied chip of each kind starts (the chips are in input order).
+	const lastApplied = new Map<ChipKind, number>();
+	for (const c of chips) if (c.status === "applied") lastApplied.set(c.kind, c.span.start);
+	const opened = new Set(open);
+	for (const c of chips) {
+		if ((c.kind !== "scheduled" && c.kind !== "deadline") || c.status !== "choice" || ctx.manual.has(c.kind)) continue;
+		const rangeStart = c.kind === "scheduled" && taskRangeStarts.has(`${c.span.start}:${c.span.end}`);
+		if ((c.notice === undefined && !rangeStart) || (lastApplied.get(c.kind) ?? -1) > c.span.start) continue;
+		if (!opened.has(c.id)) open.push(c.id);
+		if (rangeStart) leaving.add(c.id);
+	}
 	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
-	return finish(input, chips, open, keptText, escapes);
+	return finish(input, chips, open, keptText, escapes, leaving);
 }
 
 /**
@@ -546,8 +564,8 @@ function supersede(drafts: Draft[]): void {
 }
 
 /**
- * The title: the input without the applied spans, or the full text if nothing remains, with no stray punctuation or
- * spaces. Beside a removed span (over spaces), a comma or a semicolon goes with it (SEPARATOR_MARKS: "Read every day, 20
+ * The title: the input without the applied spans and the chips `leaving` names (by id), or the full text if nothing
+ * remains, with no stray punctuation or spaces. Beside a removed span (over spaces), a comma or a semicolon goes with it (SEPARATOR_MARKS: "Read every day, 20
  * pages"); another mark (LONE_MARKS) goes only when it is lone and left at the start or the end of the title: lone is
  * only whitespace, the text's edge or removed text touching it on both sides ("Pay rent - tomorrow", "Pay rent !1.",
  * "Q&A: Friday?" is "Q&A:"); a mark a word of the title touches is the user's ("Wow! tomorrow", "Pay rent: tomorrow"),
@@ -556,9 +574,9 @@ function supersede(drafts: Draft[]): void {
  * every sunday."). An escaped phrase loses its backslash (`escapes`, their indexes). Text the user kept as it is
  * (`literal`: a dismissed chip, a quoted or an escaped phrase) is never touched.
  */
-function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[], escapes: readonly number[]): string {
+function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[], escapes: readonly number[], leaving: ReadonlySet<string>): string {
 	const n = input.length;
-	const applied = chips.filter((c) => c.status === "applied");
+	const applied = chips.filter((c) => c.status === "applied" || leaving.has(c.id));
 	const gone = new Uint8Array(n);
 	for (const c of applied) gone.fill(1, c.span.start, c.span.end);
 	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end);
@@ -645,7 +663,7 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 	return collapseWhitespace(out);
 }
 
-function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[]): ParseResult {
+function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[], leaving: ReadonlySet<string>): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
 	for (const c of chips) {
@@ -689,7 +707,8 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 		}
 	}
-	const collapsed = titleOf(input, chips, literal, escapes);
+	const collapsed = titleOf(input, chips, literal, escapes, leaving);
+	const blocks = new Set(open);
 	return {
 		input,
 		chips,
@@ -698,7 +717,7 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 		fields,
 		// An unresolved list, an unknown section, an invalid repeat end, and a typed repeat or a yearly repeat's start whose
 		// hour is still a choice (`open`) block saving until fixed, chosen or dismissed.
-		blocking: chips.filter((c) => c.status === "unresolved" || ((c.kind === "repeatEnd" || c.kind === "category") && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
+		blocking: chips.filter((c) => c.status === "unresolved" || ((c.kind === "repeatEnd" || c.kind === "category") && c.status === "invalid") || blocks.has(c.id)).map((c) => c.id),
 	};
 }
 

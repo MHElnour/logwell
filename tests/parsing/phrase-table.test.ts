@@ -1118,6 +1118,10 @@ describe("8. Dates", () => {
 			{ in: "Report within a week", locale: "any", title: "Report", d: "2026-10-14", brief: ["deadline|applied|within a week"] },
 			{ in: "Report within 2 weeks", locale: "any", title: "Report", d: "2026-10-21", brief: ["deadline|applied|within 2 weeks"] },
 			{ in: "Report by Friday", locale: "any", title: "Report", d: "2026-10-09", brief: ["deadline|applied|by Friday"] },
+			{ in: "Report due tomorrow", locale: "any", title: "Report", d: "2026-10-08", brief: ["deadline|applied|due tomorrow"] },
+			{ in: "Report before 5pm", locale: "any", title: "Report", d: "2026-10-07T17:00", brief: ["deadline|applied|before 5pm"] },
+			// within counts days and weeks only: hours read as before
+			{ in: "Call within 3 hours", locale: "any", title: "Call", s: "2026-10-07T13:00", brief: ["scheduled|applied|within 3 hours"] },
 			// a deadline word not right before a date is title text
 			{ in: "Due diligence tomorrow", locale: "any", title: "Due diligence", s: "2026-10-08", brief: ["scheduled|applied|tomorrow"] },
 			{ in: "Read before bed", locale: "any", title: "Read before bed", brief: [] },
@@ -1146,6 +1150,24 @@ describe("8. Dates", () => {
 			{ in: "Report end of week", local: "2026-10-11T10:00", title: "Report", d: "2026-10-16" },
 			{ in: "Report end of month", locale: "any", title: "Report", d: "2026-10-31", brief: ["deadline|applied|end of month"] },
 			{ in: "Report end of year", locale: "any", title: "Report", d: "2026-12-31", brief: ["deadline|applied|end of year"] },
+			{ in: "Report by EOD", locale: "any", title: "Report", d: "2026-10-07", brief: ["deadline|applied|by EOD"] },
+			{ in: "Report by end of week", locale: "any", title: "Report", d: "2026-10-09", brief: ["deadline|applied|by end of week"] },
+			{ in: "eod report", locale: "any", title: "report", d: "2026-10-07", brief: ["deadline|applied|eod"] },
+			// with `the` and `at the` or `by the` before it, those words go with it
+			{ in: "Pay rent at the end of month", locale: "any", title: "Pay rent", d: "2026-10-31", brief: ["deadline|applied|at the end of month"] },
+			{ in: "Pay rent the end of month", locale: "any", title: "Pay rent", d: "2026-10-31", brief: ["deadline|applied|the end of month"] },
+			{ in: "Pay rent by the end of week", locale: "any", title: "Pay rent", d: "2026-10-09", brief: ["deadline|applied|by the end of week"] },
+			// a date right after it is the deadline, one chip
+			{ in: "Send report EOD Friday", locale: "any", title: "Send report", d: "2026-10-09", brief: ["deadline|applied|EOD Friday"] },
+			{ in: "Send report EOD tomorrow", locale: "any", title: "Send report", d: "2026-10-08", brief: ["deadline|applied|EOD tomorrow"] },
+			{ in: "Send report end of day tomorrow", locale: "any", title: "Send report", d: "2026-10-08", brief: ["deadline|applied|end of day tomorrow"] },
+			{ in: "Report end of week Friday", locale: "any", title: "Report", d: "2026-10-09", brief: ["deadline|applied|end of week Friday"] },
+			{ in: "Report end of month Oct 20", locale: "any", title: "Report", d: "2026-10-20", brief: ["deadline|applied|end of month Oct 20"] },
+			// two ends of a period are two deadlines: the later one wins
+			{ in: "Report end of week end of month", locale: "any", title: "Report end of week", d: "2026-10-31", brief: ["deadline|superseded|end of week", "deadline|applied|end of month"] },
+			// other words with end of are text
+			{ in: "Read end of story", locale: "any", title: "Read end of story", brief: [] },
+			{ in: "the end of the week is near", locale: "any", title: "the end of the week is near", brief: ["scheduled|suggestion|the week"] },
 		])("#6: $in", (row) => checkRow(row));
 	});
 
@@ -1158,11 +1180,25 @@ describe("8. Dates", () => {
 			{ in: "Party Fri 16", locale: "any", title: "Party", s: "2026-10-16", brief: ["scheduled|applied|Fri 16"] },
 			{ in: "Party Fri 16.", locale: "any", title: "Party", s: "2026-10-16" },
 			{ in: "Party Fri 16 at 8pm", locale: "any", title: "Party", s: "2026-10-16T20:00", brief: ["scheduled|applied|Fri 16 at 8pm"] },
+			{ in: "Party Fri 16?", locale: "any", title: "Party", s: "2026-10-16", brief: ["scheduled|applied|Fri 16"] },
+			{ in: "Party Fri 16 9am", locale: "any", title: "Party", s: "2026-10-16T09:00", brief: ["scheduled|applied|Fri 16 9am"] },
+			{ in: "Party Fri 16 at 9", locale: "any", title: "Party Fri 16 at 9", chips: ["choice|scheduled|Fri 16 at 9|a=09:00=2026-10-16T09:00/21:00=2026-10-16T21:00"] },
+			{ in: "Party Thurs 15th", locale: "any", title: "Party", s: "2026-10-15", brief: ["scheduled|applied|Thurs 15th"] },
+			{ in: "Party Wed 7", locale: "any", title: "Party", s: "2026-10-07", brief: ["scheduled|applied|Wed 7"] },
 			// before other words it is title text
 			{ in: "Read Friday 2 chapters", locale: "any", title: "Read 2 chapters", s: "2026-10-09", brief: ["scheduled|applied|Friday"] },
 			// a weekday that is not the day's: a choice of the day or that weekday, and saving waits for it
 			{ in: "Party Friday 15th", locale: "any", title: "Party Friday 15th", blocking: ["scheduled"], chips: ["choice|scheduled|Friday 15th|a=Thu, Oct 15=2026-10-15/Fri, Oct 16=2026-10-16|n=The 15th is a Thursday"] },
 			{ in: "Report due Friday 15th", locale: "any", title: "Report due Friday 15th", blocking: ["deadline"], brief: ["deadline|choice|due Friday 15th"] },
+			{ in: "Party Sat 3", locale: "any", title: "Party Sat 3", blocking: ["scheduled"], chips: ["choice|scheduled|Sat 3|a=Tue, Nov 3=2026-11-03/Sat, Oct 31=2026-10-31|n=The 3rd is a Tuesday"] },
+			// the nearest such weekday before today is the following one
+			{ in: "Party Mon 8th", locale: "any", title: "Party Mon 8th", blocking: ["scheduled"], chips: ["choice|scheduled|Mon 8th|a=Thu, Oct 8=2026-10-08/Mon, Oct 12=2026-10-12|n=The 8th is a Thursday"] },
+			{ in: "Party Tue 8th", locale: "any", title: "Party Tue 8th", blocking: ["scheduled"], chips: ["choice|scheduled|Tue 8th|a=Thu, Oct 8=2026-10-08/Tue, Oct 13=2026-10-13|n=The 8th is a Thursday"] },
+			// an hour with no am or pm stays a choice beside the day's
+			{ in: "Party Fri 15 at 7", locale: "any", title: "Party Fri 15 at 7", blocking: ["scheduled"], chips: ["choice|scheduled|Fri 15 at 7|a=Thu, Oct 15, 07:00=2026-10-15T07:00/Thu, Oct 15, 19:00=2026-10-15T19:00/Fri, Oct 16, 07:00=2026-10-16T07:00/Fri, Oct 16, 19:00=2026-10-16T19:00|n=The 15th is a Thursday"] },
+			// a later date of the same kind replaces the choice, which then does not block
+			{ in: "Party Friday 15th tomorrow", locale: "any", title: "Party Friday 15th", s: "2026-10-08" },
+			{ in: "due Friday 15th by Monday", locale: "any", title: "due Friday 15th", d: "2026-10-12" },
 			// a date set by hand wins: the choice offers to replace it and does not block
 			{ in: "Party Friday 15th", locale: "any", manual: ["scheduled"], title: "Party Friday 15th", chips: ["choice|scheduled|Friday 15th|a=Thu, Oct 15=2026-10-15/Fri, Oct 16=2026-10-16|n=Replace date?"] },
 			// a day number no month has is only offered
@@ -1175,6 +1211,12 @@ describe("8. Dates", () => {
 			{ in: "Party on the 20th", locale: "any", title: "Party", s: "2026-10-20", brief: ["scheduled|applied|on the 20th"] },
 			// a day already past this month is next month's
 			{ in: "Party on the 5th", locale: "any", title: "Party", s: "2026-11-05", brief: ["scheduled|applied|on the 5th"] },
+			{ in: "Party on the 20th at 3pm", locale: "any", title: "Party", s: "2026-10-20T15:00", brief: ["scheduled|applied|on the 20th at 3pm"] },
+			{ in: "Party on the 31st", locale: "any", title: "Party", s: "2026-10-31", brief: ["scheduled|applied|on the 31st"] },
+			// a typed date never means a day already past: the next such day
+			{ in: "Party on the 13th", local: "2026-10-14T10:00", title: "Party", s: "2026-11-13" },
+			{ in: "Party Oct 2", locale: "any", title: "Party", s: "2027-10-02" },
+			{ in: "Call Tuesday", local: "2026-10-14T10:00", title: "Call", s: "2026-10-20" },
 			// without `on` a day alone is text
 			{ in: "Call the 20th", locale: "any", title: "Call the 20th", brief: [] },
 			{ in: "May the 4th be with you", locale: "any", title: "May the 4th be with you", brief: [] },
@@ -1188,6 +1230,9 @@ describe("8. Dates", () => {
 			{ in: "Call next weekday", local: "2026-10-09T10:00", title: "Call", s: "2026-10-12" },
 			{ in: "Call this morning", locale: "any", title: "Call", s: "2026-10-07", brief: ["scheduled|applied|this morning"] },
 			{ in: "Call this afternoon", locale: "any", title: "Call", s: "2026-10-07", brief: ["scheduled|applied|this afternoon"] },
+			{ in: "Plan next weekday's plan", locale: "any", title: "Plan 's plan", s: "2026-10-08", brief: ["scheduled|applied|next weekday"] },
+			// the later date wins
+			{ in: "Call this morning tomorrow", locale: "any", title: "Call this morning", s: "2026-10-08", brief: ["scheduled|superseded|this morning", "scheduled|applied|tomorrow"] },
 		])("#6: $in", (row) => checkRow(row));
 	});
 
@@ -1207,8 +1252,14 @@ describe("8. Dates", () => {
 			{ in: "Report due Friday.", locale: "any", title: "Report", d: "2026-10-09" },
 			{ in: "Report (due Friday)", locale: "any", title: "Report", d: "2026-10-09", brief: ["deadline|applied|due Friday"] },
 			{ in: "Report (by Friday)", locale: "any", title: "Report", d: "2026-10-09", brief: ["deadline|applied|by Friday"] },
+			// a closing bracket goes only with an opening one before it
+			{ in: "Note (see Friday)", locale: "any", title: "Note (see )", s: "2026-10-09", brief: ["scheduled|applied|Friday"] },
+			{ in: "Meeting Friday) and stuff", locale: "any", title: "Meeting and stuff", s: "2026-10-09", brief: ["scheduled|applied|Friday)"] },
+			{ in: "Call (Bob) Friday)", locale: "any", title: "Call (Bob)", s: "2026-10-09", brief: ["scheduled|applied|Friday)"] },
+			{ in: "Friday)", locale: "any", title: "Friday)", s: "2026-10-09", brief: ["scheduled|applied|Friday)"] },
 			{ in: "Pay rent every month due Friday", locale: "any", title: "Pay rent", rec: "monthly", d: "2026-10-09" },
 			{ in: "Report due Monday due Friday", locale: "any", title: "Report due Monday", d: "2026-10-09" },
+			{ in: "Report due due due Friday", locale: "any", title: "Report due due", d: "2026-10-09", brief: ["deadline|applied|due Friday"] },
 			{ in: 'Report "due Friday"', locale: "any", title: 'Report "due Friday"', brief: [] },
 			{ in: "Report \\due Friday", locale: "any", title: "Report due Friday", brief: [] },
 			{ in: "Report end of week every week", locale: "any", title: "Report", rec: "weekly", d: "2026-10-09" },
@@ -1236,12 +1287,30 @@ describe("8. Dates", () => {
 				{ in: "Trip Oct 20-25", title: "Trip", s: "2026-10-20", d: "2026-10-25" },
 				{ in: "Trip Friday to Monday", title: "Trip", s: "2026-10-09", d: "2026-10-12" },
 				{ in: "Trip Dec 28 to Jan 3", title: "Trip", s: "2026-12-28", d: "2027-01-03" },
+				{ in: "Trip Dec 28 to Jan 3", local: "2027-01-01T10:00", title: "Trip", s: "2027-12-28", d: "2028-01-03" },
 				{ in: "Trip Oct 12 till Dec 1", title: "Trip", s: "2026-10-12", d: "2026-12-01" },
 				{ in: "Trip tomorrow till Friday", title: "Trip", s: "2026-10-08", d: "2026-10-09" },
 				{ in: "Trip 20 Oct to 25 Oct", locale: "en-GB", title: "Trip", s: "2026-10-20", d: "2026-10-25" },
 				{ in: "Trip 20/10 to 25/10", locale: "en-GB", title: "Trip", s: "2026-10-20", d: "2026-10-25" },
 				// an end before the start is never guessed: the suggestion it was
 				{ in: "Trip Oct 25 to Oct 20", title: "Trip Oct 25 to Oct 20", dates: ["scheduled|suggestion|Oct 25 to Oct 20"] },
+				{ in: "Trip Oct 30 to Oct 2", title: "Trip Oct 30 to Oct 2", dates: ["scheduled|suggestion|Oct 30 to Oct 2"] },
+				{ in: "Trip Oct 30-2", title: "Trip Oct 30-2", dates: ["scheduled|suggestion|Oct 30-2"] },
+				{ in: "Trip Oct 8-6", title: "Trip Oct 8-6", dates: ["scheduled|suggestion|Oct 8-6"] },
+				{ in: "Trip 30/10 to 2/10", locale: "en-GB", title: "Trip 30/10 to 2/10", dates: ["scheduled|suggestion|30/10 to 2/10"] },
+				{ in: "Trip 30 Oct to 2 Oct", locale: "en-GB", title: "Trip 30 Oct to 2 Oct", dates: ["scheduled|suggestion|30 Oct to 2 Oct"] },
+				// the end in the start's year: Feb 29 2027 is no date
+				{ in: "Trip Feb 28-29", local: "2026-10-10T10:00", title: "Trip Feb 28-29", dates: ["scheduled|suggestion|Feb 28-29"] },
+				// a start that is a choice: when one of its days is after the end, the range stays a suggestion
+				{ in: "Trip Wednesday to Oct 9", title: "Trip Wednesday to Oct 9", dates: ["scheduled|suggestion|Wednesday to Oct 9"] },
+				// a start that is a choice blocks saving, and its text leaves the title with the end's
+				{ in: "Trip Oct 20 to Oct 25 at 5", title: "Trip", d: "2026-10-25", blocking: ["scheduled"], dates: ["scheduled|choice|Oct 20", "deadline|applied|to Oct 25 at 5"] },
+				// other spellings of two dates
+				{ in: "Trip Mon 12 to Fri 16", title: "Trip", s: "2026-10-12", d: "2026-10-16" },
+				{ in: "Trip today to Friday", title: "Trip", s: "2026-10-07", d: "2026-10-09" },
+				{ in: "Trip 2026-10-20 to 2026-10-25", title: "Trip", s: "2026-10-20", d: "2026-10-25" },
+				// one day: the schedule and the deadline both that day
+				{ in: "Trip Oct 7 to Oct 7", title: "Trip", s: "2026-10-07", d: "2026-10-07" },
 				// with other tokens
 				{ in: "Trip Oct 20 to Oct 25 at 9am", title: "Trip", s: "2026-10-20T09:00", d: "2026-10-25" },
 				{ in: "Trip Oct 20 to Oct 25 #Home !2", title: "Trip", s: "2026-10-20", d: "2026-10-25", cat: HOME.id, pri: 2, vault: { categories: [...CATEGORIES, HOME] } },
