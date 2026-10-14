@@ -3,8 +3,7 @@ import { parseQuickAdd, rebaseDecisions, tokenAtCursor } from "../../src/parsing
 import type { SpanDecision } from "../../src/parsing/types";
 import { CATEGORIES, makeCtx } from "./helpers";
 
-const parse = (input: string, decisions: SpanDecision[], manual: Parameters<typeof makeCtx>[0] = {}) =>
-	parseQuickAdd(input, makeCtx({ ...manual, decisions }));
+const parse = (input: string, decisions: SpanDecision[]) => parseQuickAdd(input, makeCtx({ decisions }));
 
 const lit = (input: string, word: string, nth = 0): SpanDecision => {
 	let from = -1;
@@ -12,32 +11,13 @@ const lit = (input: string, word: string, nth = 0): SpanDecision => {
 	return { span: { start: from, end: from + word.length }, text: word, kind: "literal" };
 };
 
-describe("A11 decisions apply while the text matches", () => {
-	it("a literal decision keeps the span as plain text without a chip (QA-03, B3)", () => {
-		const input = "Buy milk tomorrow";
-		const r = parse(input, [lit(input, "tomorrow")]);
-		expect(r.chips).toEqual([]);
-		expect(r.title).toBe(input);
-		expect(r.fields.scheduled).toBeUndefined();
-	});
-
-	it("a decision whose text no longer matches is ignored", () => {
-		const input = "Buy milk tomorrow";
-		const d: SpanDecision = { span: { start: 9, end: 17 }, text: "today", kind: "literal" };
-		expect(parse(input, [d]).fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-	});
-
+// The plain decisions (a literal, a literal next to a time, text that no longer matches, accepting a manual-field
+// replacement) are rows of golden.test.ts.
+describe("decisions apply while the text matches", () => {
 	it("a decision with a span outside the input is ignored", () => {
 		const d: SpanDecision = { span: { start: 40, end: 48 }, text: "tomorrow", kind: "literal" };
 		expect(() => parse("tomorrow", [d])).not.toThrow();
 		expect(parse("tomorrow", [d]).chips).toHaveLength(1);
-	});
-
-	it("a literal span is not re-recognized even partly", () => {
-		const input = "Buy milk tomorrow at 7pm";
-		const r = parse(input, [lit(input, "tomorrow")]);
-		expect(r.chips.map((c) => c.text)).toEqual(["at 7pm"]);
-		expect(r.title).toBe("Buy milk tomorrow");
 	});
 
 	it("a literal on part of a chrono span splits it", () => {
@@ -101,14 +81,6 @@ describe("A11 decisions apply while the text matches", () => {
 		const bound: SpanDecision = { span: { start: 2, end: 6 }, text: "#Foo", kind: "category", categoryId: "cat-study-0002" };
 		const r = parse(input, [bound, lit(input, "#Foo")]);
 		expect(r.chips).toEqual([]);
-	});
-
-	it("an accept decision applies a manual-field replacement", () => {
-		const input = "Call friday";
-		const d: SpanDecision = { span: { start: 5, end: 11 }, text: "friday", kind: "accept" };
-		const r = parse(input, [d], { manual: ["scheduled"] });
-		expect(r.fields.scheduled).toEqual({ kind: "date", date: "2026-10-02" });
-		expect(r.chips[0]?.status).toBe("applied");
 	});
 
 	it("an accept decision on a chip that needs no acceptance changes nothing", () => {
@@ -182,10 +154,6 @@ describe("rebaseDecisions", () => {
 		expect(out).toEqual([d(4, 12, "tomorrow"), d(18, 24, "friday")]);
 	});
 
-	it("returns every decision when nothing changed", () => {
-		expect(rebaseDecisions("abc", "abc", [d(0, 3, "abc")])).toEqual([d(0, 3, "abc")]);
-	});
-
 	it("keeps the decision payload and does not mutate its input", () => {
 		const cat: SpanDecision = { span: { start: 9, end: 13 }, text: "#Foo", kind: "category", categoryId: "c1" };
 		const out = rebaseDecisions("Buy milk #Foo", "Please buy milk #Foo", [cat]);
@@ -232,7 +200,7 @@ describe("tokenAtCursor", () => {
 		expect(tokenAtCursor("[[Plan]] x", 7)).toEqual({ kind: "note", span: { start: 0, end: 8 }, query: "Plan" });
 	});
 
-	it("M1: no token when the cursor is at or after the end of a closed note link", () => {
+	it("no token when the cursor is at or after the end of a closed note link", () => {
 		expect(tokenAtCursor("Draft [[Roadmap]]", 17)).toBeNull();
 		expect(tokenAtCursor("[[Plan]] x", 8)).toBeNull();
 		expect(tokenAtCursor("[[Plan]] x", 9)).toBeNull();
@@ -271,7 +239,7 @@ describe("tokenAtCursor", () => {
 });
 
 describe("bound tag decisions and unresolved categories", () => {
-	it("M2: a bound tag decision whose tag no longer exists is dropped; the span is re-recognized as a new tag", () => {
+	it("a bound tag decision whose tag no longer exists is dropped; the span is re-recognized as a new tag", () => {
 		const input = "x @Gone";
 		const d: SpanDecision = { span: { start: 2, end: 7 }, text: "@Gone", kind: "tag", key: "gone" };
 		const r = parse(input, [d]);
@@ -281,13 +249,13 @@ describe("bound tag decisions and unresolved categories", () => {
 		expect(r.fields.newTags).toEqual(["Gone"]);
 	});
 
-	it("M2: a bound tag decision whose key exists (any casing) still applies", () => {
+	it("a bound tag decision whose key exists (any casing) still applies", () => {
 		const input = "x @my tag";
 		const d: SpanDecision = { span: { start: 2, end: 9 }, text: "@my tag", kind: "tag", key: "Learning" };
 		expect(parse(input, [d]).fields.tagKeys).toEqual(["Learning"]);
 	});
 
-	it("L2: an unresolved category followed by a later applied category is superseded and does not block", () => {
+	it("an unresolved category followed by a later applied category is superseded and does not block", () => {
 		const r = parse("Read #Hobbies #Study", []);
 		expect(r.chips.map((c) => c.status)).toEqual(["superseded", "applied"]);
 		expect(r.chips[0]!.notice).toBe("Replaced by a later value");
@@ -296,7 +264,7 @@ describe("bound tag decisions and unresolved categories", () => {
 		expect(r.title).toBe("Read #Hobbies");
 	});
 
-	it("L2: an unresolved category after an applied one still blocks", () => {
+	it("an unresolved category after an applied one still blocks", () => {
 		const r = parse("Read #Study #Hobbies", []);
 		expect(r.chips.map((c) => c.status)).toEqual(["applied", "unresolved"]);
 		expect(r.blocking).toHaveLength(1);

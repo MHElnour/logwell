@@ -36,7 +36,7 @@ describe("sync links", () => {
 		return JSON.stringify({ ...raw, syncLinks: records });
 	}
 
-	describe("syncLinks records (SYNC-11)", () => {
+	describe("syncLinks records", () => {
 		it("are keyed kind:logwellId", () => {
 			expect(recordId("syncLinks", link("task", "t1"))).toBe("task:t1");
 			expect(recordId("syncLinks", link("list", "inbox"))).toBe("list:inbox");
@@ -76,7 +76,7 @@ describe("sync links", () => {
 			expect(again).toContain('"base":{"date":"cd34","title":"ab12"},"noteBySync":true,"modifiedAt":"2026-10-07T09:00:00.000Z","laterField":7}');
 		});
 
-		it("keep a sync-created note's base text and item lines, after noteBySync, and leave them out when absent (SYNC-09)", () => {
+		it("keep a sync-created note's base text and item lines, after noteBySync, and leave them out when absent", () => {
 			const withNote = { ...link("task", "t1"), noteBySync: true, noteBase: "Trip", noteItems: ["- [ ] Bring passport"] };
 			const text = withLinks([withNote, link("task", "t2")]);
 			const raw = JSON.parse(text) as Record<string, unknown>;

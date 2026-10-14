@@ -45,7 +45,7 @@ If you have habits, they sit above the list. See [Habits](habits.md#habits-in-to
 
 The other views end with a collapsed group, such as **Completed · 3**, with the completed tasks the view showed while they were open. In **Today** that includes overdue tasks you completed today. Click the group to open it; **Show more** adds 20 tasks at a time. A completed subtask stays under its open parent.
 
-A task you complete stays a moment, then moves into the group. To hide the group in every view, open **View options** (the ⋯ button) and turn off **Show completed**.
+A task you complete stays a moment where it was, an overdue one under **Overdue** too, then moves into the group. To hide the group in every view, open **View options** (the ⋯ button) and turn off **Show completed**.
 
 ## Restore a deleted task
 
@@ -85,7 +85,7 @@ In the list layout, open **View options**, choose **Group by…** and pick a gro
 
 In Today, Upcoming, Inbox, lists and tags:
 
-- Drag a row up or down to reorder it. This works under **Sort: default**. A parent moves with its subtasks.
+- Drag a row up or down to reorder it. This works under **Sort: default**. A parent moves with its subtasks. Only the row you drag moves: every other task keeps its place in every view, including tasks of the same list that this view does not show.
 - Drag a row onto another group to change that value: its day, priority, section or list. A new day keeps the task's time. This works under every sort.
 
 **Overdue**, **No date** and tag groups take no drops. After a move, a notice such as "Moved "Pay rent" to High." offers **Undo**.

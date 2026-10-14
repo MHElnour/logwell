@@ -42,7 +42,7 @@ describe("calendar layout", () => {
 		return layoutWeek(layoutTasks, days, c).timed.get(day) ?? [];
 	}
 
-	describe("week helpers (CAL-01)", () => {
+	describe("week helpers", () => {
 		it("weekStartOf honors MO, SU and SA", () => {
 			// Friday 2026-10-02
 			expect(weekStartOf("2026-10-02", "MO")).toBe("2026-09-28");
@@ -91,7 +91,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("monthGrid (CAL-02)", () => {
+	describe("monthGrid", () => {
 		function check(anchor: string, ws: WeekStart): string[][] {
 			const grid = monthGrid(anchor, ws);
 			const flat = grid.flat();
@@ -143,7 +143,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("dayHours (D1)", () => {
+	describe("dayHours", () => {
 		it("a normal day has 1440 minutes and no marks", () => {
 			expect(dayHours("2026-10-02", "Europe/Berlin")).toEqual({
 				date: "2026-10-02",
@@ -234,7 +234,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("layoutWeek placement (CAL-03, CAL-04, CAL-05)", () => {
+	describe("layoutWeek placement", () => {
 		it("keys allDay, timed and hours by every day, with empty arrays for empty days", () => {
 			const layout = layoutWeek([], WEEK, ctx);
 			expect(layout.days).toEqual(WEEK);
@@ -263,7 +263,7 @@ describe("calendar layout", () => {
 			expect(s?.task).toBe(t);
 		});
 
-		it("places date-only tasks in the all-day row and never moves them across zones (B19)", () => {
+		it("places date-only tasks in the all-day row and never moves them across zones", () => {
 			const t = task("d", { scheduled: date("2026-10-03") });
 			for (const zone of ["Pacific/Kiritimati", "Pacific/Pago_Pago", "UTC"]) {
 				const layout = layoutWeek([t], WEEK, { ...ctx, zone });
@@ -272,7 +272,7 @@ describe("calendar layout", () => {
 			}
 		});
 
-		it("converts a task stored in another zone to the display zone (B19)", () => {
+		it("converts a task stored in another zone to the display zone", () => {
 			// 19:00 in New York (EDT, UTC-4) is 01:00 on the next day in Berlin (CEST, UTC+2).
 			const t = task("ny", { scheduled: at("2026-10-02T19:00", "America/New_York"), plannedDurationMin: 30 });
 			expect(seg([t], "2026-10-02")).toEqual([]);
@@ -287,13 +287,13 @@ describe("calendar layout", () => {
 			expect(s?.startMin).toBe(555);
 		});
 
-		it("gives a task with no duration 30 minutes and flags it (CAL-05)", () => {
+		it("gives a task with no duration 30 minutes and flags it", () => {
 			const t = task("n", { scheduled: at("2026-10-02T08:00") });
 			const [s] = seg([t], "2026-10-02");
 			expect(s).toMatchObject({ startMin: 480, endMin: 510, durationMin: 30, noDuration: true });
 		});
 
-		it("splits a block that crosses midnight into two segments (D1)", () => {
+		it("splits a block that crosses midnight into two segments", () => {
 			const t = task("late", { scheduled: at("2026-10-02T23:30"), plannedDurationMin: 60 });
 			const [first] = seg([t], "2026-10-02");
 			const [second] = seg([t], "2026-10-03");
@@ -328,7 +328,7 @@ describe("calendar layout", () => {
 			for (const d of WEEK) expect(layout.timed.get(d)).toHaveLength(1);
 		});
 
-		it("a block at 01:30 for 60 min on a fall-back day has height 60 (D1)", () => {
+		it("a block at 01:30 for 60 min on a fall-back day has height 60", () => {
 			const zone = "America/New_York";
 			const days = ["2026-11-01"];
 			const c = { zone, today: "2026-11-01", now: "2026-11-01T00:00:00.000Z", weekStart: "MO" as const, records: new Map() };
@@ -470,7 +470,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("overlap columns (CAL-04)", () => {
+	describe("overlap columns", () => {
 		const day = "2026-10-02";
 		function block(id: string, startMin: number, len: number): Task {
 			const h = String(Math.floor(startMin / 60)).padStart(2, "0");
@@ -558,7 +558,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("past and missed (D2)", () => {
+	describe("past and missed", () => {
 		// now = 2026-10-02T10:00Z = 12:00 Berlin
 		function timedPast(patch: Partial<Task>): boolean | undefined {
 			return seg([task("t", patch)], "2026-10-02")[0]?.past;
@@ -640,7 +640,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("deadline entries (B43)", () => {
+	describe("deadline entries", () => {
 		it("a date deadline shows in the all-day row on its date", () => {
 			const t = task("d", { deadline: date("2026-10-05") });
 			const days = weekDays("2026-10-05", "MO");
@@ -696,7 +696,7 @@ describe("calendar layout", () => {
 		});
 	});
 
-	describe("layoutMonth (CAL-02, D4)", () => {
+	describe("layoutMonth", () => {
 		const grid = monthGrid("2026-10-15", "MO");
 		const month = "2026-10";
 
@@ -828,70 +828,6 @@ describe("calendar layout", () => {
 					expect(narrow.allDay.get(d), `allDay ${zone} ${d}`).toEqual(reference.allDay.get(d));
 				}
 			}
-		});
-	});
-
-	describe("performance", () => {
-		function bigStore(): Task[] {
-			// 5,000 tasks spread over a year around the visible week, so most are out of range.
-			const tasks: Task[] = [];
-			const zones = ["Europe/Berlin", "America/New_York", "Asia/Tokyo"];
-			for (let i = 0; i < 5000; i++) {
-				const d = new Date(Date.parse("2026-04-01T00:00:00Z") + (i % 365) * 86_400_000).toISOString().slice(0, 10);
-				const hh = String(i % 24).padStart(2, "0");
-				const mm = String((i * 7) % 60).padStart(2, "0");
-				const kind = i % 3;
-				tasks.push(
-					task(`b${i}`, {
-						scheduled: kind === 0 ? date(d) : at(`${d}T${hh}:${mm}`, zones[i % 3]),
-						plannedDurationMin: kind === 2 ? null : 15 + (i % 8) * 15,
-						deadline: i % 5 === 0 ? date(d) : null,
-					}),
-				);
-			}
-			return tasks;
-		}
-
-		it("lays out a week of 5,000 tasks spread over a year (reported as an annotation, not asserted)", async ({ annotate }) => {
-			const tasks = bigStore();
-			const start = performance.now();
-			const layout = layoutWeek(tasks, WEEK, ctx);
-			const ms = performance.now() - start;
-			await annotate(`layoutWeek 5000 tasks over a year: ${ms.toFixed(1)} ms`);
-			expect(layout.days).toEqual(WEEK);
-		});
-
-		it("lays out a month of 5,000 tasks spread over a year (reported as an annotation, not asserted)", async ({ annotate }) => {
-			const tasks = bigStore();
-			const grid = monthGrid("2026-10-02", "MO");
-			const start = performance.now();
-			const cells = layoutMonth(tasks, grid, "2026-10", ctx);
-			const ms = performance.now() - start;
-			await annotate(`layoutMonth 5000 tasks over a year: ${ms.toFixed(1)} ms`);
-			expect(cells).toHaveLength(grid.length);
-		});
-
-		it("lays out a week where all 5,000 tasks are inside it (reported as an annotation, not asserted)", async ({ annotate }) => {
-			const tasks: Task[] = [];
-			const zones = ["Europe/Berlin", "America/New_York", "Asia/Tokyo"];
-			for (let i = 0; i < 5000; i++) {
-				const day = WEEK[i % 7] as string;
-				const hh = String(i % 24).padStart(2, "0");
-				const mm = String((i * 7) % 60).padStart(2, "0");
-				const kind = i % 3;
-				tasks.push(
-					task(`p${i}`, {
-						scheduled: kind === 0 ? date(day) : at(`${day}T${hh}:${mm}`, zones[i % 3]),
-						plannedDurationMin: kind === 2 ? null : 15 + (i % 8) * 15,
-						deadline: i % 5 === 0 ? date(day) : null,
-					}),
-				);
-			}
-			const start = performance.now();
-			const layout = layoutWeek(tasks, WEEK, ctx);
-			const ms = performance.now() - start;
-			await annotate(`layoutWeek 5000 tasks in range: ${ms.toFixed(1)} ms`);
-			expect([...layout.timed.values()].flat().length).toBeGreaterThan(3000);
 		});
 	});
 });

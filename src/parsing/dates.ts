@@ -1,7 +1,7 @@
 import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
-import { LOCAL_FORMAT, addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, type WallTimeWarning } from "../domain/time";
+import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
 import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
@@ -33,6 +33,12 @@ export type DateOutcome =
 	| { status: "applied" | "suggestion"; date: DateSpec; warning?: WallTimeWarning }
 	| { status: "choice"; alternatives: { label: string; value: DateSpec }[] };
 
+/** An applied date offered as a suggestion instead, with its warning; any other outcome as it is. */
+function asSuggestion(o: DateOutcome): DateOutcome {
+	if (o.status !== "applied") return o;
+	return o.warning === undefined ? { status: "suggestion", date: o.date } : { status: "suggestion", date: o.date, warning: o.warning };
+}
+
 export interface DateCandidate {
 	/** "end": a repeat's end (`until Dec 1`); the parser makes it a deadline when nothing repeats. */
 	kind: "scheduled" | "deadline" | "end";
@@ -50,7 +56,7 @@ export interface DateCandidate {
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
-	 * it. The parser uses it only next to a typed repeat it keeps (Repeating tasks rule 19).
+	 * it. The parser uses it only next to a typed repeat it keeps: start and end words count only after a repeat.
 	 */
 	range?: {
 		led: boolean;
@@ -72,7 +78,8 @@ interface Lead {
 }
 
 /**
- * The lead words before a date (Tasks and Quick Add rule 28, Repeating tasks rule 19), lower case, single spaces.
+ * The lead words before a date (`by` for a deadline, `at` joining a time, and a repeat's start and end words), lower
+ * case, single spaces.
  * The span widens over the lead word; "time" joins only a date whose hour is certain. Without a repeat, `until`
  * makes a deadline (the parser turns the "end" into one) and the words marked `repeatOnly` lead nothing.
  */
@@ -124,7 +131,7 @@ function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null 
 	return null;
 }
 
-/** A repeat's end that rolled to more than a year after its start is a suggestion, not applied (Repeating tasks rule 19). */
+/** A repeat's end that rolled to more than a year after its start is a suggestion ("Use as end date?"), not applied. */
 export function rollsPastYear(from: LocalDate, to: LocalDate): boolean {
 	return dayNum(to) - dayNum(from) > 366;
 }
@@ -469,7 +476,7 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock,
 			// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
 			const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
 			if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
-			return outcome.warning === undefined ? { status: "suggestion", date: outcome.date } : { status: "suggestion", date: outcome.date, warning: outcome.warning };
+			return asSuggestion(outcome);
 		};
 		const o = start.outcome;
 		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
@@ -491,6 +498,25 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock,
 	return null;
 }
 
+/**
+ * The start of a range with a side that is only a time (`Friday until midnight`), as that start reads typed alone. chrono
+ * dates that time today, then moves a later weekday start back a week (or swaps the two) to keep the range in order, and can
+ * read a day of the month as an hour (`Dec 1 until 5pm`). Null when the range is not one, the start alone is not one
+ * whole date ending at the join word, or it reads the same day as chrono's start.
+ */
+function startAlone(r: chrono.ParsedResult, masked: string, parser: chrono.Chrono, clock: Clock): chrono.ParsedResult | null {
+	if (r.end == null || (dayCertainOf(r.start) && dayCertainOf(r.end))) return null;
+	const join = new RegExp(RANGE_JOIN_PATTERN, "iu").exec(r.text);
+	if (join === null || join.index === 0) return null;
+	const before = masked.slice(0, r.index + join.index);
+	const last = parser.parse(before, clock.ref, optionOf(clock)).at(-1);
+	if (last === undefined || last.end != null || !dayCertainOf(last.start) || last.index > r.index) return null;
+	if (last.index + last.text.trimEnd().length !== before.trimEnd().length) return null;
+	const chronoDay = componentsIn(r.start, "utc");
+	const aloneDay = componentsIn(last.start, "utc");
+	return chronoDay.isValid && aloneDay.isValid && isoDate(chronoDay) === isoDate(aloneDay) ? null : last;
+}
+
 export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const zoneNow = DateTime.fromJSDate(env.now, { zone: env.zone });
 	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
@@ -498,33 +524,40 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
 	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).
 	const ref = zoneNow.setZone("system", { keepLocalTime: true }).toJSDate();
-	const clock: Clock = { env, ref, refWall: wallOf(DateTime.fromJSDate(ref)), zoneNowWall: wallOf(zoneNow), today: todayOf(zoneNow), nowLocal: zoneNow.toFormat(LOCAL_FORMAT), todayWeekday: zoneNow.weekday % 7 };
+	const clock: Clock = { env, ref, refWall: wallOf(DateTime.fromJSDate(ref)), zoneNowWall: wallOf(zoneNow), today: todayOf(zoneNow), nowLocal: wallTimeOf(zoneNow), todayWeekday: zoneNow.weekday % 7 };
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
 	for (const r of results) {
 		// A span that reaches into a mask, or one introduced by "for" ("for 2 days" is not a date).
 		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text)) continue;
-		const read = readResult(r, clock);
+		// A range with a side that is only a time: its start as typed alone, still only a suggestion (a choice keeps chrono's reading).
+		const alone = startAlone(r, masked, parser, clock);
+		const aloneRead = alone === null ? null : readResult(alone, clock);
+		const fromAlone = alone !== null && !alone.text.includes(MASK_CHAR) && aloneRead !== null && aloneRead.outcome.status !== "choice" ? { head: alone, read: aloneRead } : null;
+		const read = fromAlone?.read ?? readResult(r, clock);
 		if (read === null) continue;
-		const { dayCertain, hourCertain, outcome } = read;
+		const { dayCertain, hourCertain } = read;
+		const outcome = fromAlone === null ? read.outcome : asSuggestion(read.outcome);
+		// Where the date's own text starts: the start read alone can begin before chrono's range (`Dec 1 until 5pm`).
+		const head = fromAlone?.head ?? r;
 
 		// The span: chrono's text, widened over a directly preceding lead word (LEADS). A time joins only a date whose hour
 		// is certain; an end must be a date: an end word before a time alone (`until 5pm`) widens the span only next to a
 		// repeat (repeatOnly), where the parser offers the two as a suggestion; without one the time is read on its own.
-		let spanStart = r.index;
+		let spanStart = head.index;
 		let kind: DateCandidate["kind"] = "scheduled";
 		let repeatOnly = false;
 		// en-GB reads "on 1 Dec" with its "on": the lead words are looked for before the date itself, and chrono's own word
-		// stays part of the date (the lead found at `r.index` is that word).
-		const own = OWN_LEAD_RE.exec(r.text);
-		const found = leadBefore(masked, r.index + (own === null ? 0 : own[0].length));
+		// stays part of the date (the lead found at `head.index` is that word).
+		const own = OWN_LEAD_RE.exec(head.text);
+		const found = leadBefore(masked, head.index + (own === null ? 0 : own[0].length));
 		const lead = found !== null && (found.kind === "time" ? hourCertain : found.kind === "end" ? dayCertain : true) ? found : null;
 		const timeEnd = lead === null && found?.kind === "end";
 		const widened = lead ?? (timeEnd ? found : null);
 		if (widened !== null) {
-			spanStart = Math.min(widened.start, r.index);
-			repeatOnly = timeEnd || (widened.repeatOnly && widened.start < r.index);
+			spanStart = Math.min(widened.start, head.index);
+			repeatOnly = timeEnd || (widened.repeatOnly && widened.start < head.index);
 			if (lead?.kind === "deadline" || lead?.kind === "end") kind = lead.kind;
 		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
 			kind = "deadline";
@@ -534,7 +567,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		const candidate: DateCandidate = {
 			kind,
 			span: { start: spanStart, end: r.index + r.text.trimEnd().length },
-			textStart: r.index,
+			textStart: head.index,
 			repeatOnly,
 			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,

@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import { isDeadlineMissed } from "./queries";
 import { occurrenceSpec, projectOccurrences } from "./recurrence";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallTimeToDateTime, weekStartOfDay } from "./time";
+import { addDays, clockTimeOf, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallTimeToDateTime, weekStartOfDay } from "./time";
 import type { DateSpec, ID, LocalDate, OccurrenceRecord, Task, WeekStart } from "./types";
 
 // Calendar layout. Pure: the caller filters
@@ -421,5 +421,5 @@ export function slotRange(local: string, durationMin: number | null, zone: strin
 	const start = local.slice(11, 16);
 	if (durationMin === null || durationMin <= 0) return start;
 	const end = DateTime.fromISO(local, { zone }).plus({ minutes: durationMin });
-	return `${start}–${end.isValid ? end.toFormat("HH:mm") : fmtMin((wallMinutes(local) + durationMin) % DAY_MIN)}`;
+	return `${start}–${end.isValid ? clockTimeOf(end) : fmtMin((wallMinutes(local) + durationMin) % DAY_MIN)}`;
 }

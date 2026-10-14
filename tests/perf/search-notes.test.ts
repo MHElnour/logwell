@@ -10,16 +10,14 @@ import { SearchSection, initialSearchState } from "../../src/ui/SearchSection";
 import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
 import { input as habitInput } from "../ui/habits-helpers";
+import { countBigPasses, elapsed, perfLog, tally } from "./measure";
 
 // Search with "Also search description notes" on, 50,000 tasks of which 5,000 link a note. Commits that do not
 // change which tasks link which notes (a habit check-in here) read no note at all, and finding the linked notes
-// is one pass within the query budget. Spec: App shell and views rule 24.
+// is one pass over the tasks (its time is logged, CHECKPOINT_PERF_LOG=1).
 
 const TASKS = 50_000;
 const LINKED = 5_000;
-// Same allowance as the other perf tests: CI runners are two to three times slower.
-const CI_SLACK = process.env.CI ? 4 : 1;
-const QUERY_BUDGET_MS = 25 * CI_SLACK;
 const COMMITS = 20;
 
 beforeAll(() => {
@@ -92,15 +90,14 @@ describe(`Search note reads at ${TASKS} tasks, ${LINKED} linked`, () => {
 		}
 	}, 120_000);
 
-	it(`finding the linked notes is one pass within ${QUERY_BUDGET_MS} ms, and an unchanged result keeps its identity`, async () => {
+	it("finding the linked notes is one pass over the tasks, and an unchanged result keeps its identity", async () => {
 		const h = await bigState();
 		const tasks = h.app.store.state.tasks;
-		const t0 = performance.now();
-		const first = linkedNotes(tasks);
-		const ms = performance.now() - t0;
-		if (process.env.CHECKPOINT_PERF_LOG) process.stderr.write(`linkedNotes ${TASKS}/${LINKED}: ${ms.toFixed(1)} ms\n`);
+		const ms = elapsed(() => linkedNotes(tasks));
+		perfLog(`linkedNotes ${TASKS}/${LINKED}: ${ms.toFixed(1)} ms`);
+		const { result: first, passes } = await countBigPasses(() => linkedNotes(tasks));
+		expect(passes, tally(passes)).toHaveLength(1);
 		expect(first.size).toBe(LINKED);
-		expect(ms).toBeLessThan(QUERY_BUDGET_MS);
 		expect(linkedNotes(new Map(tasks), first)).toBe(first);
 	});
 });

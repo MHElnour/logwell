@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "../../src/parsing";
-import { NY, at, makeCtx, ruleKey } from "./helpers";
-import { check, chip, dateOf, gridSample } from "./repeat-grammar-grid";
+import { NY, at, chipOf, makeCtx, ruleKey } from "./helpers";
+import { check, dateOf, gridSample } from "./repeat-grammar-grid";
 
-// Repeating tasks rule 19 and Tasks and Quick Add rule 40 (#12): where a typed repeat phrase ends and what may follow it.
+// #12: where a typed repeat phrase ends and what may follow it.
 // A generated grid, titles × repeat forms × separators × followers, in two environments. The repeat chip's text is the
 // form itself (plus an `at <time>` typed right after it), whatever follows: a date, a weekday, a time, a range, an end,
 // title text, with or without a comma or a lead word between them is read by the date reader and the end logic. An
@@ -59,7 +59,7 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 		const daily = parseQuickAdd("Gym every day Mon-Fri", ctx);
 		expect(daily.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|every day", "scheduled|suggestion|Mon-Fri"]);
 		expect(parseQuickAdd("Gym daily Mon-Fri", ctx).chips.map((c) => `${c.kind}|${c.status}|${c.text}`)).toEqual(["recurrence|applied|daily", "scheduled|suggestion|Mon-Fri"]);
-		// A bare word counts only at the end, after title text (decision 4): `Weekly Mon-Fri review` keeps its title, and
+		// A bare word counts only at the end, after title text: `Weekly Mon-Fri review` keeps its title, and
 		// the weekdays of the dropped phrase are read on their own, the one suggestion a weekday range always is.
 		const review = parseQuickAdd("Weekly Mon-Fri review", ctx);
 		expect([review.title, review.chips.map((c) => `${c.kind}|${c.status}|${c.text}`)]).toEqual(["Weekly Mon-Fri review", ["scheduled|suggestion|Mon-Fri"]]);
@@ -135,7 +135,7 @@ describe("the repeat grammar: where a typed repeat ends and what may follow it (
 			const r = parseQuickAdd(input, ctx);
 			expect(r.title, input).toBe(title);
 			expect(r.fields.recurrence === undefined ? undefined : ruleKey(r.fields.recurrence), input).toBe(key);
-			expect(dateOf(chip(r, "scheduled", "applied")), input).toBe(date);
+			expect(dateOf(chipOf(r, "scheduled", "applied")), input).toBe(date);
 		}
 		// A bare hour in the repeat is a choice; the weekday after it is still a date (a choice too, said on a Wednesday).
 		expect(parseQuickAdd("Gym every monday at 7 wednesday", ctx).chips.map((c) => `${c.kind}|${c.status}`)).toEqual(["recurrence|choice", "scheduled|choice"]);

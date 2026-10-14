@@ -440,6 +440,11 @@ export class TaskIndex {
 		return p.subtasks;
 	}
 
+	/** How many subtasks (open and completed) a task has in the store's current tasks. Hands out no map. */
+	subtaskTotal(parentId: ID): number {
+		return this.index().subtasks.get(parentId)?.total ?? 0;
+	}
+
 	/**
 	 * Tests only: the differences between the index as maintained and one built from `state` (empty when they agree).
 	 * Builds nothing when the index was dropped; the next read builds it.

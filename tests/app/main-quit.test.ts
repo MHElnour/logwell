@@ -61,7 +61,7 @@ describe("plugin lifecycle", () => {
 		const order: string[] = [];
 		const flush = vi.fn(() => Promise.resolve(void order.push("store.flush")));
 		const flushRenames = vi.fn(() => void order.push("flushRenames"));
-		plugin.session = { app: { tasks: { flushRenames } }, store: { flush } } as unknown as typeof plugin.session;
+		plugin.session = { app: { noteRenames: { flushRenames } }, store: { flushBeforeQuit: flush } } as unknown as typeof plugin.session;
 		const tasks: (() => Promise<unknown>)[] = [];
 		quit!.callback({ add: (fn: () => Promise<unknown>) => tasks.push(fn), addPromise: () => undefined });
 		expect(tasks).toHaveLength(1);
@@ -75,6 +75,42 @@ describe("plugin lifecycle", () => {
 		await expect(tasks[0]!()).resolves.toBeUndefined();
 	});
 
+	it("#117: the quit task saves a database that is closing or opening too, and waits for each", async () => {
+		const { plugin, refs } = await loadPlugin();
+		const quit = refs.find((r) => r.name === "quit")!;
+		const saved: string[] = [];
+		const sessionOf = (name: string) =>
+			({
+				app: { noteRenames: { flushRenames: () => undefined } },
+				store: {
+					flushBeforeQuit: () =>
+						new Promise<void>((resolve) => {
+							setTimeout(() => {
+								saved.push(name);
+								resolve();
+							}, 0);
+						}),
+				},
+			}) as unknown as NonNullable<typeof plugin.session>;
+		const fields = plugin as unknown as { openingSession: unknown; closingSession: unknown };
+		fields.closingSession = sessionOf("closing");
+		fields.openingSession = sessionOf("opening");
+		plugin.session = null;
+		const tasks: (() => Promise<unknown>)[] = [];
+		quit.callback({ add: (fn: () => Promise<unknown>) => tasks.push(fn), addPromise: () => undefined });
+		await tasks[0]!();
+		expect(saved.sort()).toEqual(["closing", "opening"]);
+
+		// One session in two places is saved once.
+		saved.length = 0;
+		const open = sessionOf("open");
+		plugin.session = open;
+		fields.openingSession = open;
+		fields.closingSession = null;
+		await tasks[0]!();
+		expect(saved).toEqual(["open"]);
+	});
+
 	it("renames that arrive while the database is opening are applied once it is open", async () => {
 		const { plugin } = await loadPlugin();
 		plugin.settings.activeDatabasePath = "Checkpoint.cpbase";
@@ -86,7 +122,7 @@ describe("plugin lifecycle", () => {
 		const calls: unknown[][] = [];
 		const session = {
 			app: {
-				tasks: {
+				noteRenames: {
 					rewriteNotePaths: (...args: unknown[]) => {
 						calls.push(args);
 						return Promise.resolve(1);

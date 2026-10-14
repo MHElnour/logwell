@@ -22,7 +22,7 @@ const read = habit("r", [ver("2026-09-01", { type: "quantity", target: 30, unit:
 /** A state that has already seen the reminder times, so nothing is armed by the check. */
 const seen = (date = DAY, times: Record<string, string> = { r: "20:00" }): ReminderState => ({ ...emptyReminderState(date), times });
 
-describe("checkReminders (D10)", () => {
+describe("checkReminders", () => {
 	it("is due at the minute and not before", () => {
 		expect(checkReminders([read], idx(), seen(), at("19:59")).due).toEqual([]);
 		expect(checkReminders([read], idx(), seen(), at("20:00")).due).toEqual([read]);
@@ -134,7 +134,7 @@ describe("checkReminders (D10)", () => {
 	});
 });
 
-describe("edge minutes and zero values (D10)", () => {
+describe("edge minutes and zero values", () => {
 	it("a time set for the next minute fires when it is first seen at its own minute", () => {
 		// Set at 19:59:45 for 20:00; the host's first check after the save is at 20:00:05.
 		const r = checkReminders([read], idx(), seen(DAY, {}), at("20:00"));
@@ -157,7 +157,7 @@ describe("edge minutes and zero values (D10)", () => {
 	});
 });
 
-describe("parseReminderState (D10)", () => {
+describe("parseReminderState", () => {
 	const good: ReminderState = { v: 1, date: DAY, fired: { r: true }, snoozedUntil: { s: "2026-10-14T18:10:00.000Z" }, times: { r: "20:00" } };
 
 	it("reads what it wrote", () => {

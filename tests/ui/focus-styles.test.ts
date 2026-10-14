@@ -1,13 +1,10 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { cssBlock, cssSection } from "./styles-helpers";
 
-// Keyboard focus is visible on the Focus page's small controls and on the status-bar item.
-// happy-dom has no layout, so the rules are checked as text.
+// Keyboard focus is visible on the Focus page's small controls and on the status-bar item. The section's scoping and
+// hygiene are checked with the other sections in layout-styles.test.ts.
 
-const css = readFileSync("styles.css", "utf8");
-const MARK = "/* == M5 focus == */";
-const END = "/* == end M5 focus == */";
-const section = css.slice(css.indexOf(MARK), css.indexOf(END) + END.length);
+const section = cssSection("M5 focus");
 
 describe("focus stylesheet section", () => {
 	it("outlines the gap buttons, the show-more button and the status-bar item on :focus-visible with variables", () => {
@@ -21,19 +18,8 @@ describe("focus stylesheet section", () => {
 		expect(section).toMatch(/:focus-visible[^{]*\{[^}]*outline:\s*2px solid var\(--/);
 	});
 
-	it("uses no !important, no :has and no hex colors", () => {
-		const bare = section.replace(/\/\*[\s\S]*?\*\//g, "");
-		expect(bare).not.toMatch(/!important/);
-		expect(bare).not.toMatch(/:has\(/);
-		expect(bare).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-	});
-
-	it("P2: the tree line, the four dots and the keyboard outlines are styled with theme variables", () => {
-		const rule = (sel: string): string => {
-			const at = section.indexOf(`${sel} {`);
-			expect(at, sel).toBeGreaterThan(-1);
-			return section.slice(at, section.indexOf("}", at));
-		};
+	it("the tree line, the four dots and the keyboard outlines are styled with theme variables", () => {
+		const rule = (sel: string): string => cssBlock(`${sel} {`, section);
 		expect(rule(".checkpoint-view .cp-focus-rec::before")).toMatch(/background:\s*var\(--background-modifier-border\)/);
 		expect(rule(".checkpoint-view .cp-focus-rec:only-child::before")).toContain("display: none");
 		expect(rule(".checkpoint-view .cp-focus-rec:first-child::before")).toContain("top: var(--cp-dot-y)");

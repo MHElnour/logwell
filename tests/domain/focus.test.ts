@@ -71,13 +71,13 @@ describe("focus timer", () => {
 			expect(r.moments()).toEqual(["focus-start"]);
 		});
 
-		it("allows no task (POM-10)", () => {
+		it("allows no task", () => {
 			const r = new Run(cfg(1), null);
 			expect(r.timer).toMatchObject({ taskId: null, taskTitleSnapshot: "" });
 		});
 	});
 
-	describe("sets (D6)", () => {
+	describe("sets", () => {
 		it("a 4-round set runs focus, short break, ... and ends with no break after the last round", () => {
 			const r = new Run(cfg(4));
 			const phases: string[] = [];
@@ -139,7 +139,7 @@ describe("focus timer", () => {
 			expect(remainingSec(r.timer!, at(1505))).toBe(295);
 		});
 
-		it("breaks add no focus (POM-04) and the next focus has its own session id", () => {
+		it("breaks add no focus and the next focus has its own session id", () => {
 			const r = new Run(cfg(2));
 			const first = r.timer!.sessionId;
 			r.run(1500 + 300 + 10);
@@ -156,7 +156,7 @@ describe("focus timer", () => {
 	});
 
 	describe("pause and resume", () => {
-		it("pauses add no focus (POM-04) and remainingSec ignores paused time", () => {
+		it("pauses add no focus and remainingSec ignores paused time", () => {
 			const r = new Run(cfg(1));
 			r.run(600);
 			r.apply(pause(r.timer!, at(600)));
@@ -206,7 +206,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("stop (POM-05)", () => {
+	describe("stop", () => {
 		it("saves the real seconds as stopped and ends the set", () => {
 			const r = new Run(cfg(4));
 			r.run(400);
@@ -294,7 +294,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("B31 recoverOnLoad", () => {
+	describe("recoverOnLoad", () => {
 		it("closes the segment at the heartbeat, adds a pending gap and pauses with a prompt", () => {
 			const r = new Run(cfg(1));
 			r.run(180, 60);
@@ -324,7 +324,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("B32 gap during a run", () => {
+	describe("gap during a run", () => {
 		it("a tick more than 90 s after the previous one pauses with a prompt", () => {
 			const r = new Run(cfg(1));
 			r.run(100);
@@ -344,7 +344,7 @@ describe("focus timer", () => {
 			expect(r.saved()).toEqual([]);
 		});
 
-		it("exactly 90 s between ticks is not a gap, 91 s is (A5)", () => {
+		it("exactly 90 s between ticks is not a gap, 91 s is", () => {
 			const r = new Run(cfg(1));
 			r.run(60);
 			const step = tick(r.timer!, at(150), DEV, r.ids);
@@ -353,13 +353,13 @@ describe("focus timer", () => {
 			expect(tick(r.timer!, at(151), DEV, r.ids).timer?.needsRecovery).toBe(true);
 		});
 
-		it("a throttled background tick 85 s apart is not a gap (A5)", () => {
+		it("a throttled background tick 85 s apart is not a gap", () => {
 			const r = new Run(cfg(1));
 			r.run(100);
 			expect(tick(r.timer!, at(185), DEV, r.ids).timer?.needsRecovery).toBe(false);
 		});
 
-		it("a clock that goes back by more than 5 s re-anchors the segment, so no time is lost (A6)", () => {
+		it("a clock that goes back by more than 5 s re-anchors the segment, so no time is lost", () => {
 			const r = new Run(cfg(1));
 			r.run(100);
 			const step = r.apply(tick(r.timer!, at(80), DEV, r.ids));
@@ -371,7 +371,7 @@ describe("focus timer", () => {
 			expect(remainingSec(step.timer!, at(90))).toBe(1390);
 		});
 
-		it("a clock that goes back by 5 s or less does not re-anchor (A6)", () => {
+		it("a clock that goes back by 5 s or less does not re-anchor", () => {
 			const r = new Run(cfg(1));
 			r.run(100);
 			const step = tick(r.timer!, at(95), DEV, r.ids);
@@ -379,7 +379,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("resolveRecovery (D5)", () => {
+	describe("resolveRecovery", () => {
 		const needing = (): Run => {
 			const r = new Run(cfg(2));
 			r.run(180, 60);
@@ -447,7 +447,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("split and reassign (B35)", () => {
+	describe("split and reassign", () => {
 		it("split finalizes A as split at now and keeps the phase end for B", () => {
 			const r = new Run(cfg(2));
 			r.run(600);
@@ -510,7 +510,7 @@ describe("focus timer", () => {
 		});
 	});
 
-	describe("focusedSec, totals, overview, history (D9, D10)", () => {
+	describe("focusedSec, totals, overview, history", () => {
 		const session = (id: string, patch: Partial<FocusSession> = {}): FocusSession => ({
 			id,
 			deviceId: DEV,
@@ -542,7 +542,7 @@ describe("focus timer", () => {
 			expect(focusedSec(s)).toBe(100 + 60 + 100);
 		});
 
-		it("clamps a backwards segment or gap at zero (A7)", () => {
+		it("clamps a backwards segment or gap at zero", () => {
 			const s = session("s", {
 				segments: [
 					{ start: at(0), end: at(100) },
@@ -650,7 +650,7 @@ describe("sets, Finish and history", () => {
 		}
 	}
 
-	describe("set id (P3)", () => {
+	describe("set id", () => {
 		it("every round of a set carries the same setId and rounds, a new set gets a new one", () => {
 			const r = new Run(cfg(3));
 			const id = r.timer!.setId;
@@ -694,7 +694,7 @@ describe("sets, Finish and history", () => {
 		});
 	});
 
-	describe("finish (P5)", () => {
+	describe("finish", () => {
 		it("mid-set: saves a completed round with its real seconds and goes to the break like a natural end", () => {
 			const r = new Run(cfg(3));
 			r.run(600);
@@ -721,7 +721,7 @@ describe("sets, Finish and history", () => {
 			expect(r.moments()).toEqual(["focus-start", "set-done"]);
 		});
 
-		it("marks the save as a manual finish so the service can apply the 60 s rule (D7)", () => {
+		it("marks the save as a manual finish so the service can apply the 60 s rule", () => {
 			const r = new Run(cfg(2));
 			r.run(30);
 			const save = r.apply(finish(r.timer!, at(30), DEV, r.ids)).effects[0]!;
@@ -754,7 +754,7 @@ describe("sets, Finish and history", () => {
 		});
 	});
 
-	describe("finished early is derived (P5)", () => {
+	describe("finished early is derived", () => {
 		const base = (patch: Partial<FocusSession>): FocusSession => ({
 			id: "x",
 			deviceId: DEV,
@@ -779,7 +779,7 @@ describe("sets, Finish and history", () => {
 		});
 	});
 
-	describe("history tree (P2, P3)", () => {
+	describe("history tree", () => {
 		const rec = (id: string, startSec: number, lenSec: number, patch: Partial<FocusSession> = {}): FocusSession => ({
 			id,
 			deviceId: DEV,

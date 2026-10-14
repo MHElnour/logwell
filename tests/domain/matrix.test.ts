@@ -41,7 +41,7 @@ describe("matrix", () => {
 	const ids = (groups: { id: string; entries: { task: Task }[] }[], group: string) =>
 		groups.find((g) => g.id === group)?.entries.map((e) => e.task.id) ?? [];
 
-	describe("quadrant order and flags (D1)", () => {
+	describe("quadrant order and flags", () => {
 		it("lists I to IV and maps each to its flags", () => {
 			expect(QUADRANT_ORDER).toEqual(["urgent-important", "important", "urgent", "neither"]);
 			expect(quadrantFlags("urgent-important")).toEqual({ urgent: true, important: true });
@@ -51,7 +51,7 @@ describe("matrix", () => {
 		});
 	});
 
-	describe("date groups (D3)", () => {
+	describe("date groups", () => {
 		const cases: [string, string | null, string][] = [
 			["yesterday", "2026-09-30", "overdue"],
 			["today", "2026-10-01", "today"],
@@ -76,6 +76,16 @@ describe("matrix", () => {
 		it("overdue by deadline only: schedule today, deadline yesterday is overdue", () => {
 			const q = run([task("a", { scheduled: day("2026-10-01"), deadline: day("2026-09-30") })]);
 			expect(ids(q.neither, "overdue")).toEqual(["a"]);
+		});
+
+		it("#126: a deadline of today puts a task in Today, as in the Today view, even when its date is later", () => {
+			const q = run([
+				task("a", { scheduled: day("2026-10-02"), deadline: day("2026-10-01") }),
+				task("b", { scheduled: day("2026-10-09"), deadline: timed("2026-10-01T18:00") }),
+				task("c", { scheduled: day("2026-10-02"), deadline: day("2026-10-03") }),
+			]);
+			expect(ids(q.neither, "today")).toEqual(["a", "b"]);
+			expect(ids(q.neither, "next7")).toEqual(["c"]);
 		});
 
 		it("a timed schedule earlier today is not overdue", () => {
@@ -105,7 +115,7 @@ describe("matrix", () => {
 		});
 	});
 
-	describe("order inside a group (D4, MAT-06)", () => {
+	describe("order inside a group", () => {
 		it("scheduled first by time, then unscheduled; ties by createdAt then id; priority and sortKey ignored", () => {
 			const q = run([
 				task("u2", { deadline: day("2026-10-01"), createdAt: "2026-09-02T00:00:00.000Z", priority: 1, sortKey: "a" }),
@@ -124,7 +134,7 @@ describe("matrix", () => {
 		});
 	});
 
-	describe("quadrants (MAT-01, MAT-02, PRI-04, B42)", () => {
+	describe("quadrants", () => {
 		it("puts each task in the quadrant of its flags, whatever its dates", () => {
 			const q = run([
 				task("i", { urgent: true, important: true, scheduled: day("2026-12-01") }),
@@ -154,7 +164,7 @@ describe("matrix", () => {
 		});
 	});
 
-	describe("Completed group (spec §7)", () => {
+	describe("Completed group", () => {
 		const done = (id: string, completedAt: string, patch: Partial<Task> = {}) => task(id, { status: "completed", completedAt, ...patch });
 
 		it("is last in each quadrant and ordered newest completedAt first", () => {

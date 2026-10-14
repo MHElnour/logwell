@@ -46,7 +46,7 @@ function occurrencesAfter(base: string, r: RepeatRule, times: number): string {
 	return `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
 }
 
-describe("D12 recurrence properties", () => {
+describe("recurrence properties", () => {
 	it("(1) generation is strictly increasing, inside the window and never before the anchor", () => {
 		fc.assert(
 			fc.property(fixedRuleArb, dateArb, dateArb, fc.integer({ min: 0, max: 400 }), weekStartArb, (r, anchor, from, span, ws) => {

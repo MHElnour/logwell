@@ -168,7 +168,8 @@ function installWraps(session, view) {
 		w.__prof = true;
 		busProto.emit = w;
 	}
-	wrapAll(Object.getPrototypeOf(app.tasks), ["complete", "resumeRenames", "purgeExpired", "flushRenames"], "tasks.");
+	wrapAll(Object.getPrototypeOf(app.tasks), ["complete", "purgeExpired"], "tasks.");
+	wrapAll(Object.getPrototypeOf(app.noteRenames), ["resumeRenames", "flushRenames"], "noteRenames.");
 	wrapAll(Object.getPrototypeOf(app.recurrence), ["endExhaustedSeries"], "recurrence.");
 	wrapAll(Object.getPrototypeOf(app.focus), ["open"], "focus.");
 	wrapAll(Object.getPrototypeOf(app.store), ["run"], "appstore.");

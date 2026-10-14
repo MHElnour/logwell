@@ -11,6 +11,7 @@ import {
 	completedEntries,
 	entryOf,
 	filterTasks,
+	hasPastDate,
 	inViewScope,
 	inUpcoming,
 	isDueByToday,
@@ -32,10 +33,9 @@ import { type BoardColumn, dayTitle, toCards } from "../domain/board";
 import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
-import { compareSortKeys } from "../domain/sortKey";
 import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
-import { compareTasksBySortKey, isDated, isOpen, isUnscheduled } from "../domain/tasks";
+import { compareTasksBySortKey, isDated, isOpen, isUnscheduled, listsInSidebarOrder } from "../domain/tasks";
 import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
@@ -110,16 +110,20 @@ export function viewPreset(view: TaskView, ctx: QueryContext): { addCategoryId: 
 	return {
 		addCategoryId: view.kind === "category" ? view.id : INBOX_ID,
 		addDate: view.kind === "today" ? ctx.today : null,
-		// Every tag view presets its tag, a parent's too (Lists, sections and tags rule 26).
+		// Every tag view presets its tag, a parent's too: adding a task from a tag's view gives it that tag.
 		addTagKeys: view.kind === "tag" ? [view.key] : [],
 	};
 }
 
-/** Today: an Overdue group (a date before today) and a Today group; empty groups are omitted. */
-function todayGroups(entries: ListEntry[], ctx: QueryContext, ordered: (e: ListEntry[]) => ListEntry[]): ViewGroup[] {
+/**
+ * Today: an Overdue group (a date before today) and a Today group; empty groups are omitted. A held task (completed a
+ * moment ago) stays in the group it was in while open, so its check animation plays in place.
+ */
+function todayGroups(entries: ListEntry[], ctx: QueryContext, ordered: (e: ListEntry[]) => ListEntry[], held: ReadonlySet<ID>): ViewGroup[] {
 	const overdue: ListEntry[] = [];
 	const rest: ListEntry[] = [];
-	for (const e of entries) (isOverdue(e.task, ctx) ? overdue : rest).push(e);
+	const late = (t: Task) => isOverdue(t, ctx) || (held.has(t.id) && hasPastDate(t, ctx));
+	for (const e of entries) (late(e.task) ? overdue : rest).push(e);
 	const groups: ViewGroup[] = [];
 	// Dropping on Overdue is refused; dropping on Today reschedules to today.
 	if (overdue.length > 0) groups.push({ key: "overdue", date: null, label: "Overdue", tone: "overdue", entries: ordered(overdue) });
@@ -191,9 +195,12 @@ interface Prepared {
 	shown: ((task: Task) => boolean) | null;
 	/**
 	 * The completed tasks shown among the open rows: held ones, and subtasks whose open parent's row is shown
-	 * (App shell and views rule 21). The rows themselves still apply the view's Completed scope to them.
+	 * (a completed subtask of an open parent stays under the parent's row). The rows themselves still apply the view's
+	 * Completed scope to them.
 	 */
 	keep: (task: Task) => boolean;
+	/** The tasks completed a moment ago, still shown for their check animation. */
+	held: ReadonlySet<ID>;
 	/** `tasks` are in sort order (the index's candidates of Inbox and a list), so the rows need not sort them. */
 	sorted: boolean;
 }
@@ -208,7 +215,7 @@ function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskF
 	const sorted = candidates !== undefined && index?.candidatesInOrder(view) === true;
 	const tasks = filterTasks(candidates ?? state.tasks.values(), filter, text, ctx);
 	const scope = completedScope(view);
-	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id), sorted };
+	if (scope === null) return { tasks, shown: null, keep: (t) => held.has(t.id), held, sorted };
 	// An open parent's row is shown when the view lists it and it passes the filter and text. Asked only for
 	// the parents of completed subtasks, once per parent.
 	const known = new Map<ID, boolean>();
@@ -220,7 +227,7 @@ function prepare(state: DbData, view: TaskView, ctx: QueryContext, filter: TaskF
 		}
 		return s;
 	};
-	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown), sorted };
+	return { tasks, shown, keep: (t) => held.has(t.id) || isKeptUnderParent(t, state.tasks, shown), held, sorted };
 }
 
 function openGroups(
@@ -230,9 +237,9 @@ function openGroups(
 	filter: TaskFilter,
 	text: string,
 	groupBy: GroupBy | undefined,
-	{ tasks, keep, sorted }: Prepared,
+	{ tasks, keep, held, sorted }: Prepared,
 ): ViewGroup[] {
-	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text, sorted);
+	return viewGroups(state, view, ctx, filter, tasks, keep, groupBy, text, sorted, held);
 }
 
 /**
@@ -276,13 +283,6 @@ const PRIORITY_GROUPS: { priority: Priority; label: string }[] = [
 	{ priority: 0, label: "None" },
 ];
 
-/** The lists in sidebar order: Inbox first, then the others by their sort key. */
-function listsInSidebarOrder(state: DbData): Category[] {
-	const all = [...state.categories.values()].filter((c) => c.id !== INBOX_ID).sort((a, b) => compareSortKeys(a.sortKey, b.sortKey));
-	const inbox = state.categories.get(INBOX_ID);
-	return inbox === undefined ? all : [inbox, ...all];
-}
-
 /** Rows of `view` where `keepTask` decides which completed tasks show among the open ones, grouped as `groupBy` says. */
 function viewGroups(
 	state: DbData,
@@ -296,6 +296,8 @@ function viewGroups(
 	text = "",
 	/** `tasks` are in sort order: Inbox and list rows then skip their sort (`arrangeHierarchy` `presorted`). */
 	sorted = false,
+	/** The tasks completed a moment ago; Today keeps them in their group. */
+	held: ReadonlySet<ID> = NO_IDS,
 ): ViewGroup[] {
 	const byId = state.tasks;
 	const scope = completedScope(view);
@@ -349,7 +351,7 @@ function viewGroups(
 		case "section":
 			return sectioned(view.kind === "category" ? view.id : INBOX_ID, rows());
 		case "date": {
-			if (view.kind === "today") return todayGroups(rows(), ctx, ordered);
+			if (view.kind === "today") return todayGroups(rows(), ctx, ordered, held);
 			if (view.kind === "upcoming") {
 				return upcomingGroups(tasks, byId, ctx, keep).map((g) => ({
 					key: g.date,
@@ -395,7 +397,7 @@ function viewGroups(
 		}
 		case "list": {
 			const buckets = bucketize(rows(), (t) => t.categoryId);
-			const known = listsInSidebarOrder(state);
+			const known = listsInSidebarOrder(state.categories.values());
 			const seen = new Set(known.map((c) => c.id));
 			// A list that is missing (not expected after repair) still shows its tasks, last.
 			const lists = [

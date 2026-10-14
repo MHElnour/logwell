@@ -2,8 +2,8 @@ import { EventBus } from "../app/events";
 import { type TickTickDevicePort, TickTickError, type TickTickSecretPort } from "../app/ports";
 import { TICKTICK_PULL_RANGE } from "../app/settings";
 import type { AppEvents, AppStore } from "../app/store";
-import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/SyncService";
-import { isListSynced } from "../app/syncMarks";
+import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/syncModel";
+import { hasLinkedList, isListSynced } from "../app/syncMarks";
 import type { Change } from "../app/tx";
 
 // When the TickTick sync runs on this device. A pull every `tickTickPullMinutes` (5 to 60)
@@ -112,10 +112,7 @@ export class TickTickScheduler {
 	isActive(): boolean {
 		const { store, device, secret } = this.deps;
 		if (this.disposed || store.readOnlyState !== null || !device.isEnabled() || secret.get() === null) return false;
-		const state = store.state;
-		// Lists are few; the links of their tasks may be many.
-		for (const id of state.categories.keys()) if (isListSynced(state.syncLinks, id)) return true;
-		return false;
+		return hasLinkedList(store.state);
 	}
 
 	/** When this device last synced without a failure, and what the latest sync failed with. */

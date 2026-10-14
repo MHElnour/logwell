@@ -7,7 +7,7 @@ describe("Data portability and write safety", function () {
 		await freshDatabase();
 	});
 
-	it("EXP-01/03: export, then Replace-all import into a new database, reproduces every record", async function () {
+	it("export, then Replace-all import into a new database, reproduces every record", async function () {
 		const id = await createTask("Exported task", { urgent: true });
 		await flush();
 		const result = await browser.executeObsidian(async ({ app, plugins }, taskId) => {

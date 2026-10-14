@@ -3,14 +3,14 @@ import { type ComponentChild, type ContainerNode, options } from "preact";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { type CheckpointSettings, DEFAULT_SETTINGS } from "../../src/app/settings";
 import type { HabitInput } from "../../src/domain/habits";
+import { type SyncLink, syncLinkId } from "../../src/domain/types";
 import * as matcher from "../../src/domain/blockQuery";
 import * as parser from "../../src/parsing/blockQuery";
 import { BLOCK_LANGUAGE, type BlockEnv, type BlockSession, DETACHED_DRAW_MS, NOT_RUNNING_TEXT, REFRESH_MS, registerDashboardBlock, TICK_MS } from "../../src/obsidian/dashboardBlock";
 import { collectionsOf } from "../../src/persistence/schema";
 import { type AppHarness, appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
-import { settle } from "../ui/calendar-helpers";
-import { U1Host } from "../ui/app-helpers";
+import { settle, U1Host } from "../ui/app-helpers";
 
 // The `logwell` code block processor. The environment (database session, task opening) is a fake; the
 // element's `win`, `doc` and `isShown` are Obsidian's additions to HTMLElement, defined here over happy-dom.
@@ -302,7 +302,7 @@ describe("the block processor", () => {
 			// The note is renamed: Obsidian updates the context; the task's note path follows through the app.
 			ctx.sourcePath = "Notes/Renamed.md";
 			vi.useFakeTimers();
-			await s.h.app.tasks.rewriteNotePaths("Notes/Page.md", "Notes/Renamed.md", false);
+			await s.h.app.noteRenames.rewriteNotePaths("Notes/Page.md", "Notes/Renamed.md", false);
 			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
 			expect(titles(el)).toEqual(["Linked"]);
 			expect(s.h.app.store.state.tasks.get(t.id)!.descriptionNote!.path).toBe("Notes/Renamed.md");
@@ -1063,6 +1063,66 @@ describe("the block processor", () => {
 			observer.fire(true);
 			await flush();
 			expect(titles(el)).toEqual(["A", "B"]);
+		});
+	});
+
+	describe("the Not synced mark", () => {
+		const wait = (ms = REFRESH_MS + 10) => vi.advanceTimersByTimeAsync(ms);
+		const repeat = { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } as never;
+		/** The link that makes a list synced with TickTick. */
+		const listLink = (listId: string): SyncLink => ({
+			kind: "list",
+			logwellId: listId,
+			ttId: `tt-${listId}`,
+			ttProjectId: null,
+			etag: null,
+			base: {},
+			noteBySync: false,
+			lastPulledAt: null,
+			modifiedAt: "2026-10-01T09:00:00.000Z",
+		});
+		const marked = (el: HTMLElement) => rows(el).filter((r) => r.querySelector(".cp-meta-notsynced") !== null).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
+
+		it("#114: a change of the sync links alone redraws a row whose mark it changes", async () => {
+			const s = await setup();
+			const work = await s.h.app.categories.create("Work");
+			await s.h.app.tasks.create({ title: "Weekly review", categoryId: work.id, repeat });
+			await s.h.app.tasks.create({ title: "Call the bank", categoryId: work.id });
+			const { el } = s.block("list: Work");
+			expect(marked(el)).toEqual([]);
+			vi.useFakeTimers();
+			// Linking the list: only the links change, and the repeating task is now not synced.
+			await s.h.app.store.run("Link list", (tx) => void tx.put("syncLinks", listLink(work.id)), { undoable: false });
+			await wait();
+			expect(marked(el)).toEqual(["Weekly review"]);
+		});
+
+		it("#114: a reload that changes only the sync links redraws the mark", async () => {
+			const s = await setup();
+			const work = await s.h.app.categories.create("Work");
+			await s.h.app.tasks.create({ title: "Weekly review", categoryId: work.id, repeat });
+			const { el } = s.block("list: Work");
+			vi.useFakeTimers();
+			const c = collectionsOf(s.h.store.data);
+			const syncLinks = new Map(c.syncLinks);
+			syncLinks.set(syncLinkId("list", work.id), listLink(work.id));
+			await s.h.store.replaceAll({ ...c, syncLinks }, null);
+			s.h.app.store.notifyReloaded();
+			await wait();
+			expect(marked(el)).toEqual(["Weekly review"]);
+		});
+
+		it("#114: a change of the sync links that leaves every shown mark as it was draws nothing", async () => {
+			const s = await setup();
+			const work = await s.h.app.categories.create("Work");
+			await s.h.app.tasks.create({ title: "Call the bank", categoryId: work.id });
+			const { el } = s.block("list: Work");
+			vi.useFakeTimers();
+			const before = renders();
+			await s.h.app.store.run("Link list", (tx) => void tx.put("syncLinks", listLink(work.id)), { undoable: false });
+			await wait();
+			expect(renders()).toBe(before);
+			expect(marked(el)).toEqual([]);
 		});
 	});
 

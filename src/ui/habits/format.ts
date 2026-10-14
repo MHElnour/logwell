@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
 import { plural } from "../../domain/text";
-import { addDays, utcDay } from "../../domain/time";
+import { addDays, clockTimeOf, utcDay } from "../../domain/time";
 import type { Checkin, Habit, HabitVersion, LocalDate, TimeOfDay } from "../../domain/types";
 import { ICON } from "../icons";
 import { capitalize, formatDuration } from "../format";
@@ -153,10 +153,6 @@ export function monthOf(date: LocalDate): string {
 	return date.slice(0, 7);
 }
 
-export function shiftMonth(month: string, by: number): string {
-	return DateTime.fromISO(`${month}-01`, { zone: "UTC" }).plus({ months: by }).toFormat("yyyy-MM");
-}
-
 /** The calendar cell class of a day status (met, part, miss, off, fut). */
 export function cellClass(status: DayStatus): string {
 	switch (status) {
@@ -226,7 +222,7 @@ export function hasAmount(habit: Habit, c: Checkin, today: LocalDate): boolean {
 export function checkinWhen(c: Checkin, zone: string): string {
 	const made = DateTime.fromISO(c.createdAt, { zone: "UTC" }).setZone(zone);
 	if (!made.isValid) return "";
-	return made.toISODate() === c.date ? made.toFormat("HH:mm") : "added later";
+	return made.toISODate() === c.date ? clockTimeOf(made) : "added later";
 }
 
 /** Newest first: by date, then by creation. */

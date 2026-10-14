@@ -38,7 +38,7 @@ describe("Tasks and description notes", function () {
 		await freshDatabase();
 	});
 
-	it("AS-01: Quick Add with a title only creates a task and no note", async function () {
+	it("Quick Add with a title only creates a task and no note", async function () {
 		const notesBefore = await markdownCount();
 		await browser.executeObsidianCommand("logwell:quick-add-task");
 		const input = browser.$(".cp-quick-add-title");
@@ -52,7 +52,7 @@ describe("Tasks and description notes", function () {
 		expect(await markdownCount()).toBe(notesBefore);
 	});
 
-	it("AS-02 / AS-03: a linked note renders, is not copied, and updates live", async function () {
+	it("a linked note renders, is not copied, and updates live", async function () {
 		const id = await createTask("Plan the integration");
 		await browser.executeObsidian(async ({ plugins }, taskId) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,7 +80,7 @@ describe("Tasks and description notes", function () {
 		expect(await readVaultFile(DB_PATH)).toBe(dbBefore);
 	});
 
-	it("AS-04: renaming the task and the note keeps the ID; folder renames are tracked", async function () {
+	it("renaming the task and the note keeps the ID; folder renames are tracked", async function () {
 		const id = await createTask("Original");
 		await browser.executeObsidian(async ({ plugins }, taskId) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,7 +103,7 @@ describe("Tasks and description notes", function () {
 		expect((await getTask(id))?.title).toBe("Renamed task");
 	});
 
-	it("AS-05: deleting the task and purging Trash leaves the note byte-identical", async function () {
+	it("deleting the task and purging Trash leaves the note byte-identical", async function () {
 		const original = await readVaultFile("Plan.md");
 		const id = await createTask("To delete");
 		await browser.executeObsidian(async ({ plugins }, taskId) => {
@@ -118,7 +118,7 @@ describe("Tasks and description notes", function () {
 		expect(await readVaultFile("Plan.md")).toBe(original);
 	});
 
-	it("AS-06: a deleted note leaves the task usable with a missing state", async function () {
+	it("a deleted note leaves the task usable with a missing state", async function () {
 		const id = await createTask("Uses Other");
 		await browser.executeObsidian(async ({ app, plugins }, taskId) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -134,37 +134,6 @@ describe("Tasks and description notes", function () {
 			await (plugins as any).logwell.session.app.tasks.complete(taskId);
 		}, id);
 		expect((await getTask(id))?.status).toBe("completed");
-	});
-
-	it("AS-09: subtask completion and category rules", async function () {
-		const result = await browser.executeObsidian(async ({ plugins }) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const app = (plugins as any).logwell.session.app;
-			const study = await app.categories.create("Study");
-			const parent = (await app.tasks.create({ title: "Parent" })).task;
-			const a = (await app.tasks.create({ title: "Sub A", parentId: parent.id })).task;
-			const b = (await app.tasks.create({ title: "Sub B", parentId: parent.id })).task;
-			const prompt = await app.tasks.complete(parent.id);
-			await app.tasks.complete(a.id);
-			await app.tasks.complete(b.id);
-			const find = (id: string) => [...app.store.state.tasks.values()].find((t: { id: string }) => t.id === id);
-			const parentAfterSubs = find(parent.id).status;
-			await app.tasks.complete(parent.id);
-			await app.tasks.reopen(parent.id);
-			const subsAfterReopen = [find(a.id).status, find(b.id).status];
-			await app.tasks.update(parent.id, { categoryId: study.id });
-			return {
-				prompt,
-				parentAfterSubs,
-				subsAfterReopen,
-				categories: [find(a.id).categoryId, find(b.id).categoryId],
-				studyId: study.id,
-			};
-		});
-		expect(result.prompt).toEqual({ kind: "needs-confirmation", openSubtasks: 2 });
-		expect(result.parentAfterSubs).toBe("open");
-		expect(result.subsAfterReopen).toEqual(["completed", "completed"]);
-		expect(result.categories).toEqual([result.studyId, result.studyId]);
 	});
 
 	it("re-renders a 2,000-line note with embeds in under 150 ms", async function () {

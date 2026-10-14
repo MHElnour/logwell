@@ -26,8 +26,8 @@ const titles = (groups: { entries: { task: Task }[] }[]): string[] => groups.fla
 const view = (h: AppHarness, kind: "today" | "upcoming" | "inbox" | "completed", filter: TaskFilter = emptyFilter(), text = "") =>
 	buildList(h.app.store.state, { kind }, h.app.queryContext(), filter, text).groups;
 
-describe("D5: one reader of when a task is due", () => {
-	it("Today shows the current occurrence, overdue included; completing catches up (B20)", async () => {
+describe("one reader of when a task is due", () => {
+	it("Today shows the current occurrence, overdue included; completing catches up", async () => {
 		const h = await setup();
 		const t = await series(h, "Stretch", rule(), "2026-10-01");
 		expect(t.scheduled).toBeNull();
@@ -142,7 +142,7 @@ describe("D5: one reader of when a task is due", () => {
 	});
 });
 
-describe("D7: done occurrences in the Completed history", () => {
+describe("done occurrences in the Completed history", () => {
 	it("the Completed view lists done occurrences newest first with completed tasks; skipped ones never appear", async () => {
 		const h = await setup();
 		const a = await series(h, "Weekly review", rule({ freq: "weekly", weekdays: ["FR"] }), "2026-09-25");
@@ -205,7 +205,7 @@ describe("D7: done occurrences in the Completed history", () => {
 		expect(col!.completed.map((e) => [e.task.title, e.occurrence?.date])).toEqual([["Early", "2026-10-09"]]);
 	});
 
-	it("Reopen removes the row (B23)", async () => {
+	it("Reopen removes the row", async () => {
 		const h = await setup();
 		const a = await series(h, "Stretch", rule(), "2026-10-05");
 		await h.app.tasks.complete(a.id);

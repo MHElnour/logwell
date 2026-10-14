@@ -9,7 +9,45 @@ import type { DateSpec, Instant, LocalDate, LocalDateTime, WeekStart } from "./t
 const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const LOCAL_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 /** Luxon format of a LocalDateTime wall time. */
-export const LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm";
+const LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm";
+
+// Luxon writes numbers in the device language's digits ("٢٠٢٦" on an Arabic (Egypt) device) unless told otherwise.
+const LATIN_DIGITS = { numberingSystem: "latn" } as const;
+
+/**
+ * `dt` in a Luxon format, written with the digits 0 to 9 whatever language the device is set to (#100). Every format
+ * with numbers goes through it: a stored or compared value would no longer read as a date, a shown one would mix scripts.
+ * A `utcDay` or `NAME_LOCALE` date needs none: its English locale writes 0 to 9.
+ */
+export function formatLatin(dt: DateTime, format: string): string {
+	return dt.toFormat(format, LATIN_DIGITS);
+}
+
+/** The clock time of `dt` in its own zone as "HH:mm". */
+export function clockTimeOf(dt: DateTime): string {
+	return formatLatin(dt, "HH:mm");
+}
+
+/** The wall time of `dt` as a LocalDateTime, "2026-10-12T10:00". */
+export function wallTimeOf(dt: DateTime): LocalDateTime {
+	return formatLatin(dt, LOCAL_FORMAT);
+}
+
+const DECIMAL_DIGIT_RE = /\p{Nd}/u;
+const OTHER_DIGITS_RE = /(?![0-9])\p{Nd}/gu;
+
+/**
+ * `text` with the digits of other scripts ("٥", "۵", "৫") as 0 to 9, and nothing else changed. Unicode encodes each
+ * script's digits as one run from 0 to 9, so a digit's value is its place in its run.
+ */
+export function latinDigits(text: string): string {
+	return text.replace(OTHER_DIGITS_RE, (digit) => {
+		const code = digit.codePointAt(0) ?? 0;
+		let place = 0;
+		while (DECIMAL_DIGIT_RE.test(String.fromCodePoint(code - place - 1))) place++;
+		return String(place % 10);
+	});
+}
 
 // Luxon's IANAZone.isValidZone builds an Intl.DateTimeFormat on every call (187 ms for 50,000 tasks at load).
 // A zone name is either known to Intl or not for the life of the process, so the answer is cached.
@@ -71,6 +109,11 @@ export function todayIn(zone: string, clock: Clock): LocalDate {
 	return DateTime.fromJSDate(clock.now(), { zone }).toISODate() ?? "";
 }
 
+/** The ISO string of an epoch time in milliseconds. */
+export function instantOf(ms: number): Instant {
+	return new Date(ms).toISOString();
+}
+
 /** The instant `ms` from now on the clock, as an ISO string; negative `ms` is in the past. */
 export function instantFromNow(clock: Clock, ms: number): Instant {
 	return new Date(clock.now().getTime() + ms).toISOString();
@@ -122,7 +165,7 @@ export interface ResolvedWallTime {
 export function resolveWallTime(local: LocalDateTime, tz: string): ResolvedWallTime {
 	const dt = DateTime.fromISO(local, { zone: tz });
 	if (!dt.isValid) throw new RangeError(`Invalid wall time ${local} in ${tz}`);
-	const roundTrip = dt.toFormat(LOCAL_FORMAT);
+	const roundTrip = wallTimeOf(dt);
 	if (roundTrip !== local) {
 		return { local: roundTrip, warning: "dst-gap" };
 	}
@@ -211,7 +254,7 @@ function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: str
 		if (known !== undefined) return known;
 	}
 	const dt = wallTimeToDateTime(spec.local, spec.tz).setZone(displayZone);
-	const result: Converted = { date: dt.toISODate() ?? spec.local.slice(0, 10), local: dt.toFormat(LOCAL_FORMAT) };
+	const result: Converted = { date: dt.toISODate() ?? spec.local.slice(0, 10), local: wallTimeOf(dt) };
 	if (cacheable) {
 		if (conversions.size >= CONVERSION_CACHE_MAX) conversions.clear();
 		conversions.set(key, result);
@@ -312,6 +355,29 @@ export function dayNum(date: string): number {
 export function dateOf(n: number): LocalDate {
 	const { y, m, d } = civilOf(n);
 	return `${String(y).padStart(4, "0")}-${m < 10 ? "0" : ""}${m}-${d < 10 ? "0" : ""}${d}`;
+}
+
+/** A calendar month: the year and the month, 1 to 12. */
+export interface YearMonth {
+	year: number;
+	/** 1 to 12. */
+	month: number;
+}
+
+/** The month of a "YYYY-MM-DD" date or a "YYYY-MM" month. */
+export function yearMonthOf(date: string): YearMonth {
+	return { year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) };
+}
+
+/** The month `delta` months after `ym` (before it when negative). Plain arithmetic, no Luxon. */
+export function shiftMonth(ym: YearMonth, delta: number): YearMonth {
+	const index = ym.year * 12 + (ym.month - 1) + delta;
+	return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
+/** The first day of a month, "YYYY-MM-01". */
+export function monthStart(ym: YearMonth): LocalDate {
+	return dateOf(dayNumOf(ym.year, ym.month, 1));
 }
 
 /** The ISO weekday number (1 = Monday) each week start begins on. */

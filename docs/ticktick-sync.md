@@ -25,7 +25,7 @@ The official API has one limitation: it has no "everything that changed" request
 - After a large burst of completions, Logwell splits the time range into smaller pieces until each answer is complete.
 - When a burst cannot be split, such as hundreds of tasks completed in the same second, Logwell looks up the remaining tasks one by one over the next few syncs.
 - A task missing from TickTick is looked up before anything happens to it. Only tasks Logwell checked and could not find in any linked list are offered for the Trash, so nothing goes to the Trash on a guess.
-- Each sync keeps within TickTick's request limit.
+- The reading part of each sync keeps within a fixed number of requests; what is left waits for the next sync. Sending your changes has no such cap: they go in batches where TickTick allows it, and if TickTick answers "too many requests", the sync stops and no background sync starts before the time TickTick asks for.
 
 In practice, a very large change, or sync turned off for a long time, catches up over a few syncs instead of one.
 
@@ -45,11 +45,15 @@ Tip: change synced tasks in one place, such as TickTick. Both sides stay editabl
 
 Choose **Unlink from TickTick** in the list's menu, or **Unlink** in settings. Every task stays on both sides.
 
+Deleting a linked list unlinks it too, and its TickTick list can be linked again. Its tasks move to the Inbox, so the next sync moves them to the Inbox's TickTick list when the Inbox is linked, and deletes them in TickTick when it is not. Undo of the delete links the list again.
+
 ## What syncs
 
 Title, list, section, subtask parent, priority, open or completed, tags and one date sync both ways. Urgent, important, **Duration (min)** and order stay in Logwell. Reminders and attachments stay in TickTick.
 
-**Dates.** TickTick keeps one date. Logwell sends the deadline if there is one, otherwise the schedule. A task that comes from TickTick gets its date as both. A time range is not kept.
+**Subtasks.** A subtask moves with its parent. A subtask you move on its own to another synced list in TickTick becomes a top-level task in that list, on both sides.
+
+**Dates.** TickTick keeps one date. Logwell sends the deadline if there is one, otherwise the schedule. A task that comes from TickTick gets its date as both. Clearing the date in TickTick clears both dates in Logwell. A time range is not kept.
 
 **Tags.** Tags sync by name. TickTick allows each name once and nests one level deep, so a tag with a duplicate name or deeper nesting stays in Logwell only. Sync never renames, recolors or deletes a tag in TickTick. Deleting a tag in Logwell removes it from its tasks, and those tasks go up without it. Renaming a tag in Logwell renames nothing in TickTick: its tasks go up with the new name, the old TickTick tag stays, and a TickTick task that still carries the old name brings it back to Logwell as a new tag. Deleting a parent tag in Logwell changes nothing in TickTick: its child tags keep their names, so their tasks are not sent again.
 
@@ -62,6 +66,7 @@ Turn on **Create notes from TickTick descriptions**. A synced task with a TickTi
 - Your edits to the note go up about 5 seconds later, without the frontmatter. Links go up as their text; embeds stay in Obsidian.
 - A change in TickTick changes only the lines it touched. Your links, embeds and layout stay.
 - A checklist comes down as tick boxes, such as `- [ ] Buy groceries`, which you can move anywhere in the note. Ticking, adding or removing one changes TickTick too.
+- A line deleted on one side and left alone on the other stays deleted, even when both sides made the same change next to it.
 - If both sides changed the same lines, your lines come first, then a line `From TickTick:` and TickTick's version. Delete the one you don't want.
 
 Sync writes only the notes it created, and never deletes or renames them. If you delete or unlink one, sync stops writing it and makes no other. A note you link yourself is never read, changed or sent.
@@ -72,23 +77,23 @@ Sync writes only the notes it created, and never deletes or renames them. If you
 - Logwell pulls when Obsidian opens and at the interval you set, 5 to 60 minutes.
 - **Sync now**, or the command **Sync with TickTick now**, syncs at once.
 
-A sync cannot be undone. While the database is read-only, sync waits.
+A sync cannot be undone. While the database is read-only, sync waits. If the database turns read-only or Obsidian closes right after TickTick took a new task, this device remembers the task, and the next sync links it to its TickTick copy instead of sending it again.
 
 ## Change a task on both sides
 
-Changes to different fields both apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other.
+Changes to different fields both apply. A TickTick change Logwell cannot take, such as a column of the list you just moved the task out of, is skipped, and the task's other TickTick changes still apply. If you change the same field on both sides, Logwell keeps its value, and TickTick's version becomes a separate task such as "Pay rent (TickTick)". Keep one and delete the other. If TickTick's version was completed, the separate task is completed too and stays in Logwell only.
 
 ## Delete and complete tasks
 
 - A task you delete in Logwell, or move to a list that is not linked, is deleted in TickTick. A task you restore from the Trash is sent again.
 - A task completed or marked won't do in TickTick is completed in Logwell.
-- A task gone from TickTick goes to the Logwell Trash. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
+- A task gone from TickTick goes to the Logwell Trash. A task deleted in TickTick goes there at the second sync after the delete: TickTick still answers for a deleted task, so Logwell reads it twice to tell a delete from a change TickTick briefly left out of the list. Its subtasks that are still in TickTick, or were never sent there, stay as top-level tasks. A task TickTick leaves out of a list but still has, unchanged since the last sync, is not treated as deleted. Logwell checks missing tasks a few dozen at a time and only acts on tasks it could not find in any linked list, so a large change can take a few syncs. Fewer than 5 in one list move without asking.
 - For 5 or more in one list, or a TickTick list that comes back empty, a window asks. It lists only tasks Logwell checked and could not find. While a list still has tasks to check, nothing moves without asking, and an emptied list asks only once every task is checked. **Move to Trash** moves them, with Undo. **Keep** keeps them in Logwell only, marked **Not synced**; for an emptied list, it unlinks the list. Closing the window decides nothing.
 
 ## Limits
 
-- A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused. TickTick can still bring tasks in.
-- TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error.
+- A synced list holds at most 999 open tasks. Adding, moving in or reopening a task past that is refused, and so is deleting a list whose open tasks would take a synced Inbox past it. TickTick can still bring tasks in.
+- TickTick's free plan allows 9 lists and 99 open tasks per list. Going over shows an error. Logwell cannot see your plan, so when TickTick refuses a change to a list with 99 or more open tasks, the notice names that limit as the likely cause and gives TickTick's reason.
 - After 200 or more tasks of one list were completed at almost the same time, Logwell completes them over the next few syncs, a few dozen per sync beyond the first 200, and tasks deleted in TickTick wait until about five minutes after that burst.
 
 ## Fix a sync error
@@ -99,7 +104,8 @@ A failure stops the sync with a notice that names the list. Nothing retries in a
 | --- | --- |
 | "TickTick: too many requests. Sync will try again at the next pull." | Wait. |
 | "…the API token was refused… Replace it in Settings > Logwell." | Choose **Open settings** and choose another token. |
-| "…has 99 open tasks, the limit of TickTick's free plan." | Complete or move tasks in TickTick, then choose **Sync now**. |
+| "…refused the change (…). It has 99 open tasks, and TickTick's free plan allows 99 per list…" | On the free plan, complete or move tasks in TickTick, then choose **Sync now**. On a paid plan, choose **Sync now** a little later. |
+| "The TickTick list linked to "Work" no longer exists." | The list was deleted in TickTick. Choose **Unlink**, then link the list again if you want it synced. The other lists keep syncing, and nothing in this list changes until you unlink it. |
 | "…no answer… (network error)." | Check your connection. |
 
 See also [Troubleshooting](troubleshooting.md).

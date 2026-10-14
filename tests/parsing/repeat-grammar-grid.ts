@@ -2,13 +2,13 @@ import { expect } from "vitest";
 import { addDays } from "../../src/domain/time";
 import type { Weekday } from "../../src/domain/types";
 import { parseQuickAdd } from "../../src/parsing";
-import type { Chip, ParseResult } from "../../src/parsing/types";
-import { NY, TOKYO, at, makeCtx, ruleKey } from "./helpers";
+import type { Chip } from "../../src/parsing/types";
+import { NY, TOKYO, at, chipOf, makeCtx, ruleKey } from "./helpers";
 
 // The repeat grammar grid (#12), shared by the unit sample in `repeat-grammar.test.ts` and the on-demand run of the
 // whole grid (`npm run test:parser-grid`, `scripts/parser-oracle.mjs`).
 
-// Repeating tasks rule 19 and Tasks and Quick Add rule 40 (#12): where a typed repeat phrase ends and what may follow it.
+// #12: where a typed repeat phrase ends and what may follow it.
 // A generated grid, titles × repeat forms × separators × followers, in two environments. The repeat chip's text is the
 // form itself (plus an `at <time>` typed right after it), whatever follows: a date, a weekday, a time, a range, an end,
 // title text, with or without a comma or a lead word between them is read by the date reader and the end logic. An
@@ -27,12 +27,12 @@ export interface Form {
 	weekOn?: boolean;
 	/** `every (N) month(s)`: "on <N>" right after it is the day of the month (`every month on 15`). */
 	monthOn?: boolean;
-	/** `every (N) year(s)`: "on" before a date right after it leads into the start (decision 15). */
+	/** `every (N) year(s)`: "on" before a date right after it leads into the start. */
 	yearOn?: boolean;
 	/** The form has its own time; `choice`: a bare hour, so the chip is a two-way choice. */
 	time?: boolean;
 	choice?: boolean;
-	/** `every year on`: the date right after it is the start (decision 15). */
+	/** `every year on`: the date right after it is the start. */
 	onDate?: boolean;
 	/** Counts anywhere, not only at the end (`last friday of the month`). */
 	anywhere?: boolean;
@@ -146,7 +146,6 @@ export const followers = (env: Env): Follower[] => [
 
 export const inputOf = (title: string, form: string, sep: string, follower: string): string => `${title} ${form}${sep} ${follower}`.replace(/\s+/g, " ").trim();
 export const dateOf = (c: Chip | undefined): string | undefined => (c?.date === undefined ? undefined : c.date.kind === "date" ? c.date.date : c.date.local.slice(0, 10));
-export const chip = (r: ParseResult, kind: Chip["kind"], status?: Chip["status"]): Chip | undefined => r.chips.find((c) => c.kind === kind && (status === undefined || c.status === status));
 const DATE_WORDS = /\b(?:Oct|Dec|Feb|until|for|with|Fri)\b/u;
 const WEEK: Weekday[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
@@ -161,7 +160,7 @@ const keyWith = (f: Form, day: Weekday | null): string => {
 export function check(env: Env, title: string, f: Form, sep: string, w: Follower): void {
 	const input = inputOf(title, f.text, sep, w.text);
 	const r = parseQuickAdd(input, makeCtx({ zone: env.zone, locale: env.locale, now: at(env.zone, env.now) }));
-	const rec = chip(r, "recurrence");
+	const rec = chipOf(r, "recurrence");
 	const because = `${JSON.stringify(input)} in ${env.name}: ${r.chips.map((c) => `${c.kind}|${c.status}|${c.text}`).join(" ; ")}`;
 	// `from 12 Oct`: the date reader takes "from 12" as a time (a pre-existing en-GB reading, not the repeat's).
 	const fromGB = sep === " from" && env.locale === "en-GB";
@@ -179,7 +178,7 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 	if (f.text === "every 15th" && sep === "" && w.kind === "weekday") {
 		expect(rec, because).toMatchObject({ status: "unsupported", text: "every 15th Monday" });
 		expect(r.fields.recurrence, because).toBeUndefined();
-		expect(chip(r, "scheduled"), because).toBeUndefined();
+		expect(chipOf(r, "scheduled"), because).toBeUndefined();
 		return;
 	}
 	if (f.kind === "unsupported") {
@@ -192,17 +191,17 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 		// fits no rule (`every other weekday at 7`, `every 3 hours, at 7`), so it stays with it and is never a date.
 		expect(rec!.text.slice((f.phrase ?? f.text).length), because).not.toMatch(DATE_WORDS);
 		// A time right after the phrase goes with it; elsewhere it is read on its own, a choice that is never applied.
-		if (w.kind === "time" && sep === "") expect(chip(r, "scheduled"), because).toBeUndefined();
-		if (w.kind === "time") expect(chip(r, "scheduled", "applied"), because).toBeUndefined();
+		if (w.kind === "time" && sep === "") expect(chipOf(r, "scheduled"), because).toBeUndefined();
+		if (w.kind === "time") expect(chipOf(r, "scheduled", "applied"), because).toBeUndefined();
 		expect(r.fields.recurrence, because).toBeUndefined();
 		expect(r.title, because).toContain(f.text);
-		if ((w.kind === "date" || w.kind === "leap" || w.kind === "range") && !fromGB && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
+		if ((w.kind === "date" || w.kind === "leap" || w.kind === "range") && !fromGB && led) expect(chipOf(r, "scheduled")?.status, because).toBe("unsupported");
 		// A date right after the phrase (over a comma, `and` or `&` at most) is its start as typed: offered, never applied.
-		else if ((w.kind === "date" || w.kind === "leap") && (sep === "" || sep === "," || sep === " and")) expect(chip(r, "scheduled")?.status, because).toBe("suggestion");
-		else if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chip(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
-		if (w.kind === "end") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
-		if ((w.kind === "periods" || w.kind === "count") && sep !== " and") expect(chip(r, "repeatEnd")?.status, because).toBe("unsupported");
-		if (w.kind === "weekday" && led) expect(chip(r, "scheduled")?.status, because).toBe("unsupported");
+		else if ((w.kind === "date" || w.kind === "leap") && (sep === "" || sep === "," || sep === " and")) expect(chipOf(r, "scheduled")?.status, because).toBe("suggestion");
+		else if ((w.kind === "date" || w.kind === "leap") && !fromGB) expect(chipOf(r, "scheduled", "applied")?.text.endsWith(w.text), because).toBe(true);
+		if (w.kind === "end") expect(chipOf(r, "repeatEnd")?.status, because).toBe("unsupported");
+		if ((w.kind === "periods" || w.kind === "count") && sep !== " and") expect(chipOf(r, "repeatEnd")?.status, because).toBe("unsupported");
+		if (w.kind === "weekday" && led) expect(chipOf(r, "scheduled")?.status, because).toBe("unsupported");
 		return;
 	}
 
@@ -225,7 +224,7 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 	// a full weekday a list takes, plus "on <N>" after a month form and the "on" that leads a year form into its start date.
 	const joinsTime = sep === "" && w.kind === "time" && !f.time && f.onDate !== true;
 	const joinsDay = w.kind === "weekday" && f.days !== undefined && listJoin;
-	// `every week Mon-Fri`, `every 2 weeks on Mon-Fri`: a range opens the week form's list (Q3); after a complete list
+	// `every week Mon-Fri`, `every 2 weeks on Mon-Fri`: a range opens the week form's list; after a complete list
 	// (`every monday Mon-Fri`) it stays a suggestion.
 	const joinsRange = w.kind === "weekdayRange" && f.weekOn === true && (sep === "" || sep === " on");
 	// `every month on 20 pages`: "on 20" is the day of the month, as `on 15` is; a bare number before a month name
@@ -249,7 +248,7 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 		expect(["unsupported", "applied"], because).toContain(rec!.status);
 		return;
 	} else if (onDate && w.kind === "number" && f.onDate !== true) {
-		// `every year on 20 pages`: no date is read after "on", so the repeat is not supported (decision 15).
+		// `every year on 20 pages`: no date is read after "on", so the repeat is not supported.
 		expect(rec!.status, because).toBe("unsupported");
 		return;
 	} else if (f.choice === true || joinsTime) {
@@ -269,25 +268,25 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 		case "leap":
 		case "weekday":
 			if (onNoStart && !joinsDay) {
-				expect(chip(r, "scheduled", "applied"), because).toBeUndefined();
-				expect(chip(r, "scheduled", "suggestion")?.text, because).toBe(`on ${w.text}`);
+				expect(chipOf(r, "scheduled", "applied"), because).toBeUndefined();
+				expect(chipOf(r, "scheduled", "suggestion")?.text, because).toBe(`on ${w.text}`);
 			} else if (w.kind === "weekday") {
-				if (!joinsDay) expect(chip(r, "scheduled", "applied")?.text.endsWith("Monday"), because).toBe(true);
-			} else if (!fromGB) expect(dateOf(chip(r, "scheduled", "applied"))?.slice(5), because).toBe(w.kind === "date" ? "10-12" : "02-29");
+				if (!joinsDay) expect(chipOf(r, "scheduled", "applied")?.text.endsWith("Monday"), because).toBe(true);
+			} else if (!fromGB) expect(dateOf(chipOf(r, "scheduled", "applied"))?.slice(5), because).toBe(w.kind === "date" ? "10-12" : "02-29");
 			break;
 		case "time":
-			if (!joinsTime) expect(chip(r, "scheduled", "choice"), because).toBeDefined();
+			if (!joinsTime) expect(chipOf(r, "scheduled", "choice"), because).toBeDefined();
 			break;
 		case "range": {
 			if (f.onDate === true || fromGB) break;
 			// After "on", chrono's own text decides whether the range sits right after the repeat (en-GB keeps "on 12 Oct").
-			const split = chip(r, "repeatEnd") !== undefined;
+			const split = chipOf(r, "repeatEnd") !== undefined;
 			if ((sep === " on" && !split) || sep === " and") {
-				expect(chip(r, "scheduled", "suggestion")?.text.endsWith(env.range), because).toBe(true);
-				expect(chip(r, "repeatEnd"), because).toBeUndefined();
+				expect(chipOf(r, "scheduled", "suggestion")?.text.endsWith(env.range), because).toBe(true);
+				expect(chipOf(r, "repeatEnd"), because).toBeUndefined();
 			} else {
-				expect(dateOf(chip(r, "scheduled", "applied"))?.slice(5), because).toBe("10-12");
-				const end = chip(r, "repeatEnd");
+				expect(dateOf(chipOf(r, "scheduled", "applied"))?.slice(5), because).toBe("10-12");
+				const end = chipOf(r, "repeatEnd");
 				expect(end?.text, because).toBe(env.rangeEnd);
 				expect(endStatuses, because).toContain(end!.status);
 				if (end!.status === "applied") expect(end!.end, because).toEqual({ kind: "date", date: `${env.today.slice(0, 4)}-12-01` });
@@ -297,15 +296,15 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 		case "weekdayRange":
 			if (joinsRange) break;
 			if (sep === " starting") {
-				expect(chip(r, "scheduled", "applied")?.text, because).toBe("starting Mon");
-				expect(endStatuses, because).toContain(chip(r, "repeatEnd")?.status);
+				expect(chipOf(r, "scheduled", "applied")?.text, because).toBe("starting Mon");
+				expect(endStatuses, because).toContain(chipOf(r, "repeatEnd")?.status);
 			} else {
-				expect(chip(r, "scheduled", "suggestion")?.text.endsWith("Mon-Fri"), because).toBe(true);
-				expect(chip(r, "repeatEnd"), because).toBeUndefined();
+				expect(chipOf(r, "scheduled", "suggestion")?.text.endsWith("Mon-Fri"), because).toBe(true);
+				expect(chipOf(r, "repeatEnd"), because).toBeUndefined();
 			}
 			break;
 		case "end": {
-			const end = chip(r, "repeatEnd");
+			const end = chipOf(r, "repeatEnd");
 			expect(end?.text, because).toBe("until Dec 1");
 			expect(endStatuses, because).toContain(end!.status);
 			// Merged by the date reader into a range with a start that has its own year, the end counts from that start.
@@ -313,16 +312,16 @@ export function check(env: Env, title: string, f: Form, sep: string, w: Follower
 			break;
 		}
 		case "periods": {
-			const end = chip(r, "repeatEnd");
+			const end = chipOf(r, "repeatEnd");
 			expect(end?.text.endsWith("for 2 weeks"), because).toBe(true);
 			expect(endStatuses, because).toContain(end!.status);
 			// N periods from the start: the applied typed date, else today.
-			const anchor = dateOf(chip(r, "scheduled", "applied")) ?? env.today;
+			const anchor = dateOf(chipOf(r, "scheduled", "applied")) ?? env.today;
 			expect(end!.end, because).toEqual({ kind: "date", date: addDays(anchor, 13) });
 			break;
 		}
 		case "count": {
-			const end = chip(r, "repeatEnd");
+			const end = chipOf(r, "repeatEnd");
 			expect(end?.text.endsWith("for 5 times"), because).toBe(true);
 			expect(endStatuses, because).toContain(end!.status);
 			expect(end!.end, because).toEqual({ kind: "count", count: 5 });

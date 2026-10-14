@@ -2,8 +2,10 @@ import { Notice, normalizePath } from "obsidian";
 import { CheckpointApp } from "../app/App";
 import type { OpenResult } from "../app/FocusService";
 import type { TickTickApi } from "../app/ports";
-import { type SyncFailure, SyncService } from "../app/SyncService";
+import { SyncService } from "../app/SyncService";
+import { type SyncFailure } from "../app/syncModel";
 import { displayZone } from "../app/settings";
+import { isDomainError } from "../domain/errors";
 import { randomId, systemClock } from "../domain/ports";
 import { BackupStore, dbBackupRoot } from "../persistence/backups";
 import { CpbaseStore, type StoreEvent } from "../persistence/CpbaseStore";
@@ -18,7 +20,7 @@ import { LocalStorageReminderState } from "./reminderState";
 import { LocalStorageRenameQueue } from "./renameQueue";
 import { TICKTICK_TIMEOUT_MS, TickTickHttp } from "./tickTickHttp";
 import { ConfirmationPrompter, type LinkFlowDeps, linkListFlow, unlinkListFlow } from "./tickTickFlow";
-import { LocalStorageTickTickDevice, SecretStorageTickTickSecret } from "./tickTickPorts";
+import { LocalStorageTickTickDevice, LocalStorageTickTickPending, SecretStorageTickTickSecret } from "./tickTickPorts";
 import { askMissing, pickLinkOption, showFirstSyncPreview } from "./tickTickDialogs";
 import { TickTickScheduler } from "./tickTickScheduler";
 
@@ -109,12 +111,23 @@ export class DbSession {
 			),
 		);
 		const app = this.app;
+		// A listener that throws is shown as an error; the change and the other listeners go on.
+		app.store.bus.onListenerError = showError;
+		app.focus.bus.onListenerError = showError;
 		this.tickTickApi = new TickTickHttp(app.tickTickSecret);
-		this.sync = new SyncService(app.store, app.tasks, app.sections, app.settings, this.tickTickApi, {
-			port: app.notes,
-			enabled: () => plugin.settings.tickTickNotes,
-			folder: () => plugin.settings.noteFolder,
-		});
+		this.sync = new SyncService(
+			app.store,
+			app.tasks,
+			app.sections,
+			app.settings,
+			this.tickTickApi,
+			{
+				port: app.notes,
+				enabled: () => plugin.settings.tickTickNotes,
+				folder: () => plugin.settings.noteFolder,
+			},
+			new LocalStorageTickTickPending(obsidian),
+		);
 		this.tickTick = new TickTickScheduler({
 			store: app.store,
 			sync: this.sync,
@@ -129,12 +142,18 @@ export class DbSession {
 		});
 	}
 
-	/** A failure notice; a refused token offers the settings, the free plan's list limit offers Sync now. */
+	/**
+	 * A failure notice; a refused token offers the settings, the free plan's list limit offers Sync now, a TickTick list
+	 * that no longer exists offers Unlink.
+	 */
 	private notifyFailure(failure: SyncFailure, text: string): void {
+		const listId = failure.listId;
 		if (failure.kind === "unauthorized") {
 			actionNotice(`${text}. Replace it in Settings > Logwell.`, [{ label: "Open settings", run: () => this.plugin.openSettings() }]);
 		} else if (failure.kind === "list-limit") {
 			actionNotice(text, [{ label: "Sync now", run: () => void this.tickTick.syncNow() }]);
+		} else if (failure.kind === "list-gone" && listId !== null) {
+			actionNotice(text, [{ label: "Unlink", run: () => void this.unlinkFromTickTick(listId) }]);
 		} else {
 			new Notice(text);
 		}
@@ -189,10 +208,24 @@ export class DbSession {
 
 	async open(): Promise<void> {
 		await this.store.open();
-		this.focusOpened = await this.app.focus.open(this.store.data.meta.dbId);
-		await this.app.tasks.resumeRenames();
+		this.focusOpened = await this.app.focus.open();
+		await this.app.noteRenames.resumeRenames();
 		await this.app.tasks.purgeExpired();
 		await this.app.recurrence.endExhaustedSeries();
+	}
+
+	/**
+	 * The hourly Trash purge and end-of-series sweep. Never rejects. A refusal because the file turned
+	 * read-only after the check waits for the next hour, as a read-only file does before it; any other
+	 * failure is shown.
+	 */
+	async hourlyCleanup(): Promise<void> {
+		try {
+			await this.app.tasks.purgeExpired();
+			await this.app.recurrence.endExhaustedSeries();
+		} catch (err) {
+			if (!isDomainError(err, "ReadOnly")) showError(err, "Could not purge the Trash or end finished repeats");
+		}
 	}
 
 	/**
@@ -270,7 +303,7 @@ export class DbSession {
 			// Renames held back by the rename queue go out first. A failure here
 			// (local storage full or unavailable) must never keep the store open.
 			try {
-				this.app.tasks.flushRenames();
+				this.app.noteRenames.flushRenames();
 			} catch (err) {
 				actionNotice(
 					`Could not save the queued note renames for ${this.dbPath}: ${err instanceof Error ? err.message : String(err)} Links to notes renamed just now may need to be relinked.`,
@@ -287,7 +320,9 @@ export class DbSession {
 	private onStoreEvent(e: StoreEvent): void {
 		switch (e.type) {
 			case "loaded":
-				if (e.cause !== "open") this.app.store.notifyReloaded();
+				// A replacement (import, restore, Keep mine, Restore backup) runs through the app store, which announces
+				// it once itself; only a change from outside the file is announced here.
+				if (e.cause === "external") this.app.store.notifyReloaded();
 				break;
 			case "read-only":
 				this.app.store.notifyStatus();
@@ -346,8 +381,15 @@ export class DbSession {
 			case "repaired":
 				actionNotice(`Some database records were repaired: ${e.issues.slice(0, 3).join(" ")}${e.issues.length > 3 ? " …" : ""}`, []);
 				break;
+			case "noticed":
+				actionNotice(`Some database records need your attention: ${e.notes.slice(0, 3).join(" ")}${e.notes.length > 3 ? " …" : ""}`, []);
+				break;
 			case "migrated":
 				actionNotice(`The database was upgraded from schema ${e.from} to ${e.to}. A backup was taken first.`, []);
+				break;
+			case "backup-error":
+				// Only the backup failed: the database file is as saved, so no save is retried.
+				actionNotice(`A backup of the database could not be written: ${e.message} The database file is not affected; the next save tries the backup again.`, []);
 				break;
 			case "save-error":
 				// A closing store makes no further attempt, so never promise one.

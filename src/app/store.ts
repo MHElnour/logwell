@@ -3,7 +3,7 @@ import { type Clock, nowInstant } from "../domain/ports";
 import type { BackupInfo, SnapshotKind } from "../persistence/backups";
 import type { ReadOnlyState } from "../persistence/CpbaseStore";
 import type { JournalOp } from "../persistence/journal";
-import { type CollectionName, type DbCollections, type DbData, referenceProblem } from "../persistence/schema";
+import { type CollectionName, type DbCollections, type DbData, referenceProblem, storableDbId } from "../persistence/schema";
 import { CommandQueue, EventBus } from "./events";
 import { type Change, Tx } from "./tx";
 
@@ -98,6 +98,14 @@ export class AppStore {
 
 	get readOnlyState(): ReadOnlyState | null {
 		return this.host.readOnlyState;
+	}
+
+	/**
+	 * The id device-local state may be stored under, read on each use: the database's id now (a reload can give the
+	 * store another one), or null while it holds only the placeholder of a damaged database, which names no database.
+	 */
+	storableDbId(): string | null {
+		return storableDbId(this.state.meta.dbId, this.readOnlyState !== null);
 	}
 
 	now(): string {

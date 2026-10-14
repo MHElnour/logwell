@@ -69,7 +69,7 @@ Tab to a row and use Up and Down to move between rows. Enter or Space opens the 
 
 ## When the block updates
 
-The block redraws a moment after any change to your tasks. There is nothing to refresh. A block in a collapsed callout or on a tab you are not looking at waits until you see it.
+The block redraws a moment after any change to your tasks, including a change of what syncs with TickTick that adds or removes a task's "Not synced" mark. There is nothing to refresh. A block in a collapsed callout or on a tab you are not looking at waits until you see it.
 
 After midnight, a block that depends on the date, such as `scheduled: today` or `due: today`, moves on to the new day by itself within a minute.
 

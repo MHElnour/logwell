@@ -1,63 +1,38 @@
 // @vitest-environment happy-dom
 import { render } from "preact";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type TaskView, buildList } from "../../src/app/views";
 import type { GroupBy } from "../../src/domain/groupBy";
 import { type TaskSort, emptyFilter } from "../../src/domain/queries";
-import { INBOX_ID, type Task } from "../../src/domain/types";
+import { INBOX_ID } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
-import { type CalMount, click, dragTo, modeButton, mountBoard, settle, sidebarItem } from "./board-helpers";
-import { U1Host } from "./app-helpers";
+import { type AppMount, click, day, dragTo, mountApp, mountNode, rect, settle, sidebarItem, taskOf, tasksEl, U1Host } from "./app-helpers";
+import { modeButton } from "./board-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem } from "./view-menu-helpers";
 
 // The "Group by…" menu, the grouped list, and dragging a row to another group.
 // Today is 2026-10-01 (Europe/Berlin).
 
-const mounted: CalMount[] = [];
-const containers: HTMLElement[] = [];
-beforeAll(() => {
-	(HTMLElement.prototype as unknown as { createDiv: (o: { cls: string }) => HTMLElement }).createDiv = function (this: HTMLElement, o) {
-		const el = this.ownerDocument.createElement("div");
-		el.className = o.cls;
-		this.appendChild(el);
-		return el;
-	};
-});
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-	for (const c of containers.splice(0)) {
-		render(null, c);
-		c.remove();
-	}
-});
-async function mount() {
-	const m = await mountBoard();
-	mounted.push(m);
-	return m;
-}
 
-const date = (d: string) => ({ kind: "date" as const, date: d });
-const taskOf = (m: CalMount, title: string): Task => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
-const tasksEl = (m: CalMount) => m.root.querySelector<HTMLElement>(".cp-tasks")!;
-const headingTexts = (m: CalMount) =>
+const headingTexts = (m: AppMount) =>
 	[...m.root.querySelectorAll(".cp-tasks .cp-task-group > .cp-group-heading")].map((h) => h.textContent.replace(/\s+/g, " ").trim());
-const rowTitles = (m: CalMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
+const rowTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
 
 /** Opens the view menu, then "Group by…", and returns the options menu. */
-async function groupMenu(m: CalMount) {
+async function groupMenu(m: AppMount) {
 	const menu = await openViewMenu(m, tasksEl(m));
 	const second = await pickItem(m, menu, "Group by…");
 	expect(second).not.toBeNull();
 	return second!;
 }
-async function groupBy(m: CalMount, title: string) {
+async function groupBy(m: AppMount, title: string) {
 	await pickItem(m, await groupMenu(m), title);
 }
 
 describe("the Group by menu", () => {
 	it("offers each view its own options with the default checked", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await click(sidebarItem(m.root, "Today"));
 		let menu = await groupMenu(m);
 		expect(menuTitles(menu)).toEqual(["Date", "List", "Priority", "Tag", "None"]);
@@ -74,7 +49,7 @@ describe("the Group by menu", () => {
 	});
 
 	it("is not in Completed or Trash, and not in Board mode", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await click(sidebarItem(m.root, "Completed"));
 		expect(menuTitles(await openViewMenu(m, tasksEl(m)))).not.toContain("Group by…");
 		await click(sidebarItem(m.root, "Today"));
@@ -86,7 +61,7 @@ describe("the Group by menu", () => {
 	});
 
 	it("remembers the choice per view and checks it", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await click(sidebarItem(m.root, "Inbox"));
 		await groupBy(m, "Priority");
 		expect(checkedOf(await groupMenu(m), "Priority")).toBe(true);
@@ -103,13 +78,12 @@ describe("the Group by menu", () => {
 
 describe("the Group by second menu timer", () => {
 	it("unmounting before the tick shows no menu", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await click(sidebarItem(m.root, "Inbox"));
 		const menu = await openViewMenu(m, tasksEl(m));
 		const show = vi.spyOn(m.host, "showMenu");
 		menuItems(menu).find((i) => i.title === "Group by…")!.run();
 		m.unmount();
-		mounted.splice(mounted.indexOf(m), 1);
 		await new Promise((r) => setTimeout(r, 5));
 		expect(show).not.toHaveBeenCalled();
 	});
@@ -117,7 +91,7 @@ describe("the Group by second menu timer", () => {
 
 describe("the grouped list", () => {
 	it("Inbox is a plain list by default, even with sections; Group by Section shows them", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		const alpha = await m.h.app.sections.create(INBOX_ID, "Alpha");
 		await m.h.app.tasks.create({ title: "N1" });
 		await m.h.app.tasks.create({ title: "A1", sectionId: alpha.id });
@@ -130,10 +104,10 @@ describe("the grouped list", () => {
 	});
 
 	it("Today and Upcoming look as before: Overdue and Today, and the days", async () => {
-		const m = await mount();
-		await m.h.app.tasks.create({ title: "Late", scheduled: date("2026-09-29") });
-		await m.h.app.tasks.create({ title: "Now", scheduled: date("2026-10-01") });
-		await m.h.app.tasks.create({ title: "Next", scheduled: date("2026-10-05") });
+		const m = await mountApp();
+		await m.h.app.tasks.create({ title: "Late", scheduled: day("2026-09-29") });
+		await m.h.app.tasks.create({ title: "Now", scheduled: day("2026-10-01") });
+		await m.h.app.tasks.create({ title: "Next", scheduled: day("2026-10-05") });
 		await click(sidebarItem(m.root, "Today"));
 		expect(headingTexts(m)).toEqual(["Overdue1", "Today1"]);
 		expect(m.root.querySelector(".cp-tasks .cp-group-overdue")).toBeNull();
@@ -142,9 +116,9 @@ describe("the grouped list", () => {
 	});
 
 	it("groups a list by date: a red past-date heading with an overdue label, then No date", async () => {
-		const m = await mount();
-		await m.h.app.tasks.create({ title: "Late", scheduled: date("2026-09-29") });
-		await m.h.app.tasks.create({ title: "Now", scheduled: date("2026-10-01") });
+		const m = await mountApp();
+		await m.h.app.tasks.create({ title: "Late", scheduled: day("2026-09-29") });
+		await m.h.app.tasks.create({ title: "Now", scheduled: day("2026-10-01") });
 		await m.h.app.tasks.create({ title: "Whenever" });
 		await click(sidebarItem(m.root, "Inbox"));
 		await groupBy(m, "Date");
@@ -160,11 +134,11 @@ describe("the grouped list", () => {
 	});
 
 	it("groups by priority, tag and list", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await m.h.app.tags.create("Work");
 		const work = await m.h.app.categories.create("Work list");
-		await m.h.app.tasks.create({ title: "Hi", priority: 1, tagKeys: ["work"], scheduled: date("2026-10-01") });
-		await m.h.app.tasks.create({ title: "Plain", categoryId: work.id, scheduled: date("2026-10-01") });
+		await m.h.app.tasks.create({ title: "Hi", priority: 1, tagKeys: ["work"], scheduled: day("2026-10-01") });
+		await m.h.app.tasks.create({ title: "Plain", categoryId: work.id, scheduled: day("2026-10-01") });
 		await click(sidebarItem(m.root, "Today"));
 		await groupBy(m, "Priority");
 		expect(headingTexts(m)).toEqual(["High1", "None1"]);
@@ -180,7 +154,7 @@ describe("the grouped list", () => {
 
 describe('"Add section" in the list view menu', () => {
 	it("switches the view to Group by Section and opens the name field with the focus in it", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await m.h.app.tasks.create({ title: "N1" });
 		await click(sidebarItem(m.root, "Inbox"));
 		await pickItem(m, await openViewMenu(m, tasksEl(m)), "Add section");
@@ -192,7 +166,7 @@ describe('"Add section" in the list view menu', () => {
 	});
 
 	it("keeps another grouping's choice when a section is added on the board", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await click(sidebarItem(m.root, "Inbox"));
 		await groupBy(m, "Priority");
 		await click(modeButton(m.root, "Board"));
@@ -202,7 +176,7 @@ describe('"Add section" in the list view menu', () => {
 	});
 
 	it("does not open the field by itself when the grouping is switched to Section later", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await m.h.app.sections.create(INBOX_ID, "Alpha");
 		await click(sidebarItem(m.root, "Inbox"));
 		await pickItem(m, await openViewMenu(m, tasksEl(m)), "Add section");
@@ -216,17 +190,13 @@ describe('"Add section" in the list view menu', () => {
 
 describe("dragging a row to another group", () => {
 	// happy-dom has no layout: each group is a 30 px heading plus 40 px rows, one under the other.
-	const rect = (left: number, top: number, right: number, bottom: number) =>
-		({ left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
 
-	async function mountList(view: TaskView, by: GroupBy, seed: (m: CalMount) => Promise<void>, readOnly = false, sort: TaskSort = "manual") {
-		const m = await mount();
+	async function mountList(view: TaskView, by: GroupBy, seed: (m: AppMount) => Promise<void>, readOnly = false, sort: TaskSort = "manual") {
+		const m = await mountApp();
 		await seed(m);
 		const host = new U1Host(m.h);
 		const undo = vi.spyOn(host, "notifyUndo");
-		const root = document.createElement("div");
-		document.body.appendChild(root);
-		containers.push(root);
+		const root = mountNode(null);
 		const redraw = async () => {
 			const state = m.h.app.store.state;
 			const ctx = m.h.app.queryContext();
@@ -270,7 +240,7 @@ describe("dragging a row to another group", () => {
 		return { m, root, undo, redraw, host, tops: await redraw() };
 	}
 	const rowEl = (root: HTMLElement, text: string) => [...root.querySelectorAll<HTMLElement>(".cp-task-row")].find((r) => r.querySelector(".cp-task-title")!.textContent.trim() === text)!;
-	const seedPriority = async (m: CalMount) => {
+	const seedPriority = async (m: AppMount) => {
 		await m.h.app.tasks.create({ title: "H1", priority: 1 });
 		await m.h.app.tasks.create({ title: "H2", priority: 1 });
 		await m.h.app.tasks.create({ title: "L1", priority: 3 });
@@ -294,7 +264,7 @@ describe("dragging a row to another group", () => {
 
 	it("date: the drop moves the task to that day and keeps its time", async () => {
 		const { m, root, undo, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
-			await m.h.app.tasks.create({ title: "Mon", scheduled: date("2026-10-05") });
+			await m.h.app.tasks.create({ title: "Mon", scheduled: day("2026-10-05") });
 			await m.h.app.tasks.create({ title: "Timed", scheduled: { kind: "datetime", local: "2026-10-07T09:30", tz: "Europe/Berlin" } });
 		});
 		await dragTo(rowEl(root, "Timed"), { x: 100, y: tops.get("Timed")! }, { x: 100, y: tops.get("Mon")! + 15 });
@@ -302,10 +272,10 @@ describe("dragging a row to another group", () => {
 		expect(undo).toHaveBeenCalledWith('Moved "Timed" to Mon, Oct 5.', "Move task", expect.any(Number));
 	});
 
-	it("date: a timed series dropped on another day keeps its time and the notice says it re-anchored (D5)", async () => {
+	it("date: a timed series dropped on another day keeps its time and the notice says it re-anchored", async () => {
 		const weekly = { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } as const;
 		const { m, root, undo, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
-			await m.h.app.tasks.create({ title: "Mon", scheduled: date("2026-10-05") });
+			await m.h.app.tasks.create({ title: "Mon", scheduled: day("2026-10-05") });
 			await m.h.app.tasks.create({ title: "Gym", scheduled: { kind: "datetime", local: "2026-10-07T07:00", tz: "Europe/Berlin" }, repeat: { rule: weekly } });
 		});
 		const place = vi.spyOn(m.h.app.tasks, "place");
@@ -321,29 +291,29 @@ describe("dragging a row to another group", () => {
 
 	it("date: a deadline-only task moves its deadline, as on the board", async () => {
 		const { m, root, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
-			await m.h.app.tasks.create({ title: "Mon", scheduled: date("2026-10-05") });
-			await m.h.app.tasks.create({ title: "Due", deadline: date("2026-10-08") });
+			await m.h.app.tasks.create({ title: "Mon", scheduled: day("2026-10-05") });
+			await m.h.app.tasks.create({ title: "Due", deadline: day("2026-10-08") });
 		});
 		await dragTo(rowEl(root, "Due"), { x: 100, y: tops.get("Due")! }, { x: 100, y: tops.get("Mon")! + 15 });
-		expect(taskOf(m, "Due").deadline).toEqual(date("2026-10-05"));
+		expect(taskOf(m, "Due").deadline).toEqual(day("2026-10-05"));
 		expect(taskOf(m, "Due").scheduled).toBeNull();
 	});
 
 	it("date: No date and the Overdue group of Today refuse a row from another group", async () => {
 		const { m, root, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
-			await m.h.app.tasks.create({ title: "Mon", scheduled: date("2026-10-05") });
+			await m.h.app.tasks.create({ title: "Mon", scheduled: day("2026-10-05") });
 			await m.h.app.tasks.create({ title: "Free" });
 		});
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		await dragTo(rowEl(root, "Mon"), { x: 100, y: tops.get("Mon")! }, { x: 100, y: tops.get("Free")! + 15 });
 		expect(place).not.toHaveBeenCalled();
-		expect(taskOf(m, "Mon").scheduled).toEqual(date("2026-10-05"));
+		expect(taskOf(m, "Mon").scheduled).toEqual(day("2026-10-05"));
 	});
 
 	it("Today: a row from Overdue dropped on Today is rescheduled to today; the other way is refused", async () => {
 		const { m, root, tops } = await mountList({ kind: "today" }, "date", async (m) => {
 			await m.h.app.tasks.create({ title: "Late", scheduled: { kind: "datetime", local: "2026-09-29T08:15", tz: "Europe/Berlin" } });
-			await m.h.app.tasks.create({ title: "Now", scheduled: date("2026-10-01") });
+			await m.h.app.tasks.create({ title: "Now", scheduled: day("2026-10-01") });
 		});
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		await dragTo(rowEl(root, "Now"), { x: 100, y: tops.get("Now")! }, { x: 100, y: tops.get("Late")! });
@@ -355,8 +325,8 @@ describe("dragging a row to another group", () => {
 	it("list: the drop moves the task and its subtasks to that list", async () => {
 		const { m, root, undo, tops } = await mountList({ kind: "today" }, "list", async (m) => {
 			const work = await m.h.app.categories.create("Work");
-			await m.h.app.tasks.create({ title: "W", categoryId: work.id, scheduled: date("2026-10-01") });
-			const i = (await m.h.app.tasks.create({ title: "I", scheduled: date("2026-10-01") })).task;
+			await m.h.app.tasks.create({ title: "W", categoryId: work.id, scheduled: day("2026-10-01") });
+			const i = (await m.h.app.tasks.create({ title: "I", scheduled: day("2026-10-01") })).task;
 			await m.h.app.tasks.create({ title: "I sub", parentId: i.id });
 		});
 		await dragTo(rowEl(root, "I"), { x: 100, y: tops.get("I")! }, { x: 100, y: tops.get("W")! + 15 });
@@ -421,9 +391,9 @@ describe("dragging a row to another group", () => {
 
 	it("under another sort a same-group drop writes nothing and draws no line", async () => {
 		const { m, root, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
-			await m.h.app.tasks.create({ title: "A", scheduled: date("2026-10-05") });
-			await m.h.app.tasks.create({ title: "B", scheduled: date("2026-10-05") });
-			await m.h.app.tasks.create({ title: "C", scheduled: date("2026-10-06") });
+			await m.h.app.tasks.create({ title: "A", scheduled: day("2026-10-05") });
+			await m.h.app.tasks.create({ title: "B", scheduled: day("2026-10-05") });
+			await m.h.app.tasks.create({ title: "C", scheduled: day("2026-10-06") });
 		}, false, "date");
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		const update = vi.spyOn(m.h.app.tasks, "update");
@@ -438,7 +408,7 @@ describe("dragging a row to another group", () => {
 	it("date: a timed task dropped on a day with no such time shows the daylight saving warning", async () => {
 		const { m, root, host, tops } = await mountList({ kind: "inbox" }, "date", async (m) => {
 			m.h.clock.set("2026-03-27T08:00:00Z");
-			await m.h.app.tasks.create({ title: "Gap", scheduled: date("2026-03-29") });
+			await m.h.app.tasks.create({ title: "Gap", scheduled: day("2026-03-29") });
 			await m.h.app.tasks.create({ title: "Spring", scheduled: { kind: "datetime", local: "2026-03-30T02:30", tz: "Europe/Berlin" } });
 		});
 		await dragTo(rowEl(root, "Spring"), { x: 100, y: tops.get("Spring")! }, { x: 100, y: tops.get("Gap")! + 15 });

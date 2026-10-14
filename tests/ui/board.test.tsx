@@ -1,45 +1,13 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DateSpec } from "../../src/domain/types";
+import { describe, expect, it, vi } from "vitest";
 import { makeReadOnly } from "../app/harness";
 import { BOARD_MOVE_EVENT, routeBoardMove } from "../../src/ui/board/keys";
-import {
-	type CalMount,
-	board,
-	cardTitles,
-	click,
-	columnEl,
-	columnTitles,
-	dragTo,
-	item,
-	modeButton,
-	mountBoard,
-	openBoard,
-	press,
-	releaseAt,
-	settle,
-	sidebarItem,
-	stubBoardRects,
-} from "./board-helpers";
+import { type AppMount, at, click, day, dragTo, mountApp, pressKey, releaseAt, settle, sidebarItem, taskOf, undoDepth } from "./app-helpers";
+import { board, cardTitles, columnEl, columnTitles, item, modeButton, openBoard, stubBoardRects } from "./board-helpers";
 
 // The board view and its drag. Today is 2026-10-01 (Europe/Berlin).
 
-const mounted: CalMount[] = [];
-afterEach(() => {
-	for (const m of mounted.splice(0)) m.unmount();
-});
-async function mount() {
-	const m = await mountBoard();
-	mounted.push(m);
-	return m;
-}
-
-const day = (date: string): DateSpec => ({ kind: "date", date });
-const at = (date: string, time: string): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz: "Europe/Berlin" });
-const taskOf = (m: CalMount, title: string) => [...m.h.app.store.state.tasks.values()].find((t) => t.title === title)!;
-const undoDepth = (m: CalMount) => (m.h.app.store as unknown as { undoStack: unknown[] }).undoStack.length;
-
-async function seed(m: CalMount) {
+async function seed(m: AppMount) {
 	const T = m.h.app.tasks;
 	await T.create({ title: "Late", scheduled: day("2026-09-30") });
 	const today = await T.create({ title: "Report", scheduled: at("2026-10-01", "19:00") });
@@ -56,9 +24,9 @@ async function seed(m: CalMount) {
 	await settle();
 }
 
-describe("the List | Board switch (D2)", () => {
+describe("the List | Board switch", () => {
 	it("is in Today, Upcoming, Inbox and lists, remembered per view, and absent in Tags, Completed and Trash", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await m.h.app.categories.create("Work", "briefcase");
 		await m.h.app.tags.create("urgent", "red");
@@ -95,9 +63,9 @@ describe("the List | Board switch (D2)", () => {
 	});
 });
 
-describe("columns and cards (D3, D4)", () => {
+describe("columns and cards", () => {
 	it("Today has Overdue and Today; the board is built from the store", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Today");
 		expect(columnTitles(m.root)).toEqual(["Overdue", "Today"]);
@@ -110,8 +78,22 @@ describe("columns and cards (D3, D4)", () => {
 		expect(item(m.root, "Lunch").querySelector(".cp-meta-date.is-today")).not.toBeNull();
 	});
 
+	it("#125: ticking the only overdue card keeps it and the Overdue column in place during its check animation", async () => {
+		const m = await mountApp();
+		await seed(m);
+		await openBoard(m, "Today");
+		await m.h.app.tasks.complete(taskOf(m, "Late").id);
+		await settle();
+		expect(columnTitles(m.root)).toEqual(["Overdue", "Today"]);
+		expect(cardTitles(m.root, "overdue")).toEqual(["Late"]);
+		expect(cardTitles(m.root, "today")).toEqual(["Report", "Lunch"]);
+		await new Promise((r) => setTimeout(r, 600));
+		await settle();
+		expect(columnTitles(m.root)).toEqual(["Today"]);
+	});
+
 	it("Upcoming has one column per day from tomorrow, empty days included, and Inbox has No section", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const titles = columnTitles(m.root);
@@ -129,7 +111,7 @@ describe("columns and cards (D3, D4)", () => {
 	});
 
 	it("nests subtasks in the parent's card with a chevron that collapses them, and shows each column's Completed group", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Today");
 		const card = item(m.root, "Report").closest<HTMLElement>(".cp-board-card")!;
@@ -157,7 +139,7 @@ describe("columns and cards (D3, D4)", () => {
 	});
 
 	it("a column's + opens Quick Add on that day and in that list", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const calls: unknown[] = [];
 		m.host.quickAdd = (p?: unknown) => void calls.push(p);
@@ -171,9 +153,9 @@ describe("columns and cards (D3, D4)", () => {
 	});
 });
 
-describe("drag (D6)", () => {
+describe("drag", () => {
 	it("moves a card to another day: same id, new date, time kept, placed, one undo entry, an Undo notice", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const rects = stubBoardRects(m.root);
@@ -192,7 +174,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("places the card at its drop position within a column (the same day: no date change)", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const rects = stubBoardRects(m.root);
@@ -206,7 +188,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("moves a card from Overdue to Today and keeps its place order", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Today");
 		const rects = stubBoardRects(m.root);
@@ -217,7 +199,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("refuses a drop on Overdue", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Today");
 		const rects = stubBoardRects(m.root);
@@ -229,7 +211,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("refuses a nested subtask dropped on another column, and reorders it among its siblings", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		// A parent with two subtasks on Oct 4.
@@ -253,7 +235,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("Escape cancels the drag", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const rects = stubBoardRects(m.root);
@@ -269,7 +251,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("a short press is a click that opens the details", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const el = item(m.root, "Tomorrow B");
@@ -284,7 +266,7 @@ describe("drag (D6)", () => {
 	});
 
 	it("under another sort a card can change day but is not placed", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const a = taskOf(m, "Tomorrow A");
@@ -303,42 +285,42 @@ describe("drag (D6)", () => {
 	});
 });
 
-describe("Alt+Arrow (D7)", () => {
+describe("Alt+Arrow", () => {
 	it("Alt+Right moves a card to the next day column, focus stays on it, and Alt+Left back", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const a = taskOf(m, "Tomorrow A");
 		item(m.root, "Tomorrow A").focus();
-		await press(item(m.root, "Tomorrow A"), "ArrowRight", { altKey: true });
+		await pressKey(item(m.root, "Tomorrow A"), "ArrowRight", { altKey: true });
 		expect(m.h.app.store.state.tasks.get(a.id)!.scheduled).toEqual(at("2026-10-03", "09:30"));
 		expect(cardTitles(m.root, "2026-10-03")).toEqual(["Tomorrow A"]);
 		expect(document.activeElement).toBe(item(m.root, "Tomorrow A"));
 		expect(board(m.root).querySelector('[role="status"]')!.textContent).toContain("Saturday, Oct 3");
-		await press(document.activeElement!, "ArrowLeft", { altKey: true });
+		await pressKey(document.activeElement!, "ArrowLeft", { altKey: true });
 		expect(m.h.app.store.state.tasks.get(a.id)!.scheduled).toEqual(at("2026-10-02", "09:30"));
 		expect(document.activeElement).toBe(item(m.root, "Tomorrow A"));
 	});
 
 	it("Alt+Down reorders one place and keeps focus; Alt+Left in Today does not enter Overdue", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		item(m.root, "Tomorrow A").focus();
-		await press(item(m.root, "Tomorrow A"), "ArrowDown", { altKey: true });
+		await pressKey(item(m.root, "Tomorrow A"), "ArrowDown", { altKey: true });
 		expect(cardTitles(m.root, "2026-10-02")).toEqual(["Tomorrow B", "Tomorrow A"]);
 		expect(document.activeElement).toBe(item(m.root, "Tomorrow A"));
 		await click(sidebarItem(m.root, "Today"));
 		await click(modeButton(m.root, "Board"));
 		item(m.root, "Lunch").focus();
 		const before = undoDepth(m);
-		await press(item(m.root, "Lunch"), "ArrowLeft", { altKey: true });
+		await pressKey(item(m.root, "Lunch"), "ArrowLeft", { altKey: true });
 		expect(undoDepth(m)).toBe(before);
 		expect(cardTitles(m.root, "overdue")).toEqual(["Late"]);
 	});
 
 	it("the view's Scope route sends the key to the focused card, and ignores a focus elsewhere", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		const a = taskOf(m, "Tomorrow A");
@@ -358,7 +340,7 @@ describe("Alt+Arrow (D7)", () => {
 });
 
 describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
-	const sortByPriority = async (m: CalMount) => {
+	const sortByPriority = async (m: AppMount) => {
 		m.host.menus.length = 0;
 		await click(m.root.querySelector('.cp-tasks [aria-label="View options"]'));
 		m.host.menus.at(-1)!.flatMap((i) => (i === "separator" ? [] : [i])).find((i) => i.title === "Sort: by priority")!.run();
@@ -366,7 +348,7 @@ describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 	};
 
 	it("read-only: a drag and Alt+Arrow change nothing", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		await makeReadOnly(m.h);
@@ -380,15 +362,15 @@ describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 		expect(board(m.root).querySelector(".cp-board-ghost")).toBeNull();
 		await releaseAt(item(m.root, "Tomorrow A"), rects.columns["2026-10-03"]!);
 		item(m.root, "Tomorrow A").focus();
-		await press(item(m.root, "Tomorrow A"), "ArrowRight", { altKey: true });
-		await press(item(m.root, "Tomorrow A"), "ArrowDown", { altKey: true });
+		await pressKey(item(m.root, "Tomorrow A"), "ArrowRight", { altKey: true });
+		await pressKey(item(m.root, "Tomorrow A"), "ArrowDown", { altKey: true });
 		expect(place).not.toHaveBeenCalled();
 		expect(update).not.toHaveBeenCalled();
 		expect(m.h.app.store.state.tasks.get(a.id)).toBe(a);
 	});
 
 	it("a drop into a DST gap day shows the warning", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		m.h.clock.set("2026-03-27T08:00:00Z");
 		await m.rerender();
 		await m.h.app.tasks.create({ title: "Spring", scheduled: at("2026-03-30", "02:30") });
@@ -401,7 +383,7 @@ describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 	});
 
 	it("under another sort a same-column drag draws no drop line; another column is only highlighted", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Upcoming");
 		await sortByPriority(m);
@@ -416,7 +398,7 @@ describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 	});
 
 	it("Alt+Arrow that cannot move reports false so the Scope lets Obsidian's key run", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		const evt = (key: string) => new KeyboardEvent("keydown", { key, altKey: true, cancelable: true });
 		await openBoard(m, "Inbox");
@@ -438,7 +420,7 @@ describe("read-only, DST gaps, sort and Alt+Arrow on the board", () => {
 	});
 
 	it("dropping an Overdue card with a past deadline on Today moves both dates and keeps each time", async () => {
-		const m = await mount();
+		const m = await mountApp();
 		await seed(m);
 		await m.h.app.tasks.create({ title: "Both", scheduled: at("2026-09-30", "09:00"), deadline: at("2026-09-29", "17:00") });
 		await m.h.app.tasks.create({ title: "Future deadline", scheduled: day("2026-09-30"), deadline: day("2026-10-05") });

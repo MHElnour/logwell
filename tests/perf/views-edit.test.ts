@@ -13,14 +13,16 @@ import { CalendarSection, initialCalendarState } from "../../src/ui/CalendarSect
 import { SearchSection, initialSearchState } from "../../src/ui/SearchSection";
 import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { LISTS, LOG, ROW, RUNS, SAFETY_NET_MS, TASKS, VIEWPORT, bigHarness, countBigPasses, domCleanup, fastest, median, taskId } from "./view-edit-fixture";
+import { countBigPasses, fastest, median, perfLog } from "./measure";
+import { LISTS, ROW, RUNS, TASKS, VIEWPORT, bigHarness, domCleanup, taskId } from "./view-edit-fixture";
 
 // The calendar, the Eisenhower matrix and Search (issue 41). On every change the calendar places its dated tasks
 // (the index's 2,500) and shows the Unscheduled count (from the index's open tasks, with the default menu); the
 // drawer's rows are read and made only while it is open, and then every open task is read. The matrix reads the
 // index's set for its menu when one holds at most half the tasks (a list, a tag, or the open tasks in a vault of
 // mostly completed ones); it shows every task by default, so then it reads every task, as before. Search checks every
-// title (a text search has no candidates), once per change and only while shown.
+// title (a text search has no candidates), once per change and only while shown. Times are compared only with the same
+// view read through every task, measured in the same run; the pass counts are exact.
 const CALENDAR_RATIO = 0.6;
 const CALENDAR_BEFORE_RATIO = 0.5;
 
@@ -83,7 +85,7 @@ describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} task
 		const report = cases
 			.map(({ name }) => `${name} ${median(times.get(name) ?? []).toFixed(2)} ms with the index, ${median(scanTimes.get(name) ?? []).toFixed(2)} ms without (fastest ${ratio(name).toFixed(2)} of it)`)
 			.join("; ");
-		if (LOG) process.stderr.write(`issue-41: calendar and matrix after one edit at ${TASKS} tasks: ${report}\n`);
+		perfLog(`issue-41: calendar and matrix after one edit at ${TASKS} tasks: ${report}`);
 		// Candidates: the 2,500 dated tasks, a list's 5,000. The open tasks are 90% of all here: their set is not read,
 		// and the matrix by default shows every task.
 		const openCount = [...state.tasks.values()].filter((t) => t.status === "open").length;
@@ -104,8 +106,7 @@ describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} task
 		expect(ratio("calendar month"), report).toBeLessThan(CALENDAR_RATIO);
 		expect(ratio("calendar week, before"), report).toBeLessThan(CALENDAR_BEFORE_RATIO);
 		// No speed ratio for the matrix: the index saves only a few ms for one list, too little to measure on shared CI
-		// (#78). It is held by the equal result, the zero passes above, and the safety net below.
-		for (const { name } of cases) expect(fastest(times.get(name) ?? []), report).toBeLessThan(SAFETY_NET_MS);
+		// (#78). It is held by the equal result and the zero passes above.
 	}, 120_000);
 
 	it("redraws the calendar after an edit without a pass over the tasks while the drawer is closed", async () => {
@@ -139,7 +140,7 @@ describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} task
 			passes[unscheduledOpen ? "drawer open" : "drawer closed"] = counted;
 			render(null, container);
 		}
-		if (LOG) process.stderr.write(`issue-41: calendar redraws after an edit at ${TASKS} tasks, passes over the tasks: ${JSON.stringify(passes)}\n`);
+		perfLog(`issue-41: calendar redraws after an edit at ${TASKS} tasks, passes over the tasks: ${JSON.stringify(passes)}`);
 		// The open drawer lists every open task without a date: it reads every task, once per redraw.
 		expect(passes).toEqual({ "drawer closed": [0, 0, 0], "drawer open": [1, 1, 1] });
 	}, 120_000);
@@ -171,7 +172,7 @@ describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} task
 			counts[`${name}, drawn again`] = (await countBigPasses(() => draw())).passes.length;
 			render(null, container);
 		}
-		if (LOG) process.stderr.write(`issue-41: Search at ${TASKS} tasks, passes over the tasks per redraw: ${JSON.stringify(counts)}\n`);
+		perfLog(`issue-41: Search at ${TASKS} tasks, passes over the tasks per redraw: ${JSON.stringify(counts)}`);
 		expect(counts).toEqual({ "shown, after an edit": 1, "shown, drawn again": 0, "hidden, after an edit": 0, "hidden, drawn again": 0 });
 	}, 120_000);
 });

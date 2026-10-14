@@ -28,7 +28,7 @@ function down(note: string, items: (items: string[]) => string[]): string {
 }
 const tickAt = (k: number) => (items: string[]) => items.map((x, i) => (i === k ? x.replace("- [ ]", "- [x]") : x));
 
-describe("a note body going up (SYNC-09)", () => {
+describe("a note body going up", () => {
 	it("drops the frontmatter", () => {
 		const { front, body } = splitFrontmatter("---\ntags: [a]\n---\nHello\n");
 		expect(front).toBe("---\ntags: [a]\n---\n");
@@ -63,13 +63,13 @@ describe("a note body going up (SYNC-09)", () => {
 	});
 });
 
-describe("TickTick's text coming down changes the note as little as it can (SYNC-09)", () => {
+describe("TickTick's text coming down changes the note as little as it can", () => {
 	it("keeps a link on a line TickTick did not change, and an embed it cannot see", () => {
 		const note = "Read [[Plan|my plan]]\n![[photo.png]]\nOld line\n";
 		expect(writeNote(note, false, text("Read my plan\nNew line"))).toBe("Read [[Plan|my plan]]\n![[photo.png]]\nNew line\n");
 	});
 
-	it("a line TickTick edits keeps its links whose text is still there, and its embeds at the end (L5)", () => {
+	it("a line TickTick edits keeps its links whose text is still there, and its embeds at the end", () => {
 		expect(writeNote("Call [[Bob|the bank]] today ![[img.png]]\nOther\n", false, text("Call the bank tomorrow\nOther"))).toBe(
 			"Call [[Bob|the bank]] tomorrow ![[img.png]]\nOther\n",
 		);
@@ -96,14 +96,14 @@ describe("TickTick's text coming down changes the note as little as it can (SYNC
 		expect(writeNote(note, true, readNote(note, true))).toBe(note);
 	});
 
-	it("a frontmatter with no line ending after it gets one before the body (H1)", () => {
+	it("a frontmatter with no line ending after it gets one before the body", () => {
 		const next = writeNote("---\ntags: x\n---", false, text("New text"));
 		expect(next).toBe("---\ntags: x\n---\nNew text\n");
 		expect(splitFrontmatter(next)).toEqual({ front: "---\ntags: x\n---\n", body: "New text\n" });
 	});
 });
 
-describe("checklist ticks change only the box (B1)", () => {
+describe("checklist ticks change only the box", () => {
 	it("a tick keeps the item's link", () => {
 		expect(down("- [ ] milk [[Store]]\n", tickAt(0))).toBe("- [x] milk [[Store]]\n");
 	});
@@ -132,42 +132,7 @@ describe("checklist ticks change only the box (B1)", () => {
 	});
 });
 
-describe("writing TickTick's text reads back as that text (B2)", () => {
-	const tricky = [
-		"---\nAgenda\n---\nCall the bank",
-		"---",
-		"See [[Plan]] and [[Plan|alias]]",
-		"![[photo.png]]",
-		"Escaped \\[[x]] stays",
-		"```\n[[in code]]\n```\nafter [[x]]",
-		"- [ ] looks like an item",
-		"- \\[ ] escaped item-like",
-		"Line one\n\n\nLine four",
-		"Ends with spaces",
-	];
-	const docs: NoteDoc[] = [
-		...tricky.map(text),
-		...tricky.map((t) => ({ text: t, items: ["- [ ] Bring [[passport]]", "- [x] Print ticket", "- [ ]"] })),
-		{ text: "", items: ["- [ ] only items"] },
-	];
-
-	it.each(docs.map((d) => [JSON.stringify(d), d] as const))("into a new note: %s", (_name, doc) => {
-		const checklist = doc.items.length > 0 || doc.text.startsWith("- \\");
-		const note = writeNote("", checklist, doc);
-		expect(readNote(note, checklist)).toEqual(doc);
-		// A second write changes nothing.
-		expect(writeNote(note, checklist, doc)).toBe(note);
-	});
-
-	it.each(tricky.map((t) => [t] as const))("over an existing note with frontmatter and links: %s", (t) => {
-		const note = "---\ntags: x\n---\nOld [[Link|line]]\n![[img.png]]\n";
-		const next = writeNote(note, false, text(t));
-		expect(readNote(next, false)).toEqual(text(t));
-		expect(next.startsWith("---\ntags: x\n---\n")).toBe(true);
-	});
-});
-
-describe("checklists (SYNC-09)", () => {
+describe("checklists", () => {
 	const tt = {
 		kind: "CHECKLIST",
 		desc: "Trip notes go here.",
@@ -192,7 +157,7 @@ describe("checklists (SYNC-09)", () => {
 		expect(storedBase(text("Plain"), false)).toEqual({ noteBase: "Plain" });
 	});
 
-	it("goes up with every field TickTick gave each item, ticks and titles from the note; a new item has no id (M3)", () => {
+	it("goes up with every field TickTick gave each item, ticks and titles from the note; a new item has no id", () => {
 		const doc = { text: "Notes", items: ["- [x] Bring passport", "- [ ] Pack charger", "- [x] Print ticket"] };
 		expect(ttNoteWrite(doc, true, tt.items)).toEqual({
 			desc: "Notes",
@@ -212,7 +177,7 @@ describe("checklists (SYNC-09)", () => {
 	});
 });
 
-describe("merging checklist items (SYNC-09)", () => {
+describe("merging checklist items", () => {
 	const doc = (...items: string[]): NoteDoc => ({ text: "", items });
 
 	it("ticks on both sides apply", () => {
@@ -231,7 +196,7 @@ describe("merging checklist items (SYNC-09)", () => {
 		]);
 	});
 
-	it("an item replaced here and ticked there is kept in both versions, not renamed (M1)", () => {
+	it("an item replaced here and ticked there is kept in both versions, not renamed", () => {
 		expect(mergeDocs(doc("- [ ] Milk", "- [ ] Bread"), doc("- [ ] Eggs", "- [ ] Bread"), doc("- [x] Milk", "- [ ] Bread")).items).toEqual([
 			"- [ ] Eggs",
 			"- [x] Milk",
@@ -239,7 +204,7 @@ describe("merging checklist items (SYNC-09)", () => {
 		]);
 	});
 
-	it("the same item added on both sides is kept once, whatever its case (M2)", () => {
+	it("the same item added on both sides is kept once, whatever its case", () => {
 		expect(mergeDocs(doc("- [ ] a"), doc("- [ ] a", "- [ ] Eggs"), doc("- [ ] a", "- [ ] eggs")).items).toEqual(["- [ ] a", "- [ ] Eggs"]);
 		expect(mergeDocs(doc("- [ ] a"), doc("- [ ] a", "- [ ] Eggs"), doc("- [ ] a", "- [ ] Eggs")).items).toEqual(["- [ ] a", "- [ ] Eggs"]);
 	});
@@ -256,7 +221,7 @@ describe("merging checklist items (SYNC-09)", () => {
 	});
 });
 
-describe("verification findings (SYNC-09)", () => {
+describe("verification findings", () => {
 	it.each([
 		["Receipt ![[scan.png]]", "Receipt March"],
 		["![[scan.png]] Receipt", "Receipt March"],
@@ -270,7 +235,7 @@ describe("verification findings (SYNC-09)", () => {
 		expect(out).toContain("![[");
 	});
 
-	it("TickTick text with an unclosed code fence does not swallow the note's later lines (L1)", () => {
+	it("TickTick text with an unclosed code fence does not swallow the note's later lines", () => {
 		const note = "Old\n![[pic.png]]\n- [ ] milk\n";
 		const target: NoteDoc = { text: "```\ncode [[x]]", items: ["- [ ] milk"] };
 		const out = writeNote(note, true, target);
@@ -280,7 +245,7 @@ describe("verification findings (SYNC-09)", () => {
 		expect(readNote(plain, false).text).toBe("```\nB");
 	});
 
-	it("an escaped item-like line of a checklist reads as plain text after the task becomes a normal one (L2)", () => {
+	it("an escaped item-like line of a checklist reads as plain text after the task becomes a normal one", () => {
 		const doc = docFromTickTick({ kind: "CHECKLIST", desc: "- [ ] not an item", items: [{ id: "1", title: "real", status: 0 }] });
 		const note = writeNote("", true, doc);
 		expect(readNote(note, true)).toEqual(doc);
@@ -292,7 +257,7 @@ describe("verification findings (SYNC-09)", () => {
 		}
 	});
 
-	it("an item retitled in place keeps its TickTick fields, such as its date; a line removed and one added elsewhere is a new item (L3)", () => {
+	it("an item retitled in place keeps its TickTick fields, such as its date; a line removed and one added elsewhere is a new item", () => {
 		const cur = [
 			{ id: "1", title: "Milk", status: 0, startDate: "d1" },
 			{ id: "2", title: "Bread", status: 0 },
@@ -307,7 +272,7 @@ describe("verification findings (SYNC-09)", () => {
 		]);
 	});
 
-	it("the same item changed on both sides keeps Logwell's title and the tick of the side that changed it (L4)", () => {
+	it("the same item changed on both sides keeps Logwell's title and the tick of the side that changed it", () => {
 		const doc = (...items: string[]): NoteDoc => ({ text: "", items });
 		expect(mergeDocs(doc("- [ ] Milk"), doc("- [ ] milk"), doc("- [x] Milk")).items).toEqual(["- [x] milk"]);
 		expect(mergeDocs(doc("- [x] Milk"), doc("- [ ] milk"), doc("- [x] MILK")).items).toEqual(["- [ ] milk"]);
@@ -324,8 +289,20 @@ describe("verification findings (SYNC-09)", () => {
 		};
 		const pick = <T>(a: readonly T[], n: number): T[] => Array.from({ length: n }, () => a[rnd(a.length)]!);
 		const noteLines = ["A", "B [[Link|b]]", "![[pic.png]]", "", "- [ ] milk", "- [x] eggs [[Store]]", "## H", "```", "code [[x]]", "- \\[ ] esc", "\\[[lit]]", "  indented", "---", "C ![[e.png]] tail", "* [X] star", "Receipt ![[scan.png]]"];
-		const ttLines = ["A", "b", "", "New", "[[raw]]", "![[emb]]", "- [ ] looks item", "```", "---", "x \\[[y", "  sp", "#tag", "B b", "Receipt March", "- \\[ ] esc"];
-		const itemPool = ["- [ ] milk", "- [x] eggs Store", "- [ ] new", "- [ ]", "- [x] [[odd]]", "- [ ] Milk"];
+		// TickTick text that once broke the round trip, whole: frontmatter-like rules, links and embeds, escapes, code
+		// fences, item-like lines and blank-line runs.
+		const tricky = [
+			"---\nAgenda\n---\nCall the bank",
+			"See [[Plan]] and [[Plan|alias]]",
+			"![[photo.png]]",
+			"Escaped \\[[x]] stays",
+			"```\n[[in code]]\n```\nafter [[x]]",
+			"- \\[ ] escaped item-like",
+			"Line one\n\n\nLine four",
+			"Ends with spaces",
+		];
+		const ttLines = ["A", "b", "", "New", "[[raw]]", "![[emb]]", "- [ ] looks item", "```", "---", "x \\[[y", "  sp", "#tag", "B b", "Receipt March", "- \\[ ] esc", ...tricky];
+		const itemPool = ["- [ ] milk", "- [x] eggs Store", "- [ ] new", "- [ ]", "- [x] [[odd]]", "- [ ] Milk", "- [ ] Bring [[passport]]", "- [x] Print ticket"];
 		const failures: unknown[] = [];
 		for (let i = 0; i < 5000 && failures.length < 3; i++) {
 			const checklist = rnd(2) === 0;

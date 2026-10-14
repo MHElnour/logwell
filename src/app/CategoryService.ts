@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
-import { compareSortKeys, keyAfter, keyBetween } from "../domain/sortKey";
+import { keyAfter, rekeyOrder } from "../domain/sortKey";
 import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
@@ -15,33 +15,50 @@ import {
 	tagDisplayPath,
 	tagDisplaySegments,
 	tagLeaf,
+	tagNameClashMessage,
 	tagPath,
 } from "../domain/tags";
-import { assertUniqueCategoryName, categoryNameKey, requireCategoryName, requireColor, requireIconName } from "../domain/tasks";
-import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor } from "../domain/types";
+import {
+	assertUniqueCategoryName,
+	categoryNameKey,
+	compareCategories,
+	listsInSidebarOrder,
+	requireCategoryName,
+	requireColor,
+	requireIconName,
+} from "../domain/tasks";
+import { type Category, type ID, INBOX_ID, type Tag, type TagColor, paletteColor, syncLinkId } from "../domain/types";
 import type { AppStore } from "./store";
+import type { TaskIndex } from "./taskIndex";
 import type { Tx } from "./tx";
 import type { WriteResult } from "./writes";
 
 // Categories (lists) and tags.
 
-function sortedCategories(categories: Iterable<Category>): Category[] {
-	return [...categories].sort((a, b) => compareSortKeys(a.sortKey, b.sortKey));
-}
+/** The store labels of the list commands (each Undo notice and "Undone: …" names its write by one). */
+export const CREATE_LIST_LABEL = "Create list";
+export const EDIT_LIST_LABEL = "Edit list";
+export const LIST_ICON_LABEL = "Change list icon";
+export const LIST_COLOR_LABEL = "Change list color";
+export const REORDER_LISTS_LABEL = "Reorder lists";
+export const DELETE_LIST_LABEL = "Delete list";
 
 export class CategoryService {
 	constructor(
 		private readonly store: AppStore,
 		private readonly ids: IdGenerator,
+		/** The task index: the synced-list cap a delete's move into Inbox obeys, and a list's task count. */
+		private readonly lists: TaskIndex,
 	) {}
 
+	/** The lists in sidebar order, Inbox first. */
 	list(): Category[] {
-		return sortedCategories(this.store.state.categories.values());
+		return listsInSidebarOrder(this.store.state.categories.values());
 	}
 
 	/** Explicit creation from list management only. */
 	create(name: string, icon: string | null = null, color?: TagColor | null): Promise<Category> {
-		return this.store.run("Create category", (tx) => {
+		return this.store.run(CREATE_LIST_LABEL, (tx) => {
 			const clean = requireCategoryName(name);
 			assertUniqueCategoryName(tx.all("categories"), clean, null);
 			const category: Category = {
@@ -64,7 +81,7 @@ export class CategoryService {
 
 	/** The ID and membership stay. Inbox can be renamed for display. */
 	update(id: ID, patch: { name?: string; icon?: string | null }): Promise<Category> {
-		return this.store.run("Edit category", (tx) => {
+		return this.store.run(EDIT_LIST_LABEL, (tx) => {
 			const current = tx.get("categories", id);
 			if (current === undefined) throw new DomainError("NotFound", "The list no longer exists.");
 			const next: Category = { ...current };
@@ -86,7 +103,7 @@ export class CategoryService {
 	 * accepted as is, so a legacy emoji icon can be kept.
 	 */
 	setIcon(id: ID, icon: string | null): Promise<Category> {
-		return this.store.run("Change category icon", (tx) => {
+		return this.store.run(LIST_ICON_LABEL, (tx) => {
 			const current = tx.get("categories", id);
 			if (current === undefined) throw new DomainError("NotFound", "The list no longer exists.");
 			const next = icon === null ? null : icon.trim() || null;
@@ -100,7 +117,7 @@ export class CategoryService {
 
 	/** The list color, or null for the default. */
 	setColor(id: ID, color: TagColor | null): Promise<Category> {
-		return this.store.run("Change category color", (tx) => {
+		return this.store.run(LIST_COLOR_LABEL, (tx) => {
 			const current = tx.get("categories", id);
 			if (current === undefined) throw new DomainError("NotFound", "The list no longer exists.");
 			requireColor(color);
@@ -111,31 +128,36 @@ export class CategoryService {
 		});
 	}
 
-	/** Moves a category one place up or down in the sidebar. */
+	/**
+	 * Moves a list one place up or down among the lists after the Inbox, which stays first. The Inbox does not move,
+	 * and neither does a list at either end: nothing is written. Lists that share a key get new ascending ones.
+	 */
 	move(id: ID, direction: -1 | 1): Promise<void> {
-		return this.store.run("Reorder categories", (tx) => {
-			const list = sortedCategories(tx.all("categories"));
-			const i = list.findIndex((c) => c.id === id);
-			const current = list[i];
-			if (current === undefined) return;
+		return this.store.run(REORDER_LISTS_LABEL, (tx) => {
+			const order = listsInSidebarOrder(tx.all("categories")).filter((c) => c.id !== INBOX_ID);
+			const i = order.findIndex((c) => c.id === id);
 			const target = i + direction;
-			if (target < 0 || target >= list.length) return;
-			const lo = direction < 0 ? (list[target - 1]?.sortKey ?? null) : (list[target]?.sortKey ?? null);
-			const hi = direction < 0 ? (list[target]?.sortKey ?? null) : (list[target + 1]?.sortKey ?? null);
-			tx.put("categories", { ...current, sortKey: keyBetween(lo, hi), modifiedAt: tx.now });
+			if (i < 0 || target < 0 || target >= order.length) return;
+			[order[i], order[target]] = [order[target]!, order[i]!];
+			for (const [c, sortKey] of rekeyOrder(order, target, [], compareCategories)) {
+				if (sortKey !== c.sortKey) tx.put("categories", { ...c, sortKey, modifiedAt: tx.now });
+			}
 		});
 	}
 
 	/** Tasks (open and completed) that a delete would move, for the delete prompt. */
 	taskCount(id: ID): number {
-		let n = 0;
-		for (const t of this.store.state.tasks.values()) if (t.categoryId === id) n++;
-		return n;
+		const tasks = this.store.state.tasks;
+		return this.lists.tasksOf((tid) => tasks.get(tid), id).length;
 	}
 
-	/** Tasks move to Inbox in the same write; undo restores both. */
+	/**
+	 * Tasks move to Inbox in the same write; undo restores both. Refused when the move would take a synced Inbox past
+	 * its open-task cap. A list linked to TickTick is unlinked in the same write (its link and its sections' links go);
+	 * its tasks keep their links, so the next sync treats them as moved to the Inbox.
+	 */
 	delete(id: ID): Promise<number> {
-		return this.store.run("Delete category", (tx) => {
+		return this.store.run(DELETE_LIST_LABEL, (tx) => {
 			if (id === INBOX_ID) throw new DomainError("InboxProtected", "The Inbox cannot be deleted.");
 			if (tx.get("categories", id) === undefined) throw new DomainError("NotFound", "The list no longer exists.");
 			let moved = 0;
@@ -145,8 +167,14 @@ export class CategoryService {
 				tx.put("tasks", { ...t, categoryId: INBOX_ID, sectionId: null, modifiedAt: tx.now });
 				moved++;
 			}
-			for (const s of tx.all("sections")) if (s.categoryId === id) tx.remove("sections", s.id);
+			for (const s of tx.all("sections")) {
+				if (s.categoryId !== id) continue;
+				tx.remove("sections", s.id);
+				tx.remove("syncLinks", syncLinkId("section", s.id));
+			}
+			tx.remove("syncLinks", syncLinkId("list", id));
 			tx.remove("categories", id);
+			this.lists.assertSyncedRoom(tx);
 			return moved;
 		});
 	}
@@ -209,7 +237,7 @@ export class TagService {
 
 	/**
 	 * `create` inside the caller's transaction (Quick Add makes its new tags in the task's write). A missing parent is
-	 * created first, with the next palette color (rule 26); `color` is the new tag's own.
+	 * created first, in the same write, with the next palette color; `color` is the new tag's own.
 	 */
 	static createIn(tx: Tx, raw: string, color?: TagColor | null): Tag {
 		const key = requireTagKey(raw);
@@ -276,6 +304,8 @@ export class TagService {
 		return this.store.run(EDIT_TAG_LABEL, (tx) => {
 			const tag = tx.get("tags", key);
 			if (tag === undefined) throw new DomainError("NotFound", "The tag no longer exists.");
+			// The color it has already: nothing is written, so there is no Undo entry either.
+			if (tag.color === color) return;
 			tx.put("tags", { ...tag, color, modifiedAt: tx.now });
 		});
 	}
@@ -323,7 +353,7 @@ export class TagService {
 				const c = t.key === key ? color : t.color;
 				if (k === t.key && display === t.displayName && c === t.color) continue;
 				if (k !== t.key) keyMoves.set(t.key, k);
-				// createdAt stays: it is what a tag owns its name by (rule 22).
+				// createdAt stays: among tags that share a name, the oldest owns it.
 				next.push({ ...t, key: k, displayName: display, color: c, modifiedAt: tx.now });
 			}
 			if (next.length === 0) return { wrote: false, label, key };
@@ -342,7 +372,8 @@ export class TagService {
 
 	/**
 	 * Removes the tag and its key from every task, including tasks in Trash, in one write. Its child tags move to the
-	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task in the same write (rule 28). `tasks` counts
+	 * top level (`home/calls` becomes `calls`, createdAt kept) on every task, trashed ones too, in the same write. A child whose
+	 * name is already a top-level tag (two tags of one name from an older file) refuses the delete, as a rename would. `tasks` counts
 	 * the live tasks changed; `moves` lists the children moved; `wrote` is false when there was nothing to remove (the
 	 * tag was already gone and unused).
 	 */
@@ -352,8 +383,14 @@ export class TagService {
 			const keyMoves = new Map<string, string | null>([[key, null]]);
 			const moves: TagMove[] = [];
 			const children = tx.all("tags").filter((t) => t.key !== key && isUnderTag(t.key, key));
+			const tags = tx.map("tags");
+			// The tag each top-level key goes to; a child never lands on another tag (two tags are never merged).
+			const holders = new Map<string, string>();
 			for (const t of children.sort((a, b) => (a.key < b.key ? -1 : 1))) {
 				const to = tagLeaf(t.key);
+				const holder = to !== key && tags.has(to) ? to : holders.get(to);
+				if (holder !== undefined) throw new DomainError("InvalidTag", tagNameClashMessage(tags, holder));
+				holders.set(to, t.key);
 				keyMoves.set(t.key, to);
 				moves.push({ from: t.key, to });
 			}

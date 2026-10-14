@@ -164,7 +164,7 @@ export function findRepeatCounts(s: string, from: number, taken: Taken): RepeatC
 
 const NOT_WORD_AFTER = "(?![\\p{L}\\p{N}])";
 
-// -- the repeat grammar (Repeating tasks rule 19, Tasks and Quick Add rule 40) ---------------------------------------
+// -- the repeat grammar: the closed table of repeat phrases Quick Add reads; outside it nothing applies ------------
 // A typed repeat is `every` + a form Quick Add builds (EVERY_RE) + an optional `at <time>`; a bare word (BARE_RE) is the
 // same form without `every`. The phrase ends there: whatever follows (a comma, a date, a range, a time, a lead word,
 // title text) is read by the date reader and the end logic. Two things make an `every …` unsupported, never a date: no
@@ -230,7 +230,7 @@ const EVERY_MONTH_RE = new RegExp(`every\\s+(?!${RANGE_START})${MONTH_PATTERN}(?
 // A list word or "except" after a form: what joins a compound repeat ("every 2nd and 4th tuesday", "every monday & 2
 // others", "every day except sunday").
 const JOIN_RE = new RegExp(`${LIST_SEP_PATTERN}|\\s+except\\s+`, "iyu");
-// The words of a repeat (rule 40): a number, number word or ordinal, a weekday, a period or unit, a day part, "others"
+// The words of a repeat: a number, number word or ordinal, a weekday, a period or unit, a day part, "others"
 // ("& 2 others").
 const REPEAT_WORD_RE = new RegExp(`^(?:\\d+(?:st|nd|rd|th)?|${NUMBER_WORD_PATTERN}|${ORDINAL_PATTERN}|${WEEKDAY_PATTERN}|${UNIT_PATTERN}|${DAY_PART_PATTERN}s?|others)$`, "iu");
 // A run of plain numbers and glue after a list word is title text, not a compound repeat ("every day, 20 pages").

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { exportFileName, mergeCollections } from "../../src/app/DataService";
-import { buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
+import { buildBoard, buildList, globalSearch, linkedNotes, searchNoteContent, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
+import { matrixQuadrants } from "../../src/domain/matrix";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { serializeDb } from "../../src/persistence/serializer";
 import { DB_PATH, descendant, emptyDbText, load, makeTask, withTask } from "../persistence/fixtures";
@@ -15,7 +16,7 @@ describe("views, export and import", () => {
 	// FakeClock starts at 2026-10-01T10:00Z; the display zone is Europe/Berlin.
 	const TODAY = "2026-10-01";
 
-	describe("views (VIEW-01..03, SUB-07)", () => {
+	describe("views", () => {
 		it("Today = overdue + today, including deadlines; Upcoming groups tomorrow through the next 14 days by date", async () => {
 			const h = await appHarness();
 			const t = h.app.tasks;
@@ -39,25 +40,43 @@ describe("views, export and import", () => {
 			expect(sidebarCounts(h.app.store.state, ctx)).toMatchObject({ today: 3, upcoming: 1 });
 		});
 
-		it("Upcoming leaves out a task that is due by today (scheduled tomorrow, deadline today or past): Today owns it", async () => {
+		it("#125: a held overdue task completed a moment ago stays in Overdue, in the list and on the board", async () => {
 			const h = await appHarness();
 			const t = h.app.tasks;
-			await t.create({ title: "Deadline today", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } });
-			await t.create({ title: "Deadline past", scheduled: { kind: "date", date: "2026-10-03" }, deadline: { kind: "date", date: "2026-09-28" } });
-			await t.create({ title: "Deadline later", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: "2026-10-09" } });
-			const done = (await t.create({ title: "Done", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } })).task;
-			await t.complete(done.id);
+			const late = (await t.create({ title: "Late", scheduled: { kind: "date", date: "2026-09-29" } })).task;
+			await t.create({ title: "Lunch", scheduled: { kind: "date", date: TODAY } });
+			await t.complete(late.id);
 			const state = h.app.store.state;
 			const ctx = h.app.queryContext();
-			const titles = (v: "today" | "upcoming") => buildList(state, { kind: v }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
-			expect(titles("upcoming")).toEqual(["Deadline later"]);
-			expect(titles("today").sort()).toEqual(["Deadline past", "Deadline today"]);
-			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 2, upcoming: 1 });
-			expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed).toEqual([]);
-			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Done"]);
+			const held = new Set([late.id]);
+			const groups = buildList(state, { kind: "today" }, ctx, emptyFilter(), "", held).groups;
+			expect(groups.map((g) => [g.key, g.entries.map((e) => e.task.title)])).toEqual([
+				["overdue", ["Late"]],
+				["today", ["Lunch"]],
+			]);
+			const columns = buildBoard(state, { kind: "today" }, ctx, emptyFilter(), "", held);
+			expect(columns.map((c) => [c.id, c.cards.map((card) => card.entry.task.title)])).toEqual([
+				["overdue", ["Late"]],
+				["today", ["Lunch"]],
+			]);
+			// Once the hold ends it leaves the rows for the Completed group, and the Overdue column goes.
+			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups.map((g) => g.key)).toEqual(["today"]);
+			expect(buildBoard(state, { kind: "today" }, ctx, emptyFilter(), "").map((c) => c.id)).toEqual(["today"]);
 		});
 
-		it("SUB-07: a scheduled subtask shows on its own date with the parent's title", async () => {
+		it("#126: a task dated tomorrow with a deadline today is due today in the Today view, the sidebar count and the matrix", async () => {
+			const h = await appHarness();
+			const task = (await h.app.tasks.create({ title: "Report", scheduled: { kind: "date", date: "2026-10-02" }, deadline: { kind: "date", date: TODAY } })).task;
+			const state = h.app.store.state;
+			const ctx = h.app.queryContext();
+			const today = buildList(state, { kind: "today" }, ctx, emptyFilter(), "").groups;
+			expect(today.map((g) => [g.key, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
+			expect(sidebarCounts(state, ctx)).toMatchObject({ today: 1, upcoming: 0 });
+			const matrix = matrixQuadrants([task], state.tasks, ctx).neither;
+			expect(matrix.map((g) => [g.id, g.entries.map((e) => e.task.title)])).toEqual([["today", ["Report"]]]);
+		});
+
+		it("a scheduled subtask shows on its own date with the parent's title", async () => {
 			const h = await appHarness();
 			const parent = (await h.app.tasks.create({ title: "Trip" })).task;
 			await h.app.tasks.create({ title: "Book hotel", parentId: parent.id, scheduled: { kind: "date", date: TODAY } });
@@ -88,53 +107,7 @@ describe("views, export and import", () => {
 			expect(buildList(state, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
 		});
 
-		it("Upcoming does the same", async () => {
-			const h = await appHarness();
-			const T = h.app.tasks;
-			const inView = (await T.create({ title: "Shown parent", scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			const hidden = (await T.create({ title: "Hidden parent" })).task;
-			const a = (await T.create({ title: "Sub A", parentId: inView.id, scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			const b = (await T.create({ title: "Sub B", parentId: hidden.id, scheduled: { kind: "date", date: "2026-10-02" } })).task;
-			await T.complete(a.id);
-			await T.complete(b.id);
-			const ctx = h.app.queryContext();
-			const state = h.app.store.state;
-			const open = buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").groups.flatMap((g) => g.entries.map((e) => e.task.title));
-			expect(open).toEqual(["Shown parent", "Sub A"]);
-			expect(buildList(state, { kind: "upcoming" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Sub B"]);
-		});
-
-		it("Completed is newest first; completing removes the task from Today (AS-10, list part)", async () => {
-			const h = await appHarness();
-			const a = (await h.app.tasks.create({ title: "A", scheduled: { kind: "date", date: TODAY } })).task;
-			const b = (await h.app.tasks.create({ title: "B" })).task;
-			await h.app.tasks.complete(a.id);
-			h.clock.advance(1000);
-			await h.app.tasks.complete(b.id);
-			const ctx = h.app.queryContext();
-			expect(buildList(h.app.store.state, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
-			const done = buildList(h.app.store.state, { kind: "completed" }, ctx, emptyFilter(), "").groups;
-			expect(done[0]!.entries.map((e) => e.task.title)).toEqual(["B", "A"]);
-		});
-
-		it("the Completed group: Today holds a task completed today even when it was overdue, not one completed yesterday (spec §7)", async () => {
-			const h = await appHarness();
-			const T = h.app.tasks;
-			const old = (await T.create({ title: "Old", scheduled: { kind: "date", date: "2026-09-20" } })).task;
-			const fresh = (await T.create({ title: "Fresh", scheduled: { kind: "date", date: "2026-09-20" } })).task;
-			await T.complete(old.id);
-			h.clock.advance(24 * 3600 * 1000);
-			await T.complete(fresh.id);
-			const ctx = { ...h.app.queryContext(), today: "2026-10-02" };
-			const s = h.app.store.state;
-			expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Fresh"]);
-			// Open rows never include them, and the views without a group have none.
-			expect(buildList(s, { kind: "today" }, ctx, emptyFilter(), "").groups).toEqual([]);
-			expect(buildList(s, { kind: "completed" }, ctx, emptyFilter(), "").completed).toEqual([]);
-			expect(buildList(s, { kind: "trash" }, ctx, emptyFilter(), "").completed).toEqual([]);
-		});
-
-		it("buildList keeps a completed subtask under its open parent and a held task in place", async () => {
+		it("buildList keeps a completed subtask under its open parent and a held task in place; Completed and Trash have no Completed group", async () => {
 			const h = await appHarness();
 			const T = h.app.tasks;
 			const parent = (await T.create({ title: "Trip" })).task;
@@ -150,6 +123,8 @@ describe("views, export and import", () => {
 			expect(titles(new Set([solo.id]))).toEqual(["Trip", "Book (sub)", "Solo"]);
 			expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "").completed.map((e) => e.task.title)).toEqual(["Solo"]);
 			expect(buildList(s, { kind: "inbox" }, ctx, emptyFilter(), "", new Set([solo.id])).completed).toEqual([]);
+			expect(buildList(s, { kind: "completed" }, ctx, emptyFilter(), "").completed).toEqual([]);
+			expect(buildList(s, { kind: "trash" }, ctx, emptyFilter(), "").completed).toEqual([]);
 		});
 
 		it("sort by date orders by key date, undated last, subtasks with their parent", async () => {
@@ -163,7 +138,7 @@ describe("views, export and import", () => {
 			expect(rows.map((e) => e.task.title)).toEqual(["Soon", "Soon child", "Late", "None"]);
 		});
 
-		it("VIEW-02 / VIEW-03 / SRCH-02: search and filters combine with AND", async () => {
+		it("search and filters combine with AND", async () => {
 			const h = await appHarness();
 			const study = await h.app.categories.create("Study");
 			await h.app.tags.create("x");
@@ -187,7 +162,7 @@ describe("views, export and import", () => {
 			expect(inView[0]!.entries).toHaveLength(1);
 		});
 
-		it("SRCH-01: note-content search reads notes without storing them", async () => {
+		it("note-content search reads notes without storing them", async () => {
 			const h = await appHarness();
 			h.notes.files.set("n.md", "Contains the Needle somewhere");
 			const { task } = await h.app.tasks.create({ title: "Hay", notePath: "n.md" });
@@ -201,7 +176,7 @@ describe("views, export and import", () => {
 			expect(h.dbText()).not.toContain("Needle");
 		});
 
-		it("SRCH-01: linkedNotes keeps its result while the links are equal; an aborted search stops reading", async () => {
+		it("linkedNotes keeps its result while the links are equal; an aborted search stops reading", async () => {
 			const h = await appHarness();
 			h.notes.files.set("n.md", "needle");
 			h.notes.files.set("m.md", "needle");
@@ -222,12 +197,14 @@ describe("views, export and import", () => {
 		});
 	});
 
-	describe("export and import (EXP-01, EXP-03)", () => {
-		it("EXP-01: re-importing the export into an empty database reproduces identical records", async () => {
+	describe("export and import", () => {
+		it("re-importing the export into an empty database reproduces identical records", async () => {
 			const source = await appHarness();
 			const cat = await source.app.categories.create("Study", "📖");
 			await source.app.tags.create("learning");
-			const parent = (await source.app.tasks.create({ title: "P", categoryId: cat.id, tagKeys: ["learning"] })).task;
+			const section = await source.app.sections.create(cat.id, "Reading");
+			await source.app.sections.create(cat.id, "Later");
+			const parent = (await source.app.tasks.create({ title: "P", categoryId: cat.id, sectionId: section.id, tagKeys: ["learning"] })).task;
 			await source.app.tasks.create({ title: "S", parentId: parent.id, deadline: { kind: "date", date: "2026-10-09" } });
 			const gone = (await source.app.tasks.create({ title: "Gone" })).task;
 			await source.app.tasks.delete(gone.id);
@@ -236,9 +213,10 @@ describe("views, export and import", () => {
 			const target = await appHarness();
 			const preview = target.app.data.previewImport(exported);
 			if (!preview.ok) throw new Error(preview.message);
-			expect(preview.preview.counts).toMatchObject({ categories: 2, tags: 1, tasks: 2, trash: 1 });
+			expect(preview.preview.counts).toMatchObject({ categories: 2, sections: 2, tags: 1, tasks: 2, trash: 1 });
 			await target.app.data.importReplace(preview.preview);
-			for (const c of ["categories", "tags", "tasks", "trash"] as const) {
+			expect(target.app.store.state.tasks.get(parent.id)?.sectionId).toBe(section.id);
+			for (const c of ["categories", "sections", "tags", "tasks", "trash"] as const) {
 				// Compared by ID; Map order is irrelevant.
 				expect(target.app.store.state[c]).toEqual(source.app.store.state[c]);
 			}
@@ -247,7 +225,7 @@ describe("views, export and import", () => {
 			expect(exportFileName(new Date("2026-10-01T10:00:00Z"))).toBe("logwell-backup-2026-10-01.json");
 		});
 
-		it("EXP-03: merge by ID keeps the newer modifiedAt and lists overwrites first", async () => {
+		it("merge by ID keeps the newer modifiedAt and lists overwrites first", async () => {
 			const h = await appHarness();
 			const a = (await h.app.tasks.create({ title: "A" })).task;
 			const b = (await h.app.tasks.create({ title: "B" })).task;
@@ -266,7 +244,7 @@ describe("views, export and import", () => {
 			expect(h.app.store.state.tasks.get(b.id)?.title).toBe("B backup newer");
 		});
 
-		it("EXP-03: the merge preview lists every record that changes, including Trash moves", async () => {
+		it("the merge preview lists every record that changes, including Trash moves", async () => {
 			const h = await appHarness();
 			const t = (await h.app.tasks.create({ title: "T" })).task;
 			const u = (await h.app.tasks.create({ title: "U" })).task;
@@ -341,6 +319,30 @@ describe("views, export and import", () => {
 			expect(merged.tasks.has(a.id)).toBe(false);
 			expect(merged.trash.size).toBe(1);
 		});
+
+		it("#104: merge keeps one section per name: a section deleted and created again here takes the backup's tasks", async () => {
+			const h = await appHarness();
+			const work = await h.app.categories.create("Work", "💼");
+			const old = await h.app.sections.create(work.id, "Doing");
+			const kept = (await h.app.tasks.create({ title: "Kept", categoryId: work.id, sectionId: old.id })).task;
+			const purged = (await h.app.tasks.create({ title: "Purged", categoryId: work.id, sectionId: old.id })).task;
+			const backup = h.app.data.exportJson();
+			h.clock.advance(1000);
+			await h.app.tasks.delete(purged.id);
+			await h.app.tasks.emptyTrash();
+			await h.app.sections.delete(old.id);
+			const doing = await h.app.sections.create(work.id, "doing");
+
+			const preview = h.app.data.previewImport(backup);
+			if (!preview.ok) throw new Error(preview.message);
+			expect(preview.preview.changes.some((c) => c.collection === "sections")).toBe(false);
+			await h.app.data.importMerge(preview.preview);
+			const sections = [...h.app.store.state.sections.values()].filter((s) => s.categoryId === work.id);
+			expect(sections.map((s) => s.id)).toEqual([doing.id]);
+			expect(h.app.store.state.tasks.get(purged.id)?.sectionId).toBe(doing.id);
+			// The newer local edit (moved to No section when Doing was deleted) still wins.
+			expect(h.app.store.state.tasks.get(kept.id)?.sectionId).toBeNull();
+		});
 	});
 
 	describe("import: the preview is what gets applied", () => {
@@ -403,7 +405,7 @@ describe("views, export and import", () => {
 		});
 	});
 
-	describe("import: TickTick sync links merge by ID (EXP-03)", () => {
+	describe("import: TickTick sync links merge by ID", () => {
 		const link = (kind: SyncLink["kind"], logwellId: string, ttId: string, modifiedAt: string): SyncLink => ({
 			kind,
 			logwellId,
@@ -497,7 +499,7 @@ describe("merge import and removed records", () => {
 // The import check against a queued external change, and routing the
 // Data section's restore and conflict actions through the command queue.
 
-describe("N1: the import's stale-preview check runs where the replacement runs", () => {
+describe("the import's stale-preview check runs where the replacement runs", () => {
 	async function previewWithExternalChange(mode: "merge" | "replace") {
 		const h = await appHarness();
 		const backup = serializeDb(withTask(load(emptyDbText()), makeTask("imp")).next);

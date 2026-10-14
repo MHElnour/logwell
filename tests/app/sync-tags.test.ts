@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { TickTickError } from "../../src/app/ports";
-import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/SyncService";
+import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/syncModel";
 import { tagNamesOf } from "../../src/domain/tags";
 import { isSyncedTag } from "../../src/domain/ticktick/tags";
 import { syncLinkId } from "../../src/domain/types";
-import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
+import { linkedList, pushes, quiet, type SyncHarness, syncHarness } from "./sync-harness";
 
 describe("tags both ways", () => {
 	// Tags sync both ways. A TickTick task carries lowercase tag names (the leaf, never a
 	// path); the sync makes sure TickTick has a tag record for each (parent first), reads TickTick's tags at most once
 	// per sync, and merges the set of names per field like any other field.
-
-	const pushes = (s: SyncHarness) => s.tt.count("batchTasks") + s.tt.count("updateTask") + s.tt.count("createTask") + s.tt.count("createTag");
 
 	async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
 		const s = await syncHarness();
@@ -36,10 +34,7 @@ describe("tags both ways", () => {
 			expect(creates.indexOf("createTag:home")).toBeLessThan(creates.indexOf("createTag:calls"));
 			expect(s.tt.count("listTags")).toBe(1);
 			// Stable: nothing more to do.
-			const n = pushes(s);
-			s.tick();
-			await s.sync.sync();
-			expect(pushes(s)).toBe(n);
+			await quiet(s);
 			expect(s.tt.count("listTags")).toBe(1);
 		});
 
@@ -56,6 +51,17 @@ describe("tags both ways", () => {
 			s.tick();
 			await s.sync.sync();
 			expect(s.tt.calls.filter((c) => c.startsWith("createTag:"))).toEqual(["createTag:home", "createTag:garden"]);
+		});
+
+		it("finds a TickTick tag whose name differs from its key only by an @ or surrounding spaces", async () => {
+			const s = await setup();
+			s.tt.tags.set("@calls", { name: "@calls", label: "Calls" });
+			s.tt.tags.set(" errands ", { name: " errands ", label: "Errands" });
+			await s.h.app.tags.create("Calls");
+			await s.h.app.tags.create("Errands");
+			await s.h.app.tasks.create({ title: "Ring mum", categoryId: s.listId, tagKeys: ["calls", "errands"] });
+			await s.sync.sync();
+			expect(s.tt.calls.filter((c) => c.startsWith("createTag:"))).toEqual([]);
 		});
 
 		it("removing a task's tags reads no TickTick tags", async () => {
@@ -111,15 +117,12 @@ describe("tags both ways", () => {
 			const names = tagNamesOf(s.h.app.store.state.tags);
 			expect(isSyncedTag(names, "work/calls")).toBe(false);
 			expect(isSyncedTag(names, "plain")).toBe(true);
-			const n = pushes(s);
-			s.tick();
-			await s.sync.sync();
-			expect(pushes(s)).toBe(n);
+			await quiet(s);
 			// The Logwell task keeps its tags.
 			expect(s.task("Ring the office").tagKeys).toEqual(["work/calls", "plain"]);
 		});
 
-		it("a tag record TickTick refuses stops that list only (SYNC-12), and the next sync sends it", async () => {
+		it("a tag record TickTick refuses stops that list only, and the next sync sends it", async () => {
 			const s = await setup();
 			const other = await linkedList(s, "Home");
 			await s.h.app.tags.create("Bills");
@@ -176,10 +179,7 @@ describe("tags both ways", () => {
 			expect(s.tt.count("listTags")).toBe(1);
 			expect(s.tt.count("createTag")).toBe(0);
 			// Nothing to push back.
-			const n = pushes(s);
-			s.tick();
-			await s.sync.sync();
-			expect(pushes(s)).toBe(n);
+			await quiet(s);
 		});
 
 		it("an unknown name with no TickTick record becomes a tag of that name", async () => {
@@ -290,7 +290,7 @@ describe("tags both ways", () => {
 		});
 	});
 
-	describe("merge (SYNC-07)", () => {
+	describe("merge", () => {
 		it("tags changed on both sides keep Logwell's and make TickTick's version a copy", async () => {
 			const s = await setup();
 			await s.h.app.tags.create("Bills");
@@ -364,11 +364,9 @@ describe("tags both ways", () => {
 });
 
 describe("after a tag rename", () => {
-	// Renaming a tag in Logwell renames nothing in TickTick (TickTick sync rule 6): its tasks go up once with the new
+	// Renaming a tag in Logwell renames nothing in TickTick: its tasks go up once with the new
 	// name, the old TickTick tag stays, the next sync is quiet, and a TickTick task still carrying the old name brings it
 	// back as a new Logwell tag.
-
-	const taskPushes = (s: SyncHarness) => s.tt.count("batchTasks") + s.tt.count("updateTask") + s.tt.count("createTask");
 
 	async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
 		const s = await syncHarness();
@@ -387,10 +385,10 @@ describe("after a tag rename", () => {
 			expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["calls"]);
 			const oldTag = s.tt.tags.get("calls");
 			await s.h.app.tags.edit("calls", { name: "Phone", parentKey: null, color: null });
-			const before = taskPushes(s);
+			const before = pushes(s);
 			const r = await s.sync.sync();
 			expect(r.ok).toBe(true);
-			expect(taskPushes(s) - before).toBe(1);
+			expect(pushes(s) - before).toBe(1);
 			expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["phone"]);
 			expect(s.tt.tags.get("phone")).toEqual({ name: "phone", label: "Phone" });
 			// Nothing is renamed or deleted in TickTick.
@@ -400,12 +398,7 @@ describe("after a tag rename", () => {
 			expect(s.h.app.store.state.tags.has("calls")).toBe(false);
 			expect(s.task("Ring mum").tagKeys).toEqual(["phone"]);
 
-			s.tick();
-			const settled = taskPushes(s);
-			const tagCreates = s.tt.count("createTag");
-			await s.sync.sync();
-			expect(taskPushes(s)).toBe(settled);
-			expect(s.tt.count("createTag")).toBe(tagCreates);
+			await quiet(s);
 			expect(s.h.app.store.state.tags.has("calls")).toBe(false);
 		});
 
@@ -422,10 +415,7 @@ describe("after a tag rename", () => {
 			// The pull leaves the moved key alone: it does not bring back a top-level "calls".
 			expect(s.task("Ring mum").tagKeys).toEqual(["home/calls"]);
 			expect(s.h.app.store.state.tags.has("calls")).toBe(false);
-			s.tick();
-			const settled = taskPushes(s);
-			await s.sync.sync();
-			expect(taskPushes(s)).toBe(settled);
+			await quiet(s);
 			expect(s.task("Ring mum").tagKeys).toEqual(["home/calls"]);
 		});
 
@@ -452,10 +442,7 @@ describe("after a tag rename", () => {
 			expect(s.tt.get(s.ttIdOf("Ring mum"))?.tags).toEqual(["phone"]);
 			expect(s.tt.get(s.ttIdOf("Ring the office"))?.tags).toEqual(["calls"]);
 			expect(s.task("Ring the office").tagKeys).toEqual(["work/calls"]);
-			s.tick();
-			const settled = taskPushes(s);
-			await s.sync.sync();
-			expect(taskPushes(s)).toBe(settled);
+			await quiet(s);
 		});
 
 		it("a TickTick task that still carries the old name brings it back as a new tag", async () => {
@@ -473,11 +460,9 @@ describe("after a tag rename", () => {
 });
 
 describe("after a parent tag delete", () => {
-	// Deleting a parent tag changes nothing in TickTick (TickTick sync rule 6): its child tags keep their names, so their
+	// Deleting a parent tag changes nothing in TickTick: its child tags keep their names, so their
 	// tasks are not sent again, and no TickTick tag is renamed or deleted. A task that held the parent goes up once
-	// without it. Pulling a nested TickTick name creates the Logwell parent tag first (Lists, sections and tags rule 26).
-
-	const taskPushes = (s: SyncHarness) => s.tt.count("batchTasks") + s.tt.count("updateTask") + s.tt.count("createTask");
+	// without it. Pulling a nested TickTick name creates the Logwell parent tag first.
 
 	async function setup(): Promise<SyncHarness & { listId: string; projectId: string }> {
 		const s = await syncHarness();
@@ -505,10 +490,10 @@ describe("after a parent tag delete", () => {
 			await s.h.app.tags.delete("home");
 			expect(s.task("Ring mum").tagKeys).toEqual(["calls"]);
 			expect(s.task("Tidy").tagKeys).toEqual(["calls"]);
-			const before = taskPushes(s);
+			const before = pushes(s);
 			const r = await s.sync.sync();
 			expect(r.ok).toBe(true);
-			expect(taskPushes(s) - before).toBe(1);
+			expect(pushes(s) - before).toBe(1);
 			expect(s.tt.get(s.ttIdOf("Tidy"))?.tags).toEqual(["calls"]);
 			// The child tags' tasks are not sent again.
 			expect(s.tt.get(s.ttIdOf("Ring mum"))).toEqual(ring);
@@ -520,12 +505,7 @@ describe("after a parent tag delete", () => {
 			// The pull does not bring the parent back.
 			expect(s.h.app.store.state.tags.has("home")).toBe(false);
 
-			s.tick();
-			const settled = taskPushes(s);
-			const tagCreates = s.tt.count("createTag");
-			await s.sync.sync();
-			expect(taskPushes(s)).toBe(settled);
-			expect(s.tt.count("createTag")).toBe(tagCreates);
+			await quiet(s);
 			expect(s.task("Ring mum").tagKeys).toEqual(["calls"]);
 			expect([...s.h.app.store.state.tags.keys()].sort()).toEqual(["calls", "garden"]);
 		});

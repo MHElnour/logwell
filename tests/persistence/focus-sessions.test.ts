@@ -39,7 +39,7 @@ function loaded(text: string) {
 	return r;
 }
 
-describe("focus sessions in the file (D1)", () => {
+describe("focus sessions in the file", () => {
 	it("adds no schema version of its own", () => {
 		expect(CURRENT_SCHEMA_VERSION).toBe(6); // other features bumped it; focus sessions added none
 	});
@@ -63,7 +63,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(serializeDb(r.data)).toBe(text);
 	});
 
-	it("orders the keys of a record as in spec §17.2", () => {
+	it("orders the keys of a record as the file format orders them", () => {
 		const base = load(emptyDbText());
 		const text = serializeDb({ ...base, focusSessions: new Map([["f-1", session("f-1")]]) });
 		const line = text.split("\n").find((l) => l.includes('"id":"f-1"'))!;
@@ -136,7 +136,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(r.data.focusSessions.get("f-1")).toMatchObject({ taskId: null, splitFrom: null, unobserved: [] });
 	});
 
-	it("keeps extra fields on segments, like gaps (A7)", () => {
+	it("keeps extra fields on segments, like gaps", () => {
 		const s0 = session("f-1");
 		const seg = { ...s0.segments[0], device: "d-future" };
 		const r = loaded(withRaw([{ ...s0, segments: [seg] }]));
@@ -144,12 +144,12 @@ describe("focus sessions in the file (D1)", () => {
 		expect(serializeDb(r.data)).toContain('"device":"d-future"');
 	});
 
-	it("reads an empty taskId as no task (A7)", () => {
+	it("reads an empty taskId as no task", () => {
 		const r = loaded(withRaw([{ ...session("f-1"), taskId: "" }]));
 		expect(r.data.focusSessions.get("f-1")?.taskId).toBeNull();
 	});
 
-	it("P3: a record with setId and setRounds round-trips byte for byte, next to splitFrom", () => {
+	it("a record with setId and setRounds round-trips byte for byte, next to splitFrom", () => {
 		const base = load(emptyDbText());
 		const text = serializeDb({ ...base, focusSessions: new Map([["f-1", session("f-1", { setId: "set-1", setRounds: 4, status: "completed" })]]) });
 		const line = text.split("\n").find((l) => l.includes('"id":"f-1"'))!;
@@ -160,7 +160,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(serializeDb(r.data)).toBe(text);
 	});
 
-	it("P2: setRound round-trips after setRounds; an unreadable one is dropped with an issue", () => {
+	it("setRound round-trips after setRounds; an unreadable one is dropped with an issue", () => {
 		const base = load(emptyDbText());
 		const text = serializeDb({ ...base, focusSessions: new Map([["f-1", session("f-1", { setId: "set-1", setRounds: 4, setRound: 3, status: "completed" })]]) });
 		expect(text.split("\n").find((l) => l.includes('"id":"f-1"'))).toContain('"setRounds":4,"setRound":3');
@@ -173,14 +173,14 @@ describe("focus sessions in the file (D1)", () => {
 		expect(bad.issues.length).toBe(1);
 	});
 
-	it("P2: a round number above the set size is dropped with an issue (hand-edited files)", () => {
+	it("a round number above the set size is dropped with an issue (hand-edited files)", () => {
 		const r = loaded(withRaw([{ ...session("f-1"), setId: "s", setRounds: 4, setRound: 1000000000 }]));
 		expect(r.data.focusSessions.get("f-1")!.setRound).toBeUndefined();
 		expect(r.data.focusSessions.get("f-1")!.setRounds).toBe(4);
 		expect(r.issues.length).toBe(1);
 	});
 
-	it("P3: an old record without them loads without the keys and writes back byte for byte", () => {
+	it("an old record without them loads without the keys and writes back byte for byte", () => {
 		const base = load(emptyDbText());
 		const text = serializeDb({ ...base, focusSessions: new Map([["f-1", session("f-1")]]) });
 		expect(text).not.toContain("setId");
@@ -193,7 +193,7 @@ describe("focus sessions in the file (D1)", () => {
 		expect(CURRENT_SCHEMA_VERSION).toBe(6); // other features bumped it; focus sessions added none
 	});
 
-	it("P3: an unreadable setId or setRounds is dropped with an issue", () => {
+	it("an unreadable setId or setRounds is dropped with an issue", () => {
 		const r = loaded(withRaw([{ ...session("f-1"), setId: 7, setRounds: "four" }]));
 		const rec = r.data.focusSessions.get("f-1")!;
 		expect(rec.setId).toBeUndefined();

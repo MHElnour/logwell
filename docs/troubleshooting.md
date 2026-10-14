@@ -26,15 +26,23 @@ When Logwell knows the database's id, from the file's header or from this device
 
 To repair the file yourself, fix it and Logwell loads it once it is valid.
 
+A change that was not saved yet when the file became damaged is kept as a conflict copy. When a valid file is back, Logwell loads it and shows the conflict notice with **Keep mine** and **Keep theirs**, so the change is never dropped without a word. If the database closes first, a notice points at the copy. The same applies when a file from a newer version of Logwell arrives while a change waits.
+
 ## A conflict copy appeared after sync
 
 A notice says "The database changed outside Obsidian while this device had other changes. The other version is now loaded; yours was kept as a conflict copy." Two devices changed the database before a sync finished. Choose **Keep mine** or **Keep theirs**, in the notice or on the Data page under **Conflicts**. See [Your data](your-data.md#sync).
 
 Related notices:
 
-- "Changes this device saved earlier are missing from the database file. They were restored as a conflict copy." **Open conflict view** leads to the copy.
-- "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy."
+- "Changes this device saved earlier are missing from the database file. They were restored as a conflict copy." **Open conflict view** leads to the copy. A version already kept as a conflict copy when the other version was loaded is not reported again, whether you chose **Keep theirs** or have not chosen yet.
+- "Changes made to … just before it closed could not be saved to the file. They were kept as a conflict copy." This also covers the last save when Obsidian quits.
 - "A sync conflict copy of a Logwell database appeared: …" A sync tool made its own copy of the file. Logwell does not read or merge it. The active database is the one you use.
+
+## A notice says some records were repaired or need your attention
+
+"Some database records were repaired: …" means Logwell fixed records it could not use as they were, such as a task in a list that no longer exists. It takes a **Before repair** snapshot first and saves the repaired file once.
+
+"Some database records need your attention: …" names something Logwell leaves as it is, such as two sections with the same name in one list. Nothing is written for it; the notice shows each time the database opens until you rename or delete one of them.
 
 ## Restore a backup
 
@@ -43,6 +51,8 @@ Open the Data page, find the snapshot under **Backups** and choose **Restore**. 
 ## A notice says the database could not be saved
 
 "Could not save the database: …" followed by "Retrying." means a write failed. Logwell keeps your changes in memory and tries again every 5 seconds. If something else changed the file meanwhile, Logwell handles it as an outside change and may show the conflict notice instead.
+
+"A backup of the database could not be written: …" means the database file itself was saved, or was not touched, but the backup snapshot next to it failed, for example because the disk is full. Your tasks are safe in the file; the next save tries the backup again.
 
 "Unsaved changes to … could not be kept and are lost" is rare. It means a database closed while its changes could not be saved, and the conflict copy Logwell tries to keep failed too. The notice gives the reason.
 

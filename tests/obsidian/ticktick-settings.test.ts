@@ -136,7 +136,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect((notes.control!.disabled as () => boolean)()).toBe(true);
 	});
 
-	it("has the description-notes switch (SYNC-09): a toggle of tickTickNotes, enabled while sync is on, that names the note folder", () => {
+	it("has the description-notes switch: a toggle of tickTickNotes, enabled while sync is on, that names the note folder", () => {
 		const t = setup({ device: true });
 		const row = t.rows().find((r) => r.name === "Create notes from TickTick descriptions")!;
 		expect(row.control).toMatchObject({ type: "toggle", key: "tickTickNotes" });
@@ -252,6 +252,16 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		await flush();
 		expect(t.sync.unlinkList).toHaveBeenCalledWith(WORK);
 		expect(t.notices).toEqual(["Work is no longer synced with TickTick. Its tasks stay on both sides."]);
+		expect(t.refresh).toHaveBeenCalled();
+	});
+
+	it("#135: Unlink here is the list menu's unlink: a list that was unlinked meanwhile writes nothing and says nothing", async () => {
+		const t = setup({ device: true, linked: [WORK] });
+		t.sync.unlinkList.mockResolvedValueOnce({ wrote: false, label: "x" });
+		t.render("Work").buttons[0]!.click();
+		await flush();
+		expect(t.sync.unlinkList).toHaveBeenCalledWith(WORK);
+		expect(t.notices).toEqual([]);
 		expect(t.refresh).toHaveBeenCalled();
 	});
 

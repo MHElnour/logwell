@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryTickTickDevice, MemoryTickTickSecret, TickTickError } from "../../src/app/ports";
-import { type PendingTrash, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL } from "../../src/app/SyncService";
+import { type PendingTrash, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL } from "../../src/app/syncModel";
 import type { Category, SyncLink } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
@@ -99,7 +99,7 @@ describe("when the sync runs", () => {
 	beforeEach(() => vi.useRealTimers());
 	afterEach(() => vi.useRealTimers());
 
-	describe("TickTick sync scheduler: pulls (SYNC-10, D28)", () => {
+	describe("TickTick sync scheduler: pulls", () => {
 		it("pulls once when the database opens, then every tickTickPullMinutes", async () => {
 			const s = await setup({ minutes: 5 });
 			expect(s.stub.calls).toBe(1);
@@ -111,7 +111,7 @@ describe("when the sync runs", () => {
 			expect(s.stub.calls).toBe(3);
 		});
 
-		it("never pulls less often than every 60 minutes nor more often than every 5 (D28: there is no 0)", async () => {
+		it("never pulls less often than every 60 minutes nor more often than every 5 (there is no 0)", async () => {
 			const s = await setup({ minutes: 0 });
 			expect(s.stub.calls).toBe(1);
 			await advance(5 * MIN);
@@ -137,7 +137,7 @@ describe("when the sync runs", () => {
 		});
 	});
 
-	describe("TickTick sync scheduler: pushes (SYNC-10)", () => {
+	describe("TickTick sync scheduler: pushes", () => {
 		it("pushes 5 s after the last edit of a linked list, whatever the interval", async () => {
 			const s = await setup({ minutes: 60 });
 			expect(s.stub.calls).toBe(1);
@@ -152,7 +152,7 @@ describe("when the sync runs", () => {
 			expect(s.stub.calls).toBe(2);
 		});
 
-		it("an edit of a description note the sync created pushes 5 s after the last one (SYNC-09); not while inactive", async () => {
+		it("an edit of a description note the sync created pushes 5 s after the last one; not while inactive", async () => {
 			const s = await setup({ minutes: 60 });
 			s.scheduler.noteEdited();
 			await advance(3000);
@@ -203,7 +203,7 @@ describe("when the sync runs", () => {
 		});
 	});
 
-	describe("TickTick sync scheduler: when nothing may run (SYNC-01)", () => {
+	describe("TickTick sync scheduler: when nothing may run", () => {
 		for (const [name, options] of [
 			["the device switch is off", { device: false }],
 			["no token is set", { token: false }],
@@ -277,7 +277,7 @@ describe("when the sync runs", () => {
 		});
 	});
 
-	describe("TickTick sync scheduler: one at a time, failures (SYNC-10, SYNC-12)", () => {
+	describe("TickTick sync scheduler: one at a time, failures", () => {
 		it("a trigger during a sync runs once after it", async () => {
 			const s = await setup({ minutes: 60, start: false });
 			let release!: () => void;

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Settings } from "luxon";
 import { Plugin } from "obsidian";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import { CheckpointApp } from "../../src/app/App";
@@ -112,7 +113,7 @@ describe("reminder host", () => {
 
 	afterEach(() => vi.restoreAllMocks());
 
-	describe("a reminder fires at its minute (D10)", () => {
+	describe("a reminder fires at its minute", () => {
 		it("fires once with the text, both buttons, sticky, and one system notification", async () => {
 			const { app, ui, shown, host, tickAt } = await setup();
 			await app.habits.create(quantity());
@@ -126,6 +127,22 @@ describe("reminder host", () => {
 			expect(shown[0]!.timeout).toBe(0);
 			expect(ui.systemNotify).toHaveBeenCalledTimes(1);
 			expect(ui.systemNotify).toHaveBeenCalledWith("Time for Read", "0 of 30 min");
+		});
+
+		it("#100: fires at its minute, not before, on a device whose language writes other digits", async () => {
+			const before = Settings.defaultLocale;
+			Settings.defaultLocale = "ar-EG";
+			try {
+				const { app, shown, host, tickAt } = await setup();
+				await app.habits.create(quantity());
+				host.attach(r(app));
+				tickAt(BEFORE);
+				expect(shown).toHaveLength(0);
+				tickAt(AT_20);
+				expect(shown.map((s) => s.message)).toEqual(["Time for Read · 0 of 30 min"]);
+			} finally {
+				Settings.defaultLocale = before;
+			}
 		});
 
 		it("does not fire again that day, and fires again on a new day", async () => {
@@ -183,7 +200,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("Check in from the notice (D10, D8)", () => {
+	describe("Check in from the notice", () => {
 		it("checks a binary habit in with the Undo notice carrying the service's label", async () => {
 			const { app, ui, shown, host, tickAt } = await setup();
 			const med = await app.habits.create(binary());
@@ -236,7 +253,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("Snooze 10 min (D10)", () => {
+	describe("Snooze 10 min", () => {
 		it("is quiet for 10 minutes, then fires again while still not met", async () => {
 			const { app, shown, host, tickAt, tickMinutes } = await setup();
 			await app.habits.create(quantity());
@@ -265,7 +282,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("catch-up and device state (D10)", () => {
+	describe("catch-up and device state", () => {
 		it("attach at 21:00 with two 20:00 reminders shows one combined notice and marks both fired", async () => {
 			const { app, ui, shown, host, h, state } = await setup();
 			const read = await app.habits.create(quantity());
@@ -667,7 +684,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("edge times at host level (D10)", () => {
+	describe("edge times at host level", () => {
 		it("a snooze across midnight does not fire on the new day", async () => {
 			const { app, shown, host, tickAt, tickMinutes } = await setup();
 			await app.habits.create(quantity({ reminder: { time: "23:55" } }));
@@ -726,7 +743,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("gesture (D10)", () => {
+	describe("gesture", () => {
 		it("asks for the notification permission once per host lifetime", async () => {
 			const { ui, host } = await setup();
 			host.gesture();
@@ -735,7 +752,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("SystemNotifier click (D10)", () => {
+	describe("SystemNotifier click", () => {
 		it("passes a click handler to the notification only when one is given", () => {
 			const api = { permission: "granted", requestPermission: vi.fn(), create: vi.fn() };
 			const notifier = new SystemNotifier(() => ({ api, hasFocus: () => false }));
@@ -747,7 +764,7 @@ describe("reminder host", () => {
 		});
 	});
 
-	describe("plugin wiring (D10, D15)", () => {
+	describe("plugin wiring", () => {
 		interface Cmd {
 			id: string;
 			name: string;
@@ -845,7 +862,7 @@ describe("reminder state in local storage", () => {
 
 	afterEach(() => vi.restoreAllMocks());
 
-	describe("LocalStorageReminderState (D10)", () => {
+	describe("LocalStorageReminderState", () => {
 		it("stores the state under logwell-habit-reminders-<dbId> with v 1 and reads it back", () => {
 			const f = fakeLocal();
 			const port = new LocalStorageReminderState(f.app);

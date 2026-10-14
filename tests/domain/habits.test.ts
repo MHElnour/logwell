@@ -28,7 +28,7 @@ import { ci, dates, habit, idx, ver } from "./habit-fixtures";
 
 const MWF: HabitSchedule = { kind: "weekdays", days: ["MO", "WE", "FR"] };
 
-describe("versions and schedules (D5)", () => {
+describe("versions and schedules", () => {
 	const h = habit("h", [ver("2026-09-01", { type: "quantity", target: 30, unit: "min" }), ver("2026-10-01", { type: "quantity", target: 20, unit: "min" }, MWF)]);
 
 	it("versionAt picks the last version effective on the date, and null before the first", () => {
@@ -87,7 +87,7 @@ describe("check-in index", () => {
 	});
 });
 
-describe("progress (HAB-04, HAB-05, HAB-06)", () => {
+describe("progress", () => {
 	it("sums count and quantity check-ins in the period", () => {
 		const h = habit("h", [ver("2026-09-01", { type: "quantity", target: 30, unit: "min" })]);
 		const p = progressOn(h, idx(ci("h", "2026-10-04", 20), ci("h", "2026-10-04", 10), ci("h", "2026-10-03", 99)), "2026-10-04");
@@ -99,7 +99,7 @@ describe("progress (HAB-04, HAB-05, HAB-06)", () => {
 		expect(progressOn(h, idx(ci("h", "2026-10-04", 0.7), ci("h", "2026-10-04", 0.1)), "2026-10-04")?.met).toBe(true);
 	});
 
-	it("HAB-06: two active binary check-ins on one date count as one", () => {
+	it("two active binary check-ins on one date count as one", () => {
 		const day = habit("h", [ver("2026-09-01")]);
 		const index = idx(ci("h", "2026-10-04"), ci("h", "2026-10-04"));
 		expect(progressOn(day, index, "2026-10-04")).toMatchObject({ value: 1, met: true });
@@ -120,7 +120,7 @@ describe("progress (HAB-04, HAB-05, HAB-06)", () => {
 	});
 });
 
-describe("day status (D7)", () => {
+describe("day status", () => {
 	const today = "2026-10-07";
 
 	it("day period: met, partial, missed, off, future, before", () => {
@@ -154,7 +154,7 @@ describe("day status (D7)", () => {
 	});
 });
 
-describe("streaks (HAB-08, D6)", () => {
+describe("streaks", () => {
 	it("daily: unscheduled days are skipped and the unfinished day never breaks the streak", () => {
 		const h = habit("h", [ver("2026-09-01", {}, MWF)]);
 		// Met on Mon 28, Wed 30, Fri 2, Mon 5; today Wed 7 not done yet.
@@ -193,7 +193,7 @@ describe("streaks (HAB-08, D6)", () => {
 		expect(streaks(h, index, "2026-10-02")).toEqual({ current: 2, best: 2, unit: "weeks" });
 	});
 
-	it("a schedule change mid-history keeps the walk going when the unit stays (D5)", () => {
+	it("a schedule change mid-history keeps the walk going when the unit stays", () => {
 		// Daily until Oct 1, then Mon, Wed, Fri. Every scheduled day met.
 		const h = habit("h", [ver("2026-09-25"), ver("2026-10-01", {}, MWF)]);
 		const met = [...dates("2026-09-25", "2026-09-30"), "2026-10-02", "2026-10-05"];
@@ -211,7 +211,7 @@ describe("streaks (HAB-08, D6)", () => {
 	});
 });
 
-describe("totals (D7)", () => {
+describe("totals", () => {
 	it("sums the active check-ins", () => {
 		const h = habit("h", [ver("2026-09-01", { type: "quantity", target: 30, unit: "min" })]);
 		const index = idx(ci("h", "2026-10-01", 20), ci("h", "2026-10-02", 12.5), ci("h", "2026-10-02", 100, { deletedAt: "2026-10-02T21:00:00.000Z" }));
@@ -219,7 +219,7 @@ describe("totals (D7)", () => {
 	});
 });
 
-describe("month stats and cells (D7)", () => {
+describe("month stats and cells", () => {
 	it("a day habit reads n of m scheduled days so far (mockup: 3 of 4 days on Oct 4)", () => {
 		const h = habit("h", [ver("2026-09-01", { type: "quantity", target: 30, unit: "min" })]);
 		const index = idx(ci("h", "2026-10-01", 30), ci("h", "2026-10-02", 30), ci("h", "2026-10-03", 30), ci("h", "2026-10-04", 20));
@@ -265,7 +265,7 @@ describe("month stats and cells (D7)", () => {
 	});
 });
 
-describe("day share for the strip ring (D7)", () => {
+describe("day share for the strip ring", () => {
 	it("mixes day and week habits; a week habit is scheduled every day and met on a day with a check-in", () => {
 		const date = "2026-10-06"; // Tuesday
 		const daily = habit("a", [ver("2026-09-01")]);
@@ -285,7 +285,7 @@ describe("day share for the strip ring (D7)", () => {
 	});
 });
 
-describe("time of day (D11)", () => {
+describe("time of day", () => {
 	it.each([
 		["04:59", "evening"],
 		["05:00", "morning"],
@@ -319,7 +319,7 @@ describe("time of day (D11)", () => {
 	});
 });
 
-describe("dialog rules (D20)", () => {
+describe("dialog rules", () => {
 	const base: HabitInput = {
 		name: "Read",
 		icon: null,
@@ -353,7 +353,7 @@ describe("dialog rules (D20)", () => {
 	});
 });
 
-describe("nextVersion (D5, HAB-09)", () => {
+describe("nextVersion", () => {
 	const q = (target: number) => ({ type: "quantity" as const, target, unit: "min", period: "day" as const });
 	const h = habit("h", [ver("2026-09-01", q(30))]);
 
@@ -421,7 +421,7 @@ describe("indexCheckins input", () => {
 
 // -- edge cases -----------------------------
 
-describe("a week-start edit never cuts a finished week (HAB-09, spec §21.1 item 5, D5)", () => {
+describe("a week-start edit never cuts a finished week", () => {
 	// Today Wed Oct 7. Weekly count habit on MO weeks: Sep 21-27 met, Sep 28 - Oct 4 met (Mon 28 and Sun 4).
 	const today = "2026-10-07";
 	const h = habit("h", [ver("2026-09-01", { type: "count", target: 2, period: "week" }, { kind: "weekly" }, "MO")]);
@@ -453,7 +453,7 @@ describe("a week-start edit never cuts a finished week (HAB-09, spec §21.1 item
 		]);
 	});
 
-	it("a day-period habit changed to a week period on a new week start still starts at that week (D5)", () => {
+	it("a day-period habit changed to a week period on a new week start still starts at that week", () => {
 		// The day before the new week start is a day period, not a finished week, so nothing is clamped.
 		const d = habit("d", [ver("2026-09-01", { type: "count", target: 8 })]);
 		expect(nextVersion(d, goal, { kind: "weekly" }, "SU", today).at(-1)?.effectiveFrom).toBe("2026-10-04");

@@ -7,7 +7,7 @@ import { QuickAddSuggest } from "../../src/obsidian/suggest";
 import { applyTokenChoice, filterByQuery, noteInsertName, suggestNotes } from "../../src/obsidian/tokenChoice";
 import { fileOf } from "./fake-vault";
 
-describe("applyTokenChoice (B4)", () => {
+describe("applyTokenChoice", () => {
 	it("replaces the token span and reports the new span and cursor", () => {
 		const r = applyTokenChoice("Buy milk #dee tomorrow", { span: { start: 9, end: 13 } }, "#Deep work");
 		expect(r.value).toBe("Buy milk #Deep work tomorrow");
@@ -58,7 +58,7 @@ describe("noteInsertName", () => {
 	});
 });
 
-describe("suggestNotes (H2: linear cost)", () => {
+describe("suggestNotes (linear cost)", () => {
 	it("reads each of 5,000 paths a bounded number of times and computes insert names for the results only", () => {
 		let reads = 0;
 		const n = 5000;
@@ -101,7 +101,7 @@ function vaultWith(paths: string[]): App {
 
 const app = vaultWith(["Plan.md", "Projects/Plan.md", "Archive/Plan.md", "Notes/Big note.md", "Projects/data.csv", "Archive/Plan.pdf", "Other/Plan.txt"]);
 
-describe("resolveNoteLinks (B3)", () => {
+describe("resolveNoteLinks", () => {
 	it("returns every basename match sorted by path", () => {
 		expect(resolveNoteLinks(vaultWith(["Projects/Plan.md", "Archive/Plan.md"]), "Plan")).toEqual(["Archive/Plan.md", "Projects/Plan.md"]);
 	});

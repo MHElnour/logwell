@@ -1,22 +1,22 @@
 import { DateTime } from "luxon";
-import { periodsAfter, plainRule, repeatEndProblem, seriesAnchor, singleVersionRecurrence } from "../domain/recurrence";
-import type { LocalDate, RepeatFreq, RepeatRule, WeekStart } from "../domain/types";
+import type { RepeatFreq, RepeatRule } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
-import { addDays, dateSpecDate, sameDateSpec } from "../domain/time";
+import { sameDateSpec } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
-import { findDates, resolveDateSpec, rollEnd, rollsPastYear, todayOf, type DateCandidate, type DateOutcome, type RollKind } from "./dates";
+import { findDates, resolveDateSpec, todayOf, type DateCandidate, type DateOutcome, type RollKind } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
 import { parseRepeatText } from "./recurrence";
 import { MASK_CHAR, isWordChar } from "./text";
+import { type Draft, NOTICE, draft } from "./chipDraft";
+import { bindEnds, endDraft, partsStart, pickedEndDraft, requireStartDate } from "./repeatBinding";
 import { findDurationTokens, findNoteTokens, findPriorityTokens, findRecurrence, findRepeatCounts, findWordTokens, type RepeatCount } from "./tokens";
 import type {
 	Chip,
 	ChipKind,
 	ParseContext,
-	ParsedField,
 	ParsedFields,
 	ParseResult,
 	Span,
@@ -33,15 +33,6 @@ export { rebaseDecisions, tokenAtCursor };
 //   4. manual fields and one-value-per-field rules are applied;
 //   5. the title is the input without the applied spans.
 
-const NOTICE = {
-	superseded: "Replaced by a later value",
-	useAsDate: "Use as date?",
-	useAsEndDate: "Use as end date?",
-	endWaits: "Applies once the repeat's time is chosen",
-	replaceEnd: "Replace repeat end?",
-	recurrence: "Recurrence not supported yet",
-	duration: "Duration must be 1 to 1440 minutes",
-} as const;
 
 const REPLACE_NOTICE: Record<string, string> = {
 	scheduled: "Replace date?",
@@ -54,24 +45,8 @@ const REPLACE_NOTICE: Record<string, string> = {
 	repeatEnd: "Replace repeat?",
 };
 
-const FIELD_OF: Record<string, ParsedField> = {
-	scheduled: "scheduled",
-	deadline: "deadline",
-	duration: "duration",
-	category: "category",
-	note: "note",
-	priority: "priority",
-	recurrence: "recurrence",
-	repeatEnd: "recurrence",
-	tag: "tags",
-};
-
 function overlaps(a: Span, b: Span): boolean {
 	return a.start < b.end && b.start < a.end;
-}
-
-function chipId(kind: ChipKind, span: Span): string {
-	return `${kind}:${span.start}:${span.end}`;
 }
 
 interface Decisions {
@@ -113,12 +88,6 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 		bound.push(d);
 	}
 	return { literal, bound, byChip };
-}
-
-interface Draft {
-	chip: Chip;
-	/** Whether the chip counts as applied before manual fields and decisions are considered. */
-	field: ParsedField | null;
 }
 
 function plainResult(input: string): ParseResult {
@@ -210,7 +179,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		// A new name longer than 64 characters stays in the title too.
 		if (names.tooLong(key) || names.clash(key) !== null) return false;
 		// A new tag of this input is newer than every existing one, so it never takes a name from them. Its parent is
-		// created with it when missing (Lists, sections and tags rule 26), so the parent's name is taken too.
+		// created with it when missing, in the same write, so the parent's name is taken too.
 		for (const node of tagPrefixes(key)) if (!names.has(node)) names.add(node, "￿");
 		return true;
 	})) {
@@ -302,7 +271,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			dates = datesNow();
 		}
 	}
-	// Two typed repeats are several patterns: not supported, neither applied (Repeating tasks rule 19).
+	// Two typed repeats are several patterns: not supported, neither applied.
 	const keptRepeats = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d));
 	if (keptRepeats.length > 1) {
 		for (const d of keptRepeats) {
@@ -317,8 +286,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// after an `every …` it cannot build they apply nothing.
 	const built = drafts.some((d) => d.chip.kind === "recurrence" && !dropped.has(d) && (d.chip.status === "applied" || d.chip.status === "choice"));
 	// Start and end parts belong to the typed repeat only when typed after it, to one picked by hand anywhere: before the
-	// first typed repeat that stays they read as without a repeat (Repeating tasks rule 19).
-	const partsFrom = typed ? Math.min(...keptRepeats.map((d) => d.chip.span.end)) : ctx.manual.has("recurrence") ? 0 : input.length + 1;
+	// first typed repeat that stays they read as without a repeat. Never picked by hand is no
+	// repeat: `until Dec 1` is then a deadline, as on a task that does not repeat.
+	const picked = ctx.manual.has("recurrence") && ctx.pickedNever !== true;
+	const partsFrom = partsStart(keptRepeats.map((d) => d.chip.span.end), picked, input.length);
 	const isPart = (c: DateCandidate): boolean => c.span.start >= partsFrom;
 	// Under a weekly form `on` names days: `every week on Oct 12` is no start.
 	const typedRule = keptRepeats.length === 1 ? (keptRepeats[0]!.chip.rule ?? keptRepeats[0]!.chip.alternatives?.[0]?.rule) : undefined;
@@ -327,7 +298,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const repeatEnds = drafts.filter((d) => d.chip.kind === "recurrence" && !dropped.has(d)).map((d) => d.chip.span.end);
 	for (const d of counts) if (!repeatEnds.some((end) => end <= d.chip.span.start)) dropped.add(d);
 	// A date range led by a start word (`starting Oct 12 to Dec 1`) or right after a typed repeat that stays is that
-	// repeat's start and end (Repeating tasks rule 19); a repeat picked by hand never splits one.
+	// repeat's start and end; a repeat picked by hand never splits one.
 	const afterRepeat = (at: number, joined = /^[\s,]*$/u): boolean => repeatEnds.some((end) => end <= at && joined.test(input.slice(end, at)));
 	// After a repeat Quick Add cannot build, a date joined to it by `and` or `&` is as close as one after a comma
 	// (`every May 5 and Dec 25`): it is offered at most.
@@ -358,7 +329,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		} else if (c.kind === "end") {
 			// The end of a repeat picked by hand is not a typed value it replaces, so the hand-picked repeat does not turn
 			// it into a suggestion.
-			const end = typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx);
+			const end = typed ? endDraft(input, c, ctx.zone) : pickedEndDraft(input, c, ctx.zone, ctx.pickedEnd === true);
 			if (c.rolls !== null) rolling.set(end.chip.id, c.rolls);
 			drafts.push(end);
 		} else if (c.lead?.kind === "end" || onWeekly(c)) {
@@ -384,7 +355,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 
 	const chips = kept.map((d) => d.chip);
 	const open = requireStartDate(chips, startsOnDate, readDates, input, ctx.manual.has("scheduled"));
-	// A typed repeat whose hour is a choice waits for it (Repeating tasks rule 19), unless a repeat picked by hand wins.
+	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
 	return finish(input, chips, open, decisions.literal);
@@ -405,148 +376,6 @@ function coveredText(input: string, spans: readonly Span[]): { atEnd: (span: Spa
 		last = i;
 	}
 	return { atEnd: (span) => first !== -1 && first < span.start && last < span.end };
-}
-
-/** The chip of a date led by `until`, `ending` or `ends on` while a repeat is typed: the repeat's end date. */
-function endDraft(input: string, c: DateCandidate, zone: string): Draft {
-	const o = c.outcome;
-	// A choice ("until friday" said on a Friday, "until 5") takes the later date.
-	const value = o.status === "choice" ? o.alternatives[o.alternatives.length - 1]!.value : o.date;
-	const extra: Partial<Chip> = { end: { kind: "date", date: dateSpecDate(value, zone) } };
-	if (o.status === "suggestion") extra.notice = NOTICE.useAsEndDate;
-	return draft(input, "repeatEnd", c.span, o.status === "suggestion" ? "suggestion" : "applied", extra);
-}
-
-/** Any rule's first date is on or after its anchor; a daily rule's is the anchor itself. */
-const FROM_ANCHOR: RepeatRule = plainRule("daily");
-
-/**
- * "every year on <date>": the date read right after "on" is the start. It counts when applied or a choice to make, or
- * when a date picked by hand made it a "Replace date?" suggestion (`readDates`: the picked date is the start, and the
- * repeat applies). When none is read there (dismissed, weak or unreadable), the repeat is not supported: it would
- * otherwise start on today's month and day. A second start after it (`every year on May 5 from Oct 12`, which
- * superseded the first) is two starts: the repeat is not supported and no date applies (each is a "Use as date?"
- * offer). Returns the ids of starts that are still a choice (`May 5 at 7`): they block saving until chosen, so the
- * series is never anchored on today; not when a date picked by hand (`manualDate`) is the start.
- */
-function requireStartDate(chips: Chip[], startsOnDate: ReadonlySet<string>, readDates: ReadonlySet<string>, input: string, manualDate: boolean): string[] {
-	const open: string[] = [];
-	if (startsOnDate.size === 0) return open;
-	const unsupported = (c: Chip): void => {
-		c.status = "unsupported";
-		c.notice = NOTICE.recurrence;
-		delete c.rule;
-		delete c.alternatives;
-	};
-	for (const c of chips) {
-		if (!startsOnDate.has(c.id) || c.status === "unsupported") continue;
-		let next = c.span.end;
-		while (next < input.length && /\s/u.test(input.charAt(next))) next++;
-		const start = chips.find((d) => d.kind === "scheduled" && d.span.start === next);
-		if (start !== undefined && (start.status === "applied" || start.status === "choice" || (start.status === "suggestion" && readDates.has(start.id)))) {
-			if (start.status === "choice" && !manualDate) open.push(start.id);
-			continue;
-		}
-		unsupported(c);
-		if (start?.status !== "superseded") continue;
-		for (const d of chips) {
-			if (d.kind !== "scheduled" || d.span.start < start.span.start || (d.status !== "applied" && d.status !== "superseded")) continue;
-			d.status = "suggestion";
-			d.notice = NOTICE.useAsDate;
-		}
-	}
-	return open;
-}
-
-/**
- * A typed end with no typed repeat, for the repeat picked by hand: it applies at once when that repeat has no end, and
- * is a "Replace repeat end?" suggestion when it has one. Either way the picked repeat stays (no manual precedence).
- */
-function pickedEndDraft(input: string, c: DateCandidate, ctx: ParseContext): Draft {
-	const d = { ...endDraft(input, c, ctx.zone), field: null };
-	if (ctx.pickedEnd === true && d.chip.status === "applied") {
-		d.chip.status = "suggestion";
-		d.chip.notice = NOTICE.replaceEnd;
-	}
-	return d;
-}
-
-/** The one day of a typed date whose alternatives differ only in the hour (`Sep 28 2026 at 5`); undefined otherwise. */
-function choiceDay(chips: readonly Chip[], zone: string): LocalDate | undefined {
-	const days = chips.find((c) => c.kind === "scheduled" && c.status === "choice")?.alternatives?.map((a) => (a.value === undefined ? null : dateSpecDate(a.value, zone)));
-	const first = days?.[0];
-	return first != null && days!.every((d) => d === first) ? first : undefined;
-}
-
-/**
- * Binds the end chips to the repeat once the start is known (the applied typed date; under a typed repeat, the day of
- * a typed date whose hour is a choice; else `start`: a date picked by hand, a preset or today): `for N <periods>`
- * becomes the day before N periods from the start; an end typed as a bare weekday or a month and day with no year
- * (`rolling`) that falls before the start moves past it as in a typed range (`rollEnd`), a suggestion when that is
- * more than a year on; an end that leaves the series no date is invalid (repeatEndProblem, the services' check),
- * against the typed repeat, else the one picked by hand, from the anchor a new series gets (`seriesAnchor`); an end
- * waits while its repeat's time is a choice; the end of a repeat Quick Add cannot build is not supported either.
- */
-function bindEnds(
-	chips: Chip[],
-	periods: ReadonlyMap<string, { n: number; freq: RepeatFreq }>,
-	rolling: ReadonlyMap<string, RollKind>,
-	env: { zone: string; start: LocalDate; weekStart: WeekStart; pickedRule?: RepeatRule },
-): void {
-	if (!chips.some((c) => c.kind === "repeatEnd")) return;
-	const repeats = chips.filter((c) => c.kind === "recurrence");
-	const rule = repeats.find((c) => c.status === "applied")?.rule;
-	const waiting = rule === undefined && repeats.some((c) => c.status === "choice");
-	const unsupported = repeats.length > 0 && repeats.every((c) => c.status === "unsupported");
-	const date = chips.find((c) => c.kind === "scheduled" && c.status === "applied")?.date;
-	const anchor = date === undefined ? (rule === undefined ? undefined : choiceDay(chips, env.zone)) ?? env.start : dateSpecDate(date, env.zone);
-	// Without a known rule (none typed, none picked), only the anchor is checked, and the service checks the rest.
-	const effective = rule ?? env.pickedRule ?? FROM_ANCHOR;
-	const series = singleVersionRecurrence(seriesAnchor(anchor, effective), effective);
-	for (const c of chips) {
-		if (c.kind !== "repeatEnd") continue;
-		const p = periods.get(c.id);
-		if (p !== undefined) c.end = { kind: "date", date: addDays(periodsAfter(anchor, p.freq, p.n), -1) };
-		// After a typed start, an end before it moves past it (as in a typed range); an end more than a year past the start
-		// is a suggestion. A start picked by hand keeps the end as typed: before the start it is invalid.
-		const roll = rolling.get(c.id);
-		if (c.status === "applied" && c.end?.kind === "date" && roll !== undefined && date !== undefined) {
-			const moved = rollEnd(c.end.date, anchor, roll);
-			if (moved !== null) {
-				c.end = { kind: "date", date: moved };
-				if (rollsPastYear(anchor, moved)) {
-					c.status = "suggestion";
-					c.notice = NOTICE.useAsEndDate;
-				}
-			}
-		}
-		if (c.status !== "applied" && c.status !== "suggestion") continue;
-		if (unsupported) {
-			c.status = "unsupported";
-			c.notice = NOTICE.recurrence;
-		} else if (waiting) {
-			c.status = "suggestion";
-			c.notice = NOTICE.endWaits;
-		} else if (c.status === "applied" && c.end !== undefined) {
-			const problem = repeatEndProblem(c.end, series, env.weekStart);
-			if (problem !== null) {
-				c.status = "invalid";
-				c.notice = problem;
-			}
-		}
-	}
-}
-
-function draft(input: string, kind: ChipKind, span: Span, status: Chip["status"], extra: Partial<Chip>): Draft {
-	const chip: Chip = {
-		id: chipId(kind, span),
-		kind,
-		span: { start: span.start, end: span.end },
-		text: input.slice(span.start, span.end),
-		status,
-		...extra,
-	};
-	return { chip, field: FIELD_OF[kind] ?? null };
 }
 
 /** A date read whole with its lead word, offered as "Use as date?" (or the choice it is), never applied as typed. */
@@ -640,9 +469,9 @@ const COMMA_AFTER_RE = /^\s*[,;]/u;
 const COMMA_BEFORE_RE = /[,;]\s*$/u;
 
 /**
- * The title: the input without the applied spans (Tasks and Quick Add rule 21). A lone comma or semicolon left next to a
+ * The title: the input without the applied spans, or the full text if nothing remains. A lone comma or semicolon left next to a
  * removed span goes with it, as does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
- * every sunday."): no stray punctuation or spaces (Repeating tasks rule 19). Text the user kept as it is (`literal`, a
+ * every sunday."): no stray punctuation or spaces. Text the user kept as it is (`literal`, a
  * dismissed chip) is never touched.
  */
 function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]): string {

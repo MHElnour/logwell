@@ -286,7 +286,7 @@ describe("grouping in views", () => {
 // Group by: the options and defaults per view.
 
 describe("group by options", () => {
-	it("matches the spec §7 table", () => {
+	it("matches the table of the grouped view", () => {
 		expect(groupByOptions("inbox")).toEqual(["none", "section", "date", "priority", "tag"]);
 		expect(groupByOptions("category")).toEqual(groupByOptions("inbox"));
 		expect(groupByOptions("today")).toEqual(["date", "list", "priority", "tag", "none"]);

@@ -184,7 +184,7 @@ describe("TickTick settings", () => {
 	});
 });
 
-describe("B1: dateLocale setting", () => {
+describe("dateLocale setting", () => {
 	it("defaults to en and keeps en-GB", () => {
 		expect(DEFAULT_SETTINGS.dateLocale).toBe("en");
 		expect(sanitizeSettings({ dateLocale: "en-GB" }).dateLocale).toBe("en-GB");

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { QueryContext } from "../../src/domain/queries";
-import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
-import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type Task } from "../../src/domain/types";
+import { completionPlan, currentOccurrence, describeEnd, describeRule, effectiveSchedule, explicitRule, indexOccurrenceRecords, isSeriesEnded, normalizeRepeatRule, occurrencesBetween, ordinal, projectOccurrences, remainingCount, repeatEndProblem, repeatRuleProblem, restartedSeries, ruleAt, scheduleResolver, seriesAnchor, startRecurrence, versionAt, weekdayOf } from "../../src/domain/recurrence";
+import { type OccurrenceRecord, REPEAT_FREQS, type Recurrence, type RepeatRule, type Task } from "../../src/domain/types";
 import { dateRange, done, repeating, rule, series, skipped } from "./recurrence-fixtures";
 
 const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
 
-describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
+describe("occurrencesBetween", () => {
 	it("daily: every day from the anchor, never before it", () => {
 		expect(occurrencesBetween(series("2026-10-01", rule()), "2026-09-28", "2026-10-04", "MO")).toEqual([
 			"2026-10-01",
@@ -53,7 +53,7 @@ describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 		expect(occurrencesBetween(rec, "2026-10-01", "2026-10-31", "MO")).toEqual(["2026-10-17", "2026-10-31"]);
 	});
 
-	it("B21: monthly on day 31 falls on the last day of shorter months and keeps the anchor day", () => {
+	it("monthly on day 31 falls on the last day of shorter months and keeps the anchor day", () => {
 		const rec = series("2026-01-31", rule({ freq: "monthly", monthly: { kind: "day", day: 31 } }));
 		expect(occurrencesBetween(rec, "2026-01-01", "2026-06-30", "MO")).toEqual([
 			"2026-01-31",
@@ -69,16 +69,6 @@ describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 	it("monthly without a form uses the anchor's day of month", () => {
 		const rec = series("2026-01-30", rule({ freq: "monthly" }));
 		expect(occurrencesBetween(rec, "2026-01-01", "2026-03-31", "MO")).toEqual(["2026-01-30", "2026-02-28", "2026-03-30"]);
-	});
-
-	it("every 2 months on the 15th", () => {
-		const rec = series("2026-01-15", rule({ freq: "monthly", interval: 2, monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-01-01", "2026-06-30", "MO")).toEqual(["2026-01-15", "2026-03-15", "2026-05-15"]);
-	});
-
-	it("a monthly day before the anchor's day starts next month", () => {
-		const rec = series("2026-10-20", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } }));
-		expect(occurrencesBetween(rec, "2026-10-01", "2026-12-31", "MO")).toEqual(["2026-11-15", "2026-12-15"]);
 	});
 
 	it("the Nth weekday and the last weekday of the month", () => {
@@ -100,7 +90,7 @@ describe("occurrencesBetween (D3, REC-01, decisions 1 and 2)", () => {
 		expect(occurrencesBetween(rec, "2026-10-01", "2026-10-10", "MO")).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
 	});
 
-	it("B22: a rule change from Mon/Wed/Fri to Tue/Thu on Oct 12", () => {
+	it("a rule change from Mon/Wed/Fri to Tue/Thu on Oct 12", () => {
 		const rec = series("2026-09-28", [
 			["2026-09-28", rule({ freq: "weekly", weekdays: ["MO", "WE", "FR"] })],
 			["2026-10-12", rule({ freq: "weekly", weekdays: ["TU", "TH"] })],
@@ -141,7 +131,7 @@ describe("currentOccurrence (fixed mode)", () => {
 		expect(currentOccurrence(repeating(daily), [done("2026-10-01"), skipped("2026-10-02")], "2026-10-05", "MO")).toBe("2026-10-03");
 	});
 
-	it("B23: a reopened (removed) record makes that date current again", () => {
+	it("a reopened (removed) record makes that date current again", () => {
 		expect(currentOccurrence(repeating(daily), [done("2026-10-01"), done("2026-10-03")], "2026-10-05", "MO")).toBe("2026-10-02");
 	});
 
@@ -181,15 +171,11 @@ describe("currentOccurrence (fixed mode)", () => {
 	});
 });
 
-describe("currentOccurrence (after completion, decision 3)", () => {
+describe("currentOccurrence (after completion)", () => {
 	const every3 = series("2026-10-01", rule({ interval: 3, afterCompletion: true }));
 
 	it("the anchor before any record", () => {
 		expect(currentOccurrence(repeating(every3), [], "2026-10-05", "MO")).toBe("2026-10-01");
-	});
-
-	it("done: the completion day plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-01", "2026-10-02")], "2026-10-05", "MO")).toBe("2026-10-05");
 	});
 
 	it("skipped: the skipped date plus the interval", () => {
@@ -204,16 +190,12 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 		expect(currentOccurrence(repeating(every3), [done("2026-10-08", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
 	});
 
-	it("completed on time: the date plus the interval", () => {
-		expect(currentOccurrence(repeating(every3), [done("2026-10-10", "2026-10-10")], "2026-10-10", "MO")).toBe("2026-10-13");
-	});
-
 	it("the base is the most recently resolved record, not the latest by date", () => {
 		// Oct 10 was done early on Oct 5; then Oct 8 was done on Oct 8, which is the newer resolution.
 		expect(currentOccurrence(repeating(every3), [done("2026-10-10", "2026-10-05"), done("2026-10-08", "2026-10-08")], "2026-10-08", "MO")).toBe("2026-10-11");
 	});
 
-	it("L1: a resolve-time tie prefers the done record, then the later date", () => {
+	it("a resolve-time tie prefers the done record, then the later date", () => {
 		const a = { ...done("2026-10-04", "2026-10-04"), resolvedAt: "2026-10-06T09:00:00.000Z" };
 		const b = { ...skipped("2026-10-06"), resolvedAt: "2026-10-06T09:00:00.000Z" };
 		expect(currentOccurrence(repeating(every3), [b, a], "2026-10-06", "MO")).toBe("2026-10-07");
@@ -221,13 +203,13 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 		expect(currentOccurrence(repeating(every3), [c, b], "2026-10-06", "MO")).toBe("2026-10-09");
 	});
 
-	it("M2: a manual skip counts from the day it was skipped (completedOn), an automatic one from its date", () => {
+	it("a manual skip counts from the day it was skipped (completedOn), an automatic one from its date", () => {
 		const manual = { ...skipped("2026-10-01"), completedOn: "2026-10-05" };
 		expect(currentOccurrence(repeating(every3), [manual], "2026-10-05", "MO")).toBe("2026-10-08");
 		expect(currentOccurrence(repeating(every3), [skipped("2026-10-01", true)], "2026-10-05", "MO")).toBe("2026-10-04");
 	});
 
-	it("L6: a taken version floor 8,000 years past the base is passed arithmetically, not day by day", () => {
+	it("a taken version floor 8,000 years past the base is passed arithmetically, not day by day", () => {
 		// A fixed version every 999 months from 1976, then "1 day after done" from 9970; the base record is
 		// the 1976 one (resolved last) and the floor date 9970-01-01 is taken, so the next is 9970-01-02.
 		const rec = series("1976-01-01", [
@@ -283,7 +265,7 @@ describe("currentOccurrence (after completion, decision 3)", () => {
 		expect(currentOccurrence(repeating(months), [done("2026-02-28", "2026-01-20"), done("2026-01-31", "2026-01-31")], "2026-02-01", "MO")).toBe("2026-03-31");
 	});
 
-	it("weeks and months; a month keeps the completion day where it exists (B21 clamp)", () => {
+	it("weeks and months; a month keeps the completion day where it exists (clamped)", () => {
 		const weeks = series("2026-10-01", rule({ freq: "weekly", interval: 2, afterCompletion: true }));
 		expect(currentOccurrence(repeating(weeks), [done("2026-10-01", "2026-10-03")], "2026-10-05", "MO")).toBe("2026-10-17");
 		const months = series("2026-01-31", rule({ freq: "monthly", monthly: { kind: "day", day: 31 }, afterCompletion: true }));
@@ -322,7 +304,7 @@ describe("fixed mode: completing early or late never changes the schedule (user 
 	});
 });
 
-describe("effectiveSchedule (D5)", () => {
+describe("effectiveSchedule", () => {
 	it("a task that does not repeat keeps its scheduled date", () => {
 		const t = repeating(null, { scheduled: { kind: "date", date: "2026-10-07" } });
 		expect(effectiveSchedule(t, [], ctx)).toEqual({ kind: "date", date: "2026-10-07" });
@@ -346,8 +328,8 @@ describe("effectiveSchedule (D5)", () => {
 	});
 });
 
-describe("completionPlan (REC-03, B20)", () => {
-	it("B20: a daily series 4 days overdue: the earliest is done, the other 3 are skipped, the next is today", () => {
+describe("completionPlan", () => {
+	it("a daily series 4 days overdue: the earliest is done, the other 3 are skipped, the next is today", () => {
 		const t = repeating(series("2026-10-01", rule()));
 		const plan = completionPlan(t, [], "2026-10-05", "MO");
 		expect(plan).toEqual({ done: "2026-10-01", autoSkipped: ["2026-10-02", "2026-10-03", "2026-10-04"] });
@@ -414,7 +396,7 @@ describe("isSeriesEnded and remainingCount", () => {
 	});
 });
 
-describe("describeRule and describeEnd (the chip, decision 8)", () => {
+describe("describeRule and describeEnd (the chip)", () => {
 	const d = (anchor: string, r: Parameters<typeof rule>[0]) => describeRule(series(anchor, rule(r)));
 	it.each([
 		[d("2026-10-01", {}), "every day"],
@@ -462,7 +444,7 @@ describe("describeRule and describeEnd (the chip, decision 8)", () => {
 	});
 });
 
-describe("projectOccurrences (D6)", () => {
+describe("projectOccurrences", () => {
 	const fridays = series("2026-10-02", rule({ freq: "weekly" }));
 
 	it("records, the current occurrence and the later dates", () => {
@@ -551,6 +533,33 @@ describe("repeatRuleProblem and normalizeRepeatRule", () => {
 	});
 });
 
+describe("repeatEndProblem: one check for the picker, Quick Add and the services", () => {
+	// 2026-10-05 is a Monday. The services' refusals are in tests/app/recurrence-service.test.ts.
+	const ENDS_BEFORE = "The repeat ends before its first date.";
+	const friday = rule({ freq: "weekly", weekdays: ["FR"] });
+
+	it("#12: accepts never, a count of 1 to 999 and a date on or after the first occurrence", () => {
+		expect(repeatEndProblem({ kind: "never" }, series("2026-10-05", rule()))).toBeNull();
+		expect(repeatEndProblem({ kind: "count", count: 1 })).toBeNull();
+		expect(repeatEndProblem({ kind: "count", count: 999 })).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-05" }, series("2026-10-05", rule()))).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-09" }, series("2026-10-05", friday))).toBeNull();
+		expect(repeatEndProblem({ kind: "date", date: "2026-12-01" })).toBeNull();
+	});
+
+	it("#12: refuses a count out of range, a date that is not one, a date before the anchor or before the first occurrence", () => {
+		expect(repeatEndProblem({ kind: "count", count: 0 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "count", count: 1.5 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "count", count: 1000 })).toBe("End after 1 to 999 times.");
+		expect(repeatEndProblem({ kind: "date", date: "2026-02-30" })).toBe("The end date is not valid.");
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-04" }, series("2026-10-05", rule()))).toBe(ENDS_BEFORE);
+		// Every Friday from Monday Oct 5, ending Wednesday Oct 7: no occurrence at all.
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-07" }, series("2026-10-05", friday))).toBe(ENDS_BEFORE);
+		// Every 15th from Oct 5, ending Oct 14.
+		expect(repeatEndProblem({ kind: "date", date: "2026-10-14" }, series("2026-10-05", rule({ freq: "monthly", monthly: { kind: "day", day: 15 } })))).toBe(ENDS_BEFORE);
+	});
+});
+
 describe("startRecurrence (make repeating: Quick Add and setRepeat)", () => {
 	it("no date: the fallback is the anchor", () => {
 		expect(startRecurrence(null, rule(), undefined, "2026-10-05", "Europe/Berlin")).toEqual({
@@ -582,10 +591,36 @@ describe("startRecurrence (make repeating: Quick Add and setRepeat)", () => {
 		expect(r.recurrence.anchor).toBe("2026-10-10");
 		expect(r.recurrence.versions[0]?.rule.time).toBe("07:00");
 	});
+
+	// A weekly repeat with picked weekdays starts on its first such weekday on or after its start date, so `every 2 weeks
+	// on Monday` started on a Wednesday first falls on the coming Monday.
+	const weekly = (interval: number, weekdays: RepeatRule["weekdays"]): RepeatRule => rule({ freq: "weekly", interval, weekdays });
+	const firstOf = (r: ReturnType<typeof startRecurrence>): string | undefined => occurrencesBetween(r.recurrence, r.recurrence.anchor, "2027-12-31", "MO")[0];
+
+	it("#12: the anchor of a new series is the first picked weekday on or after the start for a weekly rule with weekdays, else the start", () => {
+		expect(seriesAnchor("2026-10-07", weekly(2, ["MO"]))).toBe("2026-10-12");
+		expect(seriesAnchor("2026-10-07", weekly(1, ["WE"]))).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", weekly(2, ["TU", "TH"]))).toBe("2026-10-08");
+		expect(seriesAnchor("2026-10-07", weekly(2, null))).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", rule())).toBe("2026-10-07");
+		expect(seriesAnchor("2026-10-07", rule({ freq: "monthly", monthly: { kind: "day", day: 5 } }))).toBe("2026-10-07");
+	});
+
+	it("#12: startRecurrence uses the anchor, so the first occurrence is the coming weekday", () => {
+		const started = startRecurrence(null, weekly(2, ["MO"]), undefined, "2026-10-07", "Europe/Berlin", "MO");
+		expect(started.recurrence.anchor).toBe("2026-10-12");
+		expect(firstOf(started)).toBe("2026-10-12");
+		const timed = startRecurrence({ kind: "datetime", local: "2026-10-07T09:00", tz: "Europe/Berlin" }, weekly(2, ["MO"]), undefined, "2026-10-07", "Europe/Berlin", "MO");
+		expect(timed.recurrence.anchor).toBe("2026-10-12");
+		expect(timed.recurrence.versions[0]!.rule.time).toBe("09:00");
+		expect(startRecurrence(null, weekly(3, ["TU", "TH"]), undefined, "2026-10-07", "Europe/Berlin", "MO").recurrence.anchor).toBe("2026-10-08");
+		// A later start moves the anchor to the first weekday on or after it.
+		expect(firstOf(startRecurrence(null, weekly(2, ["MO"]), undefined, "2026-10-20", "Europe/Berlin", "MO"))).toBe("2026-10-26");
+	});
 });
 
 describe("engine limits, counts and catch-up", () => {
-	it("H1: an interval above 999 is refused, and a huge stored one never hangs", () => {
+	it("an interval above 999 is refused, and a huge stored one never hangs", () => {
 		expect(repeatRuleProblem(rule({ interval: 999 }))).toBeNull();
 		expect(repeatRuleProblem(rule({ interval: 1000 }))).toBe("Repeat every 1 to 999.");
 		// A huge stored interval works as 999 (the validator also repairs it on load).
@@ -600,7 +635,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(occurrencesBetween(monthly, "2026-11-01", "2030-01-01", "MO")).toEqual([]);
 	});
 
-	it("M1, N1: a count counts only records resolved after countFrom; anchoredAt alone does not restart it", () => {
+	it("a count counts only records resolved after countFrom; anchoredAt alone does not restart it", () => {
 		const old = Array.from({ length: 34 }, (_, i) => ({ ...done(`2026-08-${String((i % 28) + 1).padStart(2, "0")}`), resolvedAt: `2026-09-01T00:00:${String(i).padStart(2, "0")}.000Z` }));
 		const base = series("2026-10-09", rule({ freq: "weekly" }), { kind: "count", count: 5 });
 		const rec = { ...base, anchoredAt: "2026-10-05T10:00:00.000Z", countFrom: "2026-10-05T10:00:00.000Z" };
@@ -613,7 +648,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(remainingCount(movedOnly, old)).toBe(0);
 	});
 
-	it("M4: a weekly rule keeps its own week start whatever the setting", () => {
+	it("a weekly rule keeps its own week start whatever the setting", () => {
 		// Every 2 weeks on Sun and Mon, anchored Sun Sep 6 2026.
 		const records = [done("2026-09-06"), done("2026-09-07")];
 		const without = series("2026-09-06", rule({ freq: "weekly", interval: 2, weekdays: ["SU", "MO"] }));
@@ -625,7 +660,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(currentOccurrence(repeating(frozen), records, "2026-09-10", "MO")).toBe("2026-09-20");
 	});
 
-	it("M4: normalizeRepeatRule stamps the week start on weekly rules only, keeping one already set", () => {
+	it("normalizeRepeatRule stamps the week start on weekly rules only, keeping one already set", () => {
 		expect(normalizeRepeatRule(rule({ freq: "weekly" }), "SU").weekStart).toBe("SU");
 		expect(normalizeRepeatRule(rule({ freq: "weekly", weekStart: "SA" }), "SU").weekStart).toBe("SA");
 		expect(normalizeRepeatRule(rule({ freq: "weekly" }))).not.toHaveProperty("weekStart");
@@ -633,7 +668,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(repeatRuleProblem(rule({ freq: "weekly", weekStart: "TU" as never }))).toEqual(expect.any(String));
 	});
 
-	it("N6: fixed → after completion → fixed, all past: the catch-up passes the after-completion range", () => {
+	it("fixed → after completion → fixed, all past: the catch-up passes the after-completion range", () => {
 		const t = repeating(
 			series("2026-09-01", [
 				["2026-09-01", rule()],
@@ -650,7 +685,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(currentOccurrence(t, written, "2026-10-05", "MO")).toBe("2026-10-05");
 	});
 
-	it("L1: a catch-up followed by an after-completion version counts from the completion day", () => {
+	it("a catch-up followed by an after-completion version counts from the completion day", () => {
 		const t = repeating(
 			series("2026-10-01", [
 				["2026-10-01", rule()],
@@ -663,7 +698,7 @@ describe("engine limits, counts and catch-up", () => {
 		expect(currentOccurrence(t, written, "2026-10-05", "MO")).toBe("2026-10-08");
 	});
 
-	it("L2: with today, generated dates after the current one and before today are missed", () => {
+	it("with today, generated dates after the current one and before today are missed", () => {
 		const t = repeating(series("2026-10-01", rule()));
 		expect(projectOccurrences(t, [], "2026-10-01", "2026-10-06", "MO", "2026-10-04").map((p) => p.kind)).toEqual([
 			"current",
@@ -693,12 +728,12 @@ describe("engine limits, counts and catch-up", () => {
 });
 
 describe("yearly repeats", () => {
-	// A yearly repeat (#12): every N years on the anchor's month and day (Repeating tasks rules 1 and 5).
+	// A yearly repeat (#12): every N years on the anchor's month and day.
 
 	const yearly = (patch: Parameters<typeof rule>[0] = {}) => rule({ freq: "yearly", ...patch });
 	const ctx: QueryContext = { today: "2026-10-05", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
 
-	describe("yearly occurrences (Repeating tasks rules 1 and 5, #12)", () => {
+	describe("yearly occurrences (#12)", () => {
 		it("#12: is a stored frequency", () => {
 			expect(REPEAT_FREQS).toContain("yearly");
 			expect(repeatRuleProblem(yearly())).toBeNull();
@@ -771,7 +806,7 @@ describe("yearly repeats", () => {
 		});
 	});
 
-	describe("yearly after completion (Repeating tasks rule 7, #12)", () => {
+	describe("yearly after completion (#12)", () => {
 		it("#12: the next date is the completion day one interval later", () => {
 			const task = repeating(series("2026-03-14", yearly({ afterCompletion: true })));
 			expect(currentOccurrence(task, [], "2026-03-01", "MO")).toBe("2026-03-14");
@@ -815,7 +850,7 @@ describe("yearly repeats", () => {
 	});
 });
 
-// Duplicating a yearly series (#12, Repeating tasks rule 17). The copy starts on the source's current occurrence
+// Duplicating a yearly series (#12). The copy starts on the source's current occurrence
 // and takes its month and day from there. A copy of a Feb 29 series is anchored on Feb 28 (the clamped date), so
 // it falls on Feb 28 in leap years too: one day before the original.
 

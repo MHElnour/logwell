@@ -22,17 +22,20 @@ export function journalLine(entry: JournalEntry): string {
 	return `${JSON.stringify(entry)}\n`;
 }
 
-/** Parses the journal. A torn last line (crash during append) ends the log. */
+/**
+ * Parses the journal. A torn line (a crash during an append) is skipped, not
+ * the end of the log: appends go on after a restart, and replay ignores the
+ * dead end it leaves.
+ */
 export function parseJournal(text: string): JournalEntry[] {
 	const entries: JournalEntry[] = [];
 	for (const line of text.split("\n")) {
 		if (line.trim().length === 0) continue;
 		try {
 			const e = JSON.parse(line) as JournalEntry;
-			if (typeof e.rev !== "string" || !Array.isArray(e.ops)) break;
-			entries.push(e);
+			if (typeof e.rev === "string" && Array.isArray(e.ops)) entries.push(e);
 		} catch {
-			break;
+			// A torn line.
 		}
 	}
 	return entries;
@@ -64,11 +67,12 @@ export function applyOps(data: DbData, ops: readonly JournalOp[]): DbData {
  * `untilRevision` if given. Returns the revision reached and the revisions
  * applied in order: the lineage after `fromRevision`.
  *
- * A write that failed leaves an entry whose revision never reached
- * the file, and the retry appends a second entry with the same base. The store
- * re-queues the failed entry's ops, so the retry's entry carries them too. The
- * last entry for a base is therefore the one that continues the chain; an
- * earlier one with the same base is a dead end.
+ * A write refused by the compare-and-swap leaves an entry whose revision never
+ * reached the file, and the retry appends a second entry with the same base. The
+ * store re-queues the failed entry's ops, so the retry's entry carries them too.
+ * The last entry for a base is therefore the one that continues the chain; an
+ * earlier one with the same base is a dead end. A write that threw may have
+ * landed, so its retry continues from the attempted revision instead.
  */
 export function replayJournal(
 	data: DbData,

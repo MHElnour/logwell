@@ -30,7 +30,7 @@ function checkinsOf(h: Habit, counts: number[], keep: (date: string) => boolean)
 	return out;
 }
 
-describe("D6 properties", () => {
+describe("properties", () => {
 	it("(1) check-ins on unscheduled days never change the current streak", () => {
 		fc.assert(
 			fc.property(dayHabit, perDay, perDay, (h, counts, extra) => {

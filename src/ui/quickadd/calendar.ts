@@ -1,6 +1,6 @@
 import type { WeekStart } from "../../app/settings";
 import { monthGrid as domainMonthGrid } from "../../domain/calendar";
-import { dateOf, dayNumOf, isoWeekdayOf } from "../../domain/time";
+import { type YearMonth, dateOf, dayNumOf, isoWeekdayOf, monthStart, shiftMonth, yearMonthOf } from "../../domain/time";
 import { type LocalDate, MONTH_LONG, WEEKDAYS, WEEKDAY_LONG } from "../../domain/types";
 
 // Month grid of the date popover. Pure calendar arithmetic on YYYY-MM-DD strings:
@@ -11,22 +11,7 @@ interface CalDay {
 	inMonth: boolean;
 }
 
-export interface YearMonth {
-	year: number;
-	/** 1 to 12. */
-	month: number;
-}
-
 export const WEEKDAY_NAMES = WEEKDAYS.map((d) => WEEKDAY_LONG[d]);
-
-export function yearMonthOf(date: LocalDate): YearMonth {
-	return { year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) };
-}
-
-export function shiftMonth(ym: YearMonth, delta: number): YearMonth {
-	const index = ym.year * 12 + (ym.month - 1) + delta;
-	return { year: Math.floor(index / 12), month: (index % 12) + 1 };
-}
 
 function daysInMonth(ym: YearMonth): number {
 	return dayNumOf(ym.year, ym.month + 1, 1) - dayNumOf(ym.year, ym.month, 1);
@@ -34,7 +19,7 @@ function daysInMonth(ym: YearMonth): number {
 
 /** Whole weeks (4 to 6 rows) covering the month, starting on the week-start day. */
 export function monthGrid(ym: YearMonth, weekStart: WeekStart): CalDay[] {
-	const first = dateOf(dayNumOf(ym.year, ym.month, 1));
+	const first = monthStart(ym);
 	const prefix = first.slice(0, 8);
 	return domainMonthGrid(first, weekStart)
 		.flat()
