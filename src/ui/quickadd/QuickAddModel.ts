@@ -141,6 +141,7 @@ export class QuickAddModel {
 			locale: this.env.locale(),
 			...(this.env.eveningTime ? { eveningTime: this.env.eveningTime() } : {}),
 			categories: app.categories.list().map((c) => ({ id: c.id, name: c.name })),
+			sections: [...app.store.state.sections.values()].map((x) => ({ id: x.id, categoryId: x.categoryId, name: x.name })),
 			tags: app.tags.list().map((t) => ({ key: t.key, displayName: t.displayName, createdAt: t.createdAt })),
 			resolveNote: (t) => this.env.resolveNote(t),
 			decisions: this.decisions,
@@ -360,7 +361,7 @@ export class QuickAddModel {
 
 	/** The notice shown with a chip (the parser's, adjusted for a subtask's fixed category). */
 	noticeFor(chip: Chip): string | undefined {
-		if (this.isFixedCategory(chip) && (chip.status === "suggestion" || chip.status === "unresolved")) return SUBTASK_CATEGORY_NOTICE;
+		if (this.isFixedCategory(chip) && (chip.status === "suggestion" || chip.status === "unresolved" || chip.status === "invalid")) return SUBTASK_CATEGORY_NOTICE;
 		return chip.notice;
 	}
 
@@ -487,6 +488,17 @@ export class QuickAddModel {
 		if (this.parent !== undefined) return this.parent.categoryId;
 		if (this.manual.has("category") && this.vals.categoryId !== null) return this.vals.categoryId;
 		return this.result.fields.categoryId ?? this.env.preset.categoryId ?? INBOX_ID;
+	}
+
+	/**
+	 * The section the task goes to: a typed `#list/section` while its list is the task's, else the preset's. Null for a
+	 * subtask (it follows its parent).
+	 */
+	private sectionValue(): ID | null {
+		const { categoryId, sectionId } = this.result.fields;
+		if (this.parent !== undefined) return null;
+		if (sectionId !== undefined && this.categoryValue() === categoryId) return sectionId;
+		return this.presetSectionId();
 	}
 
 	/** The preset section, or null when the task goes to another list or is a subtask (it follows its parent). */
@@ -655,8 +667,8 @@ export class QuickAddModel {
 		}
 		// A subtask's category is fixed by its parent, so an unknown category stays literal text and never blocks.
 		const blocking = this.result.chips.find((c) => this.result.blocking.includes(c.id) && !this.isFixedCategory(c));
-		if (blocking?.kind === "repeatEnd") {
-			// An invalid repeat end: its notice says why, and saving waits until it is fixed or dismissed.
+		if (blocking?.status === "invalid") {
+			// An invalid repeat end or an unknown section: its notice says why, and saving waits until it is fixed or dismissed.
 			this.message = blocking.notice ?? null;
 			this.requestFocus({ kind: "chip", id: blocking.id });
 			this.notify();
@@ -702,8 +714,8 @@ export class QuickAddModel {
 				title: result.title,
 				categoryId: this.categoryValue(),
 				parentId: this.parent?.id ?? null,
-				// The preset's section only holds while the task stays in the preset's list (a typed #list leaves it).
-				sectionId: this.presetSectionId(),
+				// A typed section wins; the preset's only holds while the task stays in the preset's list (a typed #list leaves it).
+				sectionId: this.sectionValue(),
 				tagKeys: [...new Set([...manualTags, ...f.tagKeys])],
 				newTags: f.newTags,
 				scheduled,

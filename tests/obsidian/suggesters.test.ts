@@ -281,3 +281,51 @@ describe("a tag by its own name", () => {
 		});
 	});
 });
+
+describe("#list and #list/section suggester", () => {
+	const lists = [
+		{ id: "c-work", name: "Work", icon: null },
+		{ id: "c-study", name: "Study", icon: null },
+	];
+	const sections = [
+		{ id: "s-admin", categoryId: "c-work", name: "Admin" },
+		{ id: "s-plan", categoryId: "c-work", name: "Planning" },
+		{ id: "s-read", categoryId: "c-study", name: "Reading" },
+	];
+
+	function make(value: string) {
+		const input = document.createElement("input");
+		input.value = value;
+		input.setSelectionRange(value.length, value.length);
+		const bound: unknown[] = [];
+		const app = { vault: { getMarkdownFiles: () => [] } };
+		const suggest = new QuickAddSuggest(app as never, input, { categories: () => lists, sections: (id) => sections.filter((x) => x.categoryId === id), tags: () => [] }, (d) => bound.push(d));
+		const lookup = (): unknown[] => (suggest as unknown as { getSuggestions(q: string): unknown[] }).getSuggestions(input.value);
+		const render = (item: unknown): string => {
+			const el = document.createElement("div");
+			(el as unknown as { setText(t: string): void }).setText = (t) => void (el.textContent = t);
+			suggest.renderSuggestion(item as never, el);
+			return el.textContent ?? "";
+		};
+		return { suggest, input, lookup, render, bound };
+	}
+
+	it("#69: an opening parenthesis starts a token: `(#Wo` offers Work", () => {
+		const { lookup, render } = make("Report (#Wo");
+		expect(lookup().map(render)).toEqual(["Work"]);
+	});
+
+	it("#69: once `#Work/` is typed it offers that list's sections, and a pick binds the list and the section", () => {
+		const { suggest, input, lookup, render, bound } = make("Report #Work/");
+		const items = lookup();
+		expect(items.map(render)).toEqual(["Work/Admin", "Work/Planning"]);
+		suggest.selectSuggestion(items[0] as never);
+		expect(input.value).toBe("Report #Work/Admin");
+		expect(bound).toMatchObject([{ kind: "category", categoryId: "c-work", sectionId: "s-admin", text: "#Work/Admin" }]);
+	});
+
+	it("#69: the part after the slash narrows the sections", () => {
+		const { lookup, render } = make("Report #work/pla");
+		expect(lookup().map(render)).toEqual(["Work/Planning"]);
+	});
+});
