@@ -17,7 +17,7 @@ const FRAGMENTS = [
 	"#", "@", "@home", "@new", "a@b.com", "[[Plan]]", "[[Big|x]]", "[[", "]]", "[[]]", "|", " ", "  ", "\n", "\t",
 	"😀", "Café", "Cafe\u0301", "明日", "\u200b", "\u0000", "\uFFFC", "Mar 8 2:30am", "Nov 1 1:30am", "noon", "midnight",
 	"!1", "!2", "!3", "!high", "!Medium", "!LOW", "!", "!!1", "!4", "Wow!", "!1x", "1h", "5", "12", "-", "_", "/", ",", ".", "at", "on", "the", "and",
-	"(", ")", '"', "\u201c", "\u201d", "\\", "@4pm", "@noon", "at 0900", "3-4pm", "#Study/x", ":", "?", "\u2013",
+	"(", ")", '"', "\u201c", "\u201d", "\\", "@4pm", "@noon", "@4pm-5pm", "at 0900", "3-4pm", "at 9am-10am", "at 10am-9am", "#Study/x", ":", "?", "\u2013",
 ];
 
 const arbFragmentText = fc.array(fc.constantFrom(...FRAGMENTS), { maxLength: 14 }).map((a) => a.join(""));
@@ -73,6 +73,8 @@ function titleKeepsTheRest(input: string, r: ParseResult): boolean {
 	const n = input.length;
 	const removed = new Uint8Array(n);
 	for (const c of applied(r)) removed.fill(1, c.span.start, c.span.end);
+	// Text a chip keeps inside its span (a repeat's backwards time range keeps its start) is not removed.
+	for (const c of applied(r)) if (c.keep !== undefined) removed.fill(0, c.keep.start, c.keep.end);
 	const gone = (j: number): boolean => j >= 0 && j < n && removed[j] === 1;
 	const blank = (j: number): boolean => j < 0 || j >= n || isSpace(input.charAt(j));
 	// Whether an applied span is reachable from `i` over whitespace, marks and removed text.

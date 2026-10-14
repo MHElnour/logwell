@@ -257,7 +257,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		return end;
 	};
 	const repeatTokens = findRecurrence(reading.text, takenInReading)
-		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
+		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), keep: t.keep === undefined ? undefined : toInputSpan(t.keep), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
 		.filter((t) => {
 			if (t.silent) take(t.span);
 			return !t.silent;
@@ -276,7 +276,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 					{ label: label(built.other), rule: built.other },
 				],
 			});
-		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule, ...(built.durationMin === undefined ? {} : { durationMin: built.durationMin }) });
+		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule, ...(built.durationMin === undefined ? {} : { durationMin: built.durationMin }), ...(t.keep === undefined ? {} : { keep: t.keep }) });
 		drafts.push(repeat);
 		const end = t.end === null ? null : endDraftOf(t.end);
 		if (t.bare) bare.set(repeat, end);
@@ -541,8 +541,11 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 	const n = input.length;
 	const applied = chips.filter((c) => c.status === "applied");
 	const gone = new Uint8Array(n);
+	// A chip's `keep` text stays, as text the user kept does.
+	const keeps = applied.flatMap((c) => (c.keep === undefined ? [] : [c.keep]));
 	for (const c of applied) gone.fill(1, c.span.start, c.span.end);
-	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end);
+	for (const k of keeps) gone.fill(0, k.start, k.end);
+	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end) || keeps.some((l) => l.start <= i && i < l.end);
 	const space = (i: number): boolean => i < 0 || i >= n || isSpaceChar(input.charAt(i));
 	// The first and the last word character of the title.
 	let first = -1;

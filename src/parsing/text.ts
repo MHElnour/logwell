@@ -284,14 +284,18 @@ export function dayNumber(text: string): number | null {
 /** A clock time: "9", "9:30pm", "5 p.m.", "17:00", "noon", "midnight". */
 export const CLOCK_PATTERN = "(?:\\d{1,2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?|noon|midnight)";
 
-// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon"; not the start of a
-// range ("@4pm-5pm", "@4pm to 5pm"), which the table does not read after `@`.
-const AT_CLOCK_RE = new RegExp(`(?:\\d{1,2}(?::\\d{2})?[ap]m|noon)(?![\\p{L}\\p{N}_])(?!${RANGE_TO_PATTERN}(?:\\d|noon))`, "iuy");
+// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon", and the end of a
+// range written onto it ("4pm-5pm", which a tag name could also be).
+const AT_CLOCK = "(?:\\d{1,2}(?::\\d{2})?[ap]m|noon)";
+const AT_CLOCK_RE = new RegExp(`(${AT_CLOCK})(?:-(${AT_CLOCK}))?(?![\\p{L}\\p{N}_])`, "iuy");
 
-/** The length of the clock time `@` reads at `at` ("4pm", "4:30pm", "noon"), or 0 when none starts there. */
+/**
+ * The length of the clock time `@` reads at `at` ("4pm", "4:30pm", "noon", "4pm-5pm": `@` reads as `at`), or 0 when none
+ * starts there.
+ */
 export function atClockLength(s: string, at: number): number {
 	const m = sticky(AT_CLOCK_RE, s, at);
-	return m !== null && readClock(m[0]) !== null ? m[0].length : 0;
+	return m !== null && readClock(m[1]!) !== null && (m[2] === undefined || readClock(m[2]) !== null) ? m[0].length : 0;
 }
 
 // `at` and a 24-hour time of four digits, hours 00 to 23 and minutes 00 to 59 ("at 0900", "at 1730"); the end of a
@@ -384,10 +388,10 @@ export const DURATION_UNIT_PATTERN = "(?:hours?|hrs?|h|minutes?|mins?|m)";
 
 /**
  * A time range of two clock times on one day ("5pm-6pm", "17:30-18:30", "3-4pm": a start without am or pm takes the
- * end's): its start as "HH:mm" and the minutes to its end, zero or less when the end is not after the start. Null
+ * end's): its start and end as "HH:mm" and the minutes between, zero or less when the end is not after the start. Null
  * unless both read as clock times and both halves of the day are certain.
  */
-export function readClockRange(start: string, end: string): { time: string; minutes: number } | null {
+export function readClockRange(start: string, end: string): { time: string; end: string; minutes: number } | null {
 	const to = readClock(end);
 	if (to === null || to.ambiguous) return null;
 	const half = /([ap])\.?m\.?$/iu.exec(end.trim());
@@ -395,7 +399,7 @@ export function readClockRange(start: string, end: string): { time: string; minu
 	if (from?.ambiguous === true && half !== null) from = readClock(`${start.trim()}${half[1]!}m`);
 	if (from === null || from.ambiguous) return null;
 	const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
-	return { time: from.time, minutes: minutesOf(to.time) - minutesOf(from.time) };
+	return { time: from.time, end: to.time, minutes: minutesOf(to.time) - minutesOf(from.time) };
 }
 
 /** A clock time as "HH:mm", and whether its hour could be either half of the day (1 to 12 without am or pm). */

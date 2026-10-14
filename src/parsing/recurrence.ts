@@ -189,9 +189,10 @@ export function parseRepeatText(text: string, zone: string): ParsedRepeat | null
 		if (clock === null) return null;
 		phrase = at[1]!;
 		time = clock.time;
+		// A range whose end is not after its start is the end time alone, as in a date ("every day at 10am-9am").
 		if ("minutes" in clock) {
-			if (clock.minutes <= 0) return null;
-			durationMin = clock.minutes;
+			if (clock.minutes > 0) durationMin = clock.minutes;
+			else time = clock.end;
 		} else ambiguous = clock.ambiguous;
 	}
 	const parsed = parseBody(bodyOf(phrase));
