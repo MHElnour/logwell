@@ -117,3 +117,5 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#85) Fixed Quick Add's date and ⋯ popovers being cut off in a short view; Time now says it needs a date.
 
 ## Security
+
+- (#197) Updated the bundled interface library to a version that fixes a published security advisory.

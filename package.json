@@ -46,6 +46,6 @@
   "dependencies": {
     "chrono-node": "2.10.1",
     "luxon": "3.7.2",
-    "preact": "10.27.2"
+    "preact": "10.27.3"
   }
 }
