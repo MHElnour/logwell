@@ -250,9 +250,11 @@ const WEEKDAY_RANGE = `${WEEKDAY_PATTERN}${RANGE_TO_PATTERN}${WEEKDAY_PATTERN}${
 const DAY_FULL = `(?!${RANGE_START})${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}`;
 const DAY_ABBR = `(?!${RANGE_START})${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}`;
 const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
+// A repeat's time: `at` and a clock time ("at 9", "at 5:30pm").
+const AT_TIME = `at\\s+${CLOCK_PATTERN}`;
 // Joined by plain spaces, `sat` and `sun` continue a list only when nothing but more weekdays, a time and punctuation
 // follows ("every mon wed sat", not "every monday sun cream"); joined by a comma, "and" or "&", they always do.
-const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN})?[\\s\\p{P}]*$)`;
+const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+${AT_TIME})?[\\s\\p{P}]*$)`;
 const WEEKDAY_LIST = `(?:${WEEKDAY_RANGE}|${DAY})(?:${LIST_SEP_PATTERN}${DAY}|\\s+${DAY_FULL}|\\s+${DAY_ABBR}${LIST_ENDS_HERE})*`;
 const OF_MONTH = "\\s+of\\s+(?:the|each|every)\\s+month";
 // "on the 15th", "on day 15", "on 15", "on the last day": the day of a monthly repeat; a bare number before a month
@@ -281,16 +283,16 @@ const EVERY_RE = new RegExp(
 	"iyu",
 );
 // A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
-const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+const EVERY_TIME_RE = new RegExp(`\\s+${AT_TIME}${NOT_WORD_AFTER}`, "iyu");
 // The end of a time range after that time: the repeat takes the start, and the end stays title text ("every monday at
 // 5pm-6pm", "every monday at 6pm to 7pm").
 const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // The same time typed right before the repeat, with only spaces between ("Wake at 6am every day"), read in the few
 // characters before it.
-const TIME_BEFORE_RE = new RegExp(`(at\\s+${CLOCK_PATTERN})(\\s+)$`, "iu");
+const TIME_BEFORE_RE = new RegExp(`(${AT_TIME})(\\s+)$`, "iu");
 const TIME_BEFORE_REACH = 32;
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
-const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+const RUN_TIME_RE = new RegExp(`\\s*${AT_TIME}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
 // starts with a month name. Elsewhere a month name is a date, never a repeat word.
 const EVERY_MONTH_RE = new RegExp(`every\\s+(?!${RANGE_START})${MONTH_PATTERN}(?:\\s+${RANGE_DAY})?${NOT_WORD_AFTER}`, "iyu");
