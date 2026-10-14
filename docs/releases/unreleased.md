@@ -21,6 +21,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#201) Quick Add's suggested, unknown and unsupported chips are marked with a line under them that every Obsidian version draws the same way.
 ## Fixed
 
 ## Security
