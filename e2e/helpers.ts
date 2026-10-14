@@ -734,10 +734,12 @@ export async function setAppWidth(width: number | null): Promise<void> {
 /**
  * Switches Obsidian to its light or dark theme: Obsidian's internal changeTheme ("moonstone" = light, "obsidian" =
  * dark; not in the public typings, so it is feature-detected), then the body classes the plugin's rules key on.
- * Obsidian can re-apply its own theme a moment later (seen once in three full runs), so the classes are checked after
- * a pause and forced again, at most 4 times.
+ * Obsidian can re-apply its own theme a moment later, even after the classes first match, so the switch counts only
+ * once the classes hold at two checks 400 ms apart; otherwise it is forced again, at most 4 times, then it throws.
  */
 export async function setTheme(mode: "light" | "dark"): Promise<void> {
+	const holds = () =>
+		browser.execute((m) => document.body.classList.contains(`theme-${m}`) && !document.body.classList.contains(`theme-${m === "light" ? "dark" : "light"}`), mode);
 	for (let attempt = 0; attempt < 4; attempt++) {
 		await browser.executeObsidian(({ app }, m) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -747,7 +749,9 @@ export async function setTheme(mode: "light" | "dark"): Promise<void> {
 			document.body.classList.toggle("theme-dark", m === "dark");
 		}, mode);
 		await browser.pause(400);
-		const ok = await browser.execute((m) => document.body.classList.contains(`theme-${m}`) && !document.body.classList.contains(`theme-${m === "light" ? "dark" : "light"}`), mode);
-		if (ok) return;
+		if (!(await holds())) continue;
+		await browser.pause(400);
+		if (await holds()) return;
 	}
+	throw new Error(`The ${mode} theme did not hold after 4 switches.`);
 }
