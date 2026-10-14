@@ -193,6 +193,8 @@ interface RepeatToken {
 	end: RepeatCount | null;
 	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
 	onDate: boolean;
+	/** The end of a time range right after the repeat's time (`-6pm` in "every monday at 5pm-6pm"): title text, never read. */
+	timeEnd: Span | null;
 }
 
 /**
@@ -278,6 +280,9 @@ const EVERY_RE = new RegExp(
 );
 // A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
 const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+// The end of a time range after that time: the repeat takes the start, and the end stays title text ("every monday at
+// 5pm-6pm", "every monday at 6pm to 7pm").
+const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
 const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
@@ -360,6 +365,8 @@ interface RepeatPhrase {
 	silent: boolean;
 	/** "every year on …": the span ends with the "on" that leads into the start date. */
 	onDate: boolean;
+	/** The span ends with the repeat's time ("every monday at 9"). */
+	timed: boolean;
 }
 
 /**
@@ -369,10 +376,10 @@ interface RepeatPhrase {
 function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | null {
 	const body = start + word.length;
 	if (!isSpaceChar(charAt(s, body))) return null;
-	const phrase = (end: number, supported: boolean, onDate = false): RepeatPhrase => ({ end, supported, silent: false, onDate });
+	const phrase = (end: number, supported: boolean, onDate = false, timed = false): RepeatPhrase => ({ end, supported, silent: false, onDate, timed });
 	if (word.toLowerCase() === "each") {
 		const end = repeatWordsEnd(s, body);
-		return end === body ? null : { end, supported: false, silent: true, onDate: false };
+		return end === body ? null : { end, supported: false, silent: true, onDate: false, timed: false };
 	}
 	const form = sticky(EVERY_RE, s, start);
 	if (form === null) {
@@ -389,7 +396,7 @@ function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | 
 	const joined = join === null ? end : end + join[0].length;
 	const more = join === null ? end : repeatWordsEnd(s, joined);
 	const compound = more > joined && !NUMBERS_ONLY_RE.test(s.slice(joined, more));
-	return compound ? phrase(more, false) : phrase(end, true);
+	return compound ? phrase(more, false) : phrase(end, true, false, time !== null);
 }
 
 /**
@@ -422,13 +429,15 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		for (let i = start; i < end; i++) if (covered[i] === 1) return false;
 		return true;
 	};
-	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate">): number => {
+	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate" | "timed">): number => {
 		const found = phrase.onDate || phrase.silent ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate });
-		covered.fill(1, span.start, span.end);
+		const range = end === null && phrase.timed ? sticky(TIME_END_RE, s, span.end) : null;
+		const timeEnd = range !== null && free(span.end, span.end + range[0].length) ? { start: span.end, end: span.end + range[0].length } : null;
+		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate, timeEnd });
+		covered.fill(1, span.start, timeEnd?.end ?? span.end);
 		if (end !== null) covered.fill(1, end.span.start, end.span.end);
-		return end === null ? span.end : end.span.end;
+		return end?.span.end ?? timeEnd?.end ?? span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {
 		let end = found.index + found[0].length;
@@ -440,7 +449,7 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		// "on mondays", "on weekends", "on the last friday of the month": the "on" goes with the repeat; not "on daily".
 		const on = bare && !/s$/iu.test(found[0]) ? -1 : wordBefore(s, found.index, "on");
 		const start = on === -1 ? found.index : on;
-		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate });
+		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate, timed: time !== null });
 	};
 
 	// The `every` phrases first, so "every 2nd and 4th tuesday of every month" is one unsupported phrase; the "every" of

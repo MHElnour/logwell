@@ -943,6 +943,24 @@ describe("7. Everyday phrasings", () => {
 		])("#69: $in", (row) => checkRow(row));
 	});
 
+	describe("a time range after a repeat's time", () => {
+		it.each<Row>([
+			// the repeat takes the start time; the rest stays in the title, with no date or duration of its own
+			{ in: "Gym every monday at 5:30pm-6:30pm", title: "Gym -6:30pm", rec: "weekly:MO@17:30", dur: null, brief: ["recurrence|applied|every monday at 5:30pm"] },
+			{ in: "Gym every monday at 1730-1830", title: "Gym -1830", rec: "weekly:MO@17:30", dur: null, brief: ["recurrence|applied|every monday at 1730"] },
+			{ in: "Gym every day at 9am-10am", title: "Gym -10am", rec: "daily@09:00", dur: null, brief: ["recurrence|applied|every day at 9am"] },
+			{ in: "Gym every day at 10am-9am", title: "Gym -9am", rec: "daily@10:00", dur: null, brief: ["recurrence|applied|every day at 10am"] },
+			{ in: "Gym every weekday at 7am-8am starting tomorrow", title: "Gym -8am", rec: "weekly:MO,TU,WE,TH,FR@07:00", s: "2026-10-08", dur: null, brief: ["recurrence|applied|every weekday at 7am", "scheduled|applied|starting tomorrow"] },
+			{ in: "Gym every monday at 6pm to 7pm", title: "Gym to 7pm", rec: "weekly:MO@18:00", dur: null, brief: ["recurrence|applied|every monday at 6pm"] },
+			// without `at` the range is not the repeat's time: only a suggestion, as before
+			{ in: "Gym every monday 6-7pm", title: "Gym 6-7pm", rec: "weekly:MO", dur: null, brief: ["recurrence|applied|every monday", "scheduled|suggestion|6-7pm"] },
+			{ in: "Gym mondays 6-7pm", title: "Gym 6-7pm", rec: "weekly:MO", dur: null, brief: ["recurrence|applied|mondays", "scheduled|suggestion|6-7pm"] },
+			// a single time and a range without a repeat as before
+			{ in: "Gym every day at 9am", title: "Gym", rec: "daily@09:00", brief: ["recurrence|applied|every day at 9am"] },
+			{ in: "Meeting 3-4pm", title: "Meeting 3-4pm", dur: null, brief: ["scheduled|suggestion|3-4pm"] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
 	describe("durations need for", () => {
 		it.each<Row>([
 			{ in: "Gym for 2h", title: "Gym", dur: 120 },

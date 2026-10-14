@@ -257,13 +257,15 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		return end;
 	};
 	const repeatTokens = findRecurrence(reading.text, takenInReading)
-		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
+		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), timeEnd: t.timeEnd === null ? null : toInputSpan(t.timeEnd), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
 		.filter((t) => {
 			if (t.silent) take(t.span);
 			return !t.silent;
 		});
 	for (const t of repeatTokens) {
 		take(t.span);
+		// The end of a time range after the repeat's time stays title text, never a date: the repeat takes the start.
+		if (t.timeEnd !== null) take(t.timeEnd);
 		const built = t.supported ? parseRepeatText(reading.text.slice(t.read.start, t.read.end), ctx.zone) : null;
 		let repeat: Draft;
 		if (built === null) repeat = draft(input, "recurrence", t.span, "unsupported", { notice: NOTICE.recurrence });

@@ -49,7 +49,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | A linked note | `[[Budget]]`, `[[Home/Budget]]`, `[[Budget\|alias]]` | Matches the note by path, then by name. |
 | A priority | `!1` or `!high`, `!2` or `!medium`, `!3` or `!low` | It must be a separate word: `Wow!` and `!4` stay text. Punctuation around it is fine: `!1.`, `(!2)`. |
 
-You can also type a repeat, its time, its first date and its end, such as `Pay rent every month on the 1st`, `Stretch daily at 7am` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for every phrase you can type.
+You can also type a repeat, its time, its first date and its end, such as `Pay rent every month on the 1st`, `Stretch daily at 7am` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. After a repeat's time, a time range uses only its start: `Gym every monday at 6pm to 7pm` repeats at 18:00 and keeps "to 7pm" in the title. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for every phrase you can type.
 
 ## Fix an unknown list or note
 

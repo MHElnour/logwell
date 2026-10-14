@@ -59,6 +59,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#69) Fixed Quick Add reading a range after a repeat's time, like `every monday at 5pm-6pm`, as a separate date; the repeat takes the start time.
 - (#69) Fixed Quick Add missing `!1.`, `(#Work)` or `@urgent!` beside punctuation, and leaving stray marks like `.` or `()` in titles.
 - (#69) Fixed Quick Add with the Day/month date order only suggesting `Oct 15` and missing `Feb 29`; month-first dates now apply.
 - (#190) Fixed a task block `tag:` list keeping one tag twice when its accented letters were typed in two ways.
