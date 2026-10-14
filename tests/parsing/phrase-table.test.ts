@@ -961,6 +961,35 @@ describe("7. Everyday phrasings", () => {
 		])("#69: $in", (row) => checkRow(row));
 	});
 
+	describe("a time right before a repeat", () => {
+		it.each<Row>([
+			// `at` or `@` and a time with only spaces before the repeat is the repeat's time, as one typed after it
+			{ in: "Wake at 0600 every day", title: "Wake", rec: "daily@06:00", brief: ["recurrence|applied|at 0600 every day"] },
+			{ in: "Wake at 6am every day", title: "Wake", rec: "daily@06:00", brief: ["recurrence|applied|at 6am every day"] },
+			{ in: "Wake @6am every day", title: "Wake", rec: "daily@06:00", nt: [], brief: ["recurrence|applied|@6am every day"] },
+			{ in: "Gym at 5:30pm every monday", title: "Gym", rec: "weekly:MO@17:30", brief: ["recurrence|applied|at 5:30pm every monday"] },
+			{ in: "Gym at 7am weekdays", title: "Gym", rec: "weekly:MO,TU,WE,TH,FR@07:00", brief: ["recurrence|applied|at 7am weekdays"] },
+			// a date between them: the time goes with the date, as before
+			{ in: "Wake at 6am tomorrow every day", title: "Wake", rec: "daily", s: "2026-10-08T06:00", brief: ["scheduled|applied|at 6am tomorrow", "recurrence|applied|every day"] },
+			// a time after the repeat and a time with no repeat, as before
+			{ in: "Wake every day at 6am", title: "Wake", rec: "daily@06:00", brief: ["recurrence|applied|every day at 6am"] },
+			{ in: "Call at 6am", title: "Call", s: "2026-10-08T06:00", brief: ["scheduled|applied|at 6am"] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
+	describe("two times for the task", () => {
+		it.each<Row>([
+			// with no repeat the first time wins; a later time alone stays title text, with no chip
+			{ in: "Call at 4pm and at 5pm", title: "Call and at 5pm", s: "2026-10-07T16:00", brief: ["scheduled|applied|at 4pm"] },
+			{ in: "Call @4pm and @5pm", title: "Call and @5pm", s: "2026-10-07T16:00", nt: [], brief: ["scheduled|applied|@4pm"] },
+			{ in: "Call at 0900 or at 1000", title: "Call or at 1000", s: "2026-10-08T09:00", brief: ["scheduled|applied|at 0900"] },
+			{ in: "Call tomorrow at 4pm, at 5pm", title: "Call at 5pm", s: "2026-10-08T16:00", brief: ["scheduled|applied|tomorrow at 4pm"] },
+			// two dates, and a date with one time, as before
+			{ in: "Meet Friday tomorrow", title: "Meet", s: "2026-10-08", brief: ["scheduled|applied|Friday tomorrow"] },
+			{ in: "Call tomorrow at 4pm", title: "Call", s: "2026-10-08T16:00", brief: ["scheduled|applied|tomorrow at 4pm"] },
+		])("#69: $in", (row) => checkRow(row));
+	});
+
 	describe("durations need for", () => {
 		it.each<Row>([
 			{ in: "Gym for 2h", title: "Gym", dur: 120 },

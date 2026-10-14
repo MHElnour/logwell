@@ -23,7 +23,7 @@ The **Add subtask** bar in the details pane reads text the same way. See [Tasks]
 Each word Logwell recognizes is highlighted, shown as a chip under the input and taken out of the title. `Pay rent friday #Home @errands !1` becomes the title "Pay rent" with a date, a list, a tag and a priority.
 
 - Press × on a chip to keep its words in the title as plain text.
-- When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value".
+- When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value". Times are the exception: the first time wins, and a later one stays in the title, as in `Call at 4pm and at 5pm`.
 - Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
 - A range, such as `Friday until midnight` or `Oct 12 to Oct 20`, is also a suggestion. Its date is the start as you would get it typed alone: `Friday until midnight` typed on a Wednesday suggests the coming Friday.
 - Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
@@ -49,7 +49,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | A linked note | `[[Budget]]`, `[[Home/Budget]]`, `[[Budget\|alias]]` | Matches the note by path, then by name. |
 | A priority | `!1` or `!high`, `!2` or `!medium`, `!3` or `!low` | It must be a separate word: `Wow!` and `!4` stay text. Punctuation around it is fine: `!1.`, `(!2)`. |
 
-You can also type a repeat, its time, its first date and its end, such as `Pay rent every month on the 1st`, `Stretch daily at 7am` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. After a repeat's time, a time range uses only its start: `Gym every monday at 6pm to 7pm` repeats at 18:00 and keeps "to 7pm" in the title. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for every phrase you can type.
+You can also type a repeat, its time, its first date and its end, such as `Pay rent every month on the 1st`, `Stretch daily at 7am` or `Pills every day until Dec 1`. A repeat it cannot make yet, such as `every 3 hours`, stays in the title, marked "Recurrence not supported yet", and is never read as a date. A time typed right before a repeat is its time, as one typed after it: `Wake at 6am every day` repeats at 06:00. After a repeat's time, a time range uses only its start: `Gym every monday at 6pm to 7pm` repeats at 18:00 and keeps "to 7pm" in the title. See [Repeating tasks](repeating-tasks.md#type-a-repeat) for every phrase you can type.
 
 ## Fix an unknown list or note
 

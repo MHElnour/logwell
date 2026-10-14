@@ -59,6 +59,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#69) Fixed Quick Add reading `Wake at 6am every day` as a separate date; a time right before a repeat is the repeat's time.
+- (#69) Fixed Quick Add using the last of several times; the first time wins, as in `Call at 4pm and at 5pm`.
 - (#69) Fixed Quick Add reading a range after a repeat's time, like `every monday at 5pm-6pm`, as a separate date; the repeat takes the start time.
 - (#69) Fixed Quick Add missing `!1.`, `(#Work)` or `@urgent!` beside punctuation, and leaving stray marks like `.` or `()` in titles.
 - (#69) Fixed Quick Add with the Day/month date order only suggesting `Oct 15` and missing `Feb 29`; month-first dates now apply.

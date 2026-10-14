@@ -195,6 +195,8 @@ interface RepeatToken {
 	onDate: boolean;
 	/** The end of a time range right after the repeat's time (`-6pm` in "every monday at 5pm-6pm"): title text, never read. */
 	timeEnd: Span | null;
+	/** The repeat's time typed right before it ("at 6am" in "Wake at 6am every day"), where the span starts. */
+	timeBefore: Span | null;
 }
 
 /**
@@ -283,6 +285,10 @@ const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, 
 // The end of a time range after that time: the repeat takes the start, and the end stays title text ("every monday at
 // 5pm-6pm", "every monday at 6pm to 7pm").
 const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+// The same time typed right before the repeat, with only spaces between ("Wake at 6am every day"), read in the few
+// characters before it.
+const TIME_BEFORE_RE = new RegExp(`(at\\s+${CLOCK_PATTERN})(\\s+)$`, "iu");
+const TIME_BEFORE_REACH = 32;
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
 const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
@@ -434,8 +440,13 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
 		const range = end === null && phrase.timed ? sticky(TIME_END_RE, s, span.end) : null;
 		const timeEnd = range !== null && free(span.end, span.end + range[0].length) ? { start: span.end, end: span.end + range[0].length } : null;
-		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate, timeEnd });
-		covered.fill(1, span.start, timeEnd?.end ?? span.end);
+		const reach = Math.max(0, span.start - TIME_BEFORE_REACH);
+		const before = phrase.supported && !phrase.silent && !phrase.onDate && !phrase.timed ? TIME_BEFORE_RE.exec(s.slice(reach, span.start)) : null;
+		const at = before === null ? -1 : span.start - before[2]!.length - before[1]!.length;
+		const timeBefore = before !== null && wordBoundaryBefore(s, at) && free(at, span.start) ? { start: at, end: at + before[1]!.length } : null;
+		const whole = timeBefore === null ? span : { start: timeBefore.start, end: span.end };
+		out.push({ span: whole, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate, timeEnd, timeBefore });
+		covered.fill(1, whole.start, timeEnd?.end ?? span.end);
 		if (end !== null) covered.fill(1, end.span.start, end.span.end);
 		return end?.span.end ?? timeEnd?.end ?? span.end;
 	};

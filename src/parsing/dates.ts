@@ -54,6 +54,8 @@ export interface DateCandidate {
 	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
 	rolls: RollKind | null;
 	outcome: DateOutcome;
+	/** A certain hour: "alone" for one time with no day of its own ("at 5pm"), "dated" for any other; absent without one. */
+	time?: "alone" | "dated";
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
@@ -593,6 +595,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,
 			outcome,
+			...(hourCertain ? { time: timeOnly(r) ? ("alone" as const) : ("dated" as const) } : {}),
 		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start

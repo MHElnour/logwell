@@ -266,7 +266,10 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		take(t.span);
 		// The end of a time range after the repeat's time stays title text, never a date: the repeat takes the start.
 		if (t.timeEnd !== null) take(t.timeEnd);
-		const built = t.supported ? parseRepeatText(reading.text.slice(t.read.start, t.read.end), ctx.zone) : null;
+		// A time typed before the repeat reads as one typed after it.
+		const before = t.timeBefore;
+		const text = before === null ? reading.text.slice(t.read.start, t.read.end) : `${reading.text.slice(before.end, t.read.end)} ${reading.text.slice(before.start, before.end)}`;
+		const built = t.supported ? parseRepeatText(text, ctx.zone) : null;
 		let repeat: Draft;
 		if (built === null) repeat = draft(input, "recurrence", t.span, "unsupported", { notice: NOTICE.recurrence });
 		else if (built.other !== null) {
@@ -377,7 +380,16 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// The ends typed as a bare weekday or a month and day with no year: before the start they move past it (bindEnds).
 	const rolling = new Map<string, RollKind>();
 	const readings = dates.flatMap((c) => (c.range !== undefined && built && isPart(c) && !onWeekly(c) && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
-	for (const c of readings) {
+	// With no typed repeat the task's first time wins: a later time alone stays title text, with no chip ("Call at 4pm and
+	// at 5pm"). A later date keeps the rule below that the later value wins.
+	let timed = false;
+	const firstTime = (c: DateCandidate): boolean => {
+		if (typed || c.kind !== "scheduled" || c.time === undefined) return true;
+		const keep = !timed || c.time !== "alone";
+		timed = true;
+		return keep;
+	};
+	for (const c of readings.filter(firstTime)) {
 		if (!isPart(c)) {
 			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words. `until <date>`
 			// without a repeat is a deadline (decision 8).
