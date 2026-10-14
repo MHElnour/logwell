@@ -7,6 +7,8 @@ import {
 	appZone,
 	centerOf,
 	closeQuickAdd,
+	createTask,
+	detachAppLeaves,
 	dragPointer,
 	flush,
 	freshDatabase,
@@ -18,16 +20,9 @@ import {
 	setGroupBy,
 	showSidebarView,
 	useDomMenus,
-	createTask,
 	visibleTasksSection,
 	waitForStableRect,
 } from "../helpers";
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
-}
 
 /** Opens a view (its sidebar entry) and returns the visible Tasks section. */
 async function openView(name: string): Promise<WebdriverIO.Element> {

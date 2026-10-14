@@ -4,16 +4,17 @@
 // wide, so details and the unscheduled drawer float over the grid.
 import { browser, expect } from "@wdio/globals";
 import {
-	type ViewportPoint,
 	appToday,
 	appWeekStart,
 	appZone,
 	centerOf,
 	createTask,
+	detachAppLeaves,
 	dragPointer,
 	freshDatabase,
 	getTask,
 	rectOf,
+	type ViewportPoint,
 	visibleCalendar,
 	waitForStableRect,
 	weekDatesOf,
@@ -39,12 +40,6 @@ async function column(calendar: WebdriverIO.Element, date: string): Promise<Webd
 async function slotPoint(calendar: WebdriverIO.Element, date: string, minutes: number): Promise<ViewportPoint> {
 	const r = await rectOf(await column(calendar, date));
 	return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + (minutes / 60) * HOUR_PX) };
-}
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
 }
 
 describe("Calendar drag", function () {

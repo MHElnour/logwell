@@ -8,6 +8,7 @@ import {
 	centerOf,
 	closeQuickAdd,
 	createTask,
+	detachAppLeaves,
 	dragPointer,
 	freshDatabase,
 	getTask,
@@ -108,12 +109,6 @@ async function waitForSeededCards(): Promise<void> {
 	await browser.waitUntil(async () => Object.values(await readMatrix()).flatMap(titlesOf).length === 6, {
 		timeout: 5000,
 		timeoutMsg: "the matrix did not render the seeded cards",
-	});
-}
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
 	});
 }
 

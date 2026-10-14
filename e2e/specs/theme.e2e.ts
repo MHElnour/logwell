@@ -3,7 +3,7 @@
 // executed. Run `npm run e2e` locally and fix what the real app shows.
 // The accent setting and both Obsidian themes.
 import { browser, expect } from "@wdio/globals";
-import { closeQuickAdd, freshDatabase, openQuickAdd, setPluginSetting, showInbox, visibleTasksSection } from "../helpers";
+import { closeQuickAdd, freshDatabase, openQuickAdd, setPluginSetting, setTheme, showInbox, visibleTasksSection } from "../helpers";
 
 /** The resolved value of a CSS variable on an element, or on the body when no selector is given. */
 async function cssVar(selector: string, name: string): Promise<string> {
@@ -15,20 +15,6 @@ async function cssVar(selector: string, name: string): Promise<string> {
 		selector,
 		name,
 	);
-}
-
-async function setTheme(mode: "light" | "dark"): Promise<void> {
-	await browser.executeObsidian(({ app }, m) => {
-		// changeTheme is Obsidian's internal switch ("moonstone" = light, "obsidian" = dark); it is not in
-		// the public typings, so it is feature-detected. The body classes are then forced to match, which
-		// is what every theme-dependent rule of the plugin keys on.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const a = app as any;
-		if (typeof a.changeTheme === "function") a.changeTheme(m === "light" ? "moonstone" : "obsidian");
-		document.body.classList.toggle("theme-light", m === "light");
-		document.body.classList.toggle("theme-dark", m === "dark");
-	}, mode);
-	await browser.pause(300);
 }
 
 describe("Accent setting", function () {

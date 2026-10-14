@@ -3,13 +3,13 @@
 // scoped to the visible Tasks section (background tabs keep hidden copies). Drags use the real pointer.
 import { browser, expect } from "@wdio/globals";
 import {
-	type ViewportPoint,
 	appToday,
 	appZone,
 	boardColumn,
 	centerOf,
 	columnCardIds,
 	createTask,
+	detachAppLeaves,
 	dragPointer,
 	freshDatabase,
 	getTask,
@@ -19,15 +19,10 @@ import {
 	setLayout,
 	showSidebarView,
 	storedOrder,
+	type ViewportPoint,
 	visibleTasksSection,
 	waitForStableRect,
 } from "../helpers";
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
-}
 
 /** Scrolls an element into view horizontally and vertically (a board column beyond the right edge). */
 async function bringIntoView(el: WebdriverIO.Element | ChainablePromiseElement): Promise<void> {

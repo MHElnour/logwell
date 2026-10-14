@@ -6,10 +6,12 @@ import { browser, expect } from "@wdio/globals";
 import {
 	boardColumn,
 	centerOf,
+	clickUndoNotice,
 	closeQuickAdd,
 	createCategory,
 	createSectionDirect,
 	createTask,
+	detachAppLeaves,
 	domClick,
 	dragPointer,
 	flush,
@@ -27,12 +29,6 @@ import {
 	visibleTasksSection,
 	waitForStableRect,
 } from "../helpers";
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
-}
 
 async function bringIntoView(el: WebdriverIO.Element | ChainablePromiseElement): Promise<void> {
 	const element = await el;
@@ -56,21 +52,6 @@ async function openList(name: string): Promise<WebdriverIO.Element> {
 /** The section ids in stored order. */
 async function sectionIdsOf(listId: string): Promise<string[]> {
 	return (await sectionsOf(listId)).map((s) => s.id);
-}
-
-/** Clicks "Undo" on the newest notice that has one. */
-async function clickUndoNotice(): Promise<void> {
-	await browser.waitUntil(
-		() =>
-			browser.execute(() => {
-				const buttons = Array.from(document.querySelectorAll<HTMLElement>(".notice .checkpoint-notice-actions button")).filter((b) => b.textContent === "Undo");
-				const last = buttons[buttons.length - 1];
-				if (last === undefined) return false;
-				last.click();
-				return true;
-			}),
-		{ timeout: 5000, timeoutMsg: "no Undo notice" },
-	);
 }
 
 async function waitForSectionNames(listId: string, names: string[]): Promise<void> {
