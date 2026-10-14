@@ -102,7 +102,7 @@ describe("block query parser: errors in the lines", () => {
 		const r = parseBlockQuery("nope: 1\ndue: soon\nsection: X");
 		expect(r.errors).toEqual([
 			"Unknown filter “nope”.",
-			"Unknown due value “soon”. Use today, overdue, this week or next 7 days.",
+			"Unknown due value “soon”. Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026.",
 			"section needs a list filter.",
 		]);
 	});
@@ -140,7 +140,7 @@ describe("block query parser: due", () => {
 
 	it("a bad value names the value and the allowed ones", () => {
 		const r = parseBlockQuery("due: tomorrow");
-		expect(r.errors).toEqual(["Unknown due value “tomorrow”. Use today, overdue, this week or next 7 days."]);
+		expect(r.errors).toEqual(["Unknown due value “tomorrow”. Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026."]);
 		expect(r.filters).toEqual({});
 	});
 
@@ -290,12 +290,12 @@ describe("scheduled and tag lists", () => {
 
 		it("a bad value names the key and the allowed values", () => {
 			const r = parseBlockQuery("scheduled: tomorrow");
-			expect(r.errors).toEqual(["Unknown scheduled value “tomorrow”. Use today, overdue, this week or next 7 days."]);
+			expect(r.errors).toEqual(["Unknown scheduled value “tomorrow”. Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026."]);
 			expect(r.filters).toEqual({});
 		});
 
 		it("a due value error names due", () => {
-			expect(parseBlockQuery("due: soon").errors).toEqual(["Unknown due value “soon”. Use today, overdue, this week or next 7 days."]);
+			expect(parseBlockQuery("due: soon").errors).toEqual(["Unknown due value “soon”. Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026."]);
 		});
 
 		it("does not take a comma list", () => {
@@ -369,5 +369,69 @@ describe("scheduled and tag lists", () => {
 				expect(describeBlockFilters(parseBlockQuery(`scheduled: ${value}`).filters)).toEqual([`scheduled: ${text}`]);
 			}
 		});
+	});
+});
+
+describe("block query parser: specific dates", () => {
+	const RANGE = "Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026.";
+	const one = (date: string) => ({ from: date, to: date });
+
+	it.each([
+		["a day in the past", "02-10-2026", one("2026-10-02")],
+		["a day in the future", "20-10-2026", one("2026-10-20")],
+		["the last day of a leap year", "31-12-2028", one("2028-12-31")],
+		["a leap day", "29-02-2028", one("2028-02-29")],
+		["a range", "01-10-2026 to 15-10-2026", { from: "2026-10-01", to: "2026-10-15" }],
+		["a range of one day", "05-10-2026 to 05-10-2026", one("2026-10-05")],
+		["a range over a year end", "28-12-2026 to 03-01-2027", { from: "2026-12-28", to: "2027-01-03" }],
+		["spacing and case around to", "  01-10-2026   TO   15-10-2026  ", { from: "2026-10-01", to: "2026-10-15" }],
+		["a mixed case to", "01-10-2026 To 15-10-2026", { from: "2026-10-01", to: "2026-10-15" }],
+	])("%s is read for due and scheduled: %s", (_name, value, range) => {
+		expect(parseBlockQuery(`due: ${value}`)).toEqual({ filters: { due: range }, errors: [] });
+		expect(parseBlockQuery(`scheduled: ${value}`)).toEqual({ filters: { scheduled: range }, errors: [] });
+	});
+
+	it.each([
+		["a month name", "Oct 20"],
+		["a relative word", "tomorrow"],
+		["a weekday", "Friday"],
+		["slashes", "02/10/2026"],
+		["year first", "2026-10-02"],
+		["a one-digit day", "2-10-2026"],
+		["a one-digit month", "02-1-2026"],
+		["a two-digit year", "02-10-26"],
+		["a day that does not exist", "30-02-2026"],
+		["a month that does not exist", "10-13-2026"],
+		["a leap day in a common year", "29-02-2027"],
+		["a range that ends before it starts", "15-10-2026 to 01-10-2026"],
+		["a range ending in words", "01-10-2026 to Oct 15"],
+		["a range starting in words", "Oct 1 to 15-10-2026"],
+		["a range ending in a year-first date", "01-10-2026 to 2026-10-15"],
+		["a dash instead of to", "01-10-2026 - 15-10-2026"],
+		["a range with no end", "01-10-2026 to"],
+		["a range with a second to", "01-10-2026 to 05-10-2026 to 15-10-2026"],
+		["to with no space", "01-10-2026to15-10-2026"],
+		["a date with trailing text", "02-10-2026 at 9am"],
+		["a date list", "01-10-2026, 02-10-2026"],
+		["a date with a time", "02-10-2026 14:00"],
+	])("%s is an error for due and scheduled: %s", (_name, value) => {
+		expect(parseBlockQuery(`due: ${value}`)).toEqual({ filters: {}, errors: [`Unknown due value \u201c${value}\u201d. ${RANGE}`] });
+		expect(parseBlockQuery(`scheduled: ${value}`)).toEqual({ filters: {}, errors: [`Unknown scheduled value \u201c${value}\u201d. ${RANGE}`] });
+	});
+
+	it("the error shows the value as typed, without the surrounding spaces", () => {
+		expect(parseBlockQuery("due:   30-02-2026   ").errors).toEqual([`Unknown due value \u201c30-02-2026\u201d. ${RANGE}`]);
+	});
+
+	it.each([
+		["a day", "due: 02-10-2026", ["due: 02-10-2026"]],
+		["a range", "due: 01-10-2026 to 15-10-2026", ["due: 01-10-2026 to 15-10-2026"]],
+		["a range with spacing and case", "scheduled:  01-10-2026   TO  15-10-2026", ["scheduled: 01-10-2026 to 15-10-2026"]],
+		["a range of one day reads as the day", "due: 05-10-2026 to 05-10-2026", ["due: 05-10-2026"]],
+		["both keys in the fixed order", "scheduled: 20-10-2026 to 25-10-2026\ndue: 02-10-2026", ["due: 02-10-2026", "scheduled: 20-10-2026 to 25-10-2026"]],
+	])("the summary line shows %s", (_name, source, chips) => {
+		const { filters } = parseBlockQuery(source);
+		expect(describeBlockFilters(filters)).toEqual(chips);
+		expect(parseBlockQuery(chips.join("\n"))).toEqual({ filters, errors: [] });
 	});
 });
