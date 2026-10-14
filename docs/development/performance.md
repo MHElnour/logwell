@@ -10,10 +10,10 @@ The harness grows one dimension at a time and keeps everything else at the basel
 
 For each row of [`tests/limits/limits-matrix.csv`](../../tests/limits/limits-matrix.csv), the harness:
 
-1. Builds a valid, deterministic database with that count through the project's own serializer (`e2e/limits/generate.ts`).
+1. Builds a valid, deterministic database with that count through the project's own serializer (`e2e-tests/limits/generate.ts`).
 2. Resets the sandboxed vault (a copy of `test-vault/`), writes the database into it and sets a 1400 by 900 window.
-3. Measures three times inside the Obsidian window (`e2e/limits/renderer.ts`), so WebDriver round trips never count. Each clock stops two animation frames after the view appears, so layout and paint are included, with a floor of about 17 to 33 ms.
-4. Classifies the row (`e2e/limits/classify.ts`) and writes it back into the CSV at once, so an interrupted run keeps what it has.
+3. Measures three times inside the Obsidian window (`e2e-tests/limits/renderer.ts`), so WebDriver round trips never count. Each clock stops two animation frames after the view appears, so layout and paint are included, with a floor of about 17 to 33 ms.
+4. Classifies the row (`e2e-tests/limits/classify.ts`) and writes it back into the CSV at once, so an interrupted run keeps what it has.
 
 ```mermaid
 flowchart LR
@@ -84,15 +84,15 @@ Use a quiet machine, one run at a time, and keep the mouse off the Obsidian wind
 1. Keep the latest run: `mkdir -p docs/development/performance/results/<YYYY-MM-DD>-<label>`, then copy `tests/limits/limits-matrix.csv` into it. The harness overwrites that file.
 2. Run the unit perf tests: `npx vitest run --project perf` and `npx vitest run tests/ui/perf-renders tests/ui/perf-virtual-list tests/limits`.
 3. Build the release bundle and run the matrix:
-   `npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e/limits/limits.e2e.ts`.
+   `npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e-tests/limits/limits.e2e.ts`.
    The harness is not part of `npm run e2e`. To run part of it, set `LIMITS_MAX_STEP` (the highest step, default 5) or `LIMITS_ONLY` (a comma list of dimensions).
 4. Read the summary the run prints, and open the screenshots in `.notes/limits/shots/`: `<dimension>-<step>.png` is each row's slowest view.
 5. Set `ui_ok` to `yes` or `no` for every measured row in the CSV. The harness keeps whatever `ui_ok` held before, so check every row. Change `result` to `broke` where `ui_ok` is `no`.
 6. Compare with the run you archived in step 1: `git diff --no-index --word-diff docs/development/performance/results/<YYYY-MM-DD>-<label>/limits-matrix.csv tests/limits/limits-matrix.csv`. The CSV writer keeps the quoting, so the diff shows only measured cells. A single row that moves while its neighbours do not is noise: rerun it with `LIMITS_ONLY`.
 7. To see where the time goes at 50,000 tasks, profile with the unminified build:
    1. `LOGWELL_PROFILE_BUILD=1 node esbuild.config.mjs production` writes an unminified `main.js` and `main.js.map`.
-   2. `npx wdio run ./wdio.conf.mts --spec ./e2e/limits/profile.e2e.ts` writes CPU profiles of open, save and view switches to `.notes/limits/profiles/`. `PROFILE_TASKS` sets the size.
-   3. `npx tsx e2e/limits/profile-report.ts` prints the tables, naming functions by `src/` file and line, and writes them to `.notes/limits/profiles/report.txt`.
+   2. `npx wdio run ./wdio.conf.mts --spec ./e2e-tests/limits/profile.e2e.ts` writes CPU profiles of open, save and view switches to `.notes/limits/profiles/`. `PROFILE_TASKS` sets the size.
+   3. `npx tsx e2e-tests/limits/profile-report.ts` prints the tables, naming functions by `src/` file and line, and writes them to `.notes/limits/profiles/report.txt`.
    4. `npm run build` puts the minified bundle back.
 8. Update the latest results below and add a line for the archived run under older runs.
 

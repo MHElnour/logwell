@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 // Turns the files profile.e2e.ts wrote into tables: .notes/limits/profiles/<phase>.cpuprofile and <phase>.manual.json.
 //
-//   npx tsx e2e/limits/profile-report.ts [phase ...]
+//   npx tsx e2e-tests/limits/profile-report.ts [phase ...]
 //
 // Needs main.js and main.js.map of the SAME unminified build the profile was taken with
 // (LOGWELL_PROFILE_BUILD=1 node esbuild.config.mjs production), to name functions by their src file and line.

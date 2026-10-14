@@ -10,8 +10,8 @@ import { RENDERER_SRC } from "./renderer";
 // Where the time goes at 50,000 tasks (the open, save and view numbers of tests/limits/limits-matrix.csv). NOT part of `npm run e2e`.
 //
 //   LOGWELL_PROFILE_BUILD=1 node esbuild.config.mjs production      # unminified bundle + main.js.map
-//   npx wdio run ./wdio.conf.mts --spec ./e2e/limits/profile.e2e.ts
-//   npx tsx e2e/limits/profile-report.ts                            # the tables (needs main.js.map from the build)
+//   npx wdio run ./wdio.conf.mts --spec ./e2e-tests/limits/profile.e2e.ts
+//   npx tsx e2e-tests/limits/profile-report.ts                            # the tables (needs main.js.map from the build)
 //   npm run build                                                   # afterwards: put the minified bundle back
 //
 // It seeds a database like the limits harness (generate.ts, "tasks_total"), opens it once, and runs the three phases

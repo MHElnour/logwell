@@ -1,5 +1,5 @@
 // NOT RUN. These specs were written in a cloud session that cannot start
-// Obsidian. They typecheck (`npx tsc -p e2e/tsconfig.json`) but have never
+// Obsidian. They typecheck (`npx tsc -p e2e-tests/tsconfig.json`) but have never
 // executed. Run `npm run e2e` locally and fix what the real app shows.
 // Quick Add against the real vault and Obsidian's suggester: `[[note]]` matches and Enter in the suggester. The
 // chips, lists, manual values, tags and keys are in tests/ui/quick-add.test.tsx.

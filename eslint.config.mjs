@@ -47,7 +47,7 @@ const timeFences = [
 ];
 
 export default defineConfig([
-	globalIgnores(["main.js", "node_modules/**", "coverage/**", "test-vault/**", "dev-vault/**", ".claude/**", ".obsidian-cache/**", "e2e/**", "wdio.conf.mts", "scripts/**"]),
+	globalIgnores(["main.js", "node_modules/**", "coverage/**", "test-vault/**", "dev-vault/**", ".claude/**", ".obsidian-cache/**", "e2e-tests/**", "wdio.conf.mts", "scripts/**"]),
 	...obsidianmd.configs.recommended,
 	{
 		languageOptions: {

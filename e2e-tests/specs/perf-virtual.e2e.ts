@@ -1,6 +1,6 @@
 // Windowed lists in the real app: a 2,000-task Inbox draws only the rows near the viewport, and the arrow keys
 // and auto-scroll while dragging still work there under real scrolling. The database is built here with the
-// project's own types and serializer (as e2e/limits/generate.ts does) and loaded the way freshDatabase() loads
+// project's own types and serializer (as e2e-tests/limits/generate.ts does) and loaded the way freshDatabase() loads
 // the seed. Every DOM read is scoped to the visible Tasks section. Drags use the real pointer: keep the mouse off
 // the Obsidian window.
 import { randomUUID } from "node:crypto";

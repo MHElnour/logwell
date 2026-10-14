@@ -8,7 +8,7 @@ coverage/
 .claude/
 .obsidian-cache/
 test-vault/.obsidian/
-e2e/last-failure.png
+e2e-tests/last-failure.png
 dev-vault/
 .claude/settings.local.json
 

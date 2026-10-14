@@ -9,9 +9,9 @@ import { type Generated, generateDb } from "./generate";
 import { RENDERER_SRC } from "./renderer";
 
 // The limits harness (docs/development/performance.md). It is NOT part of `npm run e2e` (wdio.conf.mts globs
-// ./e2e/specs/**). Run it, after a build, with
+// ./e2e-tests/specs/**). Run it, after a build, with
 //
-//   npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e/limits/limits.e2e.ts
+//   npm run build && npx wdio run ./wdio.conf.mts --spec ./e2e-tests/limits/limits.e2e.ts
 //
 // For each row of tests/limits/limits-matrix.csv it generates a valid current-schema database (generate.ts), writes it into
 // the sandboxed vault, and measures in the real renderer (renderer.ts): open, save, view render. It writes the
