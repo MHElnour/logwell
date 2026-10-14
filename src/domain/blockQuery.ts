@@ -33,9 +33,11 @@ function normalizeNotePath(path: string): string {
 
 /**
  * `due:` and `scheduled:` as the app's date filter (`TaskFilter.date`): today, overdue and next 7 days are its own criteria,
- * "this week" is its range from the first to the last day of the week that holds today.
+ * "this week" is its range from the first to the last day of the week that holds today, and a typed date or range is
+ * its range too (both days included).
  */
 function dateCriterion(value: NonNullable<BlockFilters["due"]>, ctx: QueryContext): Pick<TaskFilter, "date" | "from" | "to"> {
+	if (typeof value === "object") return { date: "range", from: value.from, to: value.to };
 	switch (value) {
 		case "today":
 			return { date: "today", from: null, to: null };

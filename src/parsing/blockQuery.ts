@@ -1,13 +1,20 @@
 import { normalizeTagKey } from "../domain/tags";
 import { collapseWhitespace } from "../domain/text";
-import { PRIORITY_NAME, type Priority } from "../domain/types";
+import { isValidLocalDate } from "../domain/time";
+import { PRIORITY_NAME, type LocalDate, type Priority } from "../domain/types";
 import type { Quadrant } from "../domain/queries";
 
 // The source text of a `logwell` code block. One filter per line, `key: value`. Pure: it only
 // reads the text. Names (list, section, tag) are not resolved here; the domain matcher does that.
 
-/** The values `due:` and `scheduled:` accept. */
-export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days";
+/** A span of days as `YYYY-MM-DD`, both days included; one day has `from` equal to `to`. */
+export interface BlockDateRange {
+	from: LocalDate;
+	to: LocalDate;
+}
+
+/** The values `due:` and `scheduled:` accept: a word, or a typed date or range (`DD-MM-YYYY`). */
+export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days" | BlockDateRange;
 
 /** The filters a block holds. A key that is absent (or had an error) leaves its field undefined. */
 export interface BlockFilters {
@@ -60,6 +67,30 @@ const QUADRANT_VALUES: Readonly<Record<string, Quadrant>> = {
 };
 
 const own = (table: object, key: string): boolean => Object.prototype.hasOwnProperty.call(table, key);
+
+const DATE_RANGE_ERROR = "Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026.";
+// One date or `<date> to <date>`, two-digit day and month; `value` is already collapsed and lowercased.
+const TYPED_DATE_RE = /^(\d{2})-(\d{2})-(\d{4})(?: to (\d{2})-(\d{2})-(\d{4}))?$/;
+
+/** The typed day, month and year as a valid `YYYY-MM-DD`, else null. */
+function isoOf(day: string, month: string, year: string): LocalDate | null {
+	const date = `${year}-${month}-${day}`;
+	return isValidLocalDate(date) ? date : null;
+}
+
+/** `DD-MM-YYYY` or `<DD-MM-YYYY> to <DD-MM-YYYY>` (the end not before the start), else null. */
+function readTypedDates(value: string): BlockDateRange | null {
+	const m = TYPED_DATE_RE.exec(value);
+	if (m === null) return null;
+	const from = isoOf(m[1]!, m[2]!, m[3]!);
+	const to = m[4] === undefined ? from : isoOf(m[4], m[5]!, m[6]!);
+	return from === null || to === null || to < from ? null : { from, to };
+}
+
+/** A day as typed in a block: `YYYY-MM-DD` to `DD-MM-YYYY`. */
+function typedDay(date: LocalDate): string {
+	return `${date.slice(8)}-${date.slice(5, 7)}-${date.slice(0, 4)}`;
+}
 
 /** Lowercased with runs of whitespace collapsed to one space, for matching a keyword value. */
 function keyword(value: string): string {
@@ -160,9 +191,10 @@ export function parseBlockQuery(source: string): BlockParse {
 			}
 			case "due":
 			case "scheduled": {
-				const date = own(DATE_VALUES, keyword(value)) ? DATE_VALUES[keyword(value)] : undefined;
-				if (date !== undefined) filters[key] = date;
-				else errors.push(`Unknown ${key} value \u201c${value}\u201d. Use today, overdue, this week or next 7 days.`);
+				const word = keyword(value);
+				const date = own(DATE_VALUES, word) ? DATE_VALUES[word] : readTypedDates(word);
+				if (date !== undefined && date !== null) filters[key] = date;
+				else errors.push(`Unknown ${key} value \u201c${value}\u201d. ${DATE_RANGE_ERROR}`);
 				break;
 			}
 			case "priority": {
@@ -193,7 +225,13 @@ export function parseBlockQuery(source: string): BlockParse {
 	return { filters, errors };
 }
 
-const DATE_TEXT: Readonly<Record<BlockDate, string>> = { today: "today", overdue: "overdue", "this-week": "this week", "next-7-days": "next 7 days" };
+const DATE_TEXT: Readonly<Record<Exclude<BlockDate, BlockDateRange>, string>> = { today: "today", overdue: "overdue", "this-week": "this week", "next-7-days": "next 7 days" };
+
+/** A date filter as typed: the word, `DD-MM-YYYY`, or `DD-MM-YYYY to DD-MM-YYYY`. */
+function dateText(value: BlockDate): string {
+	if (typeof value === "string") return DATE_TEXT[value];
+	return value.from === value.to ? typedDay(value.from) : `${typedDay(value.from)} to ${typedDay(value.to)}`;
+}
 const QUADRANT_TEXT: Readonly<Record<Quadrant, string>> = {
 	"urgent-important": "urgent and important",
 	important: "important not urgent",
@@ -211,8 +249,8 @@ export function describeBlockFilters(filters: BlockFilters): string[] {
 	if (filters.list !== undefined) chips.push(`list: ${filters.list}`);
 	if (filters.section !== undefined) chips.push(`section: ${filters.section}`);
 	if (filters.tags !== undefined) chips.push(`tag: ${filters.tags.join(", ")}`);
-	if (filters.due !== undefined) chips.push(`due: ${DATE_TEXT[filters.due]}`);
-	if (filters.scheduled !== undefined) chips.push(`scheduled: ${DATE_TEXT[filters.scheduled]}`);
+	if (filters.due !== undefined) chips.push(`due: ${dateText(filters.due)}`);
+	if (filters.scheduled !== undefined) chips.push(`scheduled: ${dateText(filters.scheduled)}`);
 	if (filters.priorities !== undefined) chips.push(`priority: ${filters.priorities.map((p) => PRIORITY_NAME[p]).join(", ")}`);
 	if (filters.quadrants !== undefined) chips.push(`quadrant: ${filters.quadrants.map((q) => QUADRANT_TEXT[q]).join(", ")}`);
 	if (filters.linked === true) chips.push("linked: this note");

@@ -4,7 +4,7 @@ import { type BlockQueryState, compileBlockQuery, runBlockQuery } from "../../sr
 import { emptyFilter, filterTasks, hasPastScheduleAndDeadline, isDayMissed, isDeadlineMissed, isScheduleMissed, type ListEntry, matchesTaskDate, quadrantOf, type QueryContext, type TaskFilter } from "../../src/domain/queries";
 import { scheduleResolver } from "../../src/domain/recurrence";
 import type { Category, DateSpec, ID, OccurrenceRecord, Priority, Section, Tag, Task, WeekStart } from "../../src/domain/types";
-import { type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
+import { type BlockDate, type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
 import { done, repeating, rule, series } from "./recurrence-fixtures";
 import { resolveTagNames, TagNames } from "../../src/domain/tags";
 import { day, timed } from "../persistence/fixtures";
@@ -309,6 +309,91 @@ describe("block matcher", () => {
 		});
 	});
 
+	describe("block matcher: specific dates", () => {
+		const due = (id: string, date: string) => task(id, { deadline: day(date) });
+		const planned = (id: string, date: string) => task(id, { scheduled: day(date) });
+		const dated = [
+			due("past", "2026-10-02"),
+			due("edge-a", "2026-10-01"),
+			due("edge-b", "2026-10-15"),
+			due("before", "2026-09-30"),
+			due("after", "2026-10-16"),
+			due("future", "2026-10-20"),
+			task("none"),
+		];
+
+		it.each([
+			["a past day", "due: 02-10-2026", ["past"]],
+			["a future day", "due: 20-10-2026", ["future"]],
+			["a day that holds no task", "due: 05-10-2026", []],
+			["a range includes both days", "due: 01-10-2026 to 15-10-2026", ["edge-a", "edge-b", "past"]],
+			["a range of one day", "due: 02-10-2026 to 02-10-2026", ["past"]],
+			["a range over today", "due: 14-10-2026 to 20-10-2026", ["after", "edge-b", "future"]],
+			["spacing and case around to", "due:  01-10-2026   TO   02-10-2026 ", ["edge-a", "past"]],
+		])("due reads the deadline: %s", (_name, source, expected) => {
+			expect(sorted(ids(source, { tasks: dated }))).toEqual(expected);
+		});
+
+		it("due ignores the schedule, scheduled ignores the deadline", () => {
+			const both = task("both", { scheduled: day("2026-10-20"), deadline: day("2026-10-02") });
+			expect(ids("due: 02-10-2026", { tasks: [both] })).toEqual(["both"]);
+			expect(ids("due: 20-10-2026", { tasks: [both] })).toEqual([]);
+			expect(ids("scheduled: 20-10-2026", { tasks: [both] })).toEqual(["both"]);
+			expect(ids("scheduled: 02-10-2026", { tasks: [both] })).toEqual([]);
+		});
+
+		it.each([
+			["a day", "scheduled: 20-10-2026", ["x"]],
+			["a range with the first day", "scheduled: 20-10-2026 to 25-10-2026", ["x", "y"]],
+			["a range with the last day", "scheduled: 18-10-2026 to 20-10-2026", ["x"]],
+			["a range before the schedules", "scheduled: 01-10-2026 to 19-10-2026", []],
+		])("scheduled reads the schedule: %s", (_name, source, expected) => {
+			const tasks = [planned("x", "2026-10-20"), planned("y", "2026-10-25"), task("z")];
+			expect(sorted(ids(source, { tasks }))).toEqual(expected);
+		});
+
+		it("a timed deadline counts on its day in the display zone", () => {
+			// 23:30 in Los Angeles on the 13th is 08:30 on the 14th in Berlin.
+			const t = task("t", { deadline: timed("2026-10-13T23:30", "America/Los_Angeles") });
+			expect(ids("due: 14-10-2026", { tasks: [t] })).toEqual(["t"]);
+			expect(ids("due: 13-10-2026", { tasks: [t] })).toEqual([]);
+		});
+
+		describe("a repeating task's current occurrence", () => {
+			const resolved = (f: Fixture): QueryContext => ctxOf("MO", { schedule: scheduleResolver(stateOf(f), ctxOf("MO")) });
+			const f = { tasks: [repeating(series("2026-10-19", rule()), { id: "r", sortKey: "r" })] };
+
+			it.each([
+				["the day of the occurrence", "scheduled: 19-10-2026", ["r"]],
+				["a range that holds it", "scheduled: 15-10-2026 to 19-10-2026", ["r"]],
+				["a day before it", "scheduled: 18-10-2026", []],
+				["a range after it", "scheduled: 20-10-2026 to 25-10-2026", []],
+			])("scheduled reads %s", (_name, source, expected) => {
+				expect(ids(source, f, resolved(f))).toEqual(expected);
+			});
+
+			it("due never shows a repeating task", () => {
+				expect(ids("due: 19-10-2026 to 19-10-2026", f, resolved(f))).toEqual([]);
+			});
+		});
+
+		it("a date combines with the other filters", () => {
+			const tasks = [task("a", { deadline: day("2026-10-20"), categoryId: "work" }), task("b", { deadline: day("2026-10-20"), categoryId: "home" })];
+			expect(ids("list: Work\ndue: 20-10-2026", { tasks })).toEqual(["a"]);
+		});
+
+		it("a date stays what it was typed as when the clock moves to another day", () => {
+			const tasks = [due("a", "2026-10-02")];
+			expect(ids("due: 02-10-2026", { tasks }, { ...ctxOf(), today: "2026-11-30" })).toEqual(["a"]);
+		});
+
+		it("the four words keep their meaning next to a date", () => {
+			const tasks = [due("late", "2026-10-02"), due("now", TODAY)];
+			expect(ids("due: overdue", { tasks })).toEqual(["late"]);
+			expect(ids("due: today", { tasks })).toEqual(["now"]);
+		});
+	});
+
 	describe("block matcher: repeating tasks use the current occurrence", () => {
 		function resolved(f: Fixture, weekStart: WeekStart = "MO"): QueryContext {
 			return ctxOf(weekStart, { schedule: scheduleResolver(stateOf(f), ctxOf(weekStart)) });
@@ -458,13 +543,17 @@ describe("block matcher", () => {
 			open: fc.boolean(),
 			note: fc.constantFrom<string | null>(null, NOTE, "Other.md"),
 		});
+		const dateArb = fc.oneof(
+			fc.constantFrom<BlockDate>("today", "overdue", "this-week", "next-7-days"),
+			fc.tuple(fc.constantFrom(...DATES), fc.constantFrom(...DATES)).map(([a, b]): BlockDate => (a <= b ? { from: a, to: b } : { from: b, to: a })),
+		);
 		const filtersArb = fc.record(
 			{
 				list: fc.constantFrom("Inbox", "work", "HOME"),
 				section: fc.constantFrom("Planning", "chores"),
 				tags: fc.subarray(["calls", "programming", "programming/go", "programmingx"], { minLength: 1 }),
-				due: fc.constantFrom<"today" | "overdue" | "this-week" | "next-7-days">("today", "overdue", "this-week", "next-7-days"),
-				scheduled: fc.constantFrom<"today" | "overdue" | "this-week" | "next-7-days">("today", "overdue", "this-week", "next-7-days"),
+				due: dateArb,
+				scheduled: dateArb,
 				priorities: fc.subarray<Priority>([0, 1, 2, 3], { minLength: 1 }),
 				quadrants: fc.subarray(["urgent-important", "important", "urgent", "neither"] as const, { minLength: 1 }),
 				linked: fc.constant(true),
@@ -500,18 +589,19 @@ describe("block matcher", () => {
 			if (f.linked === true && t.descriptionNote?.path !== NOTE) return false;
 			const [from, to] = weekRange(weekStart);
 			const plus6 = ymd(msOf(TODAY) + 6 * 86_400_000);
-			const test = {
+			const words = {
 				today: (x: string) => x === TODAY,
 				overdue: (x: string) => x < TODAY,
 				"this-week": (x: string) => x >= from && x <= to,
 				"next-7-days": (x: string) => x >= TODAY && x <= plus6,
 			};
+			const test = (value: BlockDate, x: string): boolean => (typeof value === "string" ? words[value](x) : x >= value.from && x <= value.to);
 			const dayOf = (spec: DateSpec | null) => (spec === null ? null : spec.kind === "date" ? spec.date : spec.local.slice(0, 10));
 			// `due` reads the deadline day only, `scheduled` the schedule day only.
 			const dueDay = dayOf(t.deadline);
-			if (f.due !== undefined && !(dueDay !== null && test[f.due](dueDay))) return false;
+			if (f.due !== undefined && !(dueDay !== null && test(f.due, dueDay))) return false;
 			const schedDay = dayOf(t.scheduled);
-			if (f.scheduled !== undefined && !(schedDay !== null && test[f.scheduled](schedDay))) return false;
+			if (f.scheduled !== undefined && !(schedDay !== null && test(f.scheduled, schedDay))) return false;
 			return true;
 		}
 

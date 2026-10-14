@@ -32,8 +32,8 @@ Write each filter as `key: value`. Capitals do not matter, and blank lines are i
 | `list` | Tasks in the list with that name. Use `Inbox` for the Inbox. Capitals, spaces, `-` and `_` do not matter, and an exact name wins, so `list: homework` finds "Home work". | `list: Home` |
 | `section` | Tasks in that section of the list. It needs a `list` line. | `section: Planning` |
 | `tag` | Tasks with that tag or a tag nested under it, so `tag: home` also matches `@home/garden`. Write a nested tag by its own name (`tag: garden`) or its full path. A leading `@` is fine. Renaming a tag does not change `tag:` lines in your notes; edit them yourself. Separate several tags with commas: a task with any of them shows. | `tag: errands` or `tag: home, work` |
-| `due` | `today`, `overdue`, `this week` or `next 7 days`. Matches a task's deadline only. | `due: overdue` |
-| `scheduled` | The same values. Matches a task's planned date only; for a repeating task, its current occurrence. | `scheduled: today` |
+| `due` | `today`, `overdue`, `this week`, `next 7 days`, one date as `DD-MM-YYYY`, or a range like `01-10-2026 to 15-10-2026`. Matches a task's deadline only. | `due: overdue` or `due: 20-10-2026` |
+| `scheduled` | The same values. Matches a task's planned date only; for a repeating task, its current occurrence. | `scheduled: 20-10-2026 to 25-10-2026` |
 | `priority` | `high`, `medium`, `low` or `none`. | `priority: high, medium` |
 | `quadrant` | A quadrant of the [Eisenhower matrix](matrix.md): `1` to `4`, or `urgent and important`, `important not urgent`, `urgent not important`, `neither`. | `quadrant: 1` |
 | `linked` | `this note`: tasks whose [description note](tasks.md) is the note that holds the block. | `linked: this note` |
@@ -41,6 +41,8 @@ Write each filter as `key: value`. Capitals do not matter, and blank lines are i
 For `tag`, `priority` and `quadrant`, separate several values with commas: a task matches any of them.
 
 `due` and `scheduled` each look at one date, so `due: overdue` means the deadline has passed and `scheduled: overdue` means the planned date has passed. A repeating task has no deadline, so `due` never shows it; `scheduled` uses its current occurrence. Write both lines to ask for both: a task then needs a deadline and a planned date that each match. (The Date filter in [Search](views.md) still looks at both dates at once.) `this week` runs from the first to the last day of the current week, as set by **Week starts on** (see [Settings and commands](settings-and-commands.md)).
+
+A date is written day, month, year with two digits each for the day and the month: `02-10-2026` is 2 October 2026. A range has two dates joined by `to`, and both days are included; the first must not be after the second. The date can be in the past or the future, and spaces and capitals around `to` do not matter. Month names, weekdays, words like `tomorrow`, slashes and year-first dates are not read.
 
 In an embedded note, `linked: this note` means the embedded note. Renaming the note does not break the block.
 
@@ -82,7 +84,7 @@ If you open a different database, or close it, the blocks follow. If you turn Lo
 | No list named "Wrok". | Check the list name. Sections and tags say the same. |
 | "homework" matches several lists: Home work, Home-work. Use the exact name. | Two lists differ only by spaces, `-` or `_`. Type the full name of one. |
 | Unknown filter "colour". | Use one of the filters above. |
-| Unknown due value "soon". Use today, overdue, this week or next 7 days. | Use one of the values the message lists. Scheduled, priority, quadrant and linked say the same for their values. |
+| Unknown due value "soon". Use today, overdue, this week, next 7 days, a date like 20-10-2026, or a range like 01-10-2026 to 15-10-2026. | Use one of the values the message lists. A date needs a two-digit day and month, a real day, and a range must end on or after its start. Scheduled says the same; priority, quadrant and linked list their own values. |
 | A tag name is missing in "home,". | A comma has nothing after or before it. Remove it or write the tag name. |
 | Expected "key: value", got "...". | Add the colon after the filter name. |
 | Duplicate filter "list". | Keep one line for each filter. |

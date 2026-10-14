@@ -168,4 +168,34 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		expect(r.kind).toBe("ok");
 		if (r.kind === "ok") expect(r.entries.length).toBeGreaterThan(0);
 	}, 120_000);
+
+	// A typed date or range is read once per block, not once per task: the query stays one pass.
+	it("a block with a due range and a scheduled range queries 50,000 tasks in one pass", async () => {
+		const h = await appHarness();
+		const data = h.store.data;
+		const tasks = new Map(data.tasks);
+		const ops: JournalOp[] = [];
+		const ctx = h.app.queryContext();
+		const day = (n: number) => ({ kind: "date" as const, date: addDays(ctx.today, n) });
+		for (let i = 0; i < TASKS; i++) {
+			const t: Task = makeTask(taskId(i + 1), {
+				title: `Task ${i}`,
+				scheduled: i % 3 === 0 ? day((i % 21) - 10) : null,
+				deadline: i % 2 === 0 ? day((i % 17) - 8) : null,
+				sortKey: `V${i.toString(36).padStart(5, "0")}`,
+			});
+			tasks.set(t.id, t);
+			ops.push({ c: "tasks", id: t.id, v: t });
+		}
+		h.store.commit({ ...data, tasks }, ops);
+		const actual = (await vi.importActual<typeof import("../../src/domain/blockQuery")>("../../src/domain/blockQuery")).runBlockQuery;
+		const typed = (n: number) => addDays(ctx.today, n).split("-").reverse().join("-");
+		const filters = parseBlockQuery(`due: ${typed(-5)} to ${typed(5)}\nscheduled: ${typed(0)} to ${typed(8)}`).filters;
+		const ms = elapsed(() => actual(filters, h.store.data, ctx, "Note.md"));
+		perfLog(`task block with a due range and a scheduled range over ${TASKS} tasks: ${ms.toFixed(1)} ms`);
+		const { result: r, passes } = await countBigPasses(() => actual(filters, h.store.data, ctx, "Note.md"));
+		expect(passes, tally(passes)).toHaveLength(1);
+		expect(r.kind).toBe("ok");
+		if (r.kind === "ok") expect(r.entries.length).toBeGreaterThan(0);
+	}, 120_000);
 });

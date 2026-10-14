@@ -28,6 +28,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#7) Create a tag from the sidebar with **New tag**: pick a name, parent and color; the name is checked as you type.
 - (#52) `tag:` in a task block takes several tags separated by commas and shows a task with any of them.
 - (#52) Task blocks have a `scheduled:` filter for planned dates, a repeat's current one included: `today`, `overdue`, `this week` or `next 7 days`.
+- (#52) Task blocks take a date or range in `due:` and `scheduled:`, written like `20-10-2026` or `01-10-2026 to 15-10-2026`.
 - (#12) Added a **Yearly** repeat in the repeat picker; older Logwell versions open a database that uses it read-only, so update every device.
 - (#12) Quick Add reads more repeats, such as `every mon wed fri`; an unsupported one shows a notice, not a wrong date.
 - (#8) Edit a tag's name, parent or color in one step, with Undo until a synced task uses the new or renamed tag.

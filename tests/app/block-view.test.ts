@@ -120,6 +120,10 @@ describe("scheduled and tag list filters", () => {
 			expect(await view("scheduled: next 7 days")).toEqual({ kind: "upcoming" });
 		});
 
+		it.each(["due: 02-10-2026", "scheduled: 20-10-2026 to 25-10-2026"])("opens Upcoming for a typed date: %s", async (source) => {
+			expect(await view(source)).toEqual({ kind: "upcoming" });
+		});
+
 		it("Today wins when either date key is today or overdue", async () => {
 			expect(await view("due: this week\nscheduled: today")).toEqual({ kind: "today" });
 			expect(await view("due: overdue\nscheduled: next 7 days")).toEqual({ kind: "today" });
