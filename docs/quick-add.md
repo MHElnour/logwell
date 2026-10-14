@@ -30,8 +30,8 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.
-- To keep words as plain text, put them in double quotes: `Read "Friday night lights"` reads no date and keeps the quotes in the title. A backslash keeps one word or token as text and is removed: `Buy \today paper` becomes "Buy today paper", and `\#Work` stays "#Work".
-- A comma, period or other punctuation mark left alone next to a recognized word is removed with it, as are empty parentheses: `Pay rent (#Work).` becomes "Pay rent".
+- To keep words as plain text, put them in double quotes: `Read "Friday night lights"` reads no date and keeps the quotes in the title. A backslash keeps the word or token after it as text, with any phrase that word starts, and is removed: `Buy \today paper` becomes "Buy today paper", `Pay \by friday` stays "Pay by friday" with no deadline, and `\#Work` stays "#Work".
+- A comma or semicolon next to a recognized word is removed with it. Another mark, such as `-`, `.` or `!`, is removed when it stands alone at the start or end of what is left, and so are empty parentheses: `Pay rent - tomorrow` and `Pay rent (#Work).` become "Pay rent". A mark attached to a word stays, as in `Wow! tomorrow`.
 
 ## What you can type
 
@@ -40,7 +40,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | A date | `today`, `tomorrow`, `in 3 days`, `next week`, `this weekend`, `the day after tomorrow` | `next week` is seven days from today. |
 | | `friday`, `next fri`, `this monday`, `on friday` | A weekday means its next date. |
 | | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date: today's date is today, and `Feb 29` is the next leap day. A two-digit number after a comma is not a year: `Party May 5, 20 guests` is May 5 with "20 guests" in the title. The **Date order** setting decides what `10/5` means; with Day/month order, `from 12 Oct` is a date, and `Oct 15` is 15 October as in Month/day order. `a day` and `a week` alone, as in `3 times a day`, are not dates. |
-| A date and time | `at 7pm`, `19:00`, `at noon`, `at 0900`, `@4pm`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. Four digits after `at` are a 24-hour time. `@4pm`, `@4:30pm` and `@noon` work like `at`, unless you have a tag with that name. |
+| A date and time | `at 7pm`, `19:00`, `at noon`, `at 0900`, `@4pm`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. Four digits after `at` are a 24-hour time, also in a repeat or a range: `every day at 0900`, `at 0900-1000`. `@4pm`, `@4:30pm` and `@noon` work like `at`, as in `tomorrow @4pm`, unless you have a tag with that name. |
 | | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
 | A deadline | `by friday`, `by Oct 9`, `by 5pm`, `until tomorrow` | `by` right before a date makes it a deadline, as does `until` before a date when the task does not repeat (`Wait until tomorrow`). |
 | A planned duration | `for 45m`, `for 1h30m`, `for 90 min`, `for 1.5 hours`, `for half an hour` | From 1 minute to 24 hours. A longer value shows an error chip. Without `for`, as in `Gym 2h`, it stays in the title. |
