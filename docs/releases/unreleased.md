@@ -23,6 +23,4 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#201) Fixed Quick Add's chip underlines using a style that some Obsidian versions draw only partly; they are now plain lines in the same colors.
-
 ## Security
