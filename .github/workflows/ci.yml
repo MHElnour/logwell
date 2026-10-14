@@ -1,7 +1,8 @@
 name: CI
 
-# Changes that touch only docs or Markdown skip the code checks. Release notes still run them:
-# release-check lints docs/releases/. Patterns are read in order; a later one wins.
+# Every pull request runs the checks: `main` requires the `check` job, so a skipped run would block
+# the merge. On `main` itself, changes that touch only docs or Markdown skip them; release notes
+# still run them (release-check lints docs/releases/). Patterns are read in order; a later one wins.
 # The release workflow also calls this workflow as its first stage (workflow_call).
 on:
   workflow_call:
@@ -13,11 +14,6 @@ on:
       - "!**/*.md"
       - "docs/releases/**"
   pull_request:
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**/*.md"
-      - "docs/releases/**"
 
 permissions:
   contents: read
