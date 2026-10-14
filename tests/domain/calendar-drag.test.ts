@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { moveSameMoment, moveTimed, moveToDate, resizedDuration, slotRange, slotSpec } from "../../src/domain/calendar";
 import { resolveWallTime } from "../../src/domain/time";
 import type { DateSpec } from "../../src/domain/types";
+import { day } from "../persistence/fixtures";
 
 // Pure drag helpers.
 
 const Z = "Europe/Berlin";
 const at = (local: string, tz = Z): DateSpec => ({ kind: "datetime", local, tz });
-const day = (date: string): DateSpec => ({ kind: "date", date });
+
 
 describe("slotSpec", () => {
 	it("snaps to 15 minutes in the display zone", () => {

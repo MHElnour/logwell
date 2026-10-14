@@ -3,7 +3,7 @@ import { afterEach, expect, vi } from "vitest";
 import type { CheckpointApp } from "../../src/app/App";
 import { EventBus } from "../../src/app/events";
 import { type CheckpointSettings, DEFAULT_SETTINGS, type WeekStart } from "../../src/app/settings";
-import type { DateSpec, Task } from "../../src/domain/types";
+import type { Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
 import { AppRoot, type AppRootHandle } from "../../src/ui/AppRoot";
 import type { ButtonSpec, MenuSpec, QuickAddPreset, UiHost } from "../../src/ui/host";
@@ -575,9 +575,8 @@ export function expectLabelsResolve(root: ParentNode): void {
 
 // -- The store ----------------------------------------------------------------------------------------------------
 
-/** A date without a time, and a time in a zone (Europe/Berlin by default), as a task stores them. */
-export const day = (date: string): DateSpec => ({ kind: "date", date });
-export const at = (date: string, time: string, tz = "Europe/Berlin"): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz });
+/** A date without a time, and a time in a zone, as a task stores them (`tests/persistence/fixtures.ts`). */
+export { at, day } from "../persistence/fixtures";
 
 /** The task with this title, which must exist. */
 export function taskOf(m: { h: { app: CheckpointApp } }, title: string): Task {
@@ -590,8 +589,13 @@ export function taskOf(m: { h: { app: CheckpointApp } }, title: string): Task {
 export const undoDepth = (m: { h: { app: CheckpointApp } }) => (m.h.app.store as unknown as { undoStack: unknown[] }).undoStack.length;
 
 /** The id of the n-th seeded task (1-based), and the 0-based index of a seeded task's id (-1 for none). */
-export const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+import { taskId } from "../helpers";
+export { taskId };
 export const indexOfTaskId = (id: string | undefined) => (id === undefined ? -1 : parseInt(id.slice(-12), 16) - 1);
+/** The row of seeded task `i` (0-based) under `scope`, or null when it is not drawn. */
+export const rowOf = (scope: ParentNode, i: number) => scope.querySelector<HTMLElement>(`.cp-task-row[data-task-id="${taskId(i + 1)}"]`);
+/** The titles of the Tasks section's rows, in order. */
+export const rowTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
 /** The index of the focused seeded task, or -1. */
 export const focusedIndex = () => indexOfTaskId((document.activeElement as HTMLElement | null)?.dataset?.taskId);
 

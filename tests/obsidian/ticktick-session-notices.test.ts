@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settle } from "../ui/app-helpers";
 import { TickTickError } from "../../src/app/ports";
 import type { TickTickApi } from "../../src/app/ports";
 import type { Category, SyncLink, Task } from "../../src/domain/types";
@@ -81,8 +82,6 @@ afterEach(() => {
 	cleanup = null;
 	vi.restoreAllMocks();
 });
-
-const settle = () => new Promise((r) => setTimeout(r, 30));
 
 describe("failure notices (screen 10)", () => {
 	it("a refused token offers Open settings, which opens this plugin's tab", async () => {

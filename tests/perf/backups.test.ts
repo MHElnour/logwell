@@ -6,7 +6,7 @@ import { BackupStore, SNAPSHOT_INTERVAL_MS, type SnapshotKind } from "../../src/
 import { FakeClock } from "../helpers";
 import { BACKUP_ROOT, emptyDbText, harness, makeTask } from "../persistence/fixtures";
 import { MemoryFileGateway } from "../persistence/memoryGateway";
-import { median, perfLog } from "./measure";
+import { elapsedAsync, measuredAsync, median, perfLog } from "./measure";
 
 // Backup retention after every save (issue 35). A save that writes no snapshot still lists the snapshots folder
 // (`prune`), and the listing grows with the retention limits. This test counts the listings and logs the time of one
@@ -89,12 +89,8 @@ describe("#35: backup retention listings", () => {
 		const prunes: number[] = [];
 		const listed: number[] = [];
 		for (let i = 0; i < REPEATS; i++) {
-			let start = performance.now();
-			await backups.prune();
-			prunes.push(performance.now() - start);
-			start = performance.now();
-			await gateway.list(backups.snapshotDir);
-			listed.push(performance.now() - start);
+			prunes.push(await elapsedAsync(() => backups.prune()));
+			listed.push(await elapsedAsync(() => gateway.list(backups.snapshotDir)));
 		}
 		const pruneMs = median(prunes);
 		const listMs = median(listed);
@@ -110,10 +106,12 @@ describe("#35: backup retention listings", () => {
 			const times: number[] = [];
 			let listed = 0;
 			for (let i = 0; i < REPEATS; i++) {
-				const start = performance.now();
-				const names = await readdir(dir);
-				await Promise.all(names.map((n) => stat(join(dir, n))));
-				times.push(performance.now() - start);
+				const { result: names, ms } = await measuredAsync(async () => {
+					const found = await readdir(dir);
+					await Promise.all(found.map((n) => stat(join(dir, n))));
+					return found;
+				});
+				times.push(ms);
 				listed = names.length;
 			}
 			perfLog(`issue-35: disk readdir + stat of ${files} files, median ${median(times).toFixed(3)} ms (warm OS cache)`);

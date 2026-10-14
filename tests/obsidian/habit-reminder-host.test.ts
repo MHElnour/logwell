@@ -15,7 +15,7 @@ import { FakeNotes, makeReadOnly } from "../app/harness";
 import { progressText } from "../../src/ui/habits/format";
 import { emptyDbText, harness } from "../persistence/fixtures";
 import { sequentialIds } from "../helpers";
-import { fakeApp, loadPlugin } from "./fake-vault";
+import { fakeApp, fakeLocal, loadPlugin } from "./fake-vault";
 import { LocalStorageReminderState } from "../../src/obsidian/reminderState";
 
 describe("reminder host", () => {
@@ -847,16 +847,6 @@ describe("reminder host", () => {
 describe("reminder state in local storage", () => {
 	// The habit reminder state in the vault's local storage, per database (modeled on activeTimer).
 
-	function fakeLocal() {
-		const store = new Map<string, unknown>();
-		return {
-			store,
-			app: {
-				loadLocalStorage: (k: string) => store.get(k) ?? null,
-				saveLocalStorage: (k: string, v: unknown) => void (v === null ? store.delete(k) : store.set(k, v)),
-			},
-		};
-	}
 
 	const state = () => ({ ...emptyReminderState("2026-10-14"), fired: { "h-1": true as const }, times: { "h-1": "20:00" } });
 

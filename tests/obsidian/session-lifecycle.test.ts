@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settle } from "../ui/app-helpers";
 import { FocusService } from "../../src/app/FocusService";
 import { RecurrenceService } from "../../src/app/RecurrenceService";
 import { DbSession } from "../../src/obsidian/session";
@@ -91,7 +92,6 @@ afterEach(() => {
 
 type Emitter = { onStoreEvent(e: unknown): void };
 const emit = (session: unknown, e: unknown) => (session as Emitter).onStoreEvent(e);
-const tick = () => new Promise((r) => setTimeout(r, 0));
 const titles = (text: string | undefined) => [...load(text ?? "").tasks.values()].map((t) => t.title);
 const conflictCopies = (fake: FakeApp) => [...fake.plugin.files.keys()].filter((p) => p.includes("/conflicts/"));
 
@@ -114,7 +114,7 @@ describe("opening a database", () => {
 		await plugin.session!.store.flush();
 		fake.fire("modify", fileOf(PATH));
 		await plugin.ready();
-		await tick();
+		await settle();
 		expect(upgrades()).toHaveLength(1);
 	});
 
@@ -430,8 +430,8 @@ describe("closing a session", () => {
 			vi.spyOn(old.store, "close").mockRejectedValue(new Error("EACCES"));
 
 			plugin.onunload();
-			await tick();
-			await tick();
+			await settle();
+			await settle();
 
 			expect(unhandled).toEqual([]);
 			expect(plugin.session).toBeNull();
@@ -469,7 +469,7 @@ describe("closing a session", () => {
 			expect(lost).toHaveLength(1);
 			expect(lost[0]!.message).toContain(A);
 			expect(notices.actions.some((n) => /retrying/i.test(n.message))).toBe(false);
-			await tick();
+			await settle();
 			expect(unhandled).toEqual([]);
 		});
 
@@ -506,7 +506,7 @@ describe("closing a session", () => {
 			const session = plugin.session!;
 			await session.app.noteRenames.rewriteNotePaths("X.md", "Y.md", false); // saved at once; the cooldown starts
 			void session.app.noteRenames.rewriteNotePaths("Y.md", "Z.md", false); // held back by the cooldown
-			await tick();
+			await settle();
 			fake.app.saveLocalStorage = (k: string) => {
 				if (k.startsWith("logwell-pending-renames")) throw new Error("quota exceeded");
 			};

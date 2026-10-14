@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { NoticeAction } from "../../src/obsidian/notices";
+import { fakeApp, loadPlugin as loadFakePlugin } from "../obsidian/fake-vault";
 
 const shown = vi.hoisted(() => ({ notices: [] as string[], actions: [] as { message: string; actions: NoticeAction[] }[] }));
 
@@ -22,33 +23,13 @@ vi.mock("../../src/obsidian/notices", async (importOriginal) => ({
 }));
 
 // Pending saves are flushed when the app quits. The plugin's onload
-// runs against tests/app/obsidian-stub.ts (vitest.config.ts aliases "obsidian").
-
-interface WorkspaceRef {
-	name: string;
-	callback: (...args: unknown[]) => unknown;
-}
+// runs against tests/app/obsidian-stub.ts (vitest.config.ts aliases "obsidian"), over the fake vault, and no
+// database is opened.
 
 async function loadPlugin() {
-	const { default: CheckpointPlugin } = await import("../../src/main");
-	const refs: WorkspaceRef[] = [];
-	const app = {
-		workspace: {
-			onLayoutReady: () => undefined,
-			on: (name: string, callback: (...args: unknown[]) => unknown): WorkspaceRef => {
-				const ref = { name, callback };
-				refs.push(ref);
-				return ref;
-			},
-		},
-		vault: { configDir: "config", on: () => ({}) },
-		loadLocalStorage: () => "d-test",
-		saveLocalStorage: () => undefined,
-	};
-	const Ctor = CheckpointPlugin as unknown as new (app: unknown, manifest: unknown) => InstanceType<typeof CheckpointPlugin>;
-	const plugin = new Ctor(app, { id: "checkpoint", dir: "config/plugins/checkpoint" });
-	await plugin.onload();
-	return { plugin, refs, registered: (plugin as unknown as { registered: unknown[] }).registered };
+	const fake = fakeApp();
+	const plugin = await loadFakePlugin(fake, "", { ready: false });
+	return { plugin, refs: fake.workspaceRefs, registered: (plugin as unknown as { registered: unknown[] }).registered };
 }
 
 describe("plugin lifecycle", () => {

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { columnTitle } from "../../src/ui/board/BoardView";
 import { type QueryContext, emptyFilter, upcomingGroups, todayEntries, flatEntries } from "../../src/domain/queries";
-import type { DateSpec, Task } from "../../src/domain/types";
+import type { Task } from "../../src/domain/types";
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
 import { buildBoard, buildList } from "../../src/app/views";
-import { makeTask } from "../persistence/fixtures";
+import { day, makeTask } from "../persistence/fixtures";
 
 // Board columns. 2026-10-01 is a Thursday; the zone is Europe/Berlin.
 
 const ctx: QueryContext = { today: "2026-10-01", zone: "Europe/Berlin", upcomingDays: 3, weekStart: "MO" };
-const day = (date: string): DateSpec => ({ kind: "date", date });
+
 
 function db(tasks: Task[]): DbData {
 	const d = createEmptyDb({ dbId: "db", revision: "r", deviceId: "d", now: "2026-10-01T08:00:00.000Z" });

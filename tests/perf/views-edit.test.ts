@@ -13,7 +13,7 @@ import { CalendarSection, initialCalendarState } from "../../src/ui/CalendarSect
 import { SearchSection, initialSearchState } from "../../src/ui/SearchSection";
 import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { countBigPasses, fastest, median, perfLog } from "./measure";
+import { countBigPasses, fastest, measured, median, perfLog } from "./measure";
 import { LISTS, ROW, RUNS, TASKS, VIEWPORT, bigHarness, domCleanup, taskId } from "./view-edit-fixture";
 
 // The calendar, the Eisenhower matrix and Search (issue 41). On every change the calendar places its dated tasks
@@ -69,12 +69,8 @@ describe(`#41: one edit with the calendar, the matrix or Search at ${TASKS} task
 			await h.app.tasks.update(taskId(run * 1000 + 1), { title: `Edited ${run}` });
 			const state = h.app.store.state;
 			for (const { name, build } of cases) {
-				const scanStart = performance.now();
-				const reference = build(state, false);
-				const scanMs = performance.now() - scanStart;
-				const start = performance.now();
-				const result = build(state, true);
-				const ms = performance.now() - start;
+				const { result: reference, ms: scanMs } = measured(() => build(state, false));
+				const { result, ms } = measured(() => build(state, true));
 				expect(result).toEqual(reference);
 				if (run > 0) push(times, name, ms);
 				if (run > 0) push(scanTimes, name, scanMs);

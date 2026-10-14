@@ -1,4 +1,4 @@
-import type { Task } from "../../src/domain/types";
+import type { DateSpec, Task } from "../../src/domain/types";
 import { BackupStore, dbBackupRoot } from "../../src/persistence/backups";
 import { CpbaseStore, type StoreDeps, type StoreEvent, loadText } from "../../src/persistence/CpbaseStore";
 import type { DbFile } from "../../src/persistence/gateway";
@@ -7,7 +7,7 @@ import type { JournalOp } from "../../src/persistence/journal";
 import type { Migration } from "../../src/persistence/migrations";
 import { type DbData, HISTORY_LIMIT, createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
-import { FakeClock, ManualScheduler, MemoryLocalState, sequentialIds, settle } from "../helpers";
+import { FakeClock, ManualScheduler, MemoryLocalState, sequentialIds, drainPromises } from "../helpers";
 
 export const DB_PATH = "Checkpoint.cpbase";
 export const BACKUP_ROOT = "plugin/backups";
@@ -43,11 +43,20 @@ export function emptyDbText(dbId = "db-1", revision = "r-000000000000"): string 
 	);
 }
 
-export function load(text: string): DbData {
-	const r = loadText(text, "2026-10-01T10:00:00.000Z");
-	if (r.kind !== "ok") throw new Error(`load failed: ${r.kind}`);
-	return r.data;
+/** Loads a database text at `now`, or throws; with the issues the load repaired. */
+export function loadWithIssues(text: string, now = "2026-10-01T10:00:00.000Z"): { data: DbData; issues: string[] } {
+	const r = loadText(text, now);
+	if (r.kind !== "ok") throw new Error(`load failed: ${JSON.stringify(r)}`);
+	return { data: r.data, issues: r.issues };
 }
+
+export function load(text: string): DbData {
+	return loadWithIssues(text).data;
+}
+
+/** A date without a time, and a time in a zone (Europe/Berlin by default), as a task stores them. */
+export const day = (date: string): DateSpec => ({ kind: "date", date });
+export const at = (date: string, time: string, tz = "Europe/Berlin"): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz });
 
 /** Another device's write that descends from `base` (history capped like the store does). */
 export function descendant(base: string, change: (d: DbData) => DbData, revision: string): string {
@@ -152,7 +161,7 @@ export function harness(
 		},
 		async saveNow(store = h.store) {
 			await store.flush();
-			await settle();
+			await drainPromises();
 		},
 	};
 	return h;

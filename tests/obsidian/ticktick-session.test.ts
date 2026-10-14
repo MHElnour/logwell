@@ -11,8 +11,27 @@ import { LocalStorageTickTickDevice, LocalStorageTickTickPending, SecretStorageT
 import { FakeTickTick } from "../app/fake-ticktick";
 import { FakeClock } from "../helpers";
 import { emptyDbText, makeTask } from "../persistence/fixtures";
-import { fakeApp, loadPlugin } from "./fake-vault";
+import { fakeApp, fakeLocal, loadPlugin } from "./fake-vault";
 import { Plugin } from "obsidian";
+
+const NOW = "2026-10-01T09:59:00.000Z";
+const WORK = "00000000-0000-4000-8000-00000000000a";
+
+/** A database written on another device with the list Work and `tasks`, Work linked to the TickTick list `projectId` (none for null). */
+function workDbText(projectId: string | null, tasks: Task[] = []): string {
+	const d = createEmptyDb({ dbId: "db-a", revision: "r-aaaaaaaaaaaa", deviceId: "d-other", now: NOW });
+	const categories = new Map(d.categories);
+	const work: Category = { id: WORK, name: "Work", icon: null, color: null, nameKey: "work", isInbox: false, sortKey: "V1", createdAt: NOW, modifiedAt: NOW };
+	categories.set(WORK, work);
+	const link: SyncLink | null =
+		projectId === null ? null : { kind: "list", logwellId: WORK, ttId: projectId, ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: NOW, modifiedAt: NOW };
+	return serializeDb({
+		...d,
+		categories,
+		tasks: new Map(tasks.map((t) => [t.id, t])),
+		syncLinks: link === null ? new Map() : new Map([[`list:${WORK}`, link]]),
+	});
+}
 
 describe("the session and the sync", () => {
 	// The session and the sync. A database switch stops the sync between two requests and waits up to 15 s for
@@ -20,22 +39,15 @@ describe("the session and the sync", () => {
 	// the plugin stops the sync and closes the store at once. No sync starts in a session the plugin never
 	// keeps: one still opening when the plugin unloads, or one whose open failed after the file was read.
 
-	const NOW = "2026-10-01T09:59:00.000Z";
-	const WORK = "00000000-0000-4000-8000-00000000000a";
 	const LOCAL = "00000001-0000-4000-8000-000000000001";
 
 	const LOCAL_2 = "00000001-0000-4000-8000-000000000002";
 
-	function dbText(projectId: string): string {
-		const d = createEmptyDb({ dbId: "db-a", revision: "r-aaaaaaaaaaaa", deviceId: "d-other", now: NOW });
-		const categories = new Map(d.categories);
-		const work: Category = { id: WORK, name: "Work", icon: null, color: null, nameKey: "work", isInbox: false, sortKey: "V1", createdAt: NOW, modifiedAt: NOW };
-		categories.set(WORK, work);
-		const link: SyncLink = { kind: "list", logwellId: WORK, ttId: projectId, ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: NOW, modifiedAt: NOW };
-		const task: Task = makeTask(LOCAL, { title: "Call the bank", categoryId: WORK, sortKey: "V1" });
-		const task2: Task = makeTask(LOCAL_2, { title: "Pay the rent", categoryId: WORK, sortKey: "V2" });
-		return serializeDb({ ...d, categories, tasks: new Map([[LOCAL, task], [LOCAL_2, task2]]), syncLinks: new Map([[`list:${WORK}`, link]]) });
-	}
+	const dbText = (projectId: string): string =>
+		workDbText(projectId, [
+			makeTask(LOCAL, { title: "Call the bank", categoryId: WORK, sortKey: "V1" }),
+			makeTask(LOCAL_2, { title: "Pay the rent", categoryId: WORK, sortKey: "V2" }),
+		]);
 
 	/** A vault with Work linked to a project of `tt`, sync on for this device, and every TickTick call going to `tt`. */
 	function vault() {
@@ -203,24 +215,14 @@ describe("the Sync now command", () => {
 		checkCallback?: (checking: boolean) => boolean;
 	}
 
-	const NOW = "2026-10-01T09:59:00.000Z";
-	const WORK = "00000000-0000-4000-8000-00000000000a";
 
-	function dbText(linked: boolean): string {
-		const d = createEmptyDb({ dbId: "db-a", revision: "r-aaaaaaaaaaaa", deviceId: "d-other", now: NOW });
-		const categories = new Map(d.categories);
-		const work: Category = { id: WORK, name: "Work", icon: null, color: null, nameKey: "work", isInbox: false, sortKey: "V1", createdAt: NOW, modifiedAt: NOW };
-		categories.set(WORK, work);
-		const link: SyncLink = { kind: "list", logwellId: WORK, ttId: "p-work", ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: NOW, modifiedAt: NOW };
-		return serializeDb({ ...d, categories, syncLinks: linked ? new Map([[`list:${WORK}`, link]]) : new Map() });
-	}
 
 	async function setup(options: { linked?: boolean; device?: boolean; token?: boolean; minutes?: number } = {}) {
 		const commands: Cmd[] = [];
 		vi.spyOn(Plugin.prototype, "addCommand").mockImplementation(((c: Cmd) => void commands.push(c)) as never);
 		const sync = vi.spyOn(SyncService.prototype, "sync");
 		const fake = fakeApp();
-		fake.files.set("A.cpbase", dbText(options.linked ?? true));
+		fake.files.set("A.cpbase", workDbText((options.linked ?? true) ? "p-work" : null));
 		if (options.token ?? true) fake.secrets.set(TICKTICK_SECRET_ID, "token");
 		if (options.device ?? true) fake.local.set("logwell-ticktick-device-db-a", true);
 		const { default: CheckpointPlugin } = await import("../../src/main");
@@ -309,16 +311,6 @@ describe("the token and device ports", () => {
 		};
 	}
 
-	function fakeLocal() {
-		const store = new Map<string, unknown>();
-		return {
-			store,
-			app: {
-				loadLocalStorage: (k: string) => store.get(k) ?? null,
-				saveLocalStorage: (k: string, v: unknown) => void (v === null ? store.delete(k) : store.set(k, v)),
-			},
-		};
-	}
 
 	describe("SecretStorageTickTickSecret", () => {
 		it("stores the token under a valid secret id and reads it back", () => {

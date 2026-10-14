@@ -4,7 +4,7 @@ import { LocalStorageRenameQueue } from "../../src/obsidian/renameQueue";
 import { collectionsOf, CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 import { MemoryRenameQueue, type NoteRename, type RenameQueuePort, type RenameTimers } from "../../src/app/ports";
 import { NoteRenameTracker } from "../../src/app/noteRenames";
-import { settle } from "../helpers";
+import { drainPromises } from "../helpers";
 import { DB_PATH, descendant, emptyDbText, makeTask, withTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness, makeReadOnly, makeWritable, reopen, waitFor } from "./harness";
 import { readHeader } from "../../src/persistence/serializer";
@@ -133,7 +133,7 @@ describe("note renames", () => {
 			const h = await appHarness({ initial: done, renames });
 			const before = h.app.store.state;
 			await h.app.noteRenames.resumeRenames();
-			await settle();
+			await drainPromises();
 			expect(h.app.store.state).toBe(before);
 			expect(renames.load("db-1")).toEqual([]);
 			// Resuming twice changes nothing either.
@@ -383,7 +383,7 @@ describe("note renames", () => {
 			h.store.replaceAll = () => gate;
 			const blocker = h.app.store.replaceAll(collectionsOf(h.store.data), null);
 			const results = chain.map(([o, n, f]) => h.app.noteRenames.rewriteNotePaths(o, n, f));
-			await settle();
+			await drainPromises();
 			return { h, id, saved, release, blocker, results };
 		}
 
@@ -424,7 +424,7 @@ describe("note renames", () => {
 			const q = new CountingQueue();
 			const h = await appHarness({ initial: "garbage, not a database\n", renames: q });
 			void h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false);
-			await settle();
+			await drainPromises();
 			h.app.noteRenames.flushRenames();
 			expect(q.writes).toBe(0);
 		});
@@ -505,7 +505,7 @@ describe("renames while a database is damaged", () => {
 			expect(await h.app.noteRenames.rewriteNotePaths("A.md", "B.md", false)).toBe(0);
 			await h.app.noteRenames.rewriteNotePaths("B.md", "C.md", false);
 			h.app.noteRenames.flushRenames();
-			await settle();
+			await drainPromises();
 			expect(q.saves).toEqual([]);
 			expect(q.entries.size).toBe(0);
 		});
@@ -547,7 +547,7 @@ describe("renames while a database is damaged", () => {
 			expect(h.store.readOnlyState?.reason).toBe("newer-schema");
 			expect(h.store.data.meta.dbId).toBe("db-real");
 			h.app.store.notifyReloaded();
-			await settle();
+			await drainPromises();
 
 			h.app.noteRenames.flushRenames();
 			expect(q.saves.map((s) => s.id)).not.toContain("unknown");
@@ -563,7 +563,7 @@ describe("renames while a database is damaged", () => {
 			await waitFor(() => pathOf(h) === "B.md");
 			await h.app.noteRenames.resumeRenames();
 			h.app.store.notifyReloaded();
-			await settle();
+			await drainPromises();
 			expect(pathOf(h)).toBe("B.md");
 			expect(q.entries.size).toBe(0);
 		});
@@ -659,7 +659,7 @@ describe("description notes", () => {
 		// Replaying is idempotent: a second status event changes nothing.
 		const before = h.app.store.state;
 		h.app.store.notifyStatus();
-		await settle();
+		await drainPromises();
 		expect(h.app.store.state).toBe(before);
 	});
 

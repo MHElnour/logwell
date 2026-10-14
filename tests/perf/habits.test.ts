@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { indexCheckins, streaks } from "../../src/domain/habits";
 import type { Checkin, Habit } from "../../src/domain/types";
 import { perfLog, timeBoth } from "./measure";
+import { addDays } from "../../src/domain/time";
+import { uuid } from "./view-edit-fixture";
 
 // One HabitIndex per state. Building it over 20,000 check-ins and computing the streaks of 20 habits (the target-scale
 // seed of tests/perf/persistence.test.ts) grows with the number of check-ins: four times the check-ins (1,000 days
@@ -15,8 +17,7 @@ const GROWTH = 8;
 const NOISE_MS = 2;
 const TODAY = "2027-09-27";
 
-const uuid = (prefix: number, n: number) => `${prefix.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-const day = (n: number) => new Date(Date.UTC(2025, 0, 1) + n * 86400000).toISOString().slice(0, 10);
+const day = (n: number) => addDays("2025-01-01", n);
 
 /** The persistence seed's habits and check-ins: 20 habits, 1,000 days of check-ins each, or the last `days` of them. */
 function seed(days = DAYS): { habits: Habit[]; checkins: Map<string, Checkin> } {

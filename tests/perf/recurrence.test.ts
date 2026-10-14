@@ -6,7 +6,9 @@ import { indexOccurrenceRecords, scheduleResolver } from "../../src/domain/recur
 import type { OccurrenceRecord, RepeatRule, Task } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import type { DbData } from "../../src/persistence/schema";
-import { median, perfLog } from "./measure";
+import { elapsed, measured, median, perfLog } from "./measure";
+import { addDays } from "../../src/domain/time";
+import { taskId } from "./view-edit-fixture";
 
 // The target-scale check with repeating tasks. 5,000 tasks, 500 of them repeating with mixed rules,
 // a hundred with 50 or more records. Today, Upcoming, a month of the calendar and the sidebar counts grow linearly
@@ -23,8 +25,8 @@ const ZONE = "Europe/Berlin";
 
 const ctxBase: QueryContext = { today: TODAY, zone: ZONE, upcomingDays: 14, weekStart: "MO" };
 
-const day = (n: number): string => new Date(Date.UTC(2026, 9, 5) + n * 86_400_000).toISOString().slice(0, 10);
-const uuid = (n: number): string => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+const day = (n: number): string => addDays("2026-10-05", n);
+const uuid = taskId;
 
 function lcg(seed: number): () => number {
 	let s = seed;
@@ -124,9 +126,7 @@ function timed(s: Seed, work: (state: DbData, ctx: QueryContext) => unknown): nu
 	return medianRun(() => {
 		const state = stateOf(s);
 		const ctx: QueryContext = { ...ctxBase, schedule: scheduleResolver(state, ctxBase) };
-		const start = performance.now();
-		work(state, ctx);
-		return performance.now() - start;
+		return elapsed(() => work(state, ctx));
 	});
 }
 
@@ -140,11 +140,9 @@ function monthTime(s: Seed): number {
 	return medianRun(() => {
 		const state = stateOf(s);
 		const cal: CalendarContext = { zone: ZONE, today: TODAY, now: "2026-10-05T10:00:00.000Z", weekStart: "MO", records: indexOccurrenceRecords(state.occurrenceRecords) };
-		const start = performance.now();
-		const cells = layoutMonth(state.tasks.values(), grid, "2026-10", cal).flat();
-		const elapsed = performance.now() - start;
+		const { result: cells, ms } = measured(() => layoutMonth(state.tasks.values(), grid, "2026-10", cal).flat());
 		expect(cells.reduce((n, c) => n + c.count, 0)).toBeGreaterThan(s === full ? REPEATING : REPEATING / 4);
-		return elapsed;
+		return ms;
 	});
 }
 

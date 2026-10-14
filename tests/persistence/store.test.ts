@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { isDomainError } from "../../src/domain/errors";
 import { SAVE_DEBOUNCE_MS, SAVE_MAX_DELAY_MS, SAVE_RETRY_MS, type StoreEvent } from "../../src/persistence/CpbaseStore";
 import { parseDbText, readHeader, revisionOf, serializeDb } from "../../src/persistence/serializer";
-import { FakeClock, settle } from "../helpers";
+import { FakeClock, drainPromises } from "../helpers";
 import { BACKUP_ROOT, DB_PATH, descendant, descendants, emptyDbText, harness, type Harness, interceptWrite, load, makeTask, withTask } from "./fixtures";
 import { collectionsOf, CURRENT_SCHEMA_VERSION, HISTORY_LIMIT } from "../../src/persistence/schema";
 import { bindFile, MemoryFileGateway } from "./memoryGateway";
@@ -38,10 +38,10 @@ describe("CpbaseStore: open and save", () => {
 		const before = h.dbText();
 		h.addTask(makeTask("t1"));
 		h.scheduler.advance(SAVE_DEBOUNCE_MS - 1);
-		await settle();
+		await drainPromises();
 		expect(h.dbText()).toBe(before);
 		h.scheduler.advance(1);
-		await settle();
+		await drainPromises();
 		const after = load(h.dbText());
 		expect(after.tasks.has("t1")).toBe(true);
 		expect(after.meta.baseRevision).toBe("r-000000000000");
@@ -59,12 +59,12 @@ describe("CpbaseStore: open and save", () => {
 		for (let i = 0; i < 9; i++) {
 			h.addTask(makeTask(`t${i}`));
 			h.scheduler.advance(200);
-			await settle();
+			await drainPromises();
 		}
 		expect(h.dbText()).toBe(before);
 		h.addTask(makeTask("t9"));
 		h.scheduler.advance(SAVE_MAX_DELAY_MS - 1800);
-		await settle();
+		await drainPromises();
 		expect(load(h.dbText()).tasks.size).toBe(10);
 	});
 
@@ -104,7 +104,7 @@ describe("CpbaseStore: external changes", () => {
 		expect(h.fs.files.get(conflict.path)).toContain('"id":"mine"');
 		// The incoming version is never overwritten by the pending save.
 		h.scheduler.advance(SAVE_MAX_DELAY_MS);
-		await settle();
+		await drainPromises();
 		expect(load(h.dbText()).meta.revision).toBe("r-theirs");
 
 		await h.store.keepMine(conflict.path);
@@ -202,7 +202,7 @@ describe("CpbaseStore: fault injection", () => {
 		expect(s2.readOnlyState).toBeNull();
 		// The in-memory store retries and succeeds.
 		h.scheduler.advance(5000);
-		await settle();
+		await drainPromises();
 		expect(load(h.dbText()).tasks.has("t1")).toBe(true);
 	});
 
@@ -368,7 +368,7 @@ describe("write, reload and recovery", () => {
 			h.events.length = 0;
 			await h.store.handleExternalChange();
 			h.scheduler.advance(SAVE_MAX_DELAY_MS * 3);
-			await settle();
+			await drainPromises();
 			expect(h.events).toEqual([]);
 			expect(h.dbText()).toBe(theirs);
 		});
@@ -506,7 +506,7 @@ describe("write, reload and recovery", () => {
 			expect(h.store.data.tasks.has("saved")).toBe(true);
 			// Nothing is written while read-only.
 			h.scheduler.advance(SAVE_MAX_DELAY_MS * 3);
-			await settle();
+			await drainPromises();
 			expect(h.dbText()).toBe(marked);
 			// The damaged text is kept.
 			const conflicts = await h.store.listConflicts();
@@ -692,7 +692,7 @@ describe("save retries, lineage and snapshots", () => {
 			expect(h.store.isDirty).toBe(true);
 			expect(h.scheduler.pending).toBeGreaterThan(0);
 			h.scheduler.advance(SAVE_RETRY_MS);
-			await settle();
+			await drainPromises();
 			expect(errors()).toHaveLength(1);
 			expect(h.scheduler.pending).toBeGreaterThan(0);
 		});
@@ -904,7 +904,7 @@ describe("save retries, lineage and snapshots", () => {
 			expect([...backup.tasks.keys()].sort()).toEqual(["before", "during"]);
 			expect(h.store.data.tasks.size).toBe(0);
 			h.scheduler.advance(SAVE_MAX_DELAY_MS);
-			await settle();
+			await drainPromises();
 			expect(load(h.dbText()).tasks.size).toBe(0);
 		});
 
@@ -916,7 +916,7 @@ describe("save retries, lineage and snapshots", () => {
 			interceptWrite(h, (p) => p === DB_PATH, () => h.addTask(makeTask("late")), 1);
 			await h.store.replaceAll(collectionsOf(load(emptyDbText())), "pre-restore");
 			h.scheduler.advance(SAVE_MAX_DELAY_MS);
-			await settle();
+			await drainPromises();
 			expect([...load(h.dbText()).tasks.keys()]).toEqual(["late"]);
 		});
 
@@ -930,7 +930,7 @@ describe("save retries, lineage and snapshots", () => {
 			interceptWrite(h, (p) => p === DB_PATH, () => h.addTask(makeTask("late")), 1);
 			await h.store.restoreRecovered();
 			h.scheduler.advance(SAVE_MAX_DELAY_MS);
-			await settle();
+			await drainPromises();
 			expect([...load(h.dbText()).tasks.keys()].sort()).toEqual(["kept", "late"]);
 		});
 	});
@@ -1543,7 +1543,7 @@ describe("the retry after a write that threw but landed", () => {
 		expect(other.data.meta.revision).toBe(landed);
 
 		h.scheduler.advance(SAVE_RETRY_MS);
-		await settle();
+		await drainPromises();
 		const retried = load(h.dbText()).meta;
 		expect(retried.revision).not.toBe(landed);
 		expect(retried.baseRevision).toBe(landed);
@@ -1591,7 +1591,7 @@ describe("two sections with one name in a list", () => {
 		expect(h.store.data.sections.size).toBe(2);
 		expect(h.dbText()).toBe(incoming);
 		h.scheduler.advance(SAVE_MAX_DELAY_MS);
-		await settle();
+		await drainPromises();
 		expect(h.dbText()).toBe(incoming);
 	});
 

@@ -8,7 +8,7 @@ import type { JournalOp } from "../../src/persistence/journal";
 import { TaskList } from "../../src/ui/TaskList";
 import { VIRTUAL_THRESHOLD } from "../../src/ui/virtual";
 import { type AppHarness, appHarness } from "../app/harness";
-import { dragTo, focusedIndex, mountNode, pressFocused, pressKey, releaseAt, seedTasks, settle, taskId, U1Host } from "./app-helpers";
+import { dragTo, focusedIndex, mountNode, pressFocused, pressKey, releaseAt, rowOf, seedTasks, settle, taskId, U1Host } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 import { cssSection } from "./styles-helpers";
 
@@ -77,7 +77,7 @@ async function mount(count: number, opts: { virtualize?: boolean; groups?: (all:
 
 const rows = (m: Mount) => [...m.root.querySelectorAll<HTMLElement>(".cp-task-row")];
 const drawnTitles = (m: Mount) => rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
-const rowOf = (m: Mount, i: number) => m.root.querySelector<HTMLElement>(`.cp-task-row[data-task-id="${taskId(i + 1)}"]`);
+
 /** The row's top inside the list content (the scroller's viewport top is 0 at scrollTop 0). */
 const contentTop = (m: Mount, el: HTMLElement) => el.getBoundingClientRect().top - m.main.getBoundingClientRect().top + m.main.scrollTop;
 const tabKey = (shiftKey = false) => new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
@@ -150,7 +150,7 @@ describe("above the threshold", () => {
 		});
 		await layout!.scrollTo(m.main, 2 * HEAD + 495 * ROW);
 		const check = (i: number, size: number, pos: number) => {
-			const el = rowOf(m, i);
+			const el = rowOf(m.root, i);
 			expect(el, `row ${i}`).not.toBeNull();
 			expect(el!.getAttribute("aria-setsize"), `row ${i}`).toBe(String(size));
 			expect(el!.getAttribute("aria-posinset"), `row ${i}`).toBe(String(pos));
@@ -165,16 +165,16 @@ describe("above the threshold", () => {
 	it("scrolling draws the rows at the new position, each at its true offset", async () => {
 		const m = await mount(2000);
 		await layout!.scrollTo(m.main, 1000 * ROW);
-		expect(rowOf(m, 0)).toBeNull();
+		expect(rowOf(m.root, 0)).toBeNull();
 		for (const i of [995, 1000, 1009]) {
-			const el = rowOf(m, i);
+			const el = rowOf(m.root, i);
 			expect(el, `row ${i}`).not.toBeNull();
 			expect(contentTop(m, el!)).toBe(i * ROW);
 		}
 		expect(layout!.contentHeight(m.main)).toBe(2000 * ROW);
 		await layout!.scrollTo(m.main, 2000 * ROW);
-		expect(rowOf(m, 1999)).not.toBeNull();
-		expect(contentTop(m, rowOf(m, 1999)!)).toBe(1999 * ROW);
+		expect(rowOf(m.root, 1999)).not.toBeNull();
+		expect(contentTop(m, rowOf(m.root, 1999)!)).toBe(1999 * ROW);
 	});
 
 	it("a group far below the viewport draws no row until it is reached; its heading stays", async () => {
@@ -186,12 +186,12 @@ describe("above the threshold", () => {
 		});
 		const headings = [...m.root.querySelectorAll(".cp-group-heading")].map((e) => e.textContent);
 		expect(headings).toEqual(["First300", "Second300"]);
-		expect(rowOf(m, 300)).toBeNull();
+		expect(rowOf(m.root, 300)).toBeNull();
 		await layout!.scrollTo(m.main, HEAD + 300 * ROW);
-		expect(rowOf(m, 300)).not.toBeNull();
-		expect(contentTop(m, rowOf(m, 300)!)).toBe(2 * HEAD + 300 * ROW);
+		expect(rowOf(m.root, 300)).not.toBeNull();
+		expect(contentTop(m, rowOf(m.root, 300)!)).toBe(2 * HEAD + 300 * ROW);
 		// The first group's rows went once the viewport left it.
-		expect(rowOf(m, 0)).toBeNull();
+		expect(rowOf(m.root, 0)).toBeNull();
 		expect(rows(m).length).toBeLessThan(60);
 	});
 });
@@ -199,11 +199,11 @@ describe("above the threshold", () => {
 describe("keyboard", () => {
 	it("ArrowDown walks every row, drawing and scrolling each into view, and ArrowUp walks back", async () => {
 		const m = await mount(400);
-		rowOf(m, 0)!.focus();
+		rowOf(m.root, 0)!.focus();
 		for (let i = 1; i < 400; i++) {
 			await pressFocused("ArrowDown");
 			if (focusedIndex() !== i) throw new Error(`ArrowDown ${i}: focus is on ${focusedIndex()}`);
-			const top = contentTop(m, rowOf(m, i)!);
+			const top = contentTop(m, rowOf(m.root, i)!);
 			if (top < m.main.scrollTop || top + ROW > m.main.scrollTop + VIEWPORT) throw new Error(`ArrowDown ${i}: the row is out of view`);
 		}
 		// Far fewer rows are drawn than the list has.
@@ -219,13 +219,13 @@ describe("keyboard", () => {
 
 	it("a focused row scrolled far out of view stays drawn and focused; ArrowDown then goes to the next row", async () => {
 		const m = await mount(2000);
-		const five = rowOf(m, 5)!;
+		const five = rowOf(m.root, 5)!;
 		five.focus();
 		await layout!.scrollTo(m.main, 1500 * ROW);
-		expect(rowOf(m, 5)).toBe(five);
+		expect(rowOf(m.root, 5)).toBe(five);
 		expect(document.activeElement).toBe(five);
 		expect(contentTop(m, five)).toBe(5 * ROW);
-		expect(rowOf(m, 1500)).not.toBeNull();
+		expect(rowOf(m.root, 1500)).not.toBeNull();
 		await pressKey(five, "ArrowDown");
 		expect(focusedIndex()).toBe(6);
 		// Focusing it scrolled it into view, like any focused row.
@@ -234,7 +234,7 @@ describe("keyboard", () => {
 
 	it("Tab from a row whose next row is not drawn goes to that row; Shift+Tab to the previous one", async () => {
 		const m = await mount(2000);
-		const five = rowOf(m, 5)!;
+		const five = rowOf(m.root, 5)!;
 		five.focus();
 		await layout!.scrollTo(m.main, 1500 * ROW);
 		const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
@@ -261,10 +261,10 @@ describe("keyboard", () => {
 			],
 		});
 		await layout!.scrollTo(m.main, 290 * ROW);
-		rowOf(m, 299)!.focus();
+		rowOf(m.root, 299)!.focus();
 		// Scroll away so neither the row nor the next group's first row would be drawn without the pin.
 		await layout!.scrollTo(m.main, 0);
-		expect(rowOf(m, 300)).toBeNull();
+		expect(rowOf(m.root, 300)).toBeNull();
 		await pressKey(document.activeElement!, "ArrowDown");
 		expect(focusedIndex()).toBe(300);
 		await pressKey(document.activeElement!, "ArrowUp");
@@ -279,11 +279,11 @@ describe("keyboard", () => {
 			],
 		});
 		await layout!.scrollTo(m.main, 290 * ROW);
-		rowOf(m, 299)!.focus();
+		rowOf(m.root, 299)!.focus();
 		// Far into the second group: it draws rows there, but not its first one.
 		await layout!.scrollTo(m.main, 2 * HEAD + 450 * ROW);
-		expect(rowOf(m, 300)).toBeNull();
-		expect(rowOf(m, 450)).not.toBeNull();
+		expect(rowOf(m.root, 300)).toBeNull();
+		expect(rowOf(m.root, 450)).not.toBeNull();
 		const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
 		document.activeElement!.dispatchEvent(tab);
 		await settle();
@@ -292,7 +292,7 @@ describe("keyboard", () => {
 		// Back up into the first group, whose last row is no longer drawn once the viewport is far away.
 		await layout!.scrollTo(m.main, 0);
 		await layout!.scrollTo(m.main, 2 * HEAD + 450 * ROW);
-		expect(rowOf(m, 299)).toBeNull();
+		expect(rowOf(m.root, 299)).toBeNull();
 		const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
 		document.activeElement!.dispatchEvent(back);
 		await settle();
@@ -309,14 +309,14 @@ describe("keyboard", () => {
 		const groups = buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), { ...emptyFilter("all"), sort: "manual" }, "", undefined, { groupBy: "section" }).groups;
 		await m.draw(groups, { sections: { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 } });
 		await layout!.scrollTo(m.main, 190 * ROW);
-		rowOf(m, 199)!.focus();
+		rowOf(m.root, 199)!.focus();
 		await layout!.scrollTo(m.main, 2 * HEAD + 350 * ROW);
 		const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
 		document.activeElement!.dispatchEvent(tab);
 		expect(tab.defaultPrevented).toBe(false);
 		// Shift+Tab from the section's first row: its own heading's buttons come before it.
 		await layout!.scrollTo(m.main, 2 * HEAD + 195 * ROW);
-		rowOf(m, 200)!.focus();
+		rowOf(m.root, 200)!.focus();
 		const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
 		document.activeElement!.dispatchEvent(back);
 		expect(back.defaultPrevented).toBe(false);
@@ -324,20 +324,20 @@ describe("keyboard", () => {
 
 	it("Shift+Tab from the first row of the first listbox and Tab from the last row of the last listbox are left to the browser", async () => {
 		const m = await mount(600, { groups: twoGroups });
-		const first = rowOf(m, 0)!;
+		const first = rowOf(m.root, 0)!;
 		first.focus();
 		// Far from the viewport, so nothing next to it is drawn either.
 		await layout!.scrollTo(m.main, 2 * HEAD + 450 * ROW);
-		expect(rowOf(m, 0)).toBe(first);
+		expect(rowOf(m.root, 0)).toBe(first);
 		const back = tabKey(true);
 		first.dispatchEvent(back);
 		expect(back.defaultPrevented).toBe(false);
 		expect(document.activeElement).toBe(first);
 		await layout!.scrollTo(m.main, 2 * HEAD + 600 * ROW);
-		const last = rowOf(m, 599)!;
+		const last = rowOf(m.root, 599)!;
 		last.focus();
 		await layout!.scrollTo(m.main, 0);
-		expect(rowOf(m, 599)).toBe(last);
+		expect(rowOf(m.root, 599)).toBe(last);
 		const forward = tabKey();
 		last.dispatchEvent(forward);
 		expect(forward.defaultPrevented).toBe(false);
@@ -346,12 +346,12 @@ describe("keyboard", () => {
 
 	it("Shift+Tab and Tab at the two ends of a list with one listbox are left to the browser", async () => {
 		const m = await mount(400);
-		rowOf(m, 0)!.focus();
+		rowOf(m.root, 0)!.focus();
 		const back = tabKey(true);
 		document.activeElement!.dispatchEvent(back);
 		expect(back.defaultPrevented).toBe(false);
 		await layout!.scrollTo(m.main, 400 * ROW);
-		rowOf(m, 399)!.focus();
+		rowOf(m.root, 399)!.focus();
 		const forward = tabKey();
 		document.activeElement!.dispatchEvent(forward);
 		expect(forward.defaultPrevented).toBe(false);
@@ -361,9 +361,9 @@ describe("keyboard", () => {
 		const m = await mount(600, { groups: twoGroups });
 		await m.draw(undefined, { readOnly: true });
 		await layout!.scrollTo(m.main, 290 * ROW);
-		rowOf(m, 299)!.focus();
+		rowOf(m.root, 299)!.focus();
 		await layout!.scrollTo(m.main, 2 * HEAD + 450 * ROW);
-		expect(rowOf(m, 300)).toBeNull();
+		expect(rowOf(m.root, 300)).toBeNull();
 		const tab = tabKey();
 		document.activeElement!.dispatchEvent(tab);
 		await settle();
@@ -371,7 +371,7 @@ describe("keyboard", () => {
 		expect(focusedIndex()).toBe(300);
 		await layout!.scrollTo(m.main, 0);
 		await layout!.scrollTo(m.main, 2 * HEAD + 450 * ROW);
-		expect(rowOf(m, 299)).toBeNull();
+		expect(rowOf(m.root, 299)).toBeNull();
 		const back = tabKey(true);
 		document.activeElement!.dispatchEvent(back);
 		await settle();
@@ -391,7 +391,7 @@ describe("keyboard", () => {
 		expect(heading.querySelector<HTMLButtonElement>(".cp-section-add")!.disabled).toBe(true);
 		expect(heading.querySelector<HTMLButtonElement>(".cp-section-toggle")!.disabled).toBe(false);
 		await layout!.scrollTo(m.main, 190 * ROW);
-		rowOf(m, 199)!.focus();
+		rowOf(m.root, 199)!.focus();
 		await layout!.scrollTo(m.main, 2 * HEAD + 350 * ROW);
 		// The next stop is the section's toggle, which the browser reaches (the disabled buttons are skipped by it).
 		const tab = tabKey();
@@ -399,12 +399,12 @@ describe("keyboard", () => {
 		expect(tab.defaultPrevented).toBe(false);
 		// Past the toggle, the browser's Tab lands on the section's first row: it is drawn when focus gets there.
 		await layout!.scrollTo(m.main, 2 * HEAD + 195 * ROW);
-		expect(rowOf(m, 200)).not.toBeNull();
+		expect(rowOf(m.root, 200)).not.toBeNull();
 	});
 
 	it("rapid keys build on the row the last key went to, not on the event target", async () => {
 		const m = await mount(2000);
-		const five = rowOf(m, 5)!;
+		const five = rowOf(m.root, 5)!;
 		five.focus();
 		await layout!.scrollTo(m.main, 1500 * ROW);
 		// Two keys before any render: the second starts from where the first was sent.
@@ -416,7 +416,7 @@ describe("keyboard", () => {
 
 	it("keeps the focused row's element while the window jumps (no re-insert, so focus and capture survive)", async () => {
 		const m = await mount(2000);
-		const five = rowOf(m, 5)!;
+		const five = rowOf(m.root, 5)!;
 		five.focus();
 		const box = five.parentElement!;
 		const moves: Node[] = [];
@@ -428,7 +428,7 @@ describe("keyboard", () => {
 		// Rows came and went around it (the spy sees Preact's inserts), but the focused one was never moved.
 		expect(moves.length).toBeGreaterThan(100);
 		expect(moves).not.toContain(five);
-		expect(rowOf(m, 5)).toBe(five);
+		expect(rowOf(m.root, 5)).toBe(five);
 		expect(document.activeElement).toBe(five);
 	});
 });
@@ -437,13 +437,13 @@ describe("drag and drop", () => {
 	it("reorders a row far down: the drop index comes from the data, the dragged row stays drawn", async () => {
 		const m = await mount(2000);
 		const place = vi.spyOn(m.h.app.tasks, "place");
-		const zero = rowOf(m, 0)!;
+		const zero = rowOf(m.root, 0)!;
 		await dragTo(zero, { x: 100, y: ROW / 2 }, { x: 100, y: 300 }, false);
 		expect(zero.classList.contains("is-dragging")).toBe(true);
 		// Auto-scroll (or the wheel) takes the list far down while the pointer is held.
 		await layout!.scrollTo(m.main, 995 * ROW);
 		expect(zero.isConnected).toBe(true);
-		const target = rowOf(m, 1000)!;
+		const target = rowOf(m.root, 1000)!;
 		const y = target.getBoundingClientRect().top + ROW * 0.75;
 		zero.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		await releaseAt(zero, { x: 100, y });
@@ -464,18 +464,18 @@ describe("drag and drop", () => {
 		await m.draw(undefined, { completed: { entries: [history], open: true, onToggle: () => undefined, resetKey: "" } });
 		await layout!.scrollTo(m.main, 400 * ROW);
 		// The open row is not drawn; the history row is.
-		expect(rowOf(m, 1)).not.toBeNull();
-		expect(rowOf(m, 1)!.dataset.occurrence).toBe("2026-10-05");
+		expect(rowOf(m.root, 1)).not.toBeNull();
+		expect(rowOf(m.root, 1)!.dataset.occurrence).toBe("2026-10-05");
 		const place = vi.spyOn(m.h.app.tasks, "place");
-		const dragged = rowOf(m, 395)!;
+		const dragged = rowOf(m.root, 395)!;
 		const from = dragged.getBoundingClientRect().top + ROW / 2;
 		await dragTo(dragged, { x: 100, y: from }, { x: 100, y: from - 20 }, false);
 		// A few rows up: the top quarter of row 391, so the row lands right before it.
-		const y = rowOf(m, 391)!.getBoundingClientRect().top + ROW * 0.25;
+		const y = rowOf(m.root, 391)!.getBoundingClientRect().top + ROW * 0.25;
 		dragged.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		const line = m.root.querySelector<HTMLElement>(".cp-reorder-line")!;
 		const list = m.root.querySelector<HTMLElement>(".cp-task-list")!;
-		expect(parseFloat(line.style.top)).toBe(rowOf(m, 391)!.getBoundingClientRect().top - list.getBoundingClientRect().top);
+		expect(parseFloat(line.style.top)).toBe(rowOf(m.root, 391)!.getBoundingClientRect().top - list.getBoundingClientRect().top);
 		await releaseAt(dragged, { x: 100, y });
 		expect(place).toHaveBeenCalledTimes(1);
 		const order = place.mock.calls[0]![1];
@@ -487,7 +487,7 @@ describe("drag and drop", () => {
 
 	it("draws the drop line at the target row while the list is windowed", async () => {
 		const m = await mount(2000);
-		const zero = rowOf(m, 0)!;
+		const zero = rowOf(m.root, 0)!;
 		await dragTo(zero, { x: 100, y: ROW / 2 }, { x: 100, y: 3 * ROW + 10 }, false);
 		const line = m.root.querySelector<HTMLElement>(".cp-reorder-line")!;
 		expect(line.hidden).toBe(false);
@@ -509,10 +509,10 @@ describe("drag and drop", () => {
 		const sections = { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 };
 		await m.draw(groups(), { sections });
 		const place = vi.spyOn(m.h.app.tasks, "place");
-		const zero = rowOf(m, 0)!;
+		const zero = rowOf(m.root, 0)!;
 		await dragTo(zero, { x: 100, y: HEAD + ROW / 2 }, { x: 100, y: 200 }, false);
 		await layout!.scrollTo(m.main, 2 * HEAD + 400 * ROW);
-		const target = rowOf(m, 410)!;
+		const target = rowOf(m.root, 410)!;
 		const y = target.getBoundingClientRect().top + ROW * 0.25;
 		zero.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		await releaseAt(zero, { x: 100, y });
@@ -536,13 +536,13 @@ describe("drag and drop into another group", () => {
 		const groups = buildList(m.h.app.store.state, { kind: "inbox" }, m.h.app.queryContext(), ascending, "", undefined, { groupBy: "section" }).groups;
 		await m.draw(groups, { sections: { categoryId: "inbox", hasAny: true, collapsed: () => false, onToggle: () => undefined, addRequest: 0 } });
 		const place = vi.spyOn(m.h.app.tasks, "place");
-		const zero = rowOf(m, 0)!;
+		const zero = rowOf(m.root, 0)!;
 		await dragTo(zero, { x: 100, y: HEAD + ROW / 2 }, { x: 100, y: 200 }, false);
 		await layout!.scrollTo(m.main, 2 * HEAD + 400 * ROW);
 		const list = m.root.querySelector<HTMLElement>(".cp-task-list")!;
 		const line = m.root.querySelector<HTMLElement>(".cp-reorder-line")!;
 		// Upper half of row 410: the line is at its top, and the row goes in before it.
-		const target = rowOf(m, 410)!;
+		const target = rowOf(m.root, 410)!;
 		const y = target.getBoundingClientRect().top + ROW * 0.25;
 		zero.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		expect(parseFloat(line.style.top)).toBe(2 * HEAD + 410 * ROW);
@@ -571,18 +571,18 @@ describe("drag and drop into another group", () => {
 		expect(groups.map((g) => g.key)).toEqual(["priority:1", "priority:0"]);
 		await m.draw(groups);
 		const place = vi.spyOn(m.h.app.tasks, "place");
-		const zero = rowOf(m, 0)!;
+		const zero = rowOf(m.root, 0)!;
 		await dragTo(zero, { x: 100, y: HEAD + ROW / 2 }, { x: 100, y: 200 }, false);
 		await layout!.scrollTo(m.main, 2 * HEAD + 500 * ROW);
-		expect(rowOf(m, 0)).toBe(zero);
+		expect(rowOf(m.root, 0)).toBe(zero);
 		const list = m.root.querySelector<HTMLElement>(".cp-task-list")!;
 		const line = m.root.querySelector<HTMLElement>(".cp-reorder-line")!;
-		const target = rowOf(m, 500)!;
+		const target = rowOf(m.root, 500)!;
 		const y = target.getBoundingClientRect().top + ROW * 0.75;
 		zero.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		// Lower half of row 500: the line is at the top of row 501.
 		expect(parseFloat(line.style.top)).toBe(2 * HEAD + 501 * ROW);
-		expect(parseFloat(line.style.top)).toBe(rowOf(m, 501)!.getBoundingClientRect().top - list.getBoundingClientRect().top);
+		expect(parseFloat(line.style.top)).toBe(rowOf(m.root, 501)!.getBoundingClientRect().top - list.getBoundingClientRect().top);
 		await releaseAt(zero, { x: 100, y });
 		expect(place).toHaveBeenCalledTimes(1);
 		const [id, order, patch] = place.mock.calls[0]!;
@@ -601,12 +601,12 @@ describe("drag and drop into another group", () => {
 		await m.draw(byPriority(m));
 		const place = vi.spyOn(m.h.app.tasks, "place");
 		await layout!.scrollTo(m.main, 2 * HEAD + 550 * ROW);
-		const dragged = rowOf(m, 560)!;
+		const dragged = rowOf(m.root, 560)!;
 		const from = dragged.getBoundingClientRect().top + ROW / 2;
 		await dragTo(dragged, { x: 100, y: from }, { x: 100, y: from - 20 }, false);
 		await layout!.scrollTo(m.main, 0);
 		expect(dragged.isConnected).toBe(true);
-		const target = rowOf(m, 7)!;
+		const target = rowOf(m.root, 7)!;
 		const y = target.getBoundingClientRect().top + ROW * 0.25;
 		dragged.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 100, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 }));
 		await releaseAt(dragged, { x: 100, y });
@@ -631,12 +631,12 @@ describe("collapse", () => {
 		let collapsed = false;
 		const sections = () => ({ categoryId: "inbox", hasAny: true, collapsed: (k: string) => collapsed && k === "section:inbox:none", onToggle: () => undefined, addRequest: 0 });
 		await m.draw(groups(), { sections: sections() });
-		expect(rowOf(m, 2000)).toBeNull();
+		expect(rowOf(m.root, 2000)).toBeNull();
 		collapsed = true;
 		await m.draw(groups(), { sections: sections() });
 		// "No section" shows only its heading; "Later" now starts right under it and draws its first rows.
-		expect(rowOf(m, 0)).toBeNull();
-		const first = rowOf(m, 2000);
+		expect(rowOf(m.root, 0)).toBeNull();
+		const first = rowOf(m.root, 2000);
 		expect(first).not.toBeNull();
 		expect(contentTop(m, first!)).toBe(2 * HEAD);
 	});

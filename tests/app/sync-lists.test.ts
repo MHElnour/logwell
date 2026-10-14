@@ -3,7 +3,7 @@ import { SyncService } from "../../src/app/SyncService";
 import { linkedLists } from "../../src/app/syncMarks";
 import { TICKTICK_KEEP_LABEL, TICKTICK_LINKS_LABEL, TICKTICK_SYNC_LABEL, TICKTICK_TRASH_LABEL } from "../../src/app/syncModel";
 import { type Category, INBOX_ID, type SyncLink, syncLinkId, type Task } from "../../src/domain/types";
-import { linkedList, oneSyncedTask, syncHarness, type SyncHarness, syncTwice, trashedTitles } from "./sync-harness";
+import { linkedList, oneSyncedTask, pushes, syncHarness, type SyncHarness, syncTwice, trashedTitles } from "./sync-harness";
 import { fieldHashes } from "../../src/domain/ticktick/mapping";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
@@ -78,7 +78,7 @@ describe("first sync", () => {
 		expect(s.link("task", bank.id)).toMatchObject({ ttId: parent.id, ttProjectId: p.id, etag: s.tt.get(parent.id)?.etag });
 		expect(s.link("list", list.id)).toMatchObject({ ttId: p.id, ttProjectId: null });
 		// Nothing goes back up.
-		expect(s.tt.count("createTask") + s.tt.count("batchTasks") + s.tt.count("updateTask")).toBe(0);
+		expect(pushes(s)).toBe(0);
 	});
 
 	it("fills an empty TickTick project from Logwell, open tasks only, one createTask each", async () => {

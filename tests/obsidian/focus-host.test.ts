@@ -4,6 +4,7 @@ import type { FocusEvents } from "../../src/app/FocusService";
 import { type ActiveTimer, startSet } from "../../src/domain/focus";
 import { FocusHost, type FocusHostUi, type FocusLike, formatStatus, statusLabel } from "../../src/obsidian/focusHost";
 import { LocalStorageActiveTimer } from "../../src/obsidian/activeTimer";
+import { fakeLocal } from "./fake-vault";
 
 const shown = vi.hoisted(() => [] as string[]);
 vi.mock("../../src/obsidian/notices", async (importOriginal) => ({
@@ -488,16 +489,6 @@ describe("focus host", () => {
 });
 
 describe("the active timer in local storage", () => {
-	function fakeLocal() {
-		const store = new Map<string, unknown>();
-		return {
-			store,
-			app: {
-				loadLocalStorage: (k: string) => store.get(k) ?? null,
-				saveLocalStorage: (k: string, v: unknown) => void (v === null ? store.delete(k) : store.set(k, v)),
-			},
-		};
-	}
 
 	const config = { rounds: 4, focusSec: 1500, breakSec: 300, longBreakSec: 900 };
 	const timer = () => startSet(config, null, "2026-10-04T10:00:00.000Z", () => "s-1").timer!;

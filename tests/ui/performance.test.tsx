@@ -243,17 +243,13 @@ describe("performance at target scale: 20 habits and 20,000 check-ins", () => {
 			block();
 			render(null, container);
 
-			let start = performance.now();
-			page();
-			const pageMs = performance.now() - start;
+			const pageMs = elapsed(page);
 			expect(container.querySelectorAll(".cp-habit-row")).toHaveLength(HABITS);
 			// The selected habit's log shows its first 50 of 1,000 entries.
 			expect(container.querySelectorAll(".cp-habit-entry")).toHaveLength(50);
 			render(null, container);
 
-			start = performance.now();
-			block();
-			const blockMs = performance.now() - start;
+			const blockMs = elapsed(block);
 			expect(container.querySelector(".cp-today-habits")).not.toBeNull();
 			perfLog(`habits page ${pageMs.toFixed(0)} ms, today block ${blockMs.toFixed(0)} ms`);
 		} finally {

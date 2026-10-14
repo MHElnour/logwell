@@ -6,11 +6,13 @@ import type { Category, DateSpec, SyncLink, Tag, Task } from "../../src/domain/t
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 import { FakeTickTick } from "../app/fake-ticktick";
-import { syncHarness } from "../app/sync-harness";
+import { pushes, syncHarness } from "../app/sync-harness";
 import { makeTask } from "../persistence/fixtures";
 import { FakeClock } from "../helpers";
 import type { TtTask } from "../../src/domain/ticktick/types";
 import { countBigPasses, elapsed, elapsedAsync, median, perfLog, tally } from "./measure";
+import { addDays } from "../../src/domain/time";
+import { uuid } from "./view-edit-fixture";
 
 describe("sync at the limits", () => {
 	// A sync pulls and diffs every linked list. At the limit (9 linked lists of 999 open tasks, the open-task cap and
@@ -25,7 +27,7 @@ describe("sync at the limits", () => {
 	const PER_LIST = 999;
 	const NOW = "2026-10-01T09:59:00.000Z";
 
-	const uuid = (prefix: number, n: number) => `${prefix.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+
 
 	/** A database with LISTS linked lists of PER_LIST synced tasks, `total` tasks in all, and the matching TickTick. */
 	/** With `tagged`, every task carries two tags (one nested), in Logwell and in TickTick, and the bases hash them. */
@@ -120,7 +122,7 @@ describe("sync at the limits", () => {
 		}, 60_000);
 
 		it(`with ${PER_LIST} sync-created description notes, a sync with no change reads no note after the first`, async () => {
-			const { s, tt, sync } = await setup(LISTS * PER_LIST, false, PER_LIST);
+			const { s, sync } = await setup(LISTS * PER_LIST, false, PER_LIST);
 			const links = s.h.app.store.state.syncLinks;
 			const first = await elapsedAsync(() => sync.sync());
 			const readsAfterFirst = s.h.notes.reads.length;
@@ -131,7 +133,7 @@ describe("sync at the limits", () => {
 			expect(s.h.notes.reads.length).toBe(readsAfterFirst);
 			expect(s.h.notes.writes).toEqual([]);
 			expect(s.h.app.store.state.syncLinks).toBe(links);
-			expect(tt.count("batchTasks") + tt.count("updateTask") + tt.count("createTask")).toBe(0);
+			expect(pushes(s)).toBe(0);
 		}, 60_000);
 
 		it("touches only the linked lists in a 50,000-task database", async () => {
@@ -196,7 +198,7 @@ describe("field mapping", () => {
 	const DISPLAY = "Europe/Berlin";
 
 	const pad = (n: number): string => String(n).padStart(2, "0");
-	const day = (n: number): string => new Date(Date.UTC(2026, 0, 1) + (n % 730) * 86_400_000).toISOString().slice(0, 10);
+	const day = (n: number): string => addDays("2026-01-01", n % 730);
 
 	const specs: DateSpec[] = [];
 	for (let i = 0; i < TASKS; i++) {

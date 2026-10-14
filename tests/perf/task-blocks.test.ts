@@ -10,7 +10,9 @@ import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
 import { U1Host } from "../ui/app-helpers";
-import { countBigPasses, elapsed, perfLog, tally } from "./measure";
+import { countBigPasses, elapsed, elapsedAsync, perfLog, tally } from "./measure";
+import { addDays } from "../../src/domain/time";
+import { taskId } from "./view-edit-fixture";
 
 // A note with 10 dashboard blocks over 50,000 tasks. One task change must wake only the blocks it can
 // affect: the others run no query and draw nothing. The tasks are spread over 10 lists, 5,000 each, and 20 of
@@ -26,7 +28,7 @@ vi.mock("../../src/domain/blockQuery", async (importActual) => {
 	return { ...actual, runBlockQuery: vi.fn(actual.runBlockQuery) };
 });
 
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+
 
 /** The lists whose block queried since the counters were cleared. */
 const queried = new Map<string, number>();
@@ -103,10 +105,10 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
 		const change = async (fn: () => Promise<unknown>): Promise<number> => {
 			queried.clear();
-			const start = performance.now();
-			await fn();
-			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
-			return performance.now() - start;
+			return elapsedAsync(async () => {
+				await fn();
+				await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			});
 		};
 		const first = (k: number): ID => taskId(k * (TASKS / LISTS) + 1);
 
@@ -146,7 +148,7 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		const tasks = new Map(data.tasks);
 		const ops: JournalOp[] = [];
 		const ctx = h.app.queryContext();
-		const day = (n: number) => ({ kind: "date" as const, date: new Date(Date.parse(`${ctx.today}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10) });
+		const day = (n: number) => ({ kind: "date" as const, date: addDays(ctx.today, n) });
 		for (let i = 0; i < TASKS; i++) {
 			const t: Task = makeTask(taskId(i + 1), {
 				title: `Task ${i}`,

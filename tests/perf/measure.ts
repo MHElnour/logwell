@@ -17,18 +17,28 @@ export function median(xs: number[]): number {
 
 export const fastest = (xs: number[]) => Math.min(...xs);
 
+/** What `run` returns and the milliseconds it takes. */
+export function measured<T>(run: () => T): { result: T; ms: number } {
+	const start = performance.now();
+	const result = run();
+	return { result, ms: performance.now() - start };
+}
+
+/** What `run` resolves to and the milliseconds it takes, awaited. */
+export async function measuredAsync<T>(run: () => Promise<T>): Promise<{ result: T; ms: number }> {
+	const start = performance.now();
+	const result = await run();
+	return { result, ms: performance.now() - start };
+}
+
 /** Milliseconds `run` takes. */
 export function elapsed(run: () => unknown): number {
-	const start = performance.now();
-	run();
-	return performance.now() - start;
+	return measured(run).ms;
 }
 
 /** Milliseconds `run` takes, awaited. */
 export async function elapsedAsync(run: () => Promise<unknown>): Promise<number> {
-	const start = performance.now();
-	await run();
-	return performance.now() - start;
+	return (await measuredAsync(run)).ms;
 }
 
 /**

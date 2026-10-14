@@ -8,7 +8,7 @@ import { appHarness } from "../app/harness";
 import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
 import { U1Host } from "../ui/app-helpers";
-import { countBigPasses, median, perfLog, tally } from "./measure";
+import { countBigPasses, elapsedAsync, median, perfLog, tally } from "./measure";
 import { LISTS, TASKS, taskId } from "./view-edit-fixture";
 
 // Issue 75: a task block's redraw makes no pass over every task of its own. The query is the only pass
@@ -112,10 +112,12 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 		const ms: number[] = [];
 		for (let run = 0; run < RUNS; run++) {
 			const edit = await countBigPasses(async () => {
-				const start = performance.now();
-				await h.app.tasks.update(shownParent(3), { title: `Renamed ${run}` });
-				await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
-				ms.push(performance.now() - start);
+				ms.push(
+					await elapsedAsync(async () => {
+						await h.app.tasks.update(shownParent(3), { title: `Renamed ${run}` });
+						await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+					}),
+				);
 			});
 			if (run === 0) perfLog(`issue-75: one rename, two blocks: passes ${tally(edit.passes)}`);
 			// The command (src/app/tx.ts) and one query per block (src/domain/blockQuery.ts); no pass of the block's own.
@@ -163,10 +165,12 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 		vi.useFakeTimers(FAKE);
 		const ms: number[] = [];
 		for (let run = 0; run < RUNS; run++) {
-			const start = performance.now();
-			await h.app.tasks.update(shownParent(3), { title: `Renamed ${run}` });
-			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
-			ms.push(performance.now() - start);
+			ms.push(
+				await elapsedAsync(async () => {
+					await h.app.tasks.update(shownParent(3), { title: `Renamed ${run}` });
+					await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+				}),
+			);
 			expect(els.filter((e) => titles(e).includes(`Renamed ${run}`))).toHaveLength(10);
 		}
 		// One more rename, untimed (the counter reads a stack trace per pass), to count the passes.

@@ -9,9 +9,9 @@ import { AddSectionField } from "../../src/ui/AddSectionField";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
 import type { QuickAddPreset } from "../../src/ui/host";
-import { type AppMount, click, dragTo, mountApp, mountNode, pressKey, quickModel, rect, settle, sidebarItem, taskOf, typeInto, U1Host } from "./app-helpers";
+import { type AppMount, click, dragTo, mountApp, mountNode, pressKey, quickModel, rect, rowTitles, settle, sidebarItem, taskOf, typeInto, U1Host } from "./app-helpers";
 import { board, cardTitles, columnEl, columnEls, columnTitles, item, modeButton, openBoard, stubBoardRects } from "./board-helpers";
-import { openViewMenu as openMenuAt, pickItem } from "./view-menu-helpers";
+import { openViewMenu, pickItem } from "./view-menu-helpers";
 
 // Sections in the list view and on the board.
 // Today is 2026-10-01 (Europe/Berlin).
@@ -31,20 +31,16 @@ async function seed(m: AppMount) {
 
 const headings = (m: AppMount) =>
 	[...m.root.querySelectorAll(".cp-tasks .cp-section-heading")].map((h) => `${h.querySelector(".cp-section-toggle span[id]")!.textContent}:${h.querySelector(".cp-group-count")!.textContent}`);
-const rowTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
+
 const byLabel = (root: ParentNode, label: string) => root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 type Menu = Exclude<U1Host["menus"][number][number], "separator">;
 const menuItems = (host: U1Host): Menu[] => host.menus.at(-1)!.flatMap((i) => (i === "separator" ? [] : [i]));
 const menuRun = (host: U1Host, title: string) => menuItems(host).find((i) => i.title === title)!.run();
 
-async function openViewMenu(m: AppMount) {
-	m.host.menus.length = 0;
-	await click(byLabel(m.root.querySelector(".cp-tasks")!, "View options"));
-}
 /** Inbox groups by nothing until asked; the section headings show under "Group by: Section". */
 async function inboxBySection(m: AppMount) {
 	await click(sidebarItem(m.root, "Inbox"));
-	const menu = await openMenuAt(m, m.root.querySelector(".cp-tasks")!);
+	const menu = await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 	const second = await pickItem(m, menu, "Group by…");
 	await pickItem(m, second!, "Section");
 }
@@ -148,10 +144,10 @@ describe("list view headings", () => {
 describe('"Add section" in the view menu', () => {
 	it("is in Inbox and lists, not in Today", async () => {
 		const m = await mountApp();
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		expect(menuItems(m.host).map((i) => i.title)).not.toContain("Add section");
 		await inboxBySection(m);
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		expect(menuItems(m.host).map((i) => i.title)).toContain("Add section");
 	});
 
@@ -159,7 +155,7 @@ describe('"Add section" in the view menu', () => {
 		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		menuRun(m.host, "Add section");
 		await settle();
 		const input = m.root.querySelector<HTMLInputElement>(".cp-tasks .cp-section-name-input")!;
@@ -178,7 +174,7 @@ describe('"Add section" in the view menu', () => {
 		await inboxBySection(m);
 		await click(m.root.querySelector(".cp-tasks .cp-task-row"));
 		expect(m.root.querySelector(".cp-tasks .cp-details")).not.toBeNull();
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		menuRun(m.host, "Add section");
 		await settle();
 		const input = m.root.querySelector<HTMLInputElement>(".cp-tasks .cp-section-name-input")!;
@@ -196,7 +192,7 @@ describe('"Add section" in the view menu', () => {
 		const m = await mountApp();
 		await seed(m);
 		await inboxBySection(m);
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		menuRun(m.host, "Add section");
 		await settle();
 		const input = m.root.querySelector<HTMLInputElement>(".cp-tasks .cp-section-name-input")!;
@@ -218,7 +214,7 @@ describe('"Add section" in the view menu', () => {
 		await makeReadOnly(m.h);
 		m.h.app.store.bus.emit("status", undefined);
 		await settle();
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		expect(menuItems(m.host).map((i) => i.title)).not.toContain("Add section");
 		expect(byLabel(m.root, "Add task to Alpha")!.disabled).toBe(true);
 		expect(byLabel(m.root, "Options for section Alpha")!.disabled).toBe(true);
@@ -537,7 +533,7 @@ describe("board columns", () => {
 		const m = await mountApp();
 		await seed(m);
 		await openBoard(m, "Inbox");
-		await openViewMenu(m);
+		await openViewMenu(m, m.root.querySelector(".cp-tasks")!);
 		menuRun(m.host, "Add section");
 		await settle();
 		const input = board(m.root).querySelector<HTMLInputElement>(".cp-section-name-input")!;

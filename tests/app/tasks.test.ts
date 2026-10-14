@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { INBOX_ID, syncLinkId } from "../../src/domain/types";
 import { rule } from "../domain/recurrence-fixtures";
-import { settle } from "../helpers";
+import { drainPromises } from "../helpers";
 import { appHarness, expectDomainError } from "./harness";
 
 describe("tasks", () => {
@@ -272,7 +272,7 @@ describe("trash and undo", () => {
 		const h = await appHarness();
 		h.fs.files.set("Checkpoint.cpbase", "{broken");
 		await h.store.handleExternalChange();
-		await settle();
+		await drainPromises();
 		await expectDomainError(h.app.tasks.create({ title: "x" }), "ReadOnly");
 	});
 });

@@ -11,6 +11,7 @@ import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
 import { input as habitInput } from "../ui/habits-helpers";
 import { countBigPasses, elapsed, perfLog, tally } from "./measure";
+import { taskId } from "./view-edit-fixture";
 
 // Search with "Also search description notes" on, 50,000 tasks of which 5,000 link a note. Commits that do not
 // change which tasks link which notes (a habit check-in here) read no note at all, and finding the linked notes
@@ -26,7 +27,7 @@ beforeAll(() => {
 	};
 });
 
-const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+
 
 async function bigState() {
 	const h = await appHarness();

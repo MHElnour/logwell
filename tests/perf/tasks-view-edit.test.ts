@@ -7,7 +7,7 @@ import type { ID } from "../../src/domain/types";
 import { TasksSection, initialTasksState } from "../../src/ui/TasksSection";
 import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
-import { countBigPasses, fastest, median, perfLog, tally } from "./measure";
+import { countBigPasses, elapsedAsync, fastest, measured, measuredAsync, median, perfLog, tally } from "./measure";
 import { LISTS, ROW, RUNS, TASKS, VIEWPORT, bigHarness, domCleanup, taskId } from "./view-edit-fixture";
 
 // One task edit with the Tasks view open at 50,000 tasks (issue 41). The view rebuilds its list whenever the
@@ -85,12 +85,8 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			await h.app.tasks.update(taskId(run * 1000 + 1), { title: `Edited ${run}` });
 			const state = h.app.store.state;
 			for (const { name, view, text } of views) {
-				const scanStart = performance.now();
-				const reference = buildList(state, view, ctx, emptyFilter(), text);
-				const scanMs = performance.now() - scanStart;
-				const start = performance.now();
-				const list = buildList(state, view, ctx, emptyFilter(), text, undefined, { index });
-				const ms = performance.now() - start;
+				const { result: reference, ms: scanMs } = measured(() => buildList(state, view, ctx, emptyFilter(), text));
+				const { result: list, ms } = measured(() => buildList(state, view, ctx, emptyFilter(), text, undefined, { index }));
 				expect(list).toEqual(reference);
 				const shown = list.groups.flatMap((g) => g.entries);
 				rows.set(name, `${shown.length} rows (${shown.filter((e) => e.task.status === "completed").length} completed under a parent), ${list.completed.length} in the Completed group`);
@@ -98,12 +94,8 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 				if (run > 0) times.set(name, [...(times.get(name) ?? []), ms]);
 				if (run > 0) scanTimes.set(name, [...(scanTimes.get(name) ?? []), scanMs]);
 			}
-			const scanStart = performance.now();
-			const reference = sidebarCounts(state, ctx);
-			const scanMs = performance.now() - scanStart;
-			const start = performance.now();
-			const fromIndex = sidebarCounts(state, ctx, index);
-			const ms = performance.now() - start;
+			const { result: reference, ms: scanMs } = measured(() => sidebarCounts(state, ctx));
+			const { result: fromIndex, ms } = measured(() => sidebarCounts(state, ctx, index));
 			expect(fromIndex).toEqual(reference);
 			if (run > 0) counts = [...counts, ms];
 			if (run > 0) scanCounts = [...scanCounts, scanMs];
@@ -149,15 +141,10 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			const inbox: TaskView = { kind: "inbox" };
 			const list: TaskView = { kind: "category", id: big };
 			if (viewed) for (const view of [inbox, list]) buildList(h.app.store.state, view, ctx, emptyFilter(), "", undefined, { index });
-			const timed = async (fn: () => Promise<unknown>) => {
-				const start = performance.now();
-				await fn();
-				return performance.now() - start;
-			};
-			const deleteMs = await timed(() => h.app.categories.delete(big));
+			const deleteMs = await elapsedAsync(() => h.app.categories.delete(big));
 			expect(index.verify(h.app.store.state)).toEqual([]);
-			const inboxMs = await timed(async () => buildList(h.app.store.state, inbox, ctx, emptyFilter(), "", undefined, { index }));
-			const undoMs = await timed(() => h.app.store.undo());
+			const inboxMs = await elapsedAsync(async () => buildList(h.app.store.state, inbox, ctx, emptyFilter(), "", undefined, { index }));
+			const undoMs = await elapsedAsync(() => h.app.store.undo());
 			expect(index.verify(h.app.store.state)).toEqual([]);
 			const state = h.app.store.state;
 			expect(buildList(state, list, ctx, emptyFilter(), "", undefined, { index })).toEqual(buildList(state, list, ctx, emptyFilter(), ""));
@@ -193,12 +180,8 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			expect(h.app.store.state).not.toBe(edited);
 			const state = h.app.store.state;
 			const ctx = h.app.queryContext();
-			const start = performance.now();
-			const list = buildList(state, today, ctx, emptyFilter(), "", undefined, { index });
-			const ms = performance.now() - start;
-			const scanStart = performance.now();
-			const reference = buildList(state, today, ctx, emptyFilter(), "");
-			const scanMs = performance.now() - scanStart;
+			const { result: list, ms } = measured(() => buildList(state, today, ctx, emptyFilter(), "", undefined, { index }));
+			const { result: reference, ms: scanMs } = measured(() => buildList(state, today, ctx, emptyFilter(), ""));
 			expect(list).toEqual(reference);
 			if (run > 0) times.push(ms);
 			if (run > 0) scans.push(scanMs);
@@ -250,15 +233,16 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 			const redrawMs: number[] = [];
 			for (let run = 0; run < RUNS + 1; run++) {
 				const edit = await countBigPasses(() => h.app.tasks.update(taskId(1), { title: `Edited ${run}` }));
-				const start = performance.now();
-				const drawn = await countBigPasses(async () => {
-					draw();
-					await new Promise((r) => setTimeout(r, 0));
-				});
+				const { result: drawn, ms: drawnMs } = await measuredAsync(() =>
+					countBigPasses(async () => {
+						draw();
+						await new Promise((r) => setTimeout(r, 0));
+					}),
+				);
 				if (run > 0) {
 					command.push(edit.passes);
 					redraw.push(drawn.passes);
-					redrawMs.push(performance.now() - start);
+					redrawMs.push(drawnMs);
 				}
 			}
 			// One more edit and redraw, untimed, to count how often the rows are ordered.
