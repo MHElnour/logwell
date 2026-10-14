@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
 import type { AllDayEntry, TimedSegment } from "../../domain/calendar";
-import { dateSpecDisplayLocal } from "../../domain/time";
+import { dateSpecDisplayLocal, wallClockOf } from "../../domain/time";
 import type { ID, TagColor, Task } from "../../domain/types";
 import { Icon, hueClass } from "../common";
 import type { UiHost } from "../host";
@@ -73,7 +73,7 @@ export function describeAllDay(e: AllDayEntry, zone: string): EntryView {
 	} else {
 		missed = e.missed;
 		const local = task.deadline === null ? null : dateSpecDisplayLocal(task.deadline, zone);
-		parts.push(local === null ? "deadline" : `deadline ${local.slice(11)}`);
+		parts.push(local === null ? "deadline" : `deadline ${wallClockOf(local)}`);
 		if (missed && !done(task, occurrence)) parts.push("missed deadline");
 	}
 	parts.push(...occurrenceWords(occurrence));

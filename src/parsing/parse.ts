@@ -1,10 +1,9 @@
-import { DateTime } from "luxon";
 import type { RepeatFreq, RepeatRule } from "../domain/types";
 import { resolveListName } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
 import { sameDateSpec } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
-import { findDates, resolveDateSpec, todayOf, type DateCandidate, type DateOutcome, type RollKind } from "./dates";
+import { findDates, resolveDateSpec, todayOf, zoneNowOf, type DateCandidate, type DateOutcome, type RollKind } from "./dates";
 import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
@@ -104,13 +103,11 @@ function plainResult(input: string): ParseResult {
 
 /** The parser without its safety net. Tests call this directly so a bug cannot hide behind the guard. */
 export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
-	const zoneNow = DateTime.fromJSDate(ctx.now, { zone: ctx.zone });
-	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${ctx.zone}`);
-	const today = todayOf(zoneNow);
+	const today = todayOf(zoneNowOf(ctx.now, ctx.zone));
 
 	const decisions = usableDecisions(input, ctx);
 	const taken: Span[] = [...decisions.literal, ...decisions.bound.map((d) => d.span)];
-	const isTaken = (start: number, end: number): boolean => taken.some((t) => t.start < end && start < t.end);
+	const isTaken = (start: number, end: number): boolean => taken.some((t) => overlaps(t, { start, end }));
 	const take = (span: Span): void => {
 		taken.push(span);
 	};

@@ -1,4 +1,4 @@
-import { DateTime } from "luxon";
+import { instantInZone } from "../../domain/time";
 
 /** One hour row of the week grid. Keep equal to `--cp-cal-hour` in styles.css (a test checks it). */
 export const HOUR_PX = 48;
@@ -23,7 +23,7 @@ const WORKDAY_START_MIN = 7 * 60;
 
 /** Wall-clock minutes since midnight of an instant in the display zone. */
 export function nowMinutes(nowIso: string, zone: string): number {
-	const t = DateTime.fromISO(nowIso, { zone: "utc" }).setZone(zone);
+	const t = instantInZone(nowIso, zone);
 	return t.hour * 60 + t.minute;
 }
 

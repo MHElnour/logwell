@@ -33,6 +33,24 @@ export function wallTimeOf(dt: DateTime): LocalDateTime {
 	return formatLatin(dt, LOCAL_FORMAT);
 }
 
+/** The date of a stored wall time: "2026-10-12" of "2026-10-12T10:00". */
+export function wallDateOf(local: string): LocalDate {
+	return local.slice(0, 10);
+}
+
+/** The "HH:mm" clock time of a stored wall time: "10:00" of "2026-10-12T10:00". */
+export function wallClockOf(local: string): string {
+	return local.slice(11, 16);
+}
+
+/** Minutes since midnight of a stored wall time: 600 for "2026-10-12T10:00". */
+export function wallMinutesOf(local: string): number {
+	return Number(local.slice(11, 13)) * 60 + Number(local.slice(14, 16));
+}
+
+/** Minutes in a calendar day (a wall-clock day, whatever its DST length). */
+export const DAY_MIN = 1440;
+
 const DECIMAL_DIGIT_RE = /\p{Nd}/u;
 const OTHER_DIGITS_RE = /(?![0-9])\p{Nd}/gu;
 
@@ -112,6 +130,11 @@ export function todayIn(zone: string, clock: Clock): LocalDate {
 /** The ISO string of an epoch time in milliseconds. */
 export function instantOf(ms: number): Instant {
 	return new Date(ms).toISOString();
+}
+
+/** The current instant on the clock, floored to the whole minute ("…T10:42:00.000Z"). */
+export function minuteInstant(clock: Clock): Instant {
+	return instantOf(Math.floor(clock.now().getTime() / 60_000) * 60_000);
 }
 
 /** The instant `ms` from now on the clock, as an ISO string; negative `ms` is in the past. */
@@ -243,7 +266,7 @@ function computeSteadyDay(date: string, tz: string): boolean {
 function sameZoneIsExact(local: string, tz: string): boolean {
 	if (!LOCAL_DATE_TIME_RE.test(local) || !isValidZone(tz)) return false;
 	if (Number(local.slice(11, 13)) > 23 || Number(local.slice(14, 16)) > 59) return false;
-	return isSteadyDay(local.slice(0, 10), tz);
+	return isSteadyDay(wallDateOf(local), tz);
 }
 
 function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: string): Converted {
@@ -254,7 +277,7 @@ function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: str
 		if (known !== undefined) return known;
 	}
 	const dt = wallTimeToDateTime(spec.local, spec.tz).setZone(displayZone);
-	const result: Converted = { date: dt.toISODate() ?? spec.local.slice(0, 10), local: wallTimeOf(dt) };
+	const result: Converted = { date: dt.toISODate() ?? wallDateOf(spec.local), local: wallTimeOf(dt) };
 	if (cacheable) {
 		if (conversions.size >= CONVERSION_CACHE_MAX) conversions.clear();
 		conversions.set(key, result);
@@ -266,6 +289,14 @@ function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: str
  * The local day an instant falls on in `zone`, or null when the instant does not parse. Memoized for IANA
  * names, like `convert`: the Completed group asks for it once per completed task on every render.
  */
+/**
+ * An instant as a DateTime in `zone`: ISO text with "Z" or an offset (a stored instant, a TickTick date). Invalid when
+ * the text or the zone is. One Luxon parse: cache the result when it is read per task.
+ */
+export function instantInZone(instant: string, zone: string): DateTime {
+	return DateTime.fromISO(instant, { setZone: true }).setZone(zone);
+}
+
 export function instantDay(instant: Instant, zone: string): LocalDate | null {
 	const cacheable = isValidZone(zone);
 	const key = cacheable ? `${zone}|${instant}` : "";
@@ -273,7 +304,7 @@ export function instantDay(instant: Instant, zone: string): LocalDate | null {
 		const known = instantDays.get(key);
 		if (known !== undefined) return known;
 	}
-	const dt = DateTime.fromISO(instant, { zone });
+	const dt = instantInZone(instant, zone);
 	const day = dt.isValid ? dt.toISODate() : null;
 	if (cacheable) {
 		if (instantDays.size >= CONVERSION_CACHE_MAX) instantDays.clear();
@@ -285,7 +316,7 @@ export function instantDay(instant: Instant, zone: string): LocalDate | null {
 /** The calendar date a spec falls on, seen from the display zone. */
 export function dateSpecDate(spec: DateSpec, displayZone: string): LocalDate {
 	if (spec.kind === "date") return spec.date;
-	if (spec.tz === displayZone && sameZoneIsExact(spec.local, spec.tz)) return spec.local.slice(0, 10);
+	if (spec.tz === displayZone && sameZoneIsExact(spec.local, spec.tz)) return wallDateOf(spec.local);
 	return convert(spec, displayZone).date;
 }
 
@@ -332,6 +363,11 @@ export function dayNumOf(y: number, m: number, d: number): number {
 	const doy = Math.floor((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1;
 	const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
 	return era * 146_097 + doe - 719_468;
+}
+
+/** The number of days in month `m` (1 = January) of year `y`; a month outside 1-12 rolls over as in `dayNumOf`. */
+export function monthLength(y: number, m: number): number {
+	return dayNumOf(y, m + 1, 1) - dayNumOf(y, m, 1);
 }
 
 /** The year, month (1 = January) and day of a day number. */

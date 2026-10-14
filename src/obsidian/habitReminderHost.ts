@@ -1,4 +1,4 @@
-import { DateTime } from "luxon";
+
 import type { HabitService } from "../app/HabitService";
 import type { ReminderStatePort, SettingsPort } from "../app/ports";
 import type { AppStore } from "../app/store";
@@ -11,8 +11,8 @@ import {
 	snooze,
 } from "../domain/habitReminders";
 import { type HabitIndex, versionAt } from "../domain/habits";
-import type { Clock } from "../domain/ports";
-import { clockTimeOf, instantFromNow } from "../domain/time";
+import { type Clock, nowInstant } from "../domain/ports";
+import { clockTimeOf, instantDay, instantFromNow, instantInZone } from "../domain/time";
 import type { Habit, ID, LocalDate } from "../domain/types";
 import { progressText } from "../ui/habits/format";
 import type { NoticeAction } from "./notices";
@@ -166,11 +166,11 @@ export class HabitReminderHost {
 	// ---------------------------------------------------------------------
 
 	private wallNow(app: ReminderApp): { date: LocalDate; time: string; minute: string; instant: string } {
-		const at = this.clock.now();
-		const dt = DateTime.fromJSDate(at, { zone: app.settings.zone() });
-		const date = dt.toISODate() ?? "";
-		const time = clockTimeOf(dt);
-		return { date, time, minute: `${date} ${time}`, instant: at.toISOString() };
+		const instant = nowInstant(this.clock);
+		const zone = app.settings.zone();
+		const date = instantDay(instant, zone) ?? "";
+		const time = clockTimeOf(instantInZone(instant, zone));
+		return { date, time, minute: `${date} ${time}`, instant };
 	}
 
 	/** A new wall date: yesterday's sticky notices go (their buttons would write to yesterday), errors may show again. */

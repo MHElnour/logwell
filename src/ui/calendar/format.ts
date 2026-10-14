@@ -1,4 +1,4 @@
-import { addDays, utcDay } from "../../domain/time";
+import { addDays, monthStart, shiftMonth, utcDay, yearMonthOf } from "../../domain/time";
 import { type LocalDate, MONTH_LONG } from "../../domain/types";
 
 // Calendar titles, navigation and the text of day and time labels.
@@ -27,7 +27,7 @@ export function monthTitle(date: string): string {
  */
 export function shiftAnchor(anchor: LocalDate, mode: CalendarMode, step: 1 | -1, today: LocalDate): LocalDate {
 	if (mode === "week") return addDays(anchor, 7 * step);
-	const first = d(anchor).startOf("month").plus({ months: step }).toISODate() ?? anchor;
+	const first = monthStart(shiftMonth(yearMonthOf(anchor), step));
 	return today.slice(0, 7) === first.slice(0, 7) ? today : first;
 }
 

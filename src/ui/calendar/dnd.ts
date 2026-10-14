@@ -1,7 +1,8 @@
 import { useRef, useState } from "preact/hooks";
-import type { TaskPatch } from "../../app/TaskService";
+import { EDIT_TASK_LABEL, type TaskPatch } from "../../app/TaskService";
 import {
 	type CalendarContext,
+	DEFAULT_DURATION_MIN,
 	type TimedSegment,
 	moveSameMoment,
 	moveTimed,
@@ -10,7 +11,7 @@ import {
 	slotRange,
 	slotSpec,
 } from "../../domain/calendar";
-import { daysBetween, fmtMin } from "../../domain/time";
+import { DAY_MIN, daysBetween, fmtMin, wallDateOf, wallMinutesOf } from "../../domain/time";
 import type { DateSpec, ID, LocalDate, Task } from "../../domain/types";
 import { writeTask } from "../actions";
 import { type DragPoint, beginPointerDrag, createAutoScroller, hitTest, overElement } from "../drag";
@@ -22,8 +23,7 @@ import { HOUR_PX } from "./geometry";
 // all-day cell or a month cell) by hit testing the rendered elements; the value to store comes from
 // the pure helpers in src/domain/calendar.ts. One drop is one TaskService.update call.
 
-const DEFAULT_DURATION_MIN = 30;
-const DAY_MIN = 1440;
+
 
 type DragSource =
 	/** A timed block (either half of a split one): moves the whole task. */
@@ -157,7 +157,7 @@ export function useCalDnd(host: UiHost, ctx: CalendarContext, getRoot: () => HTM
 				// (a DST gap) nothing is written, and Undo would revert an unrelated earlier command.
 				const mark = h.app.store.undoMark();
 				void writeTask(h, task, r.patch).then((outcome) => {
-					if (outcome === "changed") h.notifyUndo(r.message, "Edit task", mark);
+					if (outcome === "changed") h.notifyUndo(r.message, EDIT_TASK_LABEL, mark);
 				});
 			},
 			onCancel: () => {
@@ -222,7 +222,7 @@ function resolveDrop(
 			const dayDelta = daysBetween(src.seg.date, dateOf(col));
 			const next = moveTimed(sched, zone, dayDelta, ((p.y - origin.y + scrollDelta) / HOUR_PX) * 60);
 			if (next === null || next.kind !== "datetime") return NONE;
-			const startMin = Number(next.local.slice(11, 13)) * 60 + Number(next.local.slice(14, 16));
+			const startMin = wallMinutesOf(next.local);
 			// The continued half was grabbed, so the ghost shows the part that runs past
 			// midnight, in the column under the pointer. The block's start is the day before.
 			const spill = startMin + src.seg.durationMin - DAY_MIN;
@@ -232,7 +232,7 @@ function resolveDrop(
 					kind: "slot",
 					taskId: task.id,
 					colDate: dateOf(col),
-					date: onPointer ? dateOf(col) : next.local.slice(0, 10),
+					date: onPointer ? dateOf(col) : wallDateOf(next.local),
 					startMin: onPointer ? 0 : startMin,
 					lenMin: onPointer ? Math.min(spill, DAY_MIN) : Math.min(src.seg.durationMin, DAY_MIN - startMin),
 					label: slotRange(next.local, src.seg.noDuration ? null : src.seg.durationMin, zone),
@@ -289,7 +289,7 @@ function resolveDrop(
 			if (col === null) return NONE;
 			const next = slotSpec(dateOf(col), ((p.y - col.getBoundingClientRect().top) / HOUR_PX) * 60, zone);
 			if (next.kind !== "datetime") return NONE;
-			const startMin = Number(next.local.slice(11, 13)) * 60 + Number(next.local.slice(14, 16));
+			const startMin = wallMinutesOf(next.local);
 			const duration = task.plannedDurationMin !== null && task.plannedDurationMin > 0 ? task.plannedDurationMin : null;
 			return {
 				ghost: {

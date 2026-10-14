@@ -18,21 +18,14 @@ const pureLayerImports = {
 const LUXON_ALLOWED = [
 	"src/domain/time.ts",
 	"src/domain/calendar.ts",
-	"src/domain/ticktick/mapping.ts",
 	"src/app/DataService.ts",
-	"src/obsidian/habitReminderHost.ts",
 	"src/parsing/dates.ts",
-	"src/parsing/parse.ts",
 	"src/ui/calendar/format.ts",
-	"src/ui/calendar/geometry.ts",
 	"src/ui/focus/format.ts",
-	"src/ui/format.ts",
-	"src/ui/habits/format.ts",
 	"src/ui/hooks.ts",
 ];
 const NEW_DATE_ALLOWED = [
 	"src/domain/time.ts",
-	"src/domain/focus.ts",
 	"src/domain/ports.ts",
 ];
 const TIME_MESSAGE = "Date and time code goes through src/domain/time.ts.";
