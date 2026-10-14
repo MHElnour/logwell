@@ -31,7 +31,7 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.
 - To keep words as plain text, put them in double quotes: `Read "Friday night lights"` reads no date and keeps the quotes in the title. A backslash keeps the word or token after it as text, with any phrase that word starts, and is removed: `Buy \today paper` becomes "Buy today paper", `Pay \by friday` stays "Pay by friday" with no deadline, and `\#Work` stays "#Work".
-- A comma or semicolon next to a recognized word is removed with it. Another mark, such as `-`, `.` or `!`, is removed when it stands alone at the start or end of what is left, and so are empty parentheses: `Pay rent - tomorrow` and `Pay rent (#Work).` become "Pay rent". A mark attached to a word stays, as in `Wow! tomorrow`.
+- A comma or semicolon next to a recognized word is removed with it. Another mark, such as `-`, `.` or `!`, is removed when it is left at the start or end of the title with no word attached to it, and so are empty parentheses: `Pay rent - tomorrow`, `Pay rent tomorrow.` and `Pay rent (#Work).` become "Pay rent". A mark attached to a word of the title stays, as in `Wow! tomorrow` or `Pay rent: tomorrow`.
 
 ## What you can type
 

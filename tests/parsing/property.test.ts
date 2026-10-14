@@ -59,11 +59,14 @@ function applied(r: ParseResult) {
 /** The marks a removed span may take with it from the title, and the opening and closing parentheses around one. */
 const TITLE_MARKS = ",;.:!?-\u2013()";
 const isSpace = (ch: string): boolean => /^\s$/u.test(ch);
+const isWord = (ch: string): boolean => /^[\p{L}\p{N}\p{M}_]$/u.test(ch);
 
 /**
  * Whether every character of the input outside the applied spans is in the title, in order, apart from whitespace, a
  * backslash, and a mark or parenthesis that only whitespace, other such marks and removed spans separate from an
- * applied span. An independent reading of what the title may drop, not a copy of the parser's rule.
+ * applied span; a mark other than a comma or semicolon that a word character of the title touches is never dropped
+ * (`Wow! tomorrow` keeps "Wow!"). An
+ * independent reading of what the title may drop, not a copy of the parser's rule.
  */
 function titleKeepsTheRest(input: string, r: ParseResult): boolean {
 	const removed = new Uint8Array(input.length);
@@ -80,18 +83,23 @@ function titleKeepsTheRest(input: string, r: ParseResult): boolean {
 		return false;
 	};
 	const title = r.title.split("").filter((ch) => !isSpace(ch));
-	let t = 0;
+	const titleWord = (j: number): boolean => j >= 0 && j < input.length && removed[j] === 0 && isWord(input.charAt(j));
+	// How much of the title the input read so far can account for, every way (a droppable mark may match or go).
+	let at = new Set([0]);
 	for (let i = 0; i < input.length; i++) {
 		const ch = input.charAt(i);
 		if (removed[i] === 1 || isSpace(ch)) continue;
-		if (title[t] === ch) {
-			t++;
-			continue;
+		// A comma or semicolon goes even after a word ("Call mom, tomorrow"); parentheses pair by what is between them.
+		const touched = !",;()".includes(ch) && (titleWord(i - 1) || titleWord(i + 1));
+		const droppable = ch === "\\" || (TITLE_MARKS.includes(ch) && besideRemoved(i) && !touched);
+		const next = new Set<number>();
+		for (const t of at) {
+			if (title[t] === ch) next.add(t + 1);
+			if (droppable) next.add(t);
 		}
-		const droppable = ch === "\\" || (TITLE_MARKS.includes(ch) && besideRemoved(i));
-		if (!droppable) return false;
+		at = next;
 	}
-	return t === title.length;
+	return at.has(title.length);
 }
 
 /** One closed double-quote pair: `"…"` with a space on both sides, and no other quote or backslash in the text. */

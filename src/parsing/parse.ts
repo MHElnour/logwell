@@ -530,9 +530,9 @@ function supersede(drafts: Draft[]): void {
  * The title: the input without the applied spans, or the full text if nothing remains, with no stray punctuation or
  * spaces. Beside a removed span (over spaces), a comma or a semicolon goes with it (SEPARATOR_MARKS: "Read every day, 20
  * pages"); another mark (LONE_MARKS) goes only when it is lone and left at the start or the end of the title: lone is
- * whitespace or the text's edge on both its sides, or on its left the end of a removed `#`, `@` or `!` token, whose
- * trailing marks are not part of it ("Pay rent - tomorrow", "Pay rent !1."; not "Wow! tomorrow", "Q&A: Friday?" or
- * "Call Ann tomorrow - about"). Parentheses with only removed text between them go ("Pay rent (#Work)", "Fix (#Work,
+ * only whitespace, the text's edge or removed text touching it on both sides ("Pay rent - tomorrow", "Pay rent !1.",
+ * "Q&A: Friday?" is "Q&A:"); a mark a word of the title touches is the user's ("Wow! tomorrow", "Pay rent: tomorrow"),
+ * and so is one between title words ("Call Ann tomorrow - about"). Parentheses with only removed text between them go ("Pay rent (#Work)", "Fix (#Work,
  * @home)", "((#Work))"), and so does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
  * every sunday."). An escaped phrase loses its backslash (`escapes`, their indexes). Text the user kept as it is
  * (`literal`: a dismissed chip, a quoted or an escaped phrase) is never touched.
@@ -552,9 +552,8 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 		if (first === -1) first = i;
 		last = i;
 	}
-	// Where a removed `#`, `@` or `!` token ends, and later a removed closing parenthesis: a mark right after one is lone.
-	const tokenEnds = new Set(applied.filter((c) => c.kind === "category" || c.kind === "tag" || c.kind === "priority").map((c) => c.span.end));
-	const lone = (m: number): boolean => (space(m - 1) || tokenEnds.has(m)) && space(m + 1);
+	// A mark is lone when only whitespace, the text's edge or removed text touches it: no word of the title, no other mark.
+	const lone = (m: number): boolean => (space(m - 1) || gone[m - 1] === 1) && (space(m + 1) || gone[m + 1] === 1);
 	const dropMark = (m: number): void => {
 		if (m < 0 || m >= n || gone[m] === 1 || kept(m)) return;
 		const ch = input.charAt(m);
@@ -592,11 +591,8 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 		for (let j = after[c.span.end]!; paren(j, ")"); j = after[j + 1]!) closes.push(j);
 		const pairs = Math.min(opens.length, closes.length);
 		for (let k = 0; k < pairs; k++) gone[opens[k]!] = gone[closes[k]!] = 1;
-		if (pairs > 0) {
-			// "Pay rent (#Work).": the mark after the parentheses is beside removed text too.
-			tokenEnds.add(closes[pairs - 1]! + 1);
-			markAfter(closes[pairs - 1]! + 1);
-		}
+		// "Pay rent (#Work).": the mark after the parentheses is beside removed text too.
+		if (pairs > 0) markAfter(closes[pairs - 1]! + 1);
 	}
 	// A sentence's last punctuation after a repeat that ends the chips, with a space before the repeat.
 	const lastChip = applied.at(-1);

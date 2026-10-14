@@ -1020,16 +1020,27 @@ describe("7. Everyday phrasings", () => {
 			// a lone mark beside a removed token, with whitespace or the text edge on both sides, at the start or end of the title, goes with it
 			{ in: "Pay rent - tomorrow", title: "Pay rent", s: "2026-10-08" },
 			{ in: "Pay rent (#Work).", title: "Pay rent", cat: WORK },
+			// a mark only removed text, whitespace or the edge touches goes too
+			{ in: "Pay rent tomorrow.", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent tomorrow!", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent tomorrow?", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Call at 0900.", title: "Call", s: "2026-10-08T09:00" },
+			{ in: "Call tomorrow at noon.", title: "Call", s: "2026-10-08T12:00" },
+			{ in: "Done tomorrow!", title: "Done", s: "2026-10-08" },
+			{ in: "Is it Friday?", title: "Is it", s: "2026-10-09" },
+			{ in: "Q&A: Friday?", title: "Q&A:", s: "2026-10-09" },
 			{ in: "Pay rent – tomorrow", title: "Pay rent", s: "2026-10-08" },
 			{ in: "Call mom, tomorrow", title: "Call mom", s: "2026-10-08" },
 			{ in: "Pills every day, until Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
-			// a mark a word touches stays, and so does one between title words
+			// a mark a word of the title touches stays, and so does one between title words
 			{ in: "Wow! tomorrow", title: "Wow!", s: "2026-10-08" },
 			{ in: "Plan: tomorrow review", title: "Plan: review", s: "2026-10-08" },
 			{ in: "Hi. tomorrow", title: "Hi.", s: "2026-10-08" },
 			{ in: "Note: tomorrow", title: "Note:", s: "2026-10-08" },
 			{ in: "1. tomorrow call", title: "1. call", s: "2026-10-08" },
-			{ in: "Q&A: Friday?", title: "Q&A: ?", s: "2026-10-09" },
+			{ in: "Self-review tomorrow", title: "Self-review", s: "2026-10-08" },
+			{ in: "Re: invoice tomorrow", title: "Re: invoice", s: "2026-10-08" },
+			{ in: "Pay rent: tomorrow", title: "Pay rent:", s: "2026-10-08" },
 			{ in: "Call Ann tomorrow - about", title: "Call Ann - about", s: "2026-10-08" },
 			{ in: "Fix sink @a.b", title: "Fix sink .b", nt: ["a"] },
 		])("#69: $in", (row) => checkRow(row));
