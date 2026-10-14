@@ -3,7 +3,7 @@
 	"name": "Logwell",
 	"version": "0.1.5",
 	"minAppVersion": "1.13.0",
-	"description": "Tasks with linked description notes, lists, sections, tags, a calendar, a board, an Eisenhower matrix and a focus timer.",
+	"description": "Tasks with natural-language Quick Add, lists, sections, tags, repeats, habits, a calendar, a board, an Eisenhower matrix and a focus timer.",
 	"author": "MHElnour",
 	"isDesktopOnly": true
 }
