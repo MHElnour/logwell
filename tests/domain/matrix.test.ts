@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { matrixQuadrants, QUADRANT_ORDER, quadrantFlags } from "../../src/domain/matrix";
 import { matchesTaskDate, type QueryContext } from "../../src/domain/queries";
-import type { DateSpec, Task } from "../../src/domain/types";
+import type { Task } from "../../src/domain/types";
+import { day, timed } from "../persistence/fixtures";
 
 describe("matrix", () => {
 	const ctx: QueryContext = { today: "2026-10-01", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" };
@@ -30,9 +31,6 @@ describe("matrix", () => {
 			...patch,
 		};
 	}
-
-	const day = (date: string): DateSpec => ({ kind: "date", date });
-	const timed = (local: string): DateSpec => ({ kind: "datetime", local, tz: "Europe/Berlin" });
 
 	function run(tasks: Task[]) {
 		const byId = new Map(tasks.map((t) => [t.id, t]));

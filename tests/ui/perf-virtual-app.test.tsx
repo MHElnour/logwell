@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { LINGER_MS } from "../../src/ui/useLingering";
 import { type AppHarness, appHarness } from "../app/harness";
-import { type AppMount, click, mountApp, seedTasks, settle, sidebarItem, taskId } from "./app-helpers";
+import { type AppMount, click, mountApp, rowOf, seedTasks, settle, sidebarItem, taskId } from "./app-helpers";
 import { type FakeLayout, fakeLayout } from "./virtual-layout";
 
 // The windowed-list checks that need the whole Tasks
@@ -36,7 +36,7 @@ async function mount(): Promise<Mount> {
 }
 
 const rows = (m: Mount) => [...m.main.querySelectorAll<HTMLElement>(".cp-task-row")];
-const rowOf = (m: Mount, i: number) => m.main.querySelector<HTMLElement>(`.cp-task-row[data-task-id="${taskId(i + 1)}"]`);
+
 /** The row's top inside the list content (row 0 is at 0). */
 const listTop = (m: Mount, el: HTMLElement) => el.getBoundingClientRect().top - m.main.querySelector(".cp-task-rows")!.getBoundingClientRect().top;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -53,22 +53,22 @@ describe("the Tasks section with 2,000 rows", () => {
 		const m = await mount();
 		await layout!.scrollTo(m.main, 1000 * ROW);
 		const top = m.main.scrollTop;
-		const row = rowOf(m, 1003)!;
+		const row = rowOf(m.main, 1003)!;
 		row.querySelector<HTMLInputElement>(".cp-task-checkbox")!.click();
 		await settle();
 		expect(m.h.app.store.state.tasks.get(taskId(1004))!.status).toBe("completed");
 		// Held among the open rows, in place, for the check animation.
-		expect(rowOf(m, 1003)).toBe(row);
+		expect(rowOf(m.main, 1003)).toBe(row);
 		expect(row.classList.contains("is-completed")).toBe(true);
 		expect(listTop(m, row)).toBe(1003 * ROW);
 		await wait(LINGER_MS + 150);
 		await settle();
-		expect(rowOf(m, 1003)).toBeNull();
+		expect(rowOf(m.main, 1003)).toBeNull();
 		expect(m.main.scrollTop).toBe(top);
-		expect(listTop(m, rowOf(m, 1004)!)).toBe(1003 * ROW);
+		expect(listTop(m, rowOf(m.main, 1004)!)).toBe(1003 * ROW);
 		expect(await m.h.app.store.undo()).not.toBeNull();
 		await settle();
-		const back = rowOf(m, 1003)!;
+		const back = rowOf(m.main, 1003)!;
 		expect(back).not.toBeNull();
 		expect(back.classList.contains("is-completed")).toBe(false);
 		expect(listTop(m, back)).toBe(1003 * ROW);
@@ -112,13 +112,13 @@ describe("the Tasks section with 2,000 rows", () => {
 		const m = await mount();
 		await layout!.scrollTo(m.main, 1200 * ROW);
 		const top = m.main.scrollTop;
-		await click(rowOf(m, 1204));
+		await click(rowOf(m.main, 1204));
 		expect(m.root.querySelector(".cp-tasks")!.classList.contains("has-details")).toBe(true);
-		expect(rowOf(m, 1204)!.classList.contains("is-selected")).toBe(true);
+		expect(rowOf(m.main, 1204)!.classList.contains("is-selected")).toBe(true);
 		expect(m.main.scrollTop).toBe(top);
 		await layout!.scrollTo(m.main, 0);
 		await layout!.scrollTo(m.main, top);
-		expect(rowOf(m, 1204)!.classList.contains("is-selected")).toBe(true);
+		expect(rowOf(m.main, 1204)!.classList.contains("is-selected")).toBe(true);
 		expect(m.root.querySelectorAll(".cp-task-row.is-selected")).toHaveLength(1);
 	});
 });

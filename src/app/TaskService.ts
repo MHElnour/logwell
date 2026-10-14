@@ -4,7 +4,7 @@ import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, sanitizeNoteName } from "../domain/notes";
 import { assertCanBecomeSubtask, compareTasksBySortKey, isActiveSeries, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
 import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
-import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn } from "../domain/time";
+import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn, wallClockOf, wallDateOf } from "../domain/time";
 import {
 	type DateSpec,
 	type ID,
@@ -88,7 +88,12 @@ export interface TaskResult {
 	reanchored?: { date: LocalDate; endCleared: boolean };
 }
 
+/** The store labels of task commands a view names in its Undo notice (each notice carries its write's label). */
 export const COMPLETE_TASK_LABEL = "Complete task";
+export const EDIT_TASK_LABEL = "Edit task";
+export const MOVE_TASK_LABEL = "Move task";
+export const DUPLICATE_TASK_LABEL = "Duplicate task";
+export const DELETE_TASK_LABEL = "Delete task";
 
 export type CompleteResult =
 	| {
@@ -165,15 +170,15 @@ function rescheduledSeries(
 	weekStart: WeekStart,
 ): Recurrence | null {
 	if (spec === null) return null;
-	const anchor = spec.kind === "datetime" ? spec.local.slice(0, 10) : dateSpecDate(spec, zone);
+	const anchor = spec.kind === "datetime" ? wallDateOf(spec.local) : dateSpecDate(spec, zone);
 	if (due === anchor) {
 		const dueRule = ruleAt(rec, due);
-		const sameTime = spec.kind === "datetime" ? dueRule.time === spec.local.slice(11, 16) && dueRule.tz === spec.tz : dueRule.time === null;
+		const sameTime = spec.kind === "datetime" ? dueRule.time === wallClockOf(spec.local) && dueRule.tz === spec.tz : dueRule.time === null;
 		if (sameTime) return rec;
 	}
 	const base = ruleAt(rec, anchor);
 	const rule =
-		spec.kind === "datetime" ? { ...base, time: spec.local.slice(11, 16), tz: spec.tz } : { ...base, time: null, tz: null };
+		spec.kind === "datetime" ? { ...base, time: wallClockOf(spec.local), tz: spec.tz } : { ...base, time: null, tz: null };
 	const versions = [{ effectiveFrom: anchor, rule }, ...rec.versions.filter((v) => v.effectiveFrom > anchor)];
 	const moved: Recurrence = { ...rec, anchor, versions, anchoredAt: now };
 	if (moved.end.kind !== "never" && isSeriesEnded({ ...moved, endedAt: null }, records, weekStart)) return { ...moved, end: { kind: "never" } };
@@ -392,7 +397,7 @@ export class TaskService {
 
 	/** A parent's category move takes its subtasks along in the same write. */
 	update(id: ID, patch: TaskPatch): Promise<TaskResult> {
-		return this.runCapped("Edit task", (tx) => this.updateIn(tx, id, patch));
+		return this.runCapped(EDIT_TASK_LABEL, (tx) => this.updateIn(tx, id, patch));
 	}
 
 	/** `update` inside the caller's transaction. */
@@ -414,7 +419,7 @@ export class TaskService {
 	 * `changed` is false when nothing was written.
 	 */
 	place(id: ID, order: ID[], patch: TaskPatch = {}): Promise<TaskResult> {
-		return this.runCapped("Move task", (tx) => {
+		return this.runCapped(MOVE_TASK_LABEL, (tx) => {
 			if (!order.includes(id)) throw new DomainError("InvalidValue", "The task is not in the order.");
 			if (new Set(order).size !== order.length) throw new DomainError("InvalidValue", "The order lists a task twice.");
 			const tasks = order.map((oid) => requireTask(tx, oid));
@@ -537,7 +542,7 @@ export class TaskService {
 
 	/** Make a task a subtask of `parentId`, or top-level with null. */
 	setParent(id: ID, parentId: ID | null): Promise<Task> {
-		return this.runCapped("Move task", (tx) => this.setParentIn(tx, id, parentId));
+		return this.runCapped(MOVE_TASK_LABEL, (tx) => this.setParentIn(tx, id, parentId));
 	}
 
 	/** `setParent` inside the caller's transaction. */
@@ -566,7 +571,7 @@ export class TaskService {
 
 	/** New IDs for the copy and its subtasks; fields and note reference are copied. */
 	duplicate(id: ID): Promise<Task> {
-		return this.runCapped("Duplicate task", (tx) => {
+		return this.runCapped(DUPLICATE_TASK_LABEL, (tx) => {
 			const source = requireTask(tx, id);
 			// The copy goes right after its source: between it and the next sibling key, if any.
 			let nextKey: string | null = null;
@@ -609,7 +614,7 @@ export class TaskService {
 
 	/** The task and its subtasks move to Trash as one batch. The note is untouched. */
 	delete(id: ID): Promise<TrashEntry> {
-		return this.store.run("Delete task", (tx) => this.deleteIn(tx, id));
+		return this.store.run(DELETE_TASK_LABEL, (tx) => this.deleteIn(tx, id));
 	}
 
 	/** `delete` inside the caller's transaction (TickTick deletions go to Trash). */

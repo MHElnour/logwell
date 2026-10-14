@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { isFinishedEarly } from "../../domain/focus";
+import { type FocusPhase, isFinishedEarly } from "../../domain/focus";
 import { plural } from "../../domain/text";
 import { clockTimeOf } from "../../domain/time";
 import type { FocusGap, FocusSession, Instant } from "../../domain/types";
@@ -25,6 +25,14 @@ export function focusedText(sec: number): string {
 /** "1 round", "4 rounds". */
 export function roundsText(n: number): string {
 	return plural(n, "round");
+}
+
+/** The name of each phase, on the ring, in the status bar and in the recovery text. */
+export const PHASE_LABEL: Readonly<Record<FocusPhase, string>> = { focus: "Focus", "short-break": "Short break", "long-break": "Long break" };
+
+/** "Round 2 of 4": the round under the ring and in the status bar. */
+export function roundText(round: number, rounds: number): string {
+	return `Round ${round} of ${rounds}`;
 }
 
 /** The set-done summary: "4 rounds · 2h focused". */

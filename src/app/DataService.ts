@@ -4,7 +4,7 @@ import { focusedSec } from "../domain/focus";
 import { currentOccurrence, describeRule, indexOccurrenceRecords } from "../domain/recurrence";
 import { compareSortKeys } from "../domain/sortKey";
 import { tagDisplayPath } from "../domain/tags";
-import { formatLatin } from "../domain/time";
+import { formatLatin, utcDateOf } from "../domain/time";
 import type { Section, Task, WeekStart } from "../domain/types";
 import { type LoadResult, loadText } from "../persistence/CpbaseStore";
 import { serializeRecord } from "../persistence/serializer";
@@ -75,7 +75,7 @@ function recordLabel(collection: CollectionName, id: string, record: unknown): s
 }
 
 export function exportFileName(date: Date): string {
-	return `logwell-backup-${date.toISOString().slice(0, 10)}.json`;
+	return `logwell-backup-${utcDateOf(date) ?? ""}.json`;
 }
 
 // -- CSV export -----------------------------------------------------------------------
@@ -145,7 +145,7 @@ export class DataService {
 		const tagName = (key: string): string => tagDisplayPath(state.tags, key);
 		const records = indexOccurrenceRecords(state.occurrenceRecords);
 		// The engine reads no clock (the current occurrence does not move with the date), so any date will do.
-		const today = this.store.now().slice(0, 10);
+		const today = utcDateOf(this.store.now()) ?? "";
 
 		const tasks = [...state.tasks.values()]
 			.sort((a, b) => compareSortKeys(a.createdAt, b.createdAt) || compareSortKeys(a.id, b.id))

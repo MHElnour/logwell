@@ -3,7 +3,7 @@ import type { TargetedEvent } from "preact";
 import { useState } from "preact/hooks";
 import { type DateFilter, type StatusFilter, type TaskFilter, type TaskSort, emptyFilter, isFilterActive } from "../domain/queries";
 import { tagsByLabel } from "../domain/tags";
-import type { Priority } from "../domain/types";
+import { PRIORITIES, type Priority, priorityLabel } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { QUADRANT_LIST } from "./matrix/quadrants";
 import type { UiHost } from "./host";
@@ -25,12 +25,7 @@ const DATE_OPTIONS: { value: DateFilter; label: string }[] = [
 	{ value: "range", label: "Date range" },
 ];
 
-const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
-	{ value: 1, label: "High" },
-	{ value: 2, label: "Medium" },
-	{ value: 3, label: "Low" },
-	{ value: 0, label: "None" },
-];
+const PRIORITY_OPTIONS: { value: Priority; label: string }[] = PRIORITIES.map((p) => ({ value: p, label: priorityLabel(p) }));
 
 const SORT_OPTIONS: { value: TaskSort; label: string }[] = [
 	{ value: "manual", label: "Default order" },

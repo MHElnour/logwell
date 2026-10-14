@@ -1,11 +1,17 @@
-import { TFile } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 import { MemoryFileGateway } from "../persistence/memoryGateway";
 
 // A fake Obsidian App for plugin-level tests: an in-memory vault with the
-// calls DbSession and CheckpointPlugin use, a DataAdapter over the same
+// calls DbSession and CheckpointPlugin use (files and folders), a DataAdapter over the same
 // memory gateway as the backups, and per-vault local storage.
 
 export type Handler = (...args: unknown[]) => unknown;
+
+/** A workspace event the plugin registered: its name and handler. */
+export interface WorkspaceRef {
+	name: string;
+	callback: Handler;
+}
 
 export function fileOf(path: string): TFile {
 	const name = path.split("/").pop() ?? path;
@@ -20,10 +26,12 @@ export function fileOf(path: string): TFile {
 
 export function fakeApp() {
 	const files = new Map<string, string>();
+	const folders = new Set<string>();
 	const plugin = new MemoryFileGateway();
 	const handlers = new Map<string, Handler>();
 	const local = new Map<string, unknown>();
 	const secrets = new Map<string, string>();
+	const workspaceRefs: WorkspaceRef[] = [];
 	let layoutReady: (() => void) | null = null;
 	const log = { processed: [] as string[] };
 
@@ -34,7 +42,17 @@ export function fakeApp() {
 			return {};
 		},
 		getFileByPath: (path: string) => (files.has(path) ? fileOf(path) : null),
-		getAbstractFileByPath: (path: string) => (files.has(path) ? fileOf(path) : null),
+		getAbstractFileByPath: (path: string) => (files.has(path) ? fileOf(path) : folders.has(path) ? Object.assign(new TFolder(), { path }) : null),
+		create: (path: string, data: string) => {
+			if (files.has(path) || folders.has(path)) return Promise.reject(new Error("File already exists."));
+			files.set(path, data);
+			return Promise.resolve(fileOf(path));
+		},
+		createFolder: (path: string) => {
+			if (files.has(path) || folders.has(path)) return Promise.reject(new Error("Folder already exists."));
+			folders.add(path);
+			return Promise.resolve(Object.assign(new TFolder(), { path }));
+		},
 		read: (file: TFile) => Promise.resolve(files.get(file.path) ?? ""),
 		cachedRead: (file: TFile) => Promise.resolve(files.get(file.path) ?? ""),
 		process: (file: TFile, fn: (data: string) => string) => {
@@ -60,7 +78,11 @@ export function fakeApp() {
 			onLayoutReady: (fn: () => void) => {
 				layoutReady = fn;
 			},
-			on: () => ({}),
+			on: (name: string, callback: Handler): WorkspaceRef => {
+				const ref = { name, callback };
+				workspaceRefs.push(ref);
+				return ref;
+			},
 			getLeavesOfType: () => [],
 		},
 		vault,
@@ -75,10 +97,12 @@ export function fakeApp() {
 	return {
 		app,
 		files,
+		folders,
 		local,
 		secrets,
 		plugin,
 		log,
+		workspaceRefs,
 		fire: (name: string, ...args: unknown[]) => handlers.get(name)?.(...args),
 		layoutReady: () => layoutReady?.(),
 	};
@@ -86,11 +110,28 @@ export function fakeApp() {
 
 export type FakeApp = ReturnType<typeof fakeApp>;
 
-export async function loadPlugin(fake: FakeApp, activePath: string) {
+/** Obsidian's per-vault local storage alone, for a port under test: saving null removes the key. */
+export function fakeLocal() {
+	const store = new Map<string, unknown>();
+	return {
+		store,
+		app: {
+			loadLocalStorage: (k: string) => store.get(k) ?? null,
+			saveLocalStorage: (k: string, v: unknown) => void (v === null ? store.delete(k) : store.set(k, v)),
+		},
+	};
+}
+
+/**
+ * Loads the plugin over `fake` with `activePath` as its database and waits until it is ready. With `ready: false` it
+ * stops after `onload`: the layout never gets ready, so no database is opened.
+ */
+export async function loadPlugin(fake: FakeApp, activePath: string, { ready = true }: { ready?: boolean } = {}) {
 	const { default: CheckpointPlugin } = await import("../../src/main");
 	const Ctor = CheckpointPlugin as unknown as new (a: unknown, m: unknown) => InstanceType<typeof CheckpointPlugin>;
 	const plugin = new Ctor(fake.app, { id: "logwell", dir: "config/plugins/logwell" });
 	await plugin.onload();
+	if (!ready) return plugin;
 	plugin.settings.activeDatabasePath = activePath;
 	fake.layoutReady();
 	await plugin.ready();

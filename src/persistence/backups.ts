@@ -1,5 +1,6 @@
 import type { Clock } from "../domain/ports";
-import { instantFromNow } from "../domain/time";
+import { fileNameOf, joinPath } from "../domain/notes";
+import { instantFromNow, utcDateOf } from "../domain/time";
 import type { FileGateway } from "./gateway";
 import { type JournalEntry, journalLine, parseJournal } from "./journal";
 import { DB_EXTENSION, isSafeId } from "./schema";
@@ -60,7 +61,7 @@ function fileStamp(date: Date): string {
 /** The backup folder of a database. Throws for a dbId that is not a safe folder name. */
 export function dbBackupRoot(parent: string, dbId: string): string {
 	if (!isSafeId(dbId)) throw new Error("The database id is not valid, so its backup folder cannot be used.");
-	return `${parent}/${dbId}`;
+	return joinPath(parent, dbId);
 }
 
 /** A file-name-safe label (for a revision from local state or from a file). */
@@ -86,10 +87,6 @@ function kindRank(kind: BackupInfo["kind"]): number {
 	return kind.startsWith("pre-") ? 0 : 1;
 }
 
-function fileName(path: string): string {
-	return path.slice(path.lastIndexOf("/") + 1);
-}
-
 const EXT = `.${DB_EXTENSION}`;
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$/;
 const COMPACT_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/;
@@ -107,7 +104,7 @@ function metaSuffix(content: string): string {
 
 /** Splits a backup file name into its base and the header values encoded in it (null: not encoded). */
 function splitName(path: string): { base: string; meta: { revision: string; writtenAt: string } | null } | null {
-	const name = fileName(path);
+	const name = fileNameOf(path);
 	if (!name.endsWith(EXT)) return null;
 	const [base = "", compact, revision, ...extra] = name.slice(0, -EXT.length).split("~");
 	if (compact === undefined || revision === undefined || extra.length > 0) return { base, meta: null };
@@ -134,15 +131,15 @@ export class BackupStore {
 	) {}
 
 	get snapshotDir(): string {
-		return `${this.root}/snapshots`;
+		return joinPath(this.root, "snapshots");
 	}
 
 	get conflictDir(): string {
-		return `${this.root}/conflicts`;
+		return joinPath(this.root, "conflicts");
 	}
 
 	get journalPath(): string {
-		return `${this.root}/journal.ndjson`;
+		return joinPath(this.root, "journal.ndjson");
 	}
 
 	async writeSnapshot(kind: SnapshotKind, content: string): Promise<string> {
@@ -150,7 +147,7 @@ export class BackupStore {
 		await this.fs.mkdir(this.snapshotDir);
 		const now = this.clock.now();
 		const stamp = fileStamp(now);
-		const path = `${this.snapshotDir}/${kind}-${stamp}${metaSuffix(content)}${EXT}`;
+		const path = joinPath(this.snapshotDir, `${kind}-${stamp}${metaSuffix(content)}${EXT}`);
 		await this.fs.write(path, content);
 		if (kind === "daily") this.dailyDate = dayOf(stamp);
 		return path;
@@ -160,7 +157,7 @@ export class BackupStore {
 	private dailyDate: string | null = null;
 
 	async hasDailySnapshot(date: Date): Promise<boolean> {
-		const day = date.toISOString().slice(0, 10);
+		const day = utcDateOf(date) ?? "";
 		if (this.dailyDate === day) return true;
 		const found = (await this.fs.list(this.snapshotDir)).some((p) => {
 			const parsed = parseSnapshotName(p);
@@ -248,7 +245,7 @@ export class BackupStore {
 	async writeConflict(content: string, revision: string, path?: string): Promise<string> {
 		await this.fs.mkdir(this.root);
 		await this.fs.mkdir(this.conflictDir);
-		path ??= `${this.conflictDir}/${fileStamp(this.clock.now())}-${safeLabel(revision)}${metaSuffix(content)}${EXT}`;
+		path ??= joinPath(this.conflictDir, `${fileStamp(this.clock.now())}-${safeLabel(revision)}${metaSuffix(content)}${EXT}`);
 		this.assertInside(path);
 		await this.fs.write(path, content);
 		return path;
@@ -264,7 +261,7 @@ export class BackupStore {
 		const result: BackupInfo[] = [];
 		for (const path of await this.fs.list(this.conflictDir)) {
 			if (!path.endsWith(EXT)) continue;
-			result.push({ path, kind: "conflict", ...(await this.headerOf(path)), stamp: fileName(path).split("-")[0] ?? "" });
+			result.push({ path, kind: "conflict", ...(await this.headerOf(path)), stamp: fileNameOf(path).split("-")[0] ?? "" });
 		}
 		return result.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
 	}
@@ -274,9 +271,9 @@ export class BackupStore {
 		this.assertInside(path);
 		const text = await this.fs.read(path);
 		if (text === null) return;
-		const dir = `${this.conflictDir}/resolved`;
+		const dir = joinPath(this.conflictDir, "resolved");
 		await this.fs.mkdir(dir);
-		await this.fs.write(`${dir}/${fileName(path)}`, text);
+		await this.fs.write(joinPath(dir, fileNameOf(path)), text);
 		await this.fs.remove(path);
 	}
 
@@ -291,7 +288,7 @@ export class BackupStore {
 			list.push({ path, stamp: parsed.stamp });
 			byKind.set(parsed.kind, list);
 		}
-		const cutoff = instantFromNow(this.clock, -DAILY_KEEP_DAYS * 24 * 3600 * 1000).slice(0, 10);
+		const cutoff = utcDateOf(instantFromNow(this.clock, -DAILY_KEEP_DAYS * 24 * 3600 * 1000)) ?? "";
 		for (const [kind, list] of byKind) {
 			// Newest first, snapshots stamped in the future after the rest, so a
 			// future stamp evicts first and never keeps real snapshots out.

@@ -9,7 +9,7 @@ import type { TaskIndex } from "./taskIndex";
 import { INBOX_ALIAS, InboxAliasApi } from "./tickTickInbox";
 import { type NotePush, ownsNote } from "./syncNotes";
 import { docFromTickTick, isChecklist, sameDoc, storedBase, ttNoteWrite } from "../domain/ticktick/noteText";
-import { byList, draftContext, EMPTY_TAGS, failureOf, type Field, FIELDS, type LinkDraft, type ListPull, lwHashes, NO_SECTION_HASH, NOT_SECTIONED, OPEN_HASH, type Pair, type PullPlan, PushStop, putDraft, RemoteTags, STOPS_ALL, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL } from "./syncModel";
+import { byList, draftContext, EMPTY_TAGS, failureOf, failureReason, type Field, FIELDS, type LinkDraft, type ListPull, lwHashes, NO_SECTION_HASH, NOT_SECTIONED, OPEN_HASH, type Pair, type PullPlan, PushStop, putDraft, RemoteTags, STOPS_ALL, type SyncFailure, type SyncResult, TICKTICK_LINKS_LABEL } from "./syncModel";
 import type { LinkBook } from "./syncLinkBook";
 
 // The push: Logwell's changes of each linked list sent to TickTick (creates, updates, moves, completions, deletes,
@@ -147,7 +147,7 @@ export class Pusher {
 				// is the likely cause, not the only one, and keeps TickTick's reason.
 				const openNow = open.get(pull.listId) ?? 0;
 				const full = !err.read && err.failure.kind === "server" && openNow >= TICKTICK_FREE_OPEN_MAX;
-				const reason = err.failure.message.replace(/^TickTick: /u, "");
+				const reason = failureReason(err.failure.message);
 				stopped.set(
 					pull.listId,
 					full

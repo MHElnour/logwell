@@ -1,6 +1,6 @@
 import type { FocusGap, FocusSession, FocusStatus, ID, Instant, LocalDate } from "./types";
 import { GAP_RESOLUTIONS, isRecord } from "./types";
-import { instantDay, isInstant } from "./time";
+import { instantDay, instantOf, isInstant } from "./time";
 import { compareSortKeys } from "./sortKey";
 
 // The focus state machine. Pure: no obsidian, no
@@ -69,7 +69,6 @@ const GAP_MS = 90_000;
 /** A clock that goes back by more than this re-anchors the running segment. */
 const BACKWARDS_MS = 5_000;
 
-const iso = (ms: number): Instant => new Date(ms).toISOString();
 const ms = (t: Instant): number => Date.parse(t);
 
 function plannedMs(t: ActiveTimer): number {
@@ -95,7 +94,7 @@ function phaseEndMs(t: ActiveTimer): number {
 }
 
 function closeSegments(t: ActiveTimer, endMs: number): { start: Instant; end: Instant }[] {
-	return t.segments.map((s) => ({ start: s.start, end: s.end ?? iso(Math.max(ms(s.start), endMs)) }));
+	return t.segments.map((s) => ({ start: s.start, end: s.end ?? instantOf(Math.max(ms(s.start), endMs)) }));
 }
 
 function openSegment(at: Instant): { start: Instant; end: Instant | null } {
@@ -122,7 +121,7 @@ function finalize(t: ActiveTimer, base: FocusStatus, endMs: number, now: Instant
 		setRounds: t.config.rounds,
 		setRound: t.round,
 		startedAt: t.startedAt,
-		endedAt: iso(endMs),
+		endedAt: instantOf(endMs),
 		finalizedAt: now,
 	};
 }
@@ -241,7 +240,7 @@ export function stop(t: ActiveTimer, now: Instant, deviceId: string): Step {
 function interrupt(t: ActiveTimer, now: Instant): Step {
 	const hb = Math.min(ms(t.lastHeartbeat), ms(now));
 	const gap: FocusGap[] =
-		t.phase === "focus" && ms(now) > hb ? [{ start: iso(hb), end: now, resolution: "pending" }] : [];
+		t.phase === "focus" && ms(now) > hb ? [{ start: instantOf(hb), end: now, resolution: "pending" }] : [];
 	return {
 		timer: {
 			...t,
@@ -273,8 +272,8 @@ export function tick(t: ActiveTimer, now: Instant, deviceId: string, newId: NewI
 		const endMs = phaseEndMs(cur);
 		const next: Step =
 			cur.phase === "focus"
-				? afterFocus(cur, finalize(cur, "completed", endMs, now, deviceId), iso(endMs), now, true)
-				: afterBreak(cur, iso(endMs), now, newId);
+				? afterFocus(cur, finalize(cur, "completed", endMs, now, deviceId), instantOf(endMs), now, true)
+				: afterBreak(cur, instantOf(endMs), now, newId);
 		effects.push(...next.effects);
 		cur = next.timer;
 	}

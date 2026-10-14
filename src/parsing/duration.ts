@@ -1,5 +1,5 @@
 import { MAX_DURATION_MIN } from "../domain/tasks";
-import { isSpaceChar, LIST_SEP_PATTERN, scanFor } from "./text";
+import { isSpaceChar, LIST_SEP_PATTERN, scanFor, sticky } from "./text";
 
 // "for <duration>". Matched by hand-written sticky regexes
 // so a long input cannot cause catastrophic backtracking.
@@ -23,11 +23,6 @@ export interface DurationMatch {
 
 function isHourUnit(unit: string): boolean {
 	return unit.toLowerCase().startsWith("h");
-}
-
-function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
-	re.lastIndex = at;
-	return re.exec(s);
 }
 
 /** Parses a duration that starts exactly at `from`. */

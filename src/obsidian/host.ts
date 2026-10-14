@@ -4,6 +4,7 @@ import { exportFileName, exportFolderName } from "../app/DataService";
 import type { CheckpointApp } from "../app/App";
 import type { CheckpointSettings } from "../app/settings";
 import { isDomainError } from "../domain/errors";
+import { joinPath, noteNameCandidate } from "../domain/notes";
 import type { FocusSetConfig } from "../domain/focus";
 import { isOpen } from "../domain/tasks";
 import type { ID } from "../domain/types";
@@ -264,9 +265,9 @@ export class ViewHost implements UiHost {
 		const content = this.app.data.exportJson();
 		const vault = this.plugin.app.vault;
 		const base = exportFileName(this.app.clock.now()).replace(/\.json$/, "");
-		const dir = folder.isRoot() ? "" : `${folder.path}/`;
-		let path = `${dir}${base}.json`;
-		for (let n = 2; vault.getAbstractFileByPath(path) !== null; n++) path = `${dir}${base} (${n}).json`;
+		const candidate = (n: number) => normalizePath(joinPath(folder.path, noteNameCandidate(base, n, ".json")));
+		let path = candidate(1);
+		for (let n = 2; vault.getAbstractFileByPath(path) !== null; n++) path = candidate(n);
 		await vault.create(path, content);
 		new Notice(`Backup exported to ${path}`);
 	}
@@ -278,12 +279,12 @@ export class ViewHost implements UiHost {
 		const vault = this.plugin.app.vault;
 		const base = exportFolderName(this.app.clock.now(), this.app.settings.zone());
 		let folder = normalizePath(base);
-		for (let n = 2; vault.getAbstractFileByPath(folder) !== null; n++) folder = normalizePath(`${base} (${n})`);
+		for (let n = 2; vault.getAbstractFileByPath(folder) !== null; n++) folder = normalizePath(noteNameCandidate(base, n, ""));
 		await vault.createFolder(folder);
 		let written = 0;
 		try {
 			for (const file of files) {
-				await vault.create(normalizePath(`${folder}/${file.name}`), file.content);
+				await vault.create(normalizePath(joinPath(folder, file.name)), file.content);
 				written++;
 			}
 		} catch (err) {

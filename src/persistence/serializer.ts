@@ -1,4 +1,5 @@
 import { compareSortKeys } from "../domain/sortKey";
+import { canonical } from "../domain/text";
 import {
 	COLLECTIONS,
 	COLLECTION_SPECS,
@@ -25,19 +26,6 @@ import {
 //
 // The file is valid JSON. Collections are sorted by ID and keys are in a fixed
 // order, so a git diff shows exactly the records that changed.
-
-function canonical(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(canonical);
-	if (typeof value === "object" && value !== null) {
-		const out: Record<string, unknown> = {};
-		for (const k of Object.keys(value).sort()) {
-			const v = (value as Record<string, unknown>)[k];
-			if (v !== undefined) out[k] = canonical(v);
-		}
-		return out;
-	}
-	return value;
-}
 
 /** Canonicalizes the values of an already key-ordered record, keeping its key order. */
 function canonicalValues(record: unknown): unknown {

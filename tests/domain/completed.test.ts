@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { type CompletedScope, completedGroup, inCompletedScope, isKeptUnderParent } from "../../src/domain/completed";
 import { type QueryContext, inViewScope } from "../../src/domain/queries";
-import type { DateSpec, Task } from "../../src/domain/types";
+import type { Task } from "../../src/domain/types";
+import { day } from "../persistence/fixtures";
 
 // Which completed tasks a view's Completed group holds.
 
@@ -33,7 +34,6 @@ function task(id: string, patch: Partial<Task> = {}): Task {
 	};
 }
 
-const day = (date: string): DateSpec => ({ kind: "date", date });
 const inScope = (t: Task, scope: CompletedScope) => inCompletedScope(t, scope, ctx);
 
 describe("Today scope", () => {

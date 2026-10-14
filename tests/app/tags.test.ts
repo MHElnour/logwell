@@ -627,34 +627,38 @@ describe("deleting a parent tag", () => {
 			expect(r).toEqual({ wrote: true, label: DELETE_TAG, tasks: 2, moves: [] });
 		});
 
-		it("Undo is refused after a later write outside the history uses a moved key", async () => {
+		type Seeded = Awaited<ReturnType<typeof seeded>>;
+		it.each<{ name: string; later: (h: Seeded) => Promise<unknown>; undo: (h: Seeded, mark: number) => Promise<unknown>; refusal: object; kept: string }>([
+			{
+				name: "a later write outside the history uses a moved key",
+				later: (h) => h.app.store.run("Outside", (tx) => tx.put("tasks", makeTask("t-out", { tagKeys: ["calls"] })), { undoable: false }),
+				undo: (h, mark) => h.app.store.undoFor(mark, DELETE_TAG)(),
+				refusal: { code: "UndoConflict", message: 'Cannot undo "Delete tag": a task now uses this tag.' },
+				kept: "calls",
+			},
+			{
+				name: "a later write uses a moved key, even through a new tag of that name",
+				later: (h) => h.app.tasks.create({ title: "Call the bank", tagKeys: ["calls"] }),
+				undo: (h, mark) => h.app.store.undoFor(mark, DELETE_TAG)(),
+				refusal: { code: "UndoConflict" },
+				kept: "calls",
+			},
+			{
+				name: "a moved task was edited",
+				later: (h) => h.app.store.run("Outside", (tx) => tx.put("tasks", { ...tx.get("tasks", h.ids["Weed"]!)!, title: "Weed the beds" }), { undoable: false }),
+				undo: (h) => h.app.store.undo(),
+				refusal: { code: "UndoConflict", message: 'Cannot undo "Delete tag": the item changed since.' },
+				kept: "garden",
+			},
+		])("Undo is refused once $name", async ({ later, undo, refusal, kept }) => {
 			const h = await seeded();
 			const mark = h.app.store.undoMark();
 			await h.app.tags.delete("home");
-			await h.app.store.run("Outside", (tx) => tx.put("tasks", makeTask("t-out", { tagKeys: ["calls"] })), { undoable: false });
+			await later(h);
 			const state = h.app.store.state;
-			await expect(h.app.store.undoFor(mark, DELETE_TAG)()).rejects.toMatchObject({
-				code: "UndoConflict",
-				message: 'Cannot undo "Delete tag": a task now uses this tag.',
-			});
+			await expect(undo(h, mark)).rejects.toMatchObject(refusal);
 			expect(h.app.store.state).toBe(state);
-		});
-
-		it("Undo is refused once a later write uses a moved key, even through a new tag of that name", async () => {
-			const h = await seeded();
-			const mark = h.app.store.undoMark();
-			await h.app.tags.delete("home");
-			await h.app.tasks.create({ title: "Call the bank", tagKeys: ["calls"] });
-			await expect(h.app.store.undoFor(mark, DELETE_TAG)()).rejects.toMatchObject({ code: "UndoConflict" });
-			expect(h.app.store.state.tags.has("calls")).toBe(true);
-		});
-
-		it("Undo is refused once a moved task was edited", async () => {
-			const h = await seeded();
-			await h.app.tags.delete("home");
-			await h.app.store.run("Outside", (tx) => tx.put("tasks", { ...tx.get("tasks", h.ids["Weed"]!)!, title: "Weed the beds" }), { undoable: false });
-			await expect(h.app.store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: 'Cannot undo "Delete tag": the item changed since.' });
-			expect(h.app.store.state.tags.has("garden")).toBe(true);
+			expect(h.app.store.state.tags.has(kept)).toBe(true);
 		});
 	});
 });

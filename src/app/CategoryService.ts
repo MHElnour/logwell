@@ -4,6 +4,7 @@ import { keyAfter, rekeyOrder } from "../domain/sortKey";
 import {
 	TAG_FLAT_PARENT_MESSAGE,
 	TAG_WITH_CHILDREN_MESSAGE,
+	childTagPath,
 	isUnderTag,
 	newTagProblem,
 	normalizeTagKey,
@@ -230,7 +231,7 @@ export class TagService {
 			if (problem !== null) throw new DomainError("InvalidTag", problem);
 			const display = tagDisplayName(name);
 			// The tag is new (a repeat was refused above), so this always wrote.
-			const tag = TagService.createIn(tx, parent === null ? display : `${tagDisplayPath(tags, parent)}/${display}`, color);
+			const tag = TagService.createIn(tx, childTagPath(parent === null ? null : tagDisplayPath(tags, parent), display), color);
 			return { ...tag, wrote: true, label: CREATE_TAG_LABEL };
 		});
 	}
@@ -252,7 +253,7 @@ export class TagService {
 		// The parent's part of the display name is the parent's own, so a child always reads as its parent does.
 		const parentKey = path.slice(0, -1).join("/");
 		const parent = tx.get("tags", parentKey) ?? TagService.putNew(tx, parentKey, typed.slice(0, -1).join("/"), undefined);
-		return TagService.putNew(tx, key, `${parent.displayName}/${typed[typed.length - 1]!}`, color);
+		return TagService.putNew(tx, key, childTagPath(parent.displayName, typed[typed.length - 1]!), color);
 	}
 
 	/** Writes a new tag record. No color given: the palette color by the number of tags. An explicit null means none. */
@@ -336,11 +337,11 @@ export class TagService {
 			if (problem !== null) throw new DomainError("InvalidTag", problem);
 
 			const leaf = normalizeTagKey(name);
-			const newKey = parentKey === null ? leaf : `${parentKey}/${leaf}`;
+			const newKey = childTagPath(parentKey, leaf);
 			// The parent's part of the display name: the tag's own while the parent stays, else the parent's.
 			const own = tagDisplaySegments(tag);
 			const prefix = parentKey === null ? null : parentKey === currentParent && own !== null ? own.slice(0, -1).join("/") : tagDisplayPath(tags, parentKey);
-			const newDisplay = prefix === null ? tagDisplayName(name) : `${prefix}/${tagDisplayName(name)}`;
+			const newDisplay = childTagPath(prefix, tagDisplayName(name));
 
 			const keyMoves = new Map<string, string>();
 			const next: Tag[] = [];
@@ -348,7 +349,7 @@ export class TagService {
 				const k = t.key === key ? newKey : newKey + t.key.slice(key.length);
 				let display = newDisplay;
 				if (t.key !== key) {
-					display = `${newDisplay}/${(tagDisplaySegments(t) ?? tagPath(t.key)).slice(path.length).join("/")}`;
+					display = childTagPath(newDisplay, (tagDisplaySegments(t) ?? tagPath(t.key)).slice(path.length).join("/"));
 				}
 				const c = t.key === key ? color : t.color;
 				if (k === t.key && display === t.displayName && c === t.color) continue;

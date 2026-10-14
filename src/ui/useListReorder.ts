@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { ViewGroup } from "../app/views";
 import type { ListEntry } from "../domain/queries";
-import { DST_WARNING_TEXT } from "../app/TaskService";
+import { DST_WARNING_TEXT, EDIT_TASK_LABEL, MOVE_TASK_LABEL } from "../app/TaskService";
 import type { ID } from "../domain/types";
 import { writeTaskResult } from "./actions";
 import { notifyReanchored } from "./repeatActions";
@@ -234,8 +234,8 @@ export function useListReorder(deps: {
 					void writeTaskResult(host, task, change).then((r) => {
 						if (r.outcome !== "changed") return;
 						// `update` runs as "Edit task"; a series' date change re-anchors it and says so instead.
-						if (r.reanchored !== null) notifyReanchored(host, task, r.reanchored, "Edit task", mark);
-						else host.notifyUndo(`Moved "${title}" to ${groupTitle(target, ctx)}.`, "Edit task", mark);
+						if (r.reanchored !== null) notifyReanchored(host, task, r.reanchored, EDIT_TASK_LABEL, mark);
+						else host.notifyUndo(`Moved "${title}" to ${groupTitle(target, ctx)}.`, EDIT_TASK_LABEL, mark);
 					});
 					return;
 				}
@@ -247,8 +247,8 @@ export function useListReorder(deps: {
 					.then(({ changed, warnings, reanchored }) => {
 						for (const w of warnings) host.notify(DST_WARNING_TEXT[w]);
 						if (changed !== true) return;
-						if (reanchored !== undefined) notifyReanchored(host, task, reanchored, "Move task", mark);
-						else host.notifyUndo(target === undefined ? `Moved "${title}".` : `Moved "${title}" to ${groupTitle(target, ctx)}.`, "Move task", mark);
+						if (reanchored !== undefined) notifyReanchored(host, task, reanchored, MOVE_TASK_LABEL, mark);
+						else host.notifyUndo(target === undefined ? `Moved "${title}".` : `Moved "${title}" to ${groupTitle(target, ctx)}.`, MOVE_TASK_LABEL, mark);
 					})
 					.catch((err) => host.error(err));
 			},

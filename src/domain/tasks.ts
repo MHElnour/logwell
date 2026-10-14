@@ -1,5 +1,6 @@
 import { DomainError } from "./errors";
 import { compareSortKeys } from "./sortKey";
+import { normalizedText } from "./text";
 import { type Category, type ID, INBOX_ID, type Recurrence, TAG_COLORS, type Task } from "./types";
 
 // Pure task and category rules.
@@ -10,7 +11,7 @@ export const MAX_DURATION_MIN = 1440;
 
 /** The title is required and nonempty after trimming. */
 export function requireTitle(raw: string): string {
-	const title = raw.normalize("NFC").trim();
+	const title = normalizedText(raw);
 	if (title.length === 0) {
 		throw new DomainError("TitleRequired", "A task needs a title.");
 	}
@@ -18,7 +19,7 @@ export function requireTitle(raw: string): string {
 }
 
 export function categoryNameKey(name: string): string {
-	return name.normalize("NFC").trim().toLowerCase();
+	return normalizedText(name).toLowerCase();
 }
 
 /** The order of the lists after the Inbox: by sort key, then by ID (lists can share a key after a merge import). */
@@ -56,8 +57,11 @@ export function requireColor<T extends string | null>(color: T): T {
 	return color;
 }
 
-/** A list name with case, spaces, "-" and "_" ignored (NFC): the looser half of `resolveListName`. */
-function looseListKey(name: string): string {
+/**
+ * A name with case, spaces, "-" and "_" ignored (NFC): the looser half of `resolveListName`, and what the
+ * suggestion ranking of lists, tags and notes compares.
+ */
+export function looseListKey(name: string): string {
 	return name.normalize("NFC").toLowerCase().replace(/[\s_-]+/gu, "");
 }
 
@@ -82,7 +86,7 @@ export function resolveListName<T extends { readonly name: string }>(lists: Iter
 }
 
 export function requireCategoryName(raw: string): string {
-	const name = raw.normalize("NFC").trim();
+	const name = normalizedText(raw);
 	if (name.length === 0) {
 		throw new DomainError("CategoryNameRequired", "A list needs a name.");
 	}

@@ -4,7 +4,7 @@ import type { Task } from "../../src/domain/types";
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
 import { RecordLineCache, serializeDb } from "../../src/persistence/serializer";
 import { harness, load, makeTask, withTask } from "../persistence/fixtures";
-import { elapsed, median, perfLog } from "./measure";
+import { elapsed, elapsedAsync, median, perfLog } from "./measure";
 
 // Save serialization at 50,000 tasks (issue 36). `serializeDb` sorts every collection's ids on each save
 // (`[...map.keys()].sort(compareSortKeys)`), although a save usually changes one record. This test times a save
@@ -140,9 +140,7 @@ describe(`#36: save serialization at ${TASKS} tasks`, () => {
 			const task = h.store.data.tasks.get(ids[i * 1000] as string) as Task;
 			const { next, ops } = withTask(h.store.data, { ...task, title: `Edited ${i}`, modifiedAt: `2026-10-01T10:00:0${i}.000Z` });
 			h.store.commit(next, ops);
-			const start = performance.now();
-			await h.store.flush();
-			saves.push(performance.now() - start);
+			saves.push(await elapsedAsync(() => h.store.flush()));
 		}
 		await h.store.close();
 		expect(h.dbText()).toContain(`"title":"Edited ${EDITS - 1}"`);

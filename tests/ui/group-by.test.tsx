@@ -7,7 +7,7 @@ import { type TaskSort, emptyFilter } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeReadOnly } from "../app/harness";
-import { type AppMount, click, day, dragTo, mountApp, mountNode, rect, settle, sidebarItem, taskOf, tasksEl, U1Host } from "./app-helpers";
+import { type AppMount, click, day, dragTo, mountApp, mountNode, rect, rowTitles, settle, sidebarItem, taskOf, tasksEl, U1Host } from "./app-helpers";
 import { modeButton } from "./board-helpers";
 import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem } from "./view-menu-helpers";
 
@@ -17,7 +17,6 @@ import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem } from "./view
 
 const headingTexts = (m: AppMount) =>
 	[...m.root.querySelectorAll(".cp-tasks .cp-task-group > .cp-group-heading")].map((h) => h.textContent.replace(/\s+/g, " ").trim());
-const rowTitles = (m: AppMount) => [...m.root.querySelectorAll(".cp-tasks .cp-task-row .cp-task-title")].map((t) => t.textContent.trim());
 
 /** Opens the view menu, then "Group by…", and returns the options menu. */
 async function groupMenu(m: AppMount) {

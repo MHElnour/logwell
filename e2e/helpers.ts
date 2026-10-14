@@ -707,3 +707,51 @@ export async function domClick(el: WebdriverIO.Element | ChainablePromiseElement
 	const element = await el;
 	await browser.execute((e) => (e as unknown as HTMLElement).click(), element);
 }
+
+// -- Layout and theme helpers -----------------------------------------------------------------------
+
+/** Closes every Logwell tab, so the next openApp starts from a fresh view. */
+export async function detachAppLeaves(): Promise<void> {
+	await browser.executeObsidian(({ app }) => {
+		app.workspace.detachLeavesOfType("checkpoint-app");
+	});
+}
+
+/**
+ * Sets the width of the visible app container; null gives it back its own width. The layout uses container queries on
+ * `.cp-app`, so narrowing that element is what a narrow tab does. (WebDriver window resizing is not supported by
+ * Obsidian's Electron driver.) The app must be open.
+ */
+export async function setAppWidth(width: number | null): Promise<void> {
+	await browser.execute((w) => {
+		for (const el of Array.from(document.querySelectorAll<HTMLElement>(".cp-app"))) {
+			if (el.offsetParent !== null) el.style.width = w === null ? "" : `${w}px`;
+		}
+	}, width);
+	await browser.pause(200);
+}
+
+/**
+ * Switches Obsidian to its light or dark theme: Obsidian's internal changeTheme ("moonstone" = light, "obsidian" =
+ * dark; not in the public typings, so it is feature-detected), then the body classes the plugin's rules key on.
+ * Obsidian can re-apply its own theme a moment later, even after the classes first match, so the switch counts only
+ * once the classes hold at two checks 400 ms apart; otherwise it is forced again, at most 4 times, then it throws.
+ */
+export async function setTheme(mode: "light" | "dark"): Promise<void> {
+	const holds = () =>
+		browser.execute((m) => document.body.classList.contains(`theme-${m}`) && !document.body.classList.contains(`theme-${m === "light" ? "dark" : "light"}`), mode);
+	for (let attempt = 0; attempt < 4; attempt++) {
+		await browser.executeObsidian(({ app }, m) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const a = app as any;
+			if (typeof a.changeTheme === "function") a.changeTheme(m === "light" ? "moonstone" : "obsidian");
+			document.body.classList.toggle("theme-light", m === "light");
+			document.body.classList.toggle("theme-dark", m === "dark");
+		}, mode);
+		await browser.pause(400);
+		if (!(await holds())) continue;
+		await browser.pause(400);
+		if (await holds()) return;
+	}
+	throw new Error(`The ${mode} theme did not hold after 4 switches.`);
+}

@@ -25,6 +25,7 @@ import {
 	isWordChar,
 	tokenRunEnd,
 	scanFor,
+	sticky,
 	tokenStartAllowed,
 	wordBoundaryBefore,
 } from "./text";
@@ -264,11 +265,6 @@ const ON_DATE_TAIL_RE = /\son(?:\sthe)?$/iu;
 // An end right after the repeat; a comma before it goes with it ("daily, for 10 times").
 const COUNT_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+times?)${NOT_WORD_AFTER}`, "iyu");
 const PERIODS_RE = new RegExp(`(\\s*,)?\\s*(for\\s+(\\d+)\\s+(${PERIOD_UNIT_PATTERN}|${WEEKDAY_PATTERN}))${NOT_WORD_AFTER}`, "iyu");
-
-function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
-	re.lastIndex = at;
-	return re.exec(s);
-}
 
 /**
  * The end of the run of repeat words at `from` (over spaces), with the glue words between them and none at its end;

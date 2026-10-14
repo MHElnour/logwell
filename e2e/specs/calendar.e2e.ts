@@ -4,19 +4,22 @@
 // (background tabs keep hidden copies).
 import { browser, expect } from "@wdio/globals";
 import {
-	type WeekStartSetting,
 	appToday,
 	appWeekStart,
 	appZone,
 	createTask,
+	detachAppLeaves,
 	freshDatabase,
 	railButton,
 	restoreMenus,
+	setAppWidth,
 	setPluginSetting,
+	setTheme,
 	useDomMenus,
 	visibleCalendar,
 	waitForVisibleCalendar,
 	weekDatesOf,
+	type WeekStartSetting,
 } from "../helpers";
 
 // -- text helpers (mirror src/ui/calendar/format.ts) ---------------------------------------------
@@ -163,33 +166,6 @@ async function nowMinutesIn(zone: string): Promise<number> {
 	}, zone);
 }
 
-async function setAppWidth(width: number | null): Promise<void> {
-	await browser.execute((w) => {
-		for (const el of Array.from(document.querySelectorAll<HTMLElement>(".cp-app"))) {
-			if (el.offsetParent !== null) el.style.width = w === null ? "" : `${w}px`;
-		}
-	}, width);
-	await browser.pause(200);
-}
-
-async function setTheme(mode: "light" | "dark"): Promise<void> {
-	// Same switch as theme.e2e.ts: Obsidian's internal changeTheme, then the body classes the
-	// plugin's rules key on. Obsidian can re-apply its own theme a moment later (seen once in three
-	// full runs), so the classes are checked after a pause and forced again, at most 4 times.
-	for (let attempt = 0; attempt < 4; attempt++) {
-		await browser.executeObsidian(({ app }, m) => {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const a = app as any;
-			if (typeof a.changeTheme === "function") a.changeTheme(m === "light" ? "moonstone" : "obsidian");
-			document.body.classList.toggle("theme-light", m === "light");
-			document.body.classList.toggle("theme-dark", m === "dark");
-		}, mode);
-		await browser.pause(400);
-		const ok = await browser.execute((m) => document.body.classList.contains(`theme-${m}`) && !document.body.classList.contains(`theme-${m === "light" ? "dark" : "light"}`), mode);
-		if (ok) return;
-	}
-}
-
 // -- seeding --------------------------------------------------------------------------------------
 
 interface Seed {
@@ -230,12 +206,6 @@ async function seedWeek(): Promise<Seed> {
 	const deadline = await createTask("Cal deadline only", { deadline: { kind: "date", date: deadlineDay } });
 	const someday = await createTask("Cal someday");
 	return { today, zone, weekStart, days, dateOnly, timed, noDuration, deadline, someday, timedDay, noDurationDay, deadlineDay };
-}
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
 }
 
 describe("Calendar", function () {

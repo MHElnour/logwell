@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseQuickAdd, rebaseDecisions, tokenAtCursor } from "../../src/parsing";
+import { rebaseDecisions, tokenAtCursor } from "../../src/parsing";
 import type { SpanDecision } from "../../src/parsing/types";
-import { CATEGORIES, makeCtx } from "./helpers";
-
-const parse = (input: string, decisions: SpanDecision[]) => parseQuickAdd(input, makeCtx({ decisions }));
+import { CATEGORIES, parse } from "./helpers";
 
 const lit = (input: string, word: string, nth = 0): SpanDecision => {
 	let from = -1;
@@ -16,13 +14,13 @@ const lit = (input: string, word: string, nth = 0): SpanDecision => {
 describe("decisions apply while the text matches", () => {
 	it("a decision with a span outside the input is ignored", () => {
 		const d: SpanDecision = { span: { start: 40, end: 48 }, text: "tomorrow", kind: "literal" };
-		expect(() => parse("tomorrow", [d])).not.toThrow();
-		expect(parse("tomorrow", [d]).chips).toHaveLength(1);
+		expect(() => parse("tomorrow", { decisions: [d] })).not.toThrow();
+		expect(parse("tomorrow", { decisions: [d] }).chips).toHaveLength(1);
 	});
 
 	it("a literal on part of a chrono span splits it", () => {
 		const input = "x tomorrow at 7pm";
-		const r = parse(input, [{ span: { start: 11, end: 13 }, text: "at", kind: "literal" }]);
+		const r = parse(input, { decisions: [{ span: { start: 11, end: 13 }, text: "at", kind: "literal" }] });
 		// "at" stays plain text; chrono now sees "tomorrow" and "7pm" as two separate results.
 		expect(r.chips.map((c) => c.text)).toEqual(["tomorrow", "7pm"]);
 		expect(r.chips.map((c) => c.status)).toEqual(["superseded", "applied"]);
@@ -31,27 +29,27 @@ describe("decisions apply while the text matches", () => {
 
 	it("a literal inside a token span blocks the token", () => {
 		const input = "x #Study";
-		const r = parse(input, [{ span: { start: 3, end: 5 }, text: "St", kind: "literal" }]);
+		const r = parse(input, { decisions: [{ span: { start: 3, end: 5 }, text: "St", kind: "literal" }] });
 		expect(r.chips.map((c) => c.kind)).not.toContain("category");
 		expect(r.fields.categoryId).toBeUndefined();
 	});
 
 	it("a literal on a note link keeps its text from chrono", () => {
 		const input = "x [[Big]] tomorrow";
-		const r = parse(input, [lit(input, "[[Big]]")]);
+		const r = parse(input, { decisions: [lit(input, "[[Big]]")] });
 		expect(r.chips.map((c) => c.text)).toEqual(["tomorrow"]);
 		expect(r.fields.notePath).toBeUndefined();
 	});
 
 	it("a literal span of a suggestion removes its chip", () => {
 		const input = "Sun cream";
-		expect(parse(input, [lit(input, "Sun")]).chips).toEqual([]);
+		expect(parse(input, { decisions: [lit(input, "Sun")] }).chips).toEqual([]);
 	});
 
 	it("a bound category decision defines a token span that contains a space", () => {
 		const input = "Read #Deep work now";
 		const d: SpanDecision = { span: { start: 5, end: 15 }, text: "#Deep work", kind: "category", categoryId: CATEGORIES[2]?.id ?? "" };
-		const r = parse(input, [d]);
+		const r = parse(input, { decisions: [d] });
 		expect(r.fields.categoryId).toBe("cat-deepwork-0003");
 		expect(r.chips.map((c) => c.text)).toEqual(["#Deep work", "now"]);
 		expect(r.chips[1]?.status).toBe("suggestion");
@@ -60,10 +58,12 @@ describe("decisions apply while the text matches", () => {
 
 	it("a bound tag and note decision apply to their span", () => {
 		const input = "x @my tag [[some note]]";
-		const r = parse(input, [
+		const r = parse(input, {
+		decisions: [
 			{ span: { start: 2, end: 9 }, text: "@my tag", kind: "tag", key: "learning" },
 			{ span: { start: 10, end: 23 }, text: "[[some note]]", kind: "note", path: "Notes/Some note.md" },
-		]);
+		],
+		});
 		expect(r.fields.tagKeys).toEqual(["learning"]);
 		expect(r.fields.notePath).toBe("Notes/Some note.md");
 		expect(r.title).toBe("x");
@@ -73,26 +73,26 @@ describe("decisions apply while the text matches", () => {
 		const input = "x #Foo";
 		const d1: SpanDecision = { span: { start: 2, end: 6 }, text: "#Foo", kind: "category", categoryId: "cat-study-0002" };
 		const d2: SpanDecision = { span: { start: 2, end: 6 }, text: "#Foo", kind: "category", categoryId: "cat-health-0004" };
-		expect(parse(input, [d1, d2]).fields.categoryId).toBe("cat-health-0004");
+		expect(parse(input, { decisions: [d1, d2] }).fields.categoryId).toBe("cat-health-0004");
 	});
 
 	it("a literal overrides a bound decision that overlaps it", () => {
 		const input = "x #Foo";
 		const bound: SpanDecision = { span: { start: 2, end: 6 }, text: "#Foo", kind: "category", categoryId: "cat-study-0002" };
-		const r = parse(input, [bound, lit(input, "#Foo")]);
+		const r = parse(input, { decisions: [bound, lit(input, "#Foo")] });
 		expect(r.chips).toEqual([]);
 	});
 
 	it("an accept decision on a chip that needs no acceptance changes nothing", () => {
 		const input = "Call friday";
 		const d: SpanDecision = { span: { start: 5, end: 11 }, text: "friday", kind: "accept" };
-		expect(parse(input, [d]).chips[0]?.status).toBe("applied");
+		expect(parse(input, { decisions: [d] }).chips[0]?.status).toBe("applied");
 	});
 
 	it("an invalid date decision value is ignored", () => {
 		const input = "Run at 5";
 		const d = { span: { start: 4, end: 8 }, text: "at 5", kind: "date", value: { kind: "date", date: "nope" } } as SpanDecision;
-		expect(parse(input, [d]).chips[0]?.status).toBe("choice");
+		expect(parse(input, { decisions: [d] }).chips[0]?.status).toBe("choice");
 	});
 });
 
@@ -117,26 +117,16 @@ describe("rebaseDecisions", () => {
 		expect(out).toEqual([d(9, 17, "tomorrow")]);
 	});
 
-	it("drops a decision the edit is inside of", () => {
-		expect(rebaseDecisions("tomorrow", "tomxorrow", [d(0, 8, "tomorrow")])).toEqual([]);
-	});
-
-	it("drops a decision the edit overlaps at its start or end", () => {
-		expect(rebaseDecisions("ab tomorrow", "abXY omorrow", [d(3, 11, "tomorrow")])).toEqual([]);
-		expect(rebaseDecisions("tomorrow ab", "tomorroXY ab", [d(0, 8, "tomorrow")])).toEqual([]);
-	});
-
-	it("drops a decision the edit removes or replaces", () => {
-		expect(rebaseDecisions("a tomorrow b", "a  b", [d(2, 10, "tomorrow")])).toEqual([]);
-		expect(rebaseDecisions("a tomorrow b", "a today b", [d(2, 10, "tomorrow")])).toEqual([]);
-	});
-
-	it("drops a decision when a letter is typed directly after it", () => {
-		expect(rebaseDecisions("tomorrow", "tomorrowx", [d(0, 8, "tomorrow")])).toEqual([]);
-	});
-
-	it("drops a decision when a letter is typed directly before it", () => {
-		expect(rebaseDecisions("tomorrow", "xtomorrow", [d(0, 8, "tomorrow")])).toEqual([]);
+	it.each([
+		["the edit is inside of", "tomorrow", "tomxorrow", 0],
+		["the edit overlaps at its start", "ab tomorrow", "abXY omorrow", 3],
+		["the edit overlaps at its end", "tomorrow ab", "tomorroXY ab", 0],
+		["the edit removes", "a tomorrow b", "a  b", 2],
+		["the edit replaces", "a tomorrow b", "a today b", 2],
+		["a letter is typed directly after", "tomorrow", "tomorrowx", 0],
+		["a letter is typed directly before", "tomorrow", "xtomorrow", 0],
+	])("drops a decision %s", (_name, before, after, start) => {
+		expect(rebaseDecisions(before, after, [d(start, start + 8, "tomorrow")])).toEqual([]);
 	});
 
 	it("keeps a literal when a space is typed after it so the dismissal survives further typing", () => {
@@ -242,7 +232,7 @@ describe("bound tag decisions and unresolved categories", () => {
 	it("a bound tag decision whose tag no longer exists is dropped; the span is re-recognized as a new tag", () => {
 		const input = "x @Gone";
 		const d: SpanDecision = { span: { start: 2, end: 7 }, text: "@Gone", kind: "tag", key: "gone" };
-		const r = parse(input, [d]);
+		const r = parse(input, { decisions: [d] });
 		expect(r.chips).toHaveLength(1);
 		expect(r.chips[0]).toMatchObject({ kind: "tag", status: "applied", newTag: true, tagKey: "gone" });
 		expect(r.fields.tagKeys).toEqual([]);
@@ -252,11 +242,11 @@ describe("bound tag decisions and unresolved categories", () => {
 	it("a bound tag decision whose key exists (any casing) still applies", () => {
 		const input = "x @my tag";
 		const d: SpanDecision = { span: { start: 2, end: 9 }, text: "@my tag", kind: "tag", key: "Learning" };
-		expect(parse(input, [d]).fields.tagKeys).toEqual(["Learning"]);
+		expect(parse(input, { decisions: [d] }).fields.tagKeys).toEqual(["Learning"]);
 	});
 
 	it("an unresolved category followed by a later applied category is superseded and does not block", () => {
-		const r = parse("Read #Hobbies #Study", []);
+		const r = parse("Read #Hobbies #Study", { decisions: [] });
 		expect(r.chips.map((c) => c.status)).toEqual(["superseded", "applied"]);
 		expect(r.chips[0]!.notice).toBe("Replaced by a later value");
 		expect(r.blocking).toEqual([]);
@@ -265,7 +255,7 @@ describe("bound tag decisions and unresolved categories", () => {
 	});
 
 	it("an unresolved category after an applied one still blocks", () => {
-		const r = parse("Read #Study #Hobbies", []);
+		const r = parse("Read #Study #Hobbies", { decisions: [] });
 		expect(r.chips.map((c) => c.status)).toEqual(["applied", "unresolved"]);
 		expect(r.blocking).toHaveLength(1);
 	});

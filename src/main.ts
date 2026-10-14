@@ -5,6 +5,7 @@ import type { TaskView } from "./app/views";
 import { type CheckpointSettings, DEFAULT_SETTINGS, sanitizeSettings } from "./app/settings";
 import type { FocusSetConfig } from "./domain/focus";
 import { nowInstant, randomId, systemClock } from "./domain/ports";
+import { joinPath } from "./domain/notes";
 import type { ID } from "./domain/types";
 import { DB_EXTENSION, createEmptyDb } from "./persistence/schema";
 import { serializeDb } from "./persistence/serializer";
@@ -15,14 +16,15 @@ import { ViewHost } from "./obsidian/host";
 import { HabitReminderHost } from "./obsidian/habitReminderHost";
 import { deviceId } from "./obsidian/gateways";
 import { choose, pickFolder, prompt } from "./obsidian/modals";
-import { actionNotice, showError, syncNotice, undoAction } from "./obsidian/notices";
+import { actionNotice, plainNotice, showError, syncNotice } from "./obsidian/notices";
+import { boundUndoNotice } from "./obsidian/undoNotice";
 import { openQuickAdd } from "./obsidian/QuickAddModal";
 import { DbSession } from "./obsidian/session";
 import { CheckpointSettingTab } from "./obsidian/SettingTab";
 import { SoundPlayer } from "./obsidian/sound";
 import { SystemNotifier } from "./obsidian/systemNotification";
 import { CHECKPOINT_VIEW_TYPE, CheckpointView } from "./obsidian/CheckpointView";
-import { NOTHING_TO_UNDO } from "./ui/format";
+import { undoneText } from "./ui/format";
 import type { SectionId } from "./ui/host";
 
 export interface PluginEvents {
@@ -354,12 +356,12 @@ export default class CheckpointPlugin extends Plugin {
 		], "Create");
 		const name = values?.name?.trim().replace(/\.cpbase$/i, "");
 		if (name === undefined || name === "") return;
-		const path = normalizePath(folder.isRoot() ? `${name}.${DB_EXTENSION}` : `${folder.path}/${name}.${DB_EXTENSION}`);
+		const path = normalizePath(joinPath(folder.path, `${name}.${DB_EXTENSION}`));
 		if (this.app.vault.getAbstractFileByPath(path) !== null) {
 			new Notice(`A file already exists at ${path}.`);
 			return;
 		}
-		const now = systemClock.now().toISOString();
+		const now = nowInstant(systemClock);
 		const content = serializeDb(
 			createEmptyDb({ dbId: randomId(), revision: newRevision(randomId), deviceId: this.deviceId, now }),
 		);
@@ -502,8 +504,9 @@ export default class CheckpointPlugin extends Plugin {
 		}
 		this.focusHost = new FocusHost(
 			{
-				notify: (message) => void new Notice(message),
+				notify: plainNotice,
 				actionNotice: (message, actions) => void actionNotice(message, actions),
+				notifyUndo: (message, undo) => void boundUndoNotice(message, undo),
 				systemNotify: (title, body) => this.notifier.notify(title, body),
 				requestNotifyPermission: () => this.notifier.requestPermission(),
 				choose: (title, message, buttons, cancelLabel, signal) => choose(this.app, title, message, buttons, cancelLabel, signal),
@@ -535,9 +538,7 @@ export default class CheckpointPlugin extends Plugin {
 				systemNotify: (title, body) => this.notifier.notify(title, body, () => void this.openApp("habits")),
 				openHabits: (id, focusControl) => void this.openHabits(id, focusControl),
 				// `undo` acts on the database the check-in went to (the host binds it).
-				notifyUndo: (message, _label, undo) => {
-					actionNotice(message, [undoAction(undo)]);
-				},
+				notifyUndo: (message, undo) => void boundUndoNotice(message, undo),
 				requestNotifyPermission: () => this.notifier.requestPermission(),
 				error: showError,
 			},
@@ -655,7 +656,7 @@ export default class CheckpointPlugin extends Plugin {
 			callback: () =>
 				void this.withSession(async (s) => {
 					const label = await s.app.store.undo();
-					new Notice(label === null ? NOTHING_TO_UNDO : `Undone: ${label}`);
+					new Notice(undoneText(label));
 				}),
 		});
 	}

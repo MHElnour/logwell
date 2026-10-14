@@ -145,9 +145,26 @@ function hasPastSchedule(task: Task, ctx: QueryContext): boolean {
 	return s !== null && s < ctx.today;
 }
 
+/** Open work: an open task, and for one occurrence of a series, one not already done. Only open work is ever missed. */
+export function isOpenWork(task: Task, occurrenceDone = false): boolean {
+	return !occurrenceDone && isOpen(task);
+}
+
+/** A schedule day before today on open work (`occurrenceDone`: the day is a series occurrence already done). */
+export function isDayMissed(task: Task, date: LocalDate, ctx: Pick<QueryContext, "today">, occurrenceDone = false): boolean {
+	return date < ctx.today && isOpenWork(task, occurrenceDone);
+}
+
 /** The schedule (a repeating task's current occurrence) has passed and the task is still open. */
 export function isScheduleMissed(task: Task, ctx: QueryContext): boolean {
-	return isOpen(task) && hasPastSchedule(task, ctx);
+	const s = specDate(scheduleOf(task, ctx), ctx.zone);
+	return s !== null && isDayMissed(task, s, ctx);
+}
+
+/** The effective schedule and the deadline are both before today, whatever the status. */
+export function hasPastScheduleAndDeadline(task: Task, ctx: QueryContext): boolean {
+	const d = specDate(task.deadline, ctx.zone);
+	return d !== null && d < ctx.today && hasPastSchedule(task, ctx);
 }
 
 export function isOverdue(task: Task, ctx: QueryContext): boolean {

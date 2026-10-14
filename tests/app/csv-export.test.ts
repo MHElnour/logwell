@@ -3,37 +3,9 @@ import { csvField, exportFolderName, toCsv } from "../../src/app/DataService";
 import { isDomainError } from "../../src/domain/errors";
 import { rule } from "../domain/recurrence-fixtures";
 import { makeReadOnly, appHarness, type AppHarness } from "./harness";
+import { csvValues } from "../../e2e/limits/csv";
 
 // One CSV per entity, RFC 4180, UTF-8 with a BOM.
-
-/** A minimal RFC 4180 reader, to check that what is written reads back. */
-function parseCsv(text: string): string[][] {
-	const rows: string[][] = [];
-	let row: string[] = [];
-	let field = "";
-	let quoted = false;
-	for (let i = 0; i < text.length; i++) {
-		const ch = text[i]!;
-		if (quoted) {
-			if (ch === '"' && text[i + 1] === '"') {
-				field += '"';
-				i++;
-			} else if (ch === '"') quoted = false;
-			else field += ch;
-		} else if (ch === '"') quoted = true;
-		else if (ch === ",") {
-			row.push(field);
-			field = "";
-		} else if (ch === "\r" && text[i + 1] === "\n") {
-			row.push(field);
-			rows.push(row);
-			row = [];
-			field = "";
-			i++;
-		} else field += ch;
-	}
-	return rows;
-}
 
 describe("CSV writing", () => {
 	it("quotes fields with a comma, a quote, CR or LF and doubles the quotes", () => {
@@ -73,8 +45,7 @@ describe("CSV writing", () => {
 });
 
 async function populated(): Promise<AppHarness> {
-	const h = await appHarness();
-	h.clock.set("2026-10-05T10:00:00.000Z");
+	const h = await appHarness({ now: "2026-10-05T10:00:00.000Z" });
 	const list = await h.app.categories.create('Work, "big"');
 	await h.app.sections.create(list.id, "Doing");
 	await h.app.tags.create("Home");
@@ -95,7 +66,7 @@ describe("DataService.exportCsv", () => {
 		for (const f of files) {
 			expect(f.content.charCodeAt(0)).toBe(0xfeff);
 			expect(f.content.endsWith("\r\n")).toBe(true);
-			expect(parseCsv(f.content.slice(1))[0]!.length).toBeGreaterThan(2);
+			expect(csvValues(f.content.slice(1))[0]!.length).toBeGreaterThan(2);
 		}
 	});
 
@@ -115,7 +86,7 @@ describe("DataService.exportCsv", () => {
 
 	it("tasks.csv has one row per task with the documented columns, quoted values reading back exactly", async () => {
 		const h = await populated();
-		const rows = parseCsv(h.app.data.exportCsv().find((f) => f.name === "tasks.csv")!.content.slice(1));
+		const rows = csvValues(h.app.data.exportCsv().find((f) => f.name === "tasks.csv")!.content.slice(1));
 		const [header, ...body] = rows;
 		expect(header).toEqual([
 			"id", "title", "list", "section", "tags", "parentId", "scheduled", "scheduledTz", "deadline", "deadlineTz", "plannedDurationMin", "urgent", "important", "priority", "status", "completedAt", "repeat", "repeatJson", "nextOccurrence", "sortKey", "createdAt", "modifiedAt", "note",
@@ -137,7 +108,7 @@ describe("DataService.exportCsv", () => {
 
 	it("a repeating task: scheduled is empty, the rule is described and kept as JSON, the next occurrence is derived", async () => {
 		const h = await populated();
-		const rows = parseCsv(h.app.data.exportCsv().find((f) => f.name === "tasks.csv")!.content.slice(1));
+		const rows = csvValues(h.app.data.exportCsv().find((f) => f.name === "tasks.csv")!.content.slice(1));
 		const header = rows[0]!;
 		const gym = rows.find((r) => r[header.indexOf("title")] === "Gym")!;
 		const col = (name: string) => gym[header.indexOf(name)]!;
@@ -156,22 +127,22 @@ describe("DataService.exportCsv", () => {
 	it("occurrences.csv lists every record with its task title; the other entities are present", async () => {
 		const h = await populated();
 		const files = h.app.data.exportCsv();
-		const occ = parseCsv(files.find((f) => f.name === "occurrences.csv")!.content.slice(1));
+		const occ = csvValues(files.find((f) => f.name === "occurrences.csv")!.content.slice(1));
 		expect(occ[0]).toEqual(["taskId", "task", "trashed", "occurrenceDate", "status", "resolvedAt", "auto", "completedOn"]);
 		expect(occ.slice(1).map((r) => [r[1], r[2], r[3], r[4]])).toEqual([
 			["Gym", "false", "2026-10-02", "done"],
 			["Gym", "false", "2026-10-05", "skipped"],
 		]);
-		expect(parseCsv(files.find((f) => f.name === "lists.csv")!.content.slice(1)).length).toBeGreaterThanOrEqual(3); // header, Inbox, Work
-		expect(parseCsv(files.find((f) => f.name === "sections.csv")!.content.slice(1)).slice(1)[0]![3]).toBe("Doing");
-		expect(parseCsv(files.find((f) => f.name === "tags.csv")!.content.slice(1)).slice(1)[0]![1]).toBe("Home");
+		expect(csvValues(files.find((f) => f.name === "lists.csv")!.content.slice(1)).length).toBeGreaterThanOrEqual(3); // header, Inbox, Work
+		expect(csvValues(files.find((f) => f.name === "sections.csv")!.content.slice(1)).slice(1)[0]![3]).toBe("Doing");
+		expect(csvValues(files.find((f) => f.name === "tags.csv")!.content.slice(1)).slice(1)[0]![1]).toBe("Home");
 	});
 
 	it("occurrences.csv keeps the rows of a series in the Trash, with its title from the trash entry and trashed true", async () => {
 		const h = await populated();
 		const gym = [...h.app.store.state.tasks.values()].find((t) => t.title === "Gym")!;
 		await h.app.tasks.delete(gym.id);
-		const occ = parseCsv(h.app.data.exportCsv().find((f) => f.name === "occurrences.csv")!.content.slice(1));
+		const occ = csvValues(h.app.data.exportCsv().find((f) => f.name === "occurrences.csv")!.content.slice(1));
 		expect(occ.slice(1).map((r) => [r[1], r[2], r[3], r[4]])).toEqual([
 			["Gym", "true", "2026-10-02", "done"],
 			["Gym", "true", "2026-10-05", "skipped"],
@@ -207,13 +178,13 @@ describe("DataService.exportCsv", () => {
 			});
 		});
 		const files = h.app.data.exportCsv();
-		const habits = parseCsv(files.find((f) => f.name === "habits.csv")!.content.slice(1));
+		const habits = csvValues(files.find((f) => f.name === "habits.csv")!.content.slice(1));
 		expect(habits[1]![1]).toBe("Read, daily");
-		const checkins = parseCsv(files.find((f) => f.name === "check-ins.csv")!.content.slice(1));
+		const checkins = csvValues(files.find((f) => f.name === "check-ins.csv")!.content.slice(1));
 		expect(checkins).toHaveLength(2);
 		expect(checkins[1]![2]).toBe("Read, daily");
 		expect(checkins[1]![3]).toBe("2026-10-05");
-		const focus = parseCsv(files.find((f) => f.name === "focus-sessions.csv")!.content.slice(1));
+		const focus = csvValues(files.find((f) => f.name === "focus-sessions.csv")!.content.slice(1));
 		expect(focus[1]!.slice(0, 10)).toEqual(["f1", "d1", "", "Deep, work", "1500", "completed", "2026-10-05T08:00:00.000Z", "2026-10-05T08:25:00.000Z", "2026-10-05T08:25:00.000Z", "1500"]);
 		expect(JSON.parse(focus[1]![14]!)).toHaveLength(1);
 	});

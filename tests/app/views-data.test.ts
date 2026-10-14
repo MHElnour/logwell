@@ -10,7 +10,7 @@ import { type AppHarness, appHarness, makeReadOnly } from "./harness";
 import { CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
 import type { SyncLink } from "../../src/domain/types";
 import { rule } from "../domain/recurrence-fixtures";
-import { settle } from "../helpers";
+import { drainPromises } from "../helpers";
 
 describe("views, export and import", () => {
 	// FakeClock starts at 2026-10-01T10:00Z; the display zone is Europe/Berlin.
@@ -475,8 +475,7 @@ describe("views, export and import", () => {
 
 describe("merge import and removed records", () => {
 	it("an older backup brings back a purged task and a reopened occurrence", async () => {
-		const h = await appHarness();
-		h.clock.set("2026-10-05T10:00:00.000Z");
+		const h = await appHarness({ now: "2026-10-05T10:00:00.000Z" });
 		const t = (await h.app.tasks.create({ title: "Gym", scheduled: { kind: "date", date: "2026-10-05" }, repeat: { rule: rule() } })).task;
 		const gone = (await h.app.tasks.create({ title: "Gone" })).task;
 		await h.app.tasks.complete(t.id);
@@ -511,7 +510,7 @@ describe("the import's stale-preview check runs where the replacement runs", () 
 		const ext = h.store.handleExternalChange();
 		const confirm = mode === "merge" ? h.app.data.importMerge(pv.preview) : h.app.data.importReplace(pv.preview);
 		const [, outcome] = await Promise.allSettled([ext, confirm]);
-		await settle();
+		await drainPromises();
 		return { h, outcome };
 	}
 

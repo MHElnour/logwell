@@ -2,14 +2,15 @@
 // Tasks are seeded through the app services with dates relative to the real today. Every DOM read is
 // scoped to the visible Tasks section (background tabs keep hidden copies). Drags use the real pointer.
 import { browser, expect } from "@wdio/globals";
+import { at as timedIn } from "../../tests/persistence/fixtures";
 import {
-	type ViewportPoint,
 	appToday,
 	appZone,
 	boardColumn,
 	centerOf,
 	columnCardIds,
 	createTask,
+	detachAppLeaves,
 	dragPointer,
 	freshDatabase,
 	getTask,
@@ -19,15 +20,10 @@ import {
 	setLayout,
 	showSidebarView,
 	storedOrder,
+	type ViewportPoint,
 	visibleTasksSection,
 	waitForStableRect,
 } from "../helpers";
-
-async function detachAppLeaves(): Promise<void> {
-	await browser.executeObsidian(({ app }) => {
-		app.workspace.detachLeavesOfType("checkpoint-app");
-	});
-}
 
 /** Scrolls an element into view horizontally and vertically (a board column beyond the right edge). */
 async function bringIntoView(el: WebdriverIO.Element | ChainablePromiseElement): Promise<void> {
@@ -70,7 +66,7 @@ describe("Board and list drag", function () {
 		await browser.releaseActions();
 	});
 
-	const at = (date: string, time: string) => ({ kind: "datetime", local: `${date}T${time}`, tz: zone });
+	const at = (date: string, time: string) => timedIn(date, time, zone);
 
 	it("Today's board has Overdue and Today columns; dragging an overdue card to Today keeps its time", async function () {
 		const id = await createTask("Late card", { scheduled: at(plusDays(today, -1), "09:30") });

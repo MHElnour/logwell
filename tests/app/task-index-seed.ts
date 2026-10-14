@@ -1,6 +1,7 @@
 import { type DateSpec, type ID, INBOX_ID, type LocalDate, type Priority, type RepeatRule, type Task } from "../../src/domain/types";
 import { addDays } from "../../src/domain/time";
 import type { JournalOp } from "../../src/persistence/journal";
+import { taskId } from "../helpers";
 import { makeTask } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "./harness";
 
@@ -89,7 +90,7 @@ export async function seededState(seed = 41, count = 240): Promise<SeededState> 
 		return `${day}T${pick(["06:10", "09:45", "15:30", "21:05"])}:00.000Z`;
 	};
 	for (let i = 0; i < count; i++) {
-		const id = `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
+		const id = taskId(i + 1);
 		const roots = created.filter((t) => t.parentId === null);
 		const sub = roots.length > 0 && rnd() < 0.35;
 		const parent = sub ? pick([...roots, ...repeating.slice(0, 2)]) : null;

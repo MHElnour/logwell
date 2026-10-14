@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "../../src/parsing";
 import type { ParseResult, SpanDecision } from "../../src/parsing/types";
+import { measured } from "../perf/measure";
 import { NY, at, chipOf, endOf, inZones, makeCtx, parseAt, scheduledOf } from "./helpers";
 
 // #12: under a typed repeat, a date range is the repeat's start and its end. What each range
@@ -69,9 +70,8 @@ describe("parse time of ranges under a repeat", () => {
 		const unit = "starting Oct 12 9999 until Friday and bring water and towels and snacks for the whole group please ";
 		const input = ("Gym every day " + unit.repeat(10)).slice(0, 1000);
 		const ctx = makeCtx({ zone: NY, now: at(NY, "2026-10-07T10:00") });
-		const started = performance.now();
-		const r = parseQuickAdd(input, ctx);
-		expect(performance.now() - started).toBeLessThan(2000);
+		const { result: r, ms } = measured(() => parseQuickAdd(input, ctx));
+		expect(ms).toBeLessThan(2000);
 		expect(r.chips.length).toBeGreaterThan(10);
 	});
 });

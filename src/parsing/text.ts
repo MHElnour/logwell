@@ -45,6 +45,12 @@ export function wordBoundaryBefore(s: string, index: number): boolean {
 	return index <= 0 || !isWordChar(charBefore(s, index));
 }
 
+/** A match of the sticky (`y`) pattern `re` that starts exactly at `at`, or null. */
+export function sticky(re: RegExp, s: string, at: number): RegExpExecArray | null {
+	re.lastIndex = at;
+	return re.exec(s);
+}
+
 /**
  * Every `for` at a word start from `from` on that `read` turns into a result, left to right: `read(at)` gets the index
  * of the `for` and returns what follows it (or null), `spanOf` gives the text it takes, and a result whose span is

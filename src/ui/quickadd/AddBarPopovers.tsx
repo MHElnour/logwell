@@ -5,13 +5,13 @@ import { tagsByLabel } from "../../domain/tags";
 import { MAX_DURATION_MIN } from "../../domain/tasks";
 import { type YearMonth, addDays, shiftMonth, yearMonthOf } from "../../domain/time";
 import { noteDisplayName } from "../../domain/notes";
-import { INBOX_NAME, type LocalDate, type Priority } from "../../domain/types";
+import { INBOX_NAME, type LocalDate, PRIORITIES, priorityLabel } from "../../domain/types";
 import { SrOnly } from "../common";
 import { formatDateSpec } from "../format";
 import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
 import { repeatLine } from "../repeat";
 import { useUniqueId } from "../hooks";
-import { priorityLabel } from "./chipLabels";
+
 import { dayLabel, monthGrid, shiftDateByMonths } from "./calendar";
 import { monthTitle } from "../calendar/format";
 import { quadrantWords } from "../matrix/quadrants";
@@ -424,8 +424,6 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 }
 
 // -- More menu ------------------------------------------------------------------
-
-const PRIORITIES: Priority[] = [1, 2, 3, 0];
 
 export function MorePopover(props: PopoverProps & { pickNote: () => Promise<string | null> }) {
 	const { model, setIcon } = props;

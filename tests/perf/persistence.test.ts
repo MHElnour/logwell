@@ -3,7 +3,9 @@ import type { Checkin, FocusSession, Habit, Task } from "../../src/domain/types"
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 import { harness, makeTask, withTask } from "../persistence/fixtures";
-import { median, perfLog } from "./measure";
+import { elapsedAsync, median, perfLog } from "./measure";
+import { addDays } from "../../src/domain/time";
+import { uuid } from "./view-edit-fixture";
 
 // Load and save of one edit at 5,000 tasks, 20,000 check-ins and 5,000 focus sessions, through the real CpbaseStore,
 // serializer, validator and backup store (in-memory file gateway). The data is checked; the times are logged
@@ -19,12 +21,7 @@ const HABITS = 20;
 const CHECKINS = 20000;
 const SESSIONS = 5000;
 
-const uuid = (prefix: number, n: number) =>
-	`${prefix.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
-
-function day(n: number): string {
-	return new Date(Date.UTC(2025, 0, 1) + n * 86400000).toISOString().slice(0, 10);
-}
+const day = (n: number): string => addDays("2025-01-01", n);
 
 /** Target-scale data with records shaped like real ones, typed habits and check-ins included. */
 function planScaleDb(): DbData {
@@ -119,9 +116,7 @@ describe("persistence at target scale", () => {
 		let store = h.store;
 		for (let i = 0; i < 3; i++) {
 			store = h.newStore();
-			const start = performance.now();
-			await store.open();
-			loads.push(performance.now() - start);
+			loads.push(await elapsedAsync(() => store.open()));
 			if (i < 2) await store.close();
 		}
 
@@ -131,9 +126,7 @@ describe("persistence at target scale", () => {
 			const task = store.data.tasks.get(uuid(1, i))!;
 			const { next, ops } = withTask(store.data, { ...task, title: `Edited ${i}`, modifiedAt: `2026-10-01T10:00:0${i}.000Z` });
 			store.commit(next, ops);
-			const start = performance.now();
-			await store.flush();
-			saves.push(performance.now() - start);
+			saves.push(await elapsedAsync(() => store.flush()));
 		}
 		await store.close();
 		expect(h.dbText()).toContain('"title":"Edited 4"');

@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import { type CalendarTasks, type ViewGroup, calendarTasks, unscheduledTasks } from "../app/views";
+import { type CalendarTasks, type ViewGroup, calendarTasks, unscheduledRows } from "../app/views";
 import { type CalendarContext, monthGrid, weekDays } from "../domain/calendar";
-import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter, entryOf } from "../domain/queries";
+import { type ListEntry, type QueryContext, type TaskFilter, emptyFilter } from "../domain/queries";
+import { minuteInstant } from "../domain/time";
 import { indexOccurrenceRecords } from "../domain/recurrence";
-import { compareTasksBySortKey, isUnscheduled } from "../domain/tasks";
+import { isUnscheduled } from "../domain/tasks";
 import type { ID, LocalDate, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { CalendarHeader } from "./calendar/CalendarHeader";
@@ -64,7 +65,7 @@ function useNowIso(host: UiHost, visible: boolean): string {
 			if (interval !== undefined) window.clearInterval(interval);
 		};
 	}, [host, visible]);
-	if (visible || last.current === null) last.current = `${host.app.clock.now().toISOString().slice(0, 16)}:00.000Z`;
+	if (visible || last.current === null) last.current = minuteInstant(host.app.clock);
 	return last.current;
 }
 
@@ -136,7 +137,7 @@ export function CalendarSection(props: {
 	// made only while the drawer is open.
 	const unscheduled = useActiveMemo<ListEntry[]>(
 		props.visible && ui.unscheduledOpen,
-		() => unscheduledTasks(state, ctx, ui.filter, index).sort(compareTasksBySortKey).map<ListEntry>((t) => entryOf(t, state.tasks, ctx)),
+		() => unscheduledRows(state, ctx, ui.filter, index),
 		[index, state.tasks, state.occurrenceRecords, ui.filter, ctx.today, ctx.zone, ctx.weekStart],
 		NO_ENTRIES,
 	);

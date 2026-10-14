@@ -29,6 +29,10 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#190) Priority pickers, menus, groups and filters all list High, Medium, Low, None, and Quick Add names priorities the same way.
+- (#190) Upcoming board columns name days as rows do, like "Mon, Oct 5"; Focus writes "1h 30m focus" and "Round 2 of 4".
+- (#190) TickTick settings list the linked lists in sidebar order, as every list picker does.
+
 - (#136) When TickTick does not answer while you link a list, the notice now names the list, as a failed sync does.
 - (#126) In the Eisenhower matrix, a task with a deadline today sits under **Today** even when its date is later.
 - (#7) New tags are limited to 64 characters; longer existing tags still work, and the Tags heading shows even when empty.
@@ -50,6 +54,9 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#52) In a task block, `due:` now matches only deadlines; a block that used it for planned dates needs the new `scheduled:` filter instead.
 
 ## Fixed
+
+- (#190) Fixed a task block `tag:` list keeping one tag twice when its accented letters were typed in two ways.
+- (#190) Fixed the TickTick link window not preselecting the TickTick project whose name differs from the list's only in spaces, `-` or `_`.
 
 - Fixed Quick Add suggesting the wrong start for a range ending in a time, such as `Party Friday until midnight` on a Wednesday.
 - Fixed a task changed in TickTick and briefly left out of its list going to the Trash; deletes there now arrive one sync later.

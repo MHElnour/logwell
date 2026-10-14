@@ -1,8 +1,9 @@
+import { clamp } from "../domain/text";
 import { EventBus } from "../app/events";
 import { type TickTickDevicePort, TickTickError, type TickTickSecretPort } from "../app/ports";
 import { TICKTICK_PULL_RANGE } from "../app/settings";
 import type { AppEvents, AppStore } from "../app/store";
-import { type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/syncModel";
+import { failureReason, type PendingTrash, type SyncFailure, type SyncResult, SYNC_OWN_LABELS } from "../app/syncModel";
 import { hasLinkedList, isListSynced } from "../app/syncMarks";
 import type { Change } from "../app/tx";
 
@@ -62,7 +63,7 @@ interface SchedulerEvents {
 export function failureText(f: SyncFailure): string {
 	if (f.kind === "rate-limited") return RATE_LIMITED_TEXT;
 	if (f.listName === null || f.message.includes(`"${f.listName}"`)) return f.message;
-	return `TickTick sync stopped in "${f.listName}": ${f.message.replace(/^TickTick: /u, "")}`;
+	return `TickTick sync stopped in "${f.listName}": ${failureReason(f.message)}`;
 }
 
 /** The settings line for an error the sync threw past its own handling: a TickTick error reads like a reported failure. */
@@ -248,7 +249,7 @@ export class TickTickScheduler {
 		if (this.disposed || !this.started) return;
 		const raw = this.deps.pullMinutes();
 		const { min, max } = TICKTICK_PULL_RANGE;
-		const minutes = Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : min;
+		const minutes = Number.isFinite(raw) ? clamp(raw, min, max) : min;
 		const now = this.deps.now();
 		const due = Math.max(this.anchor + minutes * 60_000, this.notBefore);
 		this.pullTimer = this.deps.timers.set(() => {

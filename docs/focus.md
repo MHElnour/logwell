@@ -68,7 +68,7 @@ In a break, Logwell does not ask: the task you pick is the task of the next roun
 
 ## Follow the timer in the status bar
 
-On desktop, the status bar shows the running timer, for example "◎ 18:42 · Round 2/4 · Pay rent". In a break it adds "Short break" or "Long break", and a paused timer adds "(paused)". Click it, or press Enter or Space on it, to open the Focus page. It is hidden when no set runs.
+On desktop, the status bar shows the running timer, for example "◎ 18:42 · Round 2 of 4 · Pay rent". In a break it adds "Short break" or "Long break", and a paused timer adds "(paused)". Click it, or press Enter or Space on it, to open the Focus page. It is hidden when no set runs.
 
 ## Hear and see when a phase ends
 

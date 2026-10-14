@@ -1,6 +1,8 @@
 // Shared pointer drag. No obsidian import. Popout-safe: every listener and
 // timer goes through el.ownerDocument.defaultView, never the global window.
 
+import { clamp } from "../domain/text";
+
 export const DRAG_THRESHOLD_PX = 4;
 
 export interface DragPoint {
@@ -243,7 +245,7 @@ export function createAutoScroller(
 			if (inX && outY) {
 				const dy = edgeSpeed(p.y, r.top, r.bottom, edge, maxSpeed);
 				const max = el.scrollHeight - el.clientHeight;
-				const next = Math.min(Math.max(el.scrollTop + dy, 0), Math.max(max, 0));
+				const next = clamp(el.scrollTop + dy, 0, max);
 				if (dy !== 0 && next !== el.scrollTop) {
 					el.scrollTop = next;
 					moved = true;
@@ -252,7 +254,7 @@ export function createAutoScroller(
 			if (inY && outX) {
 				const dx = edgeSpeed(p.x, r.left, r.right, edge, maxSpeed);
 				const max = el.scrollWidth - el.clientWidth;
-				const next = Math.min(Math.max(el.scrollLeft + dx, 0), Math.max(max, 0));
+				const next = clamp(el.scrollLeft + dx, 0, max);
 				if (dx !== 0 && next !== el.scrollLeft) {
 					el.scrollLeft = next;
 					moved = true;

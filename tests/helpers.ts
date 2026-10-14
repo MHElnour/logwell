@@ -1,6 +1,11 @@
 import type { Clock, IdGenerator } from "../src/domain/ports";
 import type { Scheduler, StoreLocalState } from "../src/persistence/CpbaseStore";
 
+/** A test UUID: `prefix` in the first group, `n` in the last. */
+export const uuid = (prefix: number, n: number) => `${prefix.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+/** The id of the n-th seeded task (1-based). */
+export const taskId = (n: number) => uuid(0, n);
+
 export class FakeClock implements Clock {
 	private t: number;
 
@@ -87,6 +92,7 @@ export class MemoryLocalState implements StoreLocalState {
 	}
 }
 
-export async function settle(): Promise<void> {
+/** Lets 20 rounds of promise jobs run; no timer fires (`settle` in tests/ui/app-helpers.tsx waits for timers and renders). */
+export async function drainPromises(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 }

@@ -14,7 +14,7 @@ Today, Upcoming, Inbox and every list have a **List** and **Board** switch in th
 | View | Columns |
 | --- | --- |
 | Today | Your [habits](habits.md), when a habit is active today (it reads "Nothing scheduled today" when none is due). Overdue, when something is overdue. Then Today. |
-| Upcoming | One column per day, from tomorrow, empty days included. |
+| Upcoming | One column per day, from tomorrow, empty days included, named as rows name dates: "Tomorrow", then "Mon, Oct 5". |
 | Inbox and lists | "No section", then each section, then **Add section** (hidden while the database is read-only). |
 
 To create sections, see [Lists, sections and tags](lists-and-tags.md#add-a-section).

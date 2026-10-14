@@ -1,4 +1,5 @@
 import { browser, expect } from "@wdio/globals";
+import { median } from "../../tests/perf/measure";
 import {
 	createTask,
 	DB_PATH,
@@ -155,7 +156,6 @@ describe("Tasks and description notes", function () {
 			return runs;
 		});
 		console.log(`MarkdownRenderer.render on Big note.md (ms): ${timings.map((t) => t.toFixed(0)).join(", ")}`);
-		const rerenders = timings.slice(1).sort((a, b) => a - b);
-		expect(rerenders[1]).toBeLessThan(150); // median re-render
+		expect(median(timings.slice(1))).toBeLessThan(150); // median re-render
 	});
 });

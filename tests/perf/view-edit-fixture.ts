@@ -13,7 +13,8 @@ export const TASKS = 50_000;
 export const LISTS = 10;
 export const RUNS = 5;
 
-export const taskId = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+import { taskId, uuid } from "../helpers";
+export { taskId, uuid };
 
 /**
  * Which completed task `i` is, if any: completed in lists[3] (every tenth task, as before), completed subtasks of an

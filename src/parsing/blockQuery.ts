@@ -1,3 +1,4 @@
+import { normalizeTagKey } from "../domain/tags";
 import { collapseWhitespace } from "../domain/text";
 import { PRIORITY_NAME, type Priority } from "../domain/types";
 import type { Quadrant } from "../domain/queries";
@@ -94,7 +95,7 @@ function readList<T>(value: string, table: Readonly<Record<string, T>>, noun: st
 }
 
 /**
- * Reads the `tag:` list: items trimmed, a leading "@" dropped, a repeat (ignoring case) dropped with the first typing
+ * Reads the `tag:` list: items trimmed, a leading "@" dropped, a repeat (the same tag key) dropped with the first typing
  * kept. Returns null when an item is empty.
  */
 function readTags(value: string): string[] | null {
@@ -102,7 +103,7 @@ function readTags(value: string): string[] | null {
 	for (const raw of value.split(",")) {
 		const name = raw.replace(/^\s*@/, "").trim();
 		if (name === "") return null;
-		if (!tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+		if (!tags.some((t) => normalizeTagKey(t) === normalizeTagKey(name))) tags.push(name);
 	}
 	return tags;
 }

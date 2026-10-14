@@ -1,6 +1,6 @@
 import type { QueryContext } from "./queries";
-import { plural } from "./text";
-import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidLocalDate, isValidZone, weekStartOfDay as weekStartNum } from "./time";
+import { clamp, plural } from "./text";
+import { civilOf, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOfDay as isoWeekday, isValidLocalDate, isValidZone, monthLength, wallClockOf, wallDateOf, weekStartOfDay as weekStartNum } from "./time";
 import type {
 	DateSpec,
 	ID,
@@ -16,7 +16,7 @@ import type {
 	WeekStart,
 	Weekday,
 } from "./types";
-import { MONTH_SHORT, REPEAT_FREQS, WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT, WEEK_STARTS } from "./types";
+import { MONTH_LONG, MONTH_SHORT, REPEAT_FREQS, WEEKDAYS, WEEKDAY_LONG, WEEKDAY_SHORT, WEEK_STARTS } from "./types";
 import { isClockTime } from "./habits";
 import { compareSortKeys } from "./sortKey";
 
@@ -51,7 +51,7 @@ export const MAX_INTERVAL = 999;
 /** The interval the engine uses: a whole number in 1..MAX_INTERVAL, whatever is stored. */
 function intervalOf(r: RepeatRule): number {
 	const k = Math.floor(r.interval);
-	return Number.isFinite(k) ? Math.min(MAX_INTERVAL, Math.max(1, k)) : MAX_INTERVAL;
+	return Number.isFinite(k) ? clamp(k, 1, MAX_INTERVAL) : MAX_INTERVAL;
 }
 
 /** The step in months of a monthly or yearly rule: a year is 12 months on the anchor's day, clamped like a month. */
@@ -82,7 +82,8 @@ function firstOfMonth(mi: number): number {
 }
 
 function daysInMonth(mi: number): number {
-	return firstOfMonth(mi + 1) - firstOfMonth(mi);
+	const year = Math.floor(mi / 12);
+	return monthLength(year, mi - year * 12 + 1);
 }
 
 // -- compiled series (cached per immutable Recurrence object) ----------------------------
@@ -465,9 +466,9 @@ export function ordinal(n: number): string {
 	return `${n}${suffix}`;
 }
 
-/** "Oct 9": the month and day of a date, always English. */
-export function monthDayText(date: LocalDate): string {
-	return `${MONTH_SHORT[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8, 10))}`;
+/** "Oct 9", or with `long` "October 9" (an accessible name): the month and day of a date, always English. */
+export function monthDayText(date: LocalDate, long = false): string {
+	return `${(long ? MONTH_LONG : MONTH_SHORT)[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8, 10))}`;
 }
 
 /** The weekday of a date. */
@@ -820,8 +821,8 @@ export function startRecurrence(
 	let timeFromSpec = false;
 	if (scheduled !== null) {
 		if (scheduled.kind === "datetime" && r.time === null) {
-			r = { ...r, time: scheduled.local.slice(11, 16), tz: scheduled.tz };
-			anchor = scheduled.local.slice(0, 10);
+			r = { ...r, time: wallClockOf(scheduled.local), tz: scheduled.tz };
+			anchor = wallDateOf(scheduled.local);
 			timeFromSpec = true;
 		} else {
 			anchor = dateSpecDate(scheduled, zone);

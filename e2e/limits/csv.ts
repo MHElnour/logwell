@@ -47,6 +47,11 @@ export function parseCsv(text: string): Cell[][] {
 	return rows;
 }
 
+/** The values of a CSV text, row by row (what is written reads back: tests/app/csv-export.test.ts). */
+export function csvValues(text: string): string[][] {
+	return parseCsv(text).map((row) => row.map((c) => c.v));
+}
+
 function needsQuote(v: string): boolean {
 	return /[",\r\n]/.test(v);
 }

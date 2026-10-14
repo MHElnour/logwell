@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settle } from "../ui/app-helpers";
 import { TickTickError } from "../../src/app/ports";
 import type { TickTickApi } from "../../src/app/ports";
 import type { Category, SyncLink, Task } from "../../src/domain/types";
@@ -8,7 +9,7 @@ import { serializeDb } from "../../src/persistence/serializer";
 import { TickTickHttp } from "../../src/obsidian/tickTickHttp";
 import { TICKTICK_SECRET_ID } from "../../src/obsidian/tickTickPorts";
 import { FakeTickTick } from "../app/fake-ticktick";
-import { FakeClock } from "../helpers";
+import { FakeClock, uuid } from "../helpers";
 import { makeTask } from "../persistence/fixtures";
 import { fakeApp, loadPlugin } from "./fake-vault";
 
@@ -46,7 +47,6 @@ vi.mock("../../src/obsidian/tickTickDialogs", () => ({
 
 const NOW = "2026-10-01T09:59:00.000Z";
 const WORK = "00000000-0000-4000-8000-00000000000a";
-const id = (n: number) => `00000001-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 function dbText(options: { linked: boolean; tasks: number }): string {
 	const d = createEmptyDb({ dbId: "db-a", revision: "r-aaaaaaaaaaaa", deviceId: "d-other", now: NOW });
@@ -54,7 +54,7 @@ function dbText(options: { linked: boolean; tasks: number }): string {
 	const work: Category = { id: WORK, name: "Work", icon: null, color: null, nameKey: "work", isInbox: false, sortKey: "V1", createdAt: NOW, modifiedAt: NOW };
 	categories.set(WORK, work);
 	const tasks = new Map<string, Task>();
-	for (let i = 1; i <= options.tasks; i++) tasks.set(id(i), makeTask(id(i), { title: `Errand ${i}`, categoryId: WORK, sortKey: `V${i}` }));
+	for (let i = 1; i <= options.tasks; i++) tasks.set(uuid(1, i), makeTask(uuid(1, i), { title: `Errand ${i}`, categoryId: WORK, sortKey: `V${i}` }));
 	const link: SyncLink = { kind: "list", logwellId: WORK, ttId: "", ttProjectId: null, etag: null, base: {}, noteBySync: false, lastPulledAt: NOW, modifiedAt: NOW };
 	return serializeDb({ ...d, categories, tasks, syncLinks: new Map(options.linked ? [[`list:${WORK}`, link]] : []) });
 }
@@ -81,8 +81,6 @@ afterEach(() => {
 	cleanup = null;
 	vi.restoreAllMocks();
 });
-
-const settle = () => new Promise((r) => setTimeout(r, 30));
 
 describe("failure notices (screen 10)", () => {
 	it("a refused token offers Open settings, which opens this plugin's tab", async () => {

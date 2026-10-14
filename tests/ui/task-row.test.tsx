@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { TOGGLE_COMPLETE_EVENT } from "../../src/ui/TaskList";
 import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
-import { click, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
+import { click, day, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
 import { render } from "preact";
 import { TaskCheckbox } from "../../src/ui/common";
 import { css } from "./styles-helpers";
@@ -17,11 +17,10 @@ describe("task row", () => {
 
 	describe("date helpers", () => {
 		it("tones follow the color semantics", () => {
-			const d = (date: string) => ({ kind: "date" as const, date });
-			expect(dateTone(d("2026-09-30"), "Europe/Berlin", TODAY)).toBe("overdue");
-			expect(dateTone(d(TODAY), "Europe/Berlin", TODAY)).toBe("today");
-			expect(dateTone(d("2026-10-02"), "Europe/Berlin", TODAY)).toBe("tomorrow");
-			expect(dateTone(d("2026-10-09"), "Europe/Berlin", TODAY)).toBe("later");
+			expect(dateTone(day("2026-09-30"), "Europe/Berlin", TODAY)).toBe("overdue");
+			expect(dateTone(day(TODAY), "Europe/Berlin", TODAY)).toBe("today");
+			expect(dateTone(day("2026-10-02"), "Europe/Berlin", TODAY)).toBe("tomorrow");
+			expect(dateTone(day("2026-10-09"), "Europe/Berlin", TODAY)).toBe("later");
 			expect(dateTone(null, "Europe/Berlin", TODAY)).toBe("none");
 		});
 		it("row shows only the time for a timed task today; details chip combines date, time and duration", () => {

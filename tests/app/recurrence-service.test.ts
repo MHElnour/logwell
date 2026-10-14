@@ -14,11 +14,7 @@ import { type AppHarness, FakeNotes, appHarness, expectDomainError } from "./har
 
 const NOW = "2026-10-05T10:00:00.000Z";
 
-async function setup(iso = NOW): Promise<AppHarness> {
-	const h = await appHarness();
-	h.clock.set(iso);
-	return h;
-}
+const setup = (iso = NOW): Promise<AppHarness> => appHarness({ now: iso });
 
 async function plainTask(h: AppHarness, scheduled: DateSpec | null = null, patch: { deadline?: DateSpec } = {}): Promise<Task> {
 	return (await h.app.tasks.create({ title: "Gym", scheduled, ...patch })).task;
@@ -1109,8 +1105,7 @@ describe("an end before the start is refused", () => {
 
 	describe("Duplicate keeps an end only when the copy still has a date before it", () => {
 		it("#12: a copy whose end comes before its first date never ends, and the sweep leaves it open", async () => {
-			const h = await appHarness();
-			h.clock.set("2026-10-02T10:00:00.000Z"); // Friday
+			const h = await appHarness({ now: "2026-10-02T10:00:00.000Z" }); // Friday
 			const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-14" } } });
 			h.clock.set("2026-10-12T10:00:00.000Z"); // Monday: the copy starts today, and its next Friday is after the end
 			const copy = await h.app.tasks.duplicate(task.id);
@@ -1120,8 +1115,7 @@ describe("an end before the start is refused", () => {
 		});
 
 		it("#12: a copy that still has a date before the end keeps it", async () => {
-			const h = await appHarness();
-			h.clock.set("2026-10-02T10:00:00.000Z");
+			const h = await appHarness({ now: "2026-10-02T10:00:00.000Z" });
 			const { task } = await h.app.tasks.create({ title: "Gym", repeat: { rule: friday, end: { kind: "date", date: "2026-10-20" } } });
 			h.clock.set("2026-10-12T10:00:00.000Z");
 			const copy = await h.app.tasks.duplicate(task.id);

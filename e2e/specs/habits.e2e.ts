@@ -14,6 +14,7 @@ import {
 	freshDatabase,
 	habitCheckins,
 	habitRow,
+	noticeTexts,
 	railButton,
 	restoreMenus,
 	useDomMenus,
@@ -48,10 +49,6 @@ async function cleanUp(): Promise<void> {
 		if (app !== undefined && w.__cpClock !== undefined) app.clock.now = w.__cpClock.original;
 		delete w.__cpClock;
 	});
-}
-
-async function noticeTexts(): Promise<string[]> {
-	return browser.execute(() => Array.from(document.querySelectorAll<HTMLElement>(".notice")).map((n) => n.textContent ?? ""));
 }
 
 describe("Habits", function () {

@@ -11,6 +11,7 @@ import { TodayHabitsBlock } from "../../src/ui/habits/TodayHabits";
 import { TaskList } from "../../src/ui/TaskList";
 import { makeTask } from "../persistence/fixtures";
 import { appHarness } from "../app/harness";
+import { taskId, uuid } from "../helpers";
 import { elapsed, perfLog, timeBoth } from "../perf/measure";
 import { U1Host } from "./app-helpers";
 
@@ -60,12 +61,11 @@ class ScanCountingMap extends Map<ID, Task> {
 /** `total` tasks: a tenth of them are parents with two subtasks each, one completed and one open. */
 function bigTaskSet(total = TOTAL): Task[] {
 	const tasks: Task[] = [];
-	const id = (n: number) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 	const parents = total / 10;
 	const roots = total - parents * SUBS_PER_PARENT;
 	for (let i = 0; i < roots; i++) {
 		tasks.push(
-			makeTask(id(i + 1), {
+			makeTask(taskId(i + 1), {
 				title: `Task ${i}`,
 				sortKey: `V${i.toString(36).padStart(4, "0")}`,
 				scheduled: i % 10 === 0 ? { kind: "date", date: "2026-10-01" } : null,
@@ -77,9 +77,9 @@ function bigTaskSet(total = TOTAL): Task[] {
 		for (let s = 0; s < SUBS_PER_PARENT; s++) {
 			n++;
 			tasks.push(
-				makeTask(id(n), {
+				makeTask(taskId(n), {
 					title: `Subtask ${p}.${s}`,
-					parentId: id(p + 1),
+					parentId: taskId(p + 1),
 					status: s === 0 ? "completed" : "open",
 					completedAt: s === 0 ? "2026-10-01T09:30:00.000Z" : null,
 				}),
@@ -192,7 +192,6 @@ describe("performance at target scale: 20 habits and 20,000 check-ins", () => {
 		const habits = new Map(data.habits);
 		const checkins = new Map(data.checkins);
 		const ops: JournalOp[] = [];
-		const uuid = (prefix: number, n: number) => `${prefix.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 		for (let i = 0; i < HABITS; i++) {
 			const habit: Habit = {
 				id: uuid(2, i),
@@ -243,17 +242,13 @@ describe("performance at target scale: 20 habits and 20,000 check-ins", () => {
 			block();
 			render(null, container);
 
-			let start = performance.now();
-			page();
-			const pageMs = performance.now() - start;
+			const pageMs = elapsed(page);
 			expect(container.querySelectorAll(".cp-habit-row")).toHaveLength(HABITS);
 			// The selected habit's log shows its first 50 of 1,000 entries.
 			expect(container.querySelectorAll(".cp-habit-entry")).toHaveLength(50);
 			render(null, container);
 
-			start = performance.now();
-			block();
-			const blockMs = performance.now() - start;
+			const blockMs = elapsed(block);
 			expect(container.querySelector(".cp-today-habits")).not.toBeNull();
 			perfLog(`habits page ${pageMs.toFixed(0)} ms, today block ${blockMs.toFixed(0)} ms`);
 		} finally {

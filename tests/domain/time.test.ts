@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, clockTimeOf, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, clockTimeOf, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, minuteInstant, instantInZone, DAY_MIN, wallClockOf, wallDateOf, wallMinutesOf, monthLength, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime, utcDateOf } from "../../src/domain/time";
 import { FakeClock } from "../helpers";
 import fc from "fast-check";
 import { monthStats } from "../../src/domain/habits";
@@ -19,6 +19,24 @@ describe("time", () => {
 		expect(isValidDateSpec({ kind: "datetime", local: "2026-10-02T19:00", tz: "Europe/Berlin" })).toBe(true);
 		expect(isValidDateSpec({ kind: "datetime", local: "2026-10-02T19:00", tz: "Mars/Base" })).toBe(false);
 		expect(isValidDateSpec({ kind: "date", date: "2026-10-02T10:00" })).toBe(false);
+	});
+
+	it("reads the date, the clock time and the minutes of a stored wall time", () => {
+		expect(wallDateOf("2026-10-12T09:05")).toBe("2026-10-12");
+		expect(wallClockOf("2026-10-12T09:05")).toBe("09:05");
+		expect(wallMinutesOf("2026-10-12T09:05")).toBe(545);
+		expect(wallMinutesOf("2026-10-12T00:00")).toBe(0);
+		expect(wallMinutesOf("2026-10-12T23:59")).toBe(DAY_MIN - 1);
+	});
+
+	it("floors the clock to the minute, and reads an instant in a zone", () => {
+		expect(minuteInstant(new FakeClock("2026-10-01T23:30:42.517Z"))).toBe("2026-10-01T23:30:00.000Z");
+		const inBerlin = instantInZone("2026-10-01T23:30:00.000Z", "Europe/Berlin");
+		expect([inBerlin.toISODate(), inBerlin.hour, inBerlin.minute]).toEqual(["2026-10-02", 1, 30]);
+		const offset = instantInZone("2026-10-22T04:15:00.000+0000", "Europe/Moscow");
+		expect([offset.hour, offset.minute]).toEqual([7, 15]);
+		expect(instantInZone("not a time", "UTC").isValid).toBe(false);
+		expect(instantInZone("2026-10-01T23:30:00.000Z", "Mars/Base").isValid).toBe(false);
 	});
 
 	it("computes today in the display zone", () => {
@@ -132,6 +150,21 @@ describe("years 0000 to 9999", () => {
 
 	const FIRST = -719_528; // 0000-01-01
 	const LAST = 2_932_896; // 9999-12-31
+
+	describe("monthLength", () => {
+		it.each([
+			["a 31-day month", 2026, 10, 31],
+			["a 30-day month", 2026, 9, 30],
+			["February in a common year", 2026, 2, 28],
+			["February in a leap year", 2024, 2, 29],
+			["February of a century that is not a leap year", 1900, 2, 28],
+			["February of year 0000, a leap year", 0, 2, 29],
+			["a month past December rolls into the next year", 2026, 14, 28],
+			["month 0 is the December before", 2026, 0, 31],
+		])("%s", (_name, y, m, days) => {
+			expect(monthLength(y, m)).toBe(days);
+		});
+	});
 
 	describe("day numbers over years 0000 to 9999 (#15)", () => {
 		it("0050-01-01 is its own day, not 1950-01-01", () => {
@@ -422,5 +455,25 @@ describe("fast paths and caches", () => {
 			expect(timeCacheSizes().zones).toBeLessThanOrEqual(2048);
 			expect(isValidZone("Europe/Berlin")).toBe(true);
 		});
+	});
+});
+
+describe("utcDateOf", () => {
+	it.each([
+		{ name: "a Date", at: new Date("2026-10-01T10:00:00.000Z"), day: "2026-10-01" },
+		{ name: "an Instant", at: "2026-10-01T10:00:00.000Z", day: "2026-10-01" },
+		{ name: "the last millisecond of a UTC day", at: "2026-10-01T23:59:59.999Z", day: "2026-10-01" },
+		{ name: "the first millisecond of the next UTC day", at: new Date("2026-10-02T00:00:00.000Z"), day: "2026-10-02" },
+		{ name: "an instant with an offset, read in UTC", at: "2026-10-02T01:30:00.000+02:00", day: "2026-10-01" },
+		{ name: "text that is not an instant", at: "not a date", day: null },
+		{ name: "an invalid Date", at: new Date(Number.NaN), day: null },
+	])("reads the UTC day of $name", ({ at, day }) => {
+		expect(utcDateOf(at)).toBe(day);
+	});
+
+	it("leaves the instantDay cache alone", () => {
+		resetTimeCaches();
+		utcDateOf("2026-10-01T10:00:00.000Z");
+		expect(timeCacheSizes().instantDays).toBe(0);
 	});
 });

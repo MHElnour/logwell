@@ -1,4 +1,5 @@
 import type { FocusMoment } from "../domain/focus";
+import { clamp } from "../domain/text";
 import type { SoundTheme } from "../app/settings";
 
 // One short synthesized tone per moment, Web Audio only (no bundled files).
@@ -124,7 +125,7 @@ export class SoundPlayer {
 		if (this.disposed) return;
 		const { theme, volume } = this.settings();
 		if (theme === "none") return;
-		const scale = Math.min(100, Math.max(0, volume)) / 100;
+		const scale = clamp(volume, 0, 100) / 100;
 		if (scale === 0) return;
 		try {
 			const ctx = (this.ctx ??= this.create());

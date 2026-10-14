@@ -1,5 +1,4 @@
-import { DateTime } from "luxon";
-import { formatLatin, isValidZone, sameDateSpec, wallTimeOf, wallTimeToDateTime } from "../time";
+import { formatLatin, instantInZone, isValidZone, sameDateSpec, wallTimeOf, wallTimeToDateTime } from "../time";
 import type { DateSpec, Priority, Task, TaskStatus } from "../types";
 import type { TtTask } from "./types";
 
@@ -119,9 +118,7 @@ export function dateFromTt(
 }
 
 function readTtDate(text: string, allDay: boolean, zone: string): DateSpec | null {
-	const parsed = DateTime.fromISO(text, { setZone: true });
-	if (!parsed.isValid) return null;
-	const inZone = parsed.setZone(zone);
+	const inZone = instantInZone(text, zone);
 	if (!inZone.isValid) return null;
 	if (allDay) {
 		const day = inZone.toISODate();

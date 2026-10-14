@@ -1,10 +1,10 @@
-import { type CompleteResult, DST_WARNING_TEXT, type TaskPatch } from "../app/TaskService";
+import { type CompleteResult, DELETE_TASK_LABEL, DST_WARNING_TEXT, DUPLICATE_TASK_LABEL, EDIT_TASK_LABEL, type TaskPatch } from "../app/TaskService";
 import { addDays } from "../domain/time";
 import { plural } from "../domain/text";
 import { quadrantOf } from "../domain/queries";
 import { isActiveSeries } from "../domain/tasks";
 import { type LocalDate, PRIORITIES, type Priority, type Task } from "../domain/types";
-import { PRIORITY_NAME, capitalize } from "./format";
+import { PRIORITY_NAME } from "./format";
 import { ICON } from "./icons";
 import { QUADRANT_LIST } from "./matrix/quadrants";
 import type { MenuItemSpec, MenuSpec, UiHost } from "./host";
@@ -75,7 +75,7 @@ export async function deleteTask(host: UiHost, task: Task): Promise<boolean> {
 	try {
 		const mark = host.app.store.undoMark();
 		await host.app.tasks.delete(task.id);
-		host.notifyUndo(`Moved "${task.title}" to Trash.`, "Delete task", mark);
+		host.notifyUndo(`Moved "${task.title}" to Trash.`, DELETE_TASK_LABEL, mark);
 		return true;
 	} catch (err) {
 		host.error(err);
@@ -92,7 +92,7 @@ export async function writeTask(host: UiHost, task: Task, patch: TaskPatch): Pro
 	const { outcome, reanchored } = await writeTaskResult(host, task, patch);
 	// A date change of a series re-anchors the whole series; say so (the caller's own notice, if any, is replaced
 	// by this one: use writeTaskResult to decide).
-	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, "Edit task", mark);
+	if (outcome === "changed" && reanchored !== null) notifyReanchored(host, task, reanchored, EDIT_TASK_LABEL, mark);
 	return outcome;
 }
 
@@ -162,7 +162,7 @@ export async function duplicateTask(host: UiHost, task: Task): Promise<Task | nu
 	try {
 		const mark = host.app.store.undoMark();
 		const copy = await host.app.tasks.duplicate(task.id);
-		host.notifyUndo(`Duplicated "${task.title}".`, "Duplicate task", mark);
+		host.notifyUndo(`Duplicated "${task.title}".`, DUPLICATE_TASK_LABEL, mark);
 		return copy;
 	} catch (err) {
 		host.error(err);
@@ -188,9 +188,6 @@ export function priorityItems(host: UiHost, task: Task, title: (p: Priority) => 
 		run: () => void setPriority(host, task, p),
 	}));
 }
-
-/** "High", "Medium", "Low", "None". */
-export const priorityLabel = (p: Priority) => capitalize(PRIORITY_NAME[p]);
 
 /** The menu of a Completed history row: one done occurrence of a repeating task. */
 export function occurrenceMenu(host: UiHost, task: Task, date: LocalDate, onOpen: () => void): MenuSpec {

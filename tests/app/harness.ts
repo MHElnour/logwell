@@ -132,11 +132,14 @@ export interface AppHarnessOptions {
 	renames?: RenameQueuePort;
 	/** Wraps the database file, for example to make writes fail. */
 	wrapFile?: (file: DbFile) => DbFile;
+	/** The clock's time once the database is open (the open itself runs at the harness's default time). */
+	now?: string;
 }
 
 export async function appHarness(options: AppHarnessOptions = {}): Promise<AppHarness> {
 	const h = storeHarness(options.initial, undefined, options.wrapFile);
 	await h.store.open();
+	if (options.now !== undefined) h.clock.set(options.now);
 	const notes = new FakeNotes();
 	const app = new CheckpointApp(h.store, h.clock, sequentialIds("a"), { ...SETTINGS }, notes, options.renames);
 	return { ...h, app, notes };

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { EDIT_TASK_LABEL } from "../app/TaskService";
 import { menuTasks } from "../app/views";
 import { type MatrixGroup, QUADRANT_ORDER, matrixQuadrants, quadrantFlags } from "../domain/matrix";
 import { type ListEntry, type Quadrant, type QueryContext, type TaskFilter, emptyFilter, quadrantOf } from "../domain/queries";
@@ -151,7 +152,7 @@ export function MatrixSection(props: {
 			const title = host.app.store.state.tasks.get(id)?.title ?? "Task";
 			const mark = host.app.store.undoMark();
 			void moveToQuadrant(host, id, to).then((moved) => {
-				if (moved) host.notifyUndo(`Moved "${title}" to ${LABEL.get(to) ?? to}.`, "Edit task", mark);
+				if (moved) host.notifyUndo(`Moved "${title}" to ${LABEL.get(to) ?? to}.`, EDIT_TASK_LABEL, mark);
 			});
 		},
 	});

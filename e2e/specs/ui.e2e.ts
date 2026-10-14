@@ -1,41 +1,5 @@
 import { browser, expect } from "@wdio/globals";
-import { MOD_KEY, createTask, freshDatabase, getTask } from "../helpers";
-
-/** Opens the app and returns the visible Tasks section (background tabs keep hidden copies). */
-async function visibleTasksSection(): Promise<WebdriverIO.Element> {
-	await browser.executeObsidian(async ({ plugins }) => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		await (plugins as any).logwell.openApp("tasks");
-	});
-	let section: WebdriverIO.Element | undefined;
-	await browser.waitUntil(
-		async () => {
-			for (const el of await browser.$$(".cp-tasks")) if (await el.isDisplayed()) section = el;
-			return section !== undefined;
-		},
-		{ timeout: 5000, timeoutMsg: "no visible Tasks section" },
-	);
-	return section!;
-}
-
-async function showInbox(section: WebdriverIO.Element): Promise<void> {
-	await section.$(".cp-sidebar").$(`.//*[normalize-space(text())="Inbox"]`).click();
-}
-
-/**
- * Sets the width of the app container. The layout uses container queries on
- * `.cp-app`, so narrowing that element is what a narrow tab does. (WebDriver
- * window resizing is not supported by Obsidian's Electron driver.)
- */
-async function setAppWidth(width: number): Promise<void> {
-	await visibleTasksSection();
-	await browser.execute((w) => {
-		for (const el of Array.from(document.querySelectorAll<HTMLElement>(".cp-app"))) {
-			if (el.offsetParent !== null) el.style.width = `${w}px`;
-		}
-	}, width);
-	await browser.pause(200);
-}
+import { createTask, freshDatabase, getTask, MOD_KEY, setAppWidth, showInbox, visibleTasksSection } from "../helpers";
 
 // The responsive layout and the keyboard pass.
 describe("Layout and keyboard", function () {
@@ -51,6 +15,7 @@ describe("Layout and keyboard", function () {
 
 	it("details become a drawer under ~1200 px and the sidebar collapses under ~800 px", async function () {
 		const id = await createTask("Layout check");
+		await visibleTasksSection();
 		await setAppWidth(1300);
 		let section = await visibleTasksSection();
 		await showInbox(section);
@@ -65,12 +30,14 @@ describe("Layout and keyboard", function () {
 		});
 		expect(listWidth).toBeGreaterThanOrEqual(440);
 
+		await visibleTasksSection();
 		await setAppWidth(1100);
 		section = await visibleTasksSection();
 		expect((await section.$(".cp-details-pane").getCSSProperty("position")).value).toBe("absolute");
 		await expect(section.$(".cp-details-close")).toBeDisplayed();
 		await expect(section.$(".cp-sidebar-pane")).toBeDisplayed();
 
+		await visibleTasksSection();
 		await setAppWidth(700);
 		section = await visibleTasksSection();
 		await expect(section.$(".cp-sidebar-pane")).not.toBeDisplayed();
@@ -83,6 +50,7 @@ describe("Layout and keyboard", function () {
 
 	it("hovering inside the sidebar or a task row shows no container tooltip", async function () {
 		await createTask("Hover check", { scheduled: { kind: "date", date: new Date().toISOString().slice(0, 10) } });
+		await visibleTasksSection();
 		await setAppWidth(1100);
 		const section = await visibleTasksSection();
 		const tooltipText = async () =>
@@ -100,6 +68,7 @@ describe("Layout and keyboard", function () {
 
 	it("focus is visible on keyboard focus", async function () {
 		await createTask("Focus ring");
+		await visibleTasksSection();
 		await setAppWidth(1200);
 		const section = await visibleTasksSection();
 		await showInbox(section);

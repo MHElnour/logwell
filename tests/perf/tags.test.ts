@@ -5,7 +5,7 @@ import type { DbData } from "../../src/persistence/schema";
 import { sameLookups } from "../../src/ui/rowMemo";
 import { appHarness } from "../app/harness";
 import { makeTask } from "../persistence/fixtures";
-import { perfLog, timeBoth } from "./measure";
+import { elapsedAsync, measuredAsync, perfLog, timeBoth } from "./measure";
 
 describe("tag labels", () => {
 	// Tag labels at 50,000 tasks (issue 11). A label depends on the other tags, so a row compares its tags' labels when the
@@ -121,16 +121,12 @@ describe("tag rename", () => {
 			});
 			const before = h.app.store.state;
 
-			const start = performance.now();
-			const r = await h.app.tags.edit("home", { name: "House", parentKey: null, color: null });
-			const renamed = performance.now() - start;
+			const { result: r, ms: renamed } = await measuredAsync(() => h.app.tags.edit("home", { name: "House", parentKey: null, color: null }));
 			expect(r.wrote).toBe(true);
 			expect(h.app.store.state.tasks.get("t1")!.tagKeys[0]).toBe("house/child1");
 			expect(h.app.store.state.tags.has("house/child19")).toBe(true);
 
-			const undoStart = performance.now();
-			await h.app.store.undo();
-			const undone = performance.now() - undoStart;
+			const undone = await elapsedAsync(() => h.app.store.undo());
 			expect(h.app.store.state.tasks.get("t1")).toBe(before.tasks.get("t1"));
 			expect(h.app.store.state.trash.get("b0")).toBe(before.trash.get("b0"));
 			expect(h.app.store.state.tags.has("home/child19")).toBe(true);
@@ -168,9 +164,7 @@ describe("parent tag delete", () => {
 			});
 			const before = h.app.store.state;
 
-			const start = performance.now();
-			const r = await h.app.tags.delete("home");
-			const deleted = performance.now() - start;
+			const { result: r, ms: deleted } = await measuredAsync(() => h.app.tags.delete("home"));
 			expect(r.wrote).toBe(true);
 			expect(r.moves).toHaveLength(20);
 			expect(h.app.store.state.tasks.get("t1")!.tagKeys[0]).toBe("child1");
@@ -178,9 +172,7 @@ describe("parent tag delete", () => {
 			expect(h.app.store.state.tags.has("child19")).toBe(true);
 			expect(h.app.store.state.tags.has("home")).toBe(false);
 
-			const undoStart = performance.now();
-			await h.app.store.undo();
-			const undone = performance.now() - undoStart;
+			const undone = await elapsedAsync(() => h.app.store.undo());
 			expect(h.app.store.state.tasks.get("t1")).toBe(before.tasks.get("t1"));
 			expect(h.app.store.state.trash.get("b0")).toBe(before.trash.get("b0"));
 			expect(h.app.store.state.tags.has("home/child19")).toBe(true);

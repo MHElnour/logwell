@@ -12,11 +12,7 @@ import { type AppHarness, appHarness } from "./harness";
 const NOW = "2026-10-05T10:00:00.000Z";
 const TODAY = "2026-10-05";
 
-async function setup(): Promise<AppHarness> {
-	const h = await appHarness();
-	h.clock.set(NOW);
-	return h;
-}
+const setup = (): Promise<AppHarness> => appHarness({ now: NOW });
 
 async function series(h: AppHarness, title: string, r: RepeatRule, anchor: string, patch: { sectionId?: string; important?: boolean; urgent?: boolean } = {}): Promise<Task> {
 	return (await h.app.tasks.create({ title, scheduled: { kind: "date", date: anchor }, repeat: { rule: r }, ...patch })).task;

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { SecretComponent } from "obsidian";
 import { describe, expect, it, vi } from "vitest";
+import { settle } from "../ui/app-helpers";
 import { DEFAULT_SETTINGS } from "../../src/app/settings";
 import type { SyncStatus } from "../../src/obsidian/tickTickScheduler";
 import { ONE_DEVICE_TEXT, type TickTickSettingsDeps, type TickTickSettingsSession, tickTickSettingItems } from "../../src/obsidian/tickTickSettings";
@@ -115,8 +116,6 @@ function setup(options: { token?: boolean; device?: boolean; session?: boolean; 
 	return { rows, shown, render, saved, notices, refresh, tickTick, sync, device: () => device, status };
 }
 
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
 describe("TickTick sync settings (screens 1 to 3)", () => {
 	it("is one group named TickTick sync", () => {
 		const t = setup();
@@ -156,7 +155,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect(row.secret).toBeInstanceOf(SecretComponent);
 		expect(row.secret!.value).toBe("my-secret");
 		row.secret!.changed("other-secret");
-		await flush();
+		await settle();
 		expect(t.saved).toEqual([["tickTickSecretId", "other-secret"]]);
 		expect(t.tickTick.refresh).toHaveBeenCalled();
 		expect(t.refresh).toHaveBeenCalled();
@@ -165,7 +164,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 	it("removing the secret saves an empty id (nothing is written to secret storage)", async () => {
 		const t = setup();
 		t.render("TickTick token").secret!.changed("");
-		await flush();
+		await settle();
 		expect(t.saved).toEqual([["tickTickSecretId", ""]]);
 	});
 
@@ -201,8 +200,8 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect(t.render("Sync with TickTick on this device").toggle).toMatchObject({ value: false, disabled: true });
 	});
 
-	it("syncing on this device (screen 3): status, the interval, and the linked lists with Unlink", () => {
-		const t = setup({ device: true, linked: [WORK, HOME], status: { lastSyncAt: Date.parse(NOW), error: null } });
+	it("syncing on this device (screen 3): status, the interval, and the linked lists with Unlink, in sidebar order", () => {
+		const t = setup({ device: true, linked: [HOME, WORK], status: { lastSyncAt: Date.parse(NOW), error: null } });
 		expect(t.shown()).toEqual([
 			"TickTick token",
 			"Sync with TickTick on this device",
@@ -210,8 +209,8 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 			"Pull from TickTick every",
 			"Create notes from TickTick descriptions",
 			"Linked lists",
-			"Home",
 			"Work",
+			"Home",
 		]);
 		expect(t.render("Sync status").name).toBe("Synced 2 minutes ago · 2 lists");
 	});
@@ -229,7 +228,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		expect(status.buttons.map((b) => b.text)).toEqual(["Sync now"]);
 		status.buttons[0]!.click();
 		expect(status.buttons[0]!.disabled).toBe(true);
-		await flush();
+		await settle();
 		expect(t.tickTick.syncNow).toHaveBeenCalledTimes(1);
 		expect(t.refresh).toHaveBeenCalled();
 	});
@@ -249,7 +248,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		const row = t.render("Work");
 		expect(row.buttons.map((b) => b.text)).toEqual(["Unlink"]);
 		row.buttons[0]!.click();
-		await flush();
+		await settle();
 		expect(t.sync.unlinkList).toHaveBeenCalledWith(WORK);
 		expect(t.notices).toEqual(["Work is no longer synced with TickTick. Its tasks stay on both sides."]);
 		expect(t.refresh).toHaveBeenCalled();
@@ -259,7 +258,7 @@ describe("TickTick sync settings (screens 1 to 3)", () => {
 		const t = setup({ device: true, linked: [WORK] });
 		t.sync.unlinkList.mockResolvedValueOnce({ wrote: false, label: "x" });
 		t.render("Work").buttons[0]!.click();
-		await flush();
+		await settle();
 		expect(t.sync.unlinkList).toHaveBeenCalledWith(WORK);
 		expect(t.notices).toEqual([]);
 		expect(t.refresh).toHaveBeenCalled();

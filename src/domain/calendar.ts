@@ -1,8 +1,9 @@
 import { DateTime } from "luxon";
-import { isDeadlineMissed } from "./queries";
+import { isDayMissed, isDeadlineMissed, isOpenWork } from "./queries";
 import { occurrenceSpec, projectOccurrences } from "./recurrence";
-import { compareTasksBySortKey, isOpen } from "./tasks";
-import { addDays, clockTimeOf, dateOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallTimeToDateTime, weekStartOfDay } from "./time";
+import { compareTasksBySortKey } from "./tasks";
+import { clamp } from "./text";
+import { addDays, clockTimeOf, DAY_MIN, dateOf, monthStart, shiftMonth, yearMonthOf, dateSpecDate, dateSpecDisplayLocal, dayNum, daysBetween, fmtMin, wallClockOf, wallDateOf, wallMinutesOf, wallTimeToDateTime, weekStartOfDay } from "./time";
 import type { DateSpec, ID, LocalDate, OccurrenceRecord, Task, WeekStart } from "./types";
 
 // Calendar layout. Pure: the caller filters
@@ -31,8 +32,9 @@ export function weekDays(anchor: LocalDate, weekStart: WeekStart): LocalDate[] {
  * needs (4 to 6; February 2026 with a Sunday start is exactly 4).
  */
 export function monthGrid(anchor: LocalDate, weekStart: WeekStart): LocalDate[][] {
-	const first = `${anchor.slice(0, 7)}-01`;
-	const last = addDays(DateTime.fromISO(first, { zone: "UTC" }).plus({ months: 1 }).toISODate() ?? first, -1);
+	const month = yearMonthOf(anchor);
+	const first = monthStart(month);
+	const last = addDays(monthStart(shiftMonth(month, 1)), -1);
 	const start = weekStartOf(first, weekStart);
 	const rows = Math.floor(daysBetween(start, last) / 7) + 1;
 	return Array.from({ length: rows }, (_, r) => Array.from({ length: 7 }, (_, c) => addDays(start, r * 7 + c)));
@@ -140,13 +142,9 @@ export interface WeekLayout {
 	hours: DayHours[];
 }
 
-const DEFAULT_DURATION_MIN = 30;
+/** How long the calendar draws a timed task with no planned duration. */
+export const DEFAULT_DURATION_MIN = 30;
 const NO_RECORDS: readonly OccurrenceRecord[] = [];
-const DAY_MIN = 1440;
-
-function wallMinutes(local: string): number {
-	return Number(local.slice(11, 13)) * 60 + Number(local.slice(14, 16));
-}
 
 /**
  * Display and stored wall dates of one instant differ by at most 2 days: the zone offsets span
@@ -240,21 +238,20 @@ export function layoutWeek(tasks: Iterable<Task>, days: LocalDate[], ctx: Calend
 	// Places one scheduled value: a plain task's own, or one occurrence of a repeating task.
 	const place = (task: Task, scheduled: DateSpec, occurrence: OccurrenceKind | null): void => {
 		// Open work only: a completed task, or a done occurrence of a series that goes on, is never past.
-		let open: boolean | null = null;
-		const isOpenWork = (): boolean => (open ??= isOpen(task) && occurrence !== "done");
+		const done = occurrence === "done";
 		if (scheduled.kind === "date") {
 			const list = allDay.get(scheduled.date);
-			if (list !== undefined) list.push({ kind: "date", task, date: scheduled.date, past: isOpenWork() && scheduled.date < ctx.today, occurrence });
+			if (list !== undefined) list.push({ kind: "date", task, date: scheduled.date, past: isDayMissed(task, scheduled.date, ctx, done), occurrence });
 		} else if (inRange(scheduled.local, task.plannedDurationMin)) {
 			// One Luxon parse per task. In the display zone itself the stored wall time is the answer.
 			const sameZone = scheduled.tz === ctx.zone;
 			const startDt = wallTimeToDateTime(scheduled.local, scheduled.tz);
 			const shown = sameZone ? startDt : startDt.setZone(ctx.zone);
-			const startDate = sameZone ? scheduled.local.slice(0, 10) : (shown.toISODate() ?? maxDay);
+			const startDate = sameZone ? wallDateOf(scheduled.local) : (shown.toISODate() ?? maxDay);
 			if (shown.isValid && startDate <= maxDay) {
 				const noDuration = task.plannedDurationMin === null || task.plannedDurationMin <= 0;
 				const durationMin = noDuration ? DEFAULT_DURATION_MIN : (task.plannedDurationMin as number);
-				const startMin = sameZone ? wallMinutes(scheduled.local) : shown.hour * 60 + shown.minute;
+				const startMin = sameZone ? wallMinutesOf(scheduled.local) : shown.hour * 60 + shown.minute;
 				// Segment i covers day startDate + i: the rest of the first day, then whole days.
 				const firstLen = Math.min(durationMin, DAY_MIN - startMin);
 				const count = 1 + Math.ceil(Math.max(0, durationMin - firstLen) / DAY_MIN);
@@ -270,7 +267,7 @@ export function layoutWeek(tasks: Iterable<Task>, days: LocalDate[], ctx: Calend
 					if (endLocal === null) {
 						// Elapsed arithmetic on the instant, so DST days come out right.
 						const endMs = startDt.toMillis() + durationMin * 60_000;
-						past = isOpenWork() && endMs < nowMs;
+						past = isOpenWork(task, done) && endMs < nowMs;
 						const end = DateTime.fromMillis(endMs, { zone: ctx.zone });
 						endLocal = fmtMin(end.isValid ? end.hour * 60 + end.minute : (startMin + durationMin) % DAY_MIN);
 					}
@@ -373,7 +370,7 @@ export function layoutMonth(
 const DRAG_SNAP_MIN = 15;
 const LAST_SLOT_MIN = DAY_MIN - DRAG_SNAP_MIN;
 
-const snapSlot = (min: number): number => Math.min(LAST_SLOT_MIN, Math.max(0, Math.floor(min / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN));
+const snapSlot = (min: number): number => clamp(Math.floor(min / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN, 0, LAST_SLOT_MIN);
 
 const wallAt = (date: LocalDate, min: number): string => `${date}T${fmtMin(min)}`;
 
@@ -389,14 +386,14 @@ export function slotSpec(date: LocalDate, minute: number, zone: string): DateSpe
 export function moveTimed(spec: DateSpec, zone: string, dayDelta: number, minuteDelta: number): DateSpec | null {
 	const shown = dateSpecDisplayLocal(spec, zone);
 	if (shown === null) return null;
-	return slotSpec(addDays(shown.slice(0, 10), dayDelta), wallMinutes(shown) + minuteDelta, zone);
+	return slotSpec(addDays(wallDateOf(shown), dayDelta), wallMinutesOf(shown) + minuteDelta, zone);
 }
 
 /** Month view and all-day cells. Date-only stays date-only; a timed value keeps its time of day in the display zone. */
 export function moveToDate(spec: DateSpec, date: LocalDate, zone: string): DateSpec {
 	if (spec.kind === "date") return { kind: "date", date };
 	const shown = dateSpecDisplayLocal(spec, zone) ?? spec.local;
-	return { kind: "datetime", local: `${date}T${shown.slice(11, 16)}`, tz: zone };
+	return { kind: "datetime", local: `${date}T${wallClockOf(shown)}`, tz: zone };
 }
 
 /** True when `next` is the value `current` already shows (same date, or same wall time in the display zone): a no-op drop. */
@@ -409,6 +406,8 @@ export function moveSameMoment(current: DateSpec | null, next: DateSpec, zone: s
 /**
  * The planned duration after dragging the bottom edge to `rawEndMin` (minutes since midnight of
  * the start day): end snapped to 15 minutes, at least 15 minutes long, at most up to 24:00.
+ * Not `clamp`: when the start is within 15 minutes of 24:00 the end stops at 24:00 (a shorter
+ * block), so the day end wins over the 15-minute minimum; `clamp` would let the minimum win.
  */
 export function resizedDuration(startMin: number, rawEndMin: number): number {
 	const snapped = Math.floor(rawEndMin / DRAG_SNAP_MIN + 0.5) * DRAG_SNAP_MIN;
@@ -418,8 +417,8 @@ export function resizedDuration(startMin: number, rawEndMin: number): number {
 
 /** "10:15–11:00" for a drag ghost: the real end, so a DST day is right. Just the start when there is no duration. */
 export function slotRange(local: string, durationMin: number | null, zone: string): string {
-	const start = local.slice(11, 16);
+	const start = wallClockOf(local);
 	if (durationMin === null || durationMin <= 0) return start;
 	const end = DateTime.fromISO(local, { zone }).plus({ minutes: durationMin });
-	return `${start}–${end.isValid ? clockTimeOf(end) : fmtMin((wallMinutes(local) + durationMin) % DAY_MIN)}`;
+	return `${start}–${end.isValid ? clockTimeOf(end) : fmtMin((wallMinutesOf(local) + durationMin) % DAY_MIN)}`;
 }

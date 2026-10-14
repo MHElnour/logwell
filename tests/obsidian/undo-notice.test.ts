@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UNDO_NOTICE_MS } from "../../src/obsidian/notices";
-import { undoNotice } from "../../src/obsidian/undoNotice";
+import { boundUndoNotice, undoNotice } from "../../src/obsidian/undoNotice";
 
 // Issue 43: the Undo notice of a write has one builder, used by ViewHost.notifyUndo and the session.
 
@@ -73,5 +73,24 @@ describe("undoNotice", () => {
 		expect(undoFor).toHaveBeenCalledWith(3, "Move task");
 		buttons[0]!.click();
 		await vi.waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+	});
+});
+
+describe("boundUndoNotice", () => {
+	it("shows the message with an Undo button that lasts 4 seconds and runs the bound undo", async () => {
+		const undo = vi.fn(async () => true);
+		boundUndoNotice("Focus timer discarded", undo);
+		expect(texts).toEqual(["Focus timer discarded"]);
+		expect(buttons.map((b) => b.text)).toEqual(["Undo"]);
+		expect(shown.timeouts).toEqual([UNDO_NOTICE_MS]);
+		buttons[0]!.click();
+		await vi.waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+		expect(shown.messages).toHaveLength(1);
+	});
+
+	it("says there was nothing to undo when the undo resolves false", async () => {
+		boundUndoNotice("Focus timer discarded", async () => false);
+		buttons[0]!.click();
+		await vi.waitFor(() => expect(shown.messages).toEqual([expect.anything(), "Nothing to undo."]));
 	});
 });

@@ -1,6 +1,6 @@
 import { Settings } from "luxon";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeEnd } from "../../src/domain/recurrence";
+import { describeEnd, monthDayText } from "../../src/domain/recurrence";
 import type { Recurrence } from "../../src/domain/types";
 import { fmtDay, fmtDow, monthTitle, weekTitle } from "../../src/ui/calendar/format";
 import { formatDate, formatInstant } from "../../src/ui/format";
@@ -56,6 +56,11 @@ describe("month and weekday names on a French device", () => {
 
 	it("the Quick Add date popover", () => {
 		expect(dayLabel("2026-10-01")).toBe("Thursday, October 1");
+	});
+
+	it("a month and day, short or long", () => {
+		expect(monthDayText("2026-10-09")).toBe("Oct 9");
+		expect(monthDayText("2026-10-09", true)).toBe("October 9");
 	});
 });
 

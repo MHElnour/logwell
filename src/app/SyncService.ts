@@ -1,4 +1,5 @@
 import { tagNamesOf } from "../domain/tags";
+import { clamp } from "../domain/text";
 import { isSyncable, statusFromTt } from "../domain/ticktick/mapping";
 import { pullableTagName } from "../domain/ticktick/tags";
 import { TICKTICK_COMPLETED_MAX, type TtProjectData, type TtTask } from "../domain/ticktick/types";
@@ -482,7 +483,7 @@ export class SyncService {
 		const missing = new Set<string>();
 		/** Lists with linked tasks left for the next sync (beyond the lookups of this one). */
 		const waiting = new Set<ID>();
-		let lookupsLeft = Math.min(LOOKUP_MAX, Math.max(0, PULL_REQUESTS_MAX - spent.requests));
+		let lookupsLeft = clamp(PULL_REQUESTS_MAX - spent.requests, 0, LOOKUP_MAX);
 		/** Every lookup this sync made: the task, or null when TickTick did not find it. */
 		const lookedUp = new Map<string, TtTask | null>();
 		/** `firstReads` for the next sync: this sync's first reads, and earlier ones of tasks not read again yet. */

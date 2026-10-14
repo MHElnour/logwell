@@ -11,6 +11,8 @@
 // Without the Popover API it stays where the stylesheet puts it (under the bar, inside its container),
 // so every clipping container around the bar limits it too, as before.
 
+import { clamp } from "../../domain/text";
+
 const POP_GAP = 8;
 const POP_MARGIN = 12;
 const POP_MIN_HEIGHT = 160;
@@ -43,7 +45,7 @@ export function fitPopover(i: FitInput): Fit {
 /** The popover's left edge: right-aligned to the anchor, kept inside the window's 8 px margins. */
 export function alignPopover(i: { anchorRight: number; width: number; viewportWidth: number }): number {
 	const max = i.viewportWidth - POP_EDGE - i.width;
-	return Math.max(POP_EDGE, Math.min(i.anchorRight - i.width, max));
+	return clamp(i.anchorRight - i.width, POP_EDGE, max);
 }
 
 interface Limits {

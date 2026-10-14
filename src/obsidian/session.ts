@@ -6,6 +6,7 @@ import { SyncService } from "../app/SyncService";
 import { type SyncFailure } from "../app/syncModel";
 import { displayZone } from "../app/settings";
 import { isDomainError } from "../domain/errors";
+import { joinPath } from "../domain/notes";
 import { randomId, systemClock } from "../domain/ports";
 import { BackupStore, dbBackupRoot } from "../persistence/backups";
 import { CpbaseStore, type StoreEvent } from "../persistence/CpbaseStore";
@@ -14,7 +15,7 @@ import { accentClass } from "../ui/accent";
 import type CheckpointPlugin from "../main";
 import { LocalStorageActiveTimer } from "./activeTimer";
 import { AdapterGateway, LocalStorageState, VaultDbFile, VaultNotes } from "./gateways";
-import { actionNotice, showError } from "./notices";
+import { actionNotice, plainNotice, showError } from "./notices";
 import { undoNotice } from "./undoNotice";
 import { LocalStorageReminderState } from "./reminderState";
 import { LocalStorageRenameQueue } from "./renameQueue";
@@ -75,7 +76,7 @@ export class DbSession {
 		this.dbPath = path;
 		const obsidian = plugin.app;
 		const pinned = () => this.dbPath;
-		const backupRoot = normalizePath(`${plugin.manifest.dir ?? `${obsidian.vault.configDir}/plugins/${plugin.manifest.id}`}/backups`);
+		const backupRoot = normalizePath(joinPath(plugin.manifest.dir ?? joinPath(obsidian.vault.configDir, `plugins/${plugin.manifest.id}`), "backups"));
 		this.backupRoot = backupRoot;
 		const adapter = new AdapterGateway(obsidian.vault.adapter);
 		this.store = new CpbaseStore({
@@ -136,7 +137,7 @@ export class DbSession {
 			pullMinutes: () => plugin.settings.tickTickPullMinutes,
 			timers: windowTimers,
 			now: () => systemClock.now().getTime(),
-			notify: (message) => void new Notice(message),
+			notify: plainNotice,
 			notifyFailure: (failure, text) => this.notifyFailure(failure, text),
 			error: showError,
 		});
@@ -177,7 +178,7 @@ export class DbSession {
 			index: this.app.tasks.lists,
 			pick: (deps) => pickLinkOption(this.plugin.app, deps, accent),
 			preview: (deps) => showFirstSyncPreview(this.plugin.app, deps, accent),
-			notify: (message) => void new Notice(message),
+			notify: plainNotice,
 			error: showError,
 			created: this.createdProjects,
 			linked: (result) => {
@@ -253,7 +254,7 @@ export class DbSession {
 			ask: (pending, listName) => (this.closing ? Promise.resolve(null) : askMissing(this.plugin.app, { pending, listName }, accentClass(this.plugin.settings))),
 			undoMark: () => this.app.store.undoMark(),
 			notifyUndo: (message, label, mark) => void undoNotice(this.app.store, message, label, mark),
-			notify: (message) => void new Notice(message),
+			notify: plainNotice,
 			error: showError,
 		});
 		this.tickTick.events.on("confirmations", (pending) => prompter.handle(pending));
@@ -434,7 +435,7 @@ export class DbSession {
 		if (plugin.session !== this && plugin.app.vault.getFileByPath(this.dbPath) === null) {
 			// The database is gone, so there is no conflict view to show for it, and
 			// opening the Data view of another database would be misleading.
-			const where = `${dbBackupRoot(this.backupRoot, this.store.data.meta.dbId)}/conflicts`;
+			const where = joinPath(dbBackupRoot(this.backupRoot, this.store.data.meta.dbId), "conflicts");
 			actionNotice(
 				`${this.dbPath} was not found. Its conflict copies are kept in ${where}. They show in the conflict view once the database file is back.`,
 				[],

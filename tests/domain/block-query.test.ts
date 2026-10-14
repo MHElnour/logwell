@@ -1,12 +1,13 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type BlockQueryState, compileBlockQuery, runBlockQuery } from "../../src/domain/blockQuery";
-import { emptyFilter, filterTasks, isDeadlineMissed, isScheduleMissed, type ListEntry, matchesTaskDate, quadrantOf, type QueryContext, type TaskFilter } from "../../src/domain/queries";
+import { emptyFilter, filterTasks, hasPastScheduleAndDeadline, isDayMissed, isDeadlineMissed, isScheduleMissed, type ListEntry, matchesTaskDate, quadrantOf, type QueryContext, type TaskFilter } from "../../src/domain/queries";
 import { scheduleResolver } from "../../src/domain/recurrence";
 import type { Category, DateSpec, ID, OccurrenceRecord, Priority, Section, Tag, Task, WeekStart } from "../../src/domain/types";
 import { type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
 import { done, repeating, rule, series } from "./recurrence-fixtures";
 import { resolveTagNames, TagNames } from "../../src/domain/tags";
+import { day, timed } from "../persistence/fixtures";
 
 // The task block matcher. 2026-10-14 is a Wednesday. Which tasks pass which filters is the property's to check (it
 // compares every filter combination and week start with an independent reference); the examples here are what it
@@ -54,8 +55,7 @@ function task(id: string, patch: Partial<Task> = {}): Task {
 		...patch,
 	};
 }
-const day = (date: string): DateSpec => ({ kind: "date", date });
-const timed = (local: string, tz = ZONE): DateSpec => ({ kind: "datetime", local, tz });
+
 const noteOf = (path: string) => ({ path, linkedAt: TS });
 
 interface Fixture {
@@ -705,6 +705,36 @@ describe("due and scheduled in the shared date owner", () => {
 
 		it("the schedule field of overdue is isScheduleMissed over the grid", () => {
 			for (const t of GRID) expect(matchesTaskDate(t, filter("overdue"), CTX, "schedule"), t.id).toBe(isScheduleMissed(t, CTX));
+		});
+	});
+
+	describe("isDayMissed", () => {
+		const open = task("a");
+		const completed = task("b", { status: "completed", completedAt: TS });
+		it.each([
+			["a past day of an open task", open, "2026-10-13", false, true],
+			["today is not missed", open, TODAY, false, false],
+			["a past day already done in its series", open, "2026-10-13", true, false],
+			["a past day of a completed task", completed, "2026-10-13", false, false],
+		] as const)("%s", (_name, t, date, occurrenceDone, missed) => {
+			expect(isDayMissed(t, date, CTX, occurrenceDone)).toBe(missed);
+		});
+	});
+
+	describe("hasPastScheduleAndDeadline", () => {
+		it.each([
+			["both dates past", { scheduled: day("2026-10-12"), deadline: day("2026-10-13") }, true],
+			["only the deadline past", { scheduled: day(TODAY), deadline: day("2026-10-13") }, false],
+			["only the schedule past", { scheduled: day("2026-10-13"), deadline: day(TODAY) }, false],
+			["no schedule", { deadline: day("2026-10-13") }, false],
+			["no deadline", { scheduled: day("2026-10-13") }, false],
+		] as const)("%s", (_name, patch, past) => {
+			expect(hasPastScheduleAndDeadline(task("a", patch), CTX)).toBe(past);
+		});
+
+		it("reads the schedule through the context's resolver, not the stored field", () => {
+			const t = task("a", { scheduled: day(TODAY), deadline: day("2026-10-13") });
+			expect(hasPastScheduleAndDeadline(t, { ...CTX, schedule: () => day("2026-10-12") })).toBe(true);
 		});
 	});
 

@@ -51,7 +51,7 @@ Times show in the zone of the **Time zone** setting, your device zone unless you
 
 ## Set a priority
 
-A priority is none, high, medium or low. Set it with the flag in the details pane, the row menu, or `!1`, `!2` or `!3` in [Quick Add](quick-add.md). Priority never changes the task's [matrix](matrix.md) quadrant.
+A priority is high, medium, low or none, and every picker, menu and filter lists them in that order. Set it with the flag in the details pane, the row menu, or `!1`, `!2` or `!3` in [Quick Add](quick-add.md). Priority never changes the task's [matrix](matrix.md) quadrant.
 
 ## Add subtasks
 

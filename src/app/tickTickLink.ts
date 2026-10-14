@@ -1,4 +1,5 @@
 import { DomainError } from "../domain/errors";
+import { resolveListName } from "../domain/tasks";
 import { isInboxProjectId } from "../domain/ticktick/inbox";
 import { type ID, syncLinkId } from "../domain/types";
 import type { DbData } from "../persistence/schema";
@@ -63,10 +64,14 @@ export async function loadLinkOptions(api: Pick<TickTickApi, "listProjects">, st
 	return options;
 }
 
-/** The option that starts selected: an enabled project with the list's name, else creating one. */
+/**
+ * The option that starts selected: the enabled project named like the list, found as a typed list name is
+ * (`resolveListName`: the exact name, else the one name equal ignoring spaces, "-" and "_"), else creating one.
+ */
 export function defaultOption(options: readonly LinkOption[], listName: string): LinkOption | undefined {
-	const same = options.find((o) => !o.disabled && o.target.kind === "existing" && o.label.toLowerCase() === listName.toLowerCase());
-	return same ?? options.find((o) => !o.disabled);
+	const projects = options.filter((o) => !o.disabled && o.target.kind === "existing").map((o) => ({ name: o.label, option: o }));
+	const same = resolveListName(projects, listName);
+	return same.kind === "one" ? same.list.option : options.find((o) => !o.disabled);
 }
 
 /**

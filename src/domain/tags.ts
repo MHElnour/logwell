@@ -1,4 +1,5 @@
 import { DomainError } from "./errors";
+import { normalizedText } from "./text";
 import type { Tag } from "./types";
 
 // Key = NFC-normalized, trimmed, lowercased. Allowed characters are
@@ -9,8 +10,11 @@ export function normalizeTagKey(raw: string): string {
 	return tagDisplayName(raw).toLowerCase();
 }
 
-/** The key of a tag named `leaf` (already a key segment) under the tag key `parent`, or at the top for null. */
-export function childTagKey(parent: string | null, leaf: string): string {
+/**
+ * A child's path under its parent's, or `leaf` alone at the top (null): a key under a key, or a display path under
+ * the parent's display path. `leaf` is already in the matching form (a key segment, or display text).
+ */
+export function childTagPath(parent: string | null, leaf: string): string {
 	return parent === null ? leaf : `${parent}/${leaf}`;
 }
 
@@ -57,7 +61,7 @@ export function requireTagDepth(key: string): void {
 
 /** The display name keeps the user's casing from the first creation. */
 export function tagDisplayName(raw: string): string {
-	return raw.normalize("NFC").trim().replace(/^@/, "");
+	return normalizedText(raw).replace(/^@/, "");
 }
 
 // Parent tags. A "/" in a key makes a path: `programming/go` sits under `programming`.
@@ -340,7 +344,7 @@ const TAG_NAME_RE = /^[\p{L}\p{N}_-]+$/u;
  * leading "@", other characters, then more than 64 characters (per segment with a path).
  */
 export function tagNameTextProblem(typed: string, allowPath = false): string | null {
-	const name = typed.normalize("NFC").trim();
+	const name = normalizedText(typed);
 	if (name === "") return TAG_NAME_EMPTY_MESSAGE;
 	if (/\s/u.test(name)) return "Use one word: spaces are not allowed. Try a hyphen, like phone-calls.";
 	if (!allowPath && name.includes("/")) return 'Pick a parent below instead of typing "/".';
@@ -363,7 +367,7 @@ export function newTagProblem(tags: ReadonlyMap<string, Tag>, name: string, pare
 		const text = tagNameTextProblem(name);
 		if (text !== null) return text;
 	}
-	const key = childTagKey(parent, leaf);
+	const key = childTagPath(parent, leaf);
 	// The same key (a new casing or color only): the tree's names do not change, so even an older duplicate is kept.
 	if (key === except) return null;
 	let pool = tags;

@@ -260,6 +260,13 @@ function isoDate(dt: DateTime): LocalDate | null {
 	return d !== null && isValidLocalDate(d) ? d : null;
 }
 
+/** The reference time in the parse zone; throws for an invalid time or zone. The one reader of it. */
+export function zoneNowOf(now: Date, zone: string): DateTime {
+	const zoneNow = DateTime.fromJSDate(now, { zone });
+	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${zone}`);
+	return zoneNow;
+}
+
 /** Today's date on the parse clock (`zoneNow` is the reference time in the parse zone). The one reader of it. */
 export function todayOf(zoneNow: DateTime): LocalDate {
 	const today = isoDate(zoneNow);
@@ -518,8 +525,7 @@ function startAlone(r: chrono.ParsedResult, masked: string, parser: chrono.Chron
 }
 
 export function findDates(masked: string, env: DateEnv): DateCandidate[] {
-	const zoneNow = DateTime.fromJSDate(env.now, { zone: env.zone });
-	if (!zoneNow.isValid) throw new RangeError(`Invalid reference time or zone ${env.zone}`);
+	const zoneNow = zoneNowOf(env.now, env.zone);
 	const parser = DATE_READERS[env.locale];
 	// chrono reckons in the computer's zone, so it gets an instant whose wall time there is the parse zone's: every
 	// relative word, weekday and month and day then counts from the task's own clock, whatever the computer's zone (#88).

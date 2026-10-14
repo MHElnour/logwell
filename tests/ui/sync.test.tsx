@@ -394,6 +394,19 @@ describe("sync screen logic", () => {
 			expect(defaultOption(options, "Work")?.key).toBe("create");
 		});
 
+		it("#190: the project named like the list is found as a typed list name is, ignoring spaces, - and _", async () => {
+			const { s, work } = await setup();
+			s.tt.addProject("Home Office");
+			s.tt.addProject("home-office");
+			s.tt.addProject("Side_Projects");
+			const options = await load(s, work.id);
+			expect(defaultOption(options, "Side projects")?.label).toBe("Side_Projects");
+			// The exact name wins over a loose one, as for a typed list name.
+			expect(defaultOption(options, "home-office")?.label).toBe("home-office");
+			// Two loose matches and no exact one: nothing to tell them apart, so creating one is offered.
+			expect(defaultOption(options, "HomeOffice")?.key).toBe("create");
+		});
+
 		it("counts the open, non-repeating tasks a first sync sends", async () => {
 			const { s, work } = await setup();
 			await s.h.app.tasks.create({ title: "A", categoryId: work.id });

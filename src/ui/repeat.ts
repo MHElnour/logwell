@@ -1,5 +1,6 @@
 import { EVERY_WEEKDAY, MAX_INTERVAL, describeEnd, describeRule, monthDayText, normalizeRepeatRule, ordinal, periodsAfter, repeatEndProblem, repeatRuleProblem, seriesAnchor, singleVersionRecurrence, weekdayOf } from "../domain/recurrence";
 import { addDays, isValidLocalDate } from "../domain/time";
+import { canonical } from "../domain/text";
 import {
 	type LocalDate,
 	type MonthlyOn,
@@ -299,14 +300,9 @@ export function choiceOfDraft(d: RepeatDraft): RepeatChoice {
 	return { rule: normalizeRepeatRule(ruleOfDraft(d)), end: endOfDraft(d) };
 }
 
-/** Key-order-independent JSON, for comparing values that were built in different places. */
-function canonical(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-	if (value !== null && typeof value === "object") {
-		const o = value as Record<string, unknown>;
-		return `{${Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(",")}}`;
-	}
-	return JSON.stringify(value);
+/** Key-order-independent JSON (`canonical`), for comparing values that were built in different places. */
+function canonicalJson(value: unknown): string {
+	return JSON.stringify(canonical(value));
 }
 
 /**
@@ -316,5 +312,5 @@ function canonical(value: unknown): string {
 export function sameChoice(returned: RepeatChoice | null, given: RepeatChoice | null): boolean {
 	if (returned === null || given === null) return returned === given;
 	const rule = returned.rule.weekStart === undefined && given.rule.weekStart !== undefined ? { ...returned.rule, weekStart: given.rule.weekStart } : returned.rule;
-	return canonical({ rule, end: returned.end }) === canonical(given);
+	return canonicalJson({ rule, end: returned.end }) === canonicalJson(given);
 }

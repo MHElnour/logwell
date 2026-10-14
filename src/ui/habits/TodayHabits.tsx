@@ -7,7 +7,7 @@ import { ICON } from "../icons";
 import { HabitControl } from "./HabitControl";
 import { HabitIcon, HabitRow } from "./HabitRow";
 import { habitsOn } from "./HabitGroups";
-import { doneOn, progressText } from "./format";
+import { doneOn, metText, progressText } from "./format";
 
 // Habits in Today: a block above the task list in List mode and the first column in Board mode. Only the
 // Today view shows them, and only while a habit that is not archived exists. They are not tasks: they never
@@ -58,7 +58,7 @@ export function TodayHabitsBlock(props: { host: UiHost; today: LocalDate }) {
 					<span class="cp-today-habits-name">Habits</span>
 					<span class="cp-today-habits-count">
 						<span class="cp-sr-only"> · </span>
-						{`${t.met} of ${t.scheduled.length} done`}
+						{metText(t.met, t.scheduled.length)}
 					</span>
 				</h3>
 				<button type="button" class="cp-today-habits-link" onClick={() => host.openSection("habits")}>

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { classify, LIMITS } from "../../e2e/limits/classify";
 import { type Cell, formatCsv, parseCsv } from "../../e2e/limits/csv";
 import { generateDb } from "../../e2e/limits/generate";
-import { loadText } from "../../src/persistence/CpbaseStore";
+import { loadWithIssues } from "../persistence/fixtures";
 import { INBOX_ID } from "../../src/domain/types";
 import { CURRENT_SCHEMA_VERSION, type DbData } from "../../src/persistence/schema";
 
@@ -14,11 +14,7 @@ const TODAY = "2026-10-06";
 const OPTS = { today: TODAY, zone: "Europe/Berlin", dbId: "limits-test-db" };
 const NOW = "2026-10-06T08:00:00.000Z";
 
-function load(text: string): { data: DbData; issues: string[] } {
-	const r = loadText(text, NOW);
-	if (r.kind !== "ok") throw new Error(`load failed: ${JSON.stringify(r)}`);
-	return { data: r.data, issues: r.issues };
-}
+const load = (text: string) => loadWithIssues(text, NOW);
 
 const matrixText = readFileSync(new URL("./limits-matrix.csv", import.meta.url), "utf8");
 const matrix = parseCsv(matrixText);
