@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, clockTimeOf, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, minuteInstant, instantInZone, DAY_MIN, wallClockOf, wallDateOf, wallMinutesOf, monthLength, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime } from "../../src/domain/time";
+import { addDays, dateOf, dateSpecDate, dateSpecDisplayLocal, dateSpecSortValue, clockTimeOf, dayNum, fmtMin, latinDigits, instantDay, instantFromNow, isoWeekdayOf, isoWeekdayOfDay, isValidDateSpec, isValidLocalDate, isValidZone, minuteInstant, instantInZone, DAY_MIN, wallClockOf, wallDateOf, wallMinutesOf, monthLength, resetTimeCaches, resolveWallTime, timeCacheSizes, todayIn, wallTimeToDateTime, utcDateOf } from "../../src/domain/time";
 import { FakeClock } from "../helpers";
 import fc from "fast-check";
 import { monthStats } from "../../src/domain/habits";
@@ -455,5 +455,25 @@ describe("fast paths and caches", () => {
 			expect(timeCacheSizes().zones).toBeLessThanOrEqual(2048);
 			expect(isValidZone("Europe/Berlin")).toBe(true);
 		});
+	});
+});
+
+describe("utcDateOf", () => {
+	it.each([
+		{ name: "a Date", at: new Date("2026-10-01T10:00:00.000Z"), day: "2026-10-01" },
+		{ name: "an Instant", at: "2026-10-01T10:00:00.000Z", day: "2026-10-01" },
+		{ name: "the last millisecond of a UTC day", at: "2026-10-01T23:59:59.999Z", day: "2026-10-01" },
+		{ name: "the first millisecond of the next UTC day", at: new Date("2026-10-02T00:00:00.000Z"), day: "2026-10-02" },
+		{ name: "an instant with an offset, read in UTC", at: "2026-10-02T01:30:00.000+02:00", day: "2026-10-01" },
+		{ name: "text that is not an instant", at: "not a date", day: null },
+		{ name: "an invalid Date", at: new Date(Number.NaN), day: null },
+	])("reads the UTC day of $name", ({ at, day }) => {
+		expect(utcDateOf(at)).toBe(day);
+	});
+
+	it("leaves the instantDay cache alone", () => {
+		resetTimeCaches();
+		utcDateOf("2026-10-01T10:00:00.000Z");
+		expect(timeCacheSizes().instantDays).toBe(0);
 	});
 });

@@ -1,6 +1,6 @@
 import type { Clock } from "../domain/ports";
 import { fileNameOf, joinPath } from "../domain/notes";
-import { instantDay, instantFromNow } from "../domain/time";
+import { instantFromNow, utcDateOf } from "../domain/time";
 import type { FileGateway } from "./gateway";
 import { type JournalEntry, journalLine, parseJournal } from "./journal";
 import { DB_EXTENSION, isSafeId } from "./schema";
@@ -157,7 +157,7 @@ export class BackupStore {
 	private dailyDate: string | null = null;
 
 	async hasDailySnapshot(date: Date): Promise<boolean> {
-		const day = instantDay(date.toISOString(), "UTC") ?? "";
+		const day = utcDateOf(date) ?? "";
 		if (this.dailyDate === day) return true;
 		const found = (await this.fs.list(this.snapshotDir)).some((p) => {
 			const parsed = parseSnapshotName(p);
@@ -288,7 +288,7 @@ export class BackupStore {
 			list.push({ path, stamp: parsed.stamp });
 			byKind.set(parsed.kind, list);
 		}
-		const cutoff = instantFromNow(this.clock, -DAILY_KEEP_DAYS * 24 * 3600 * 1000).slice(0, 10);
+		const cutoff = utcDateOf(instantFromNow(this.clock, -DAILY_KEEP_DAYS * 24 * 3600 * 1000)) ?? "";
 		for (const [kind, list] of byKind) {
 			// Newest first, snapshots stamped in the future after the rest, so a
 			// future stamp evicts first and never keeps real snapshots out.

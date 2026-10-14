@@ -313,6 +313,12 @@ export function instantDay(instant: Instant, zone: string): LocalDate | null {
 	return day;
 }
 
+/** The UTC calendar day of an instant (a Date or ISO text), or null when it does not parse; uncached, for per-save and per-export paths. */
+export function utcDateOf(at: Date | Instant): LocalDate | null {
+	const ms = typeof at === "string" ? Date.parse(at) : at.getTime();
+	return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
+}
+
 /** The calendar date a spec falls on, seen from the display zone. */
 export function dateSpecDate(spec: DateSpec, displayZone: string): LocalDate {
 	if (spec.kind === "date") return spec.date;
