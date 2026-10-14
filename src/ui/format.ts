@@ -1,4 +1,3 @@
-
 import { dateTone as dayTone } from "../app/views";
 import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, instantInZone, utcDay, wallClockOf, wallDateOf } from "../domain/time";
 import type { DateSpec, LocalDate, Priority, Task, WeekStart } from "../domain/types";
@@ -80,8 +79,6 @@ const WEEKDAY_INITIALS: Readonly<Record<WeekStart, string[]>> = {
 export function weekdayInitials(weekStart: WeekStart): string[] {
 	return WEEKDAY_INITIALS[weekStart];
 }
-
-
 
 // -- Priority and row dates ----------------------------------------------------
 

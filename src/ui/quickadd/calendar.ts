@@ -14,8 +14,6 @@ interface CalDay {
 
 export const WEEKDAY_NAMES = WEEKDAYS.map((d) => WEEKDAY_LONG[d]);
 
-
-
 /** Whole weeks (4 to 6 rows) covering the month, starting on the week-start day. */
 export function monthGrid(ym: YearMonth, weekStart: WeekStart): CalDay[] {
 	const first = monthStart(ym);

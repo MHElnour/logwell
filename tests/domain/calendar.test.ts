@@ -2,7 +2,8 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type CalendarContext, dayHours, layoutMonth, layoutWeek, monthGrid, type TimedSegment, weekDays, type WeekStart, weekStartOf } from "../../src/domain/calendar";
 import { isDeadlineMissed } from "../../src/domain/queries";
-import type { DateSpec, Task } from "../../src/domain/types";
+import type { Task } from "../../src/domain/types";
+import { day, timed } from "../persistence/fixtures";
 import { dateOf, dayNum, weekStartOfDay } from "../../src/domain/time";
 
 describe("calendar layout", () => {
@@ -30,9 +31,6 @@ describe("calendar layout", () => {
 			...patch,
 		};
 	}
-
-	const date = (d: string): DateSpec => ({ kind: "date", date: d });
-	const at = (local: string, tz = "Europe/Berlin"): DateSpec => ({ kind: "datetime", local, tz });
 
 	// 2026-10-02 is a Friday; the week Mon Sep 28 .. Sun Oct 4 crosses a month.
 	const ctx: CalendarContext = { zone: "Europe/Berlin", today: "2026-10-02", now: "2026-10-02T10:00:00.000Z", weekStart: "MO", records: new Map() };
@@ -248,7 +246,7 @@ describe("calendar layout", () => {
 		});
 
 		it("places a timed task on its start column and wall minute", () => {
-			const t = task("a", { scheduled: at("2026-10-02T19:00"), plannedDurationMin: 45 });
+			const t = task("a", { scheduled: timed("2026-10-02T19:00"), plannedDurationMin: 45 });
 			const [s] = seg([t], "2026-10-02");
 			expect(s).toMatchObject({
 				date: "2026-10-02",
@@ -264,7 +262,7 @@ describe("calendar layout", () => {
 		});
 
 		it("places date-only tasks in the all-day row and never moves them across zones", () => {
-			const t = task("d", { scheduled: date("2026-10-03") });
+			const t = task("d", { scheduled: day("2026-10-03") });
 			for (const zone of ["Pacific/Kiritimati", "Pacific/Pago_Pago", "UTC"]) {
 				const layout = layoutWeek([t], WEEK, { ...ctx, zone });
 				expect(layout.allDay.get("2026-10-03")).toEqual([{ kind: "date", task: t, date: "2026-10-03", past: false, occurrence: null }]);
@@ -274,7 +272,7 @@ describe("calendar layout", () => {
 
 		it("converts a task stored in another zone to the display zone", () => {
 			// 19:00 in New York (EDT, UTC-4) is 01:00 on the next day in Berlin (CEST, UTC+2).
-			const t = task("ny", { scheduled: at("2026-10-02T19:00", "America/New_York"), plannedDurationMin: 30 });
+			const t = task("ny", { scheduled: timed("2026-10-02T19:00", "America/New_York"), plannedDurationMin: 30 });
 			expect(seg([t], "2026-10-02")).toEqual([]);
 			const [s] = seg([t], "2026-10-03");
 			expect(s?.startMin).toBe(60);
@@ -282,19 +280,19 @@ describe("calendar layout", () => {
 		});
 
 		it("shortcuts the same-zone case without changing the result", () => {
-			const t = task("same", { scheduled: at("2026-10-02T09:15", "UTC"), plannedDurationMin: 15 });
+			const t = task("same", { scheduled: timed("2026-10-02T09:15", "UTC"), plannedDurationMin: 15 });
 			const [s] = seg([t], "2026-10-02", { ...ctx, zone: "UTC" });
 			expect(s?.startMin).toBe(555);
 		});
 
 		it("gives a task with no duration 30 minutes and flags it", () => {
-			const t = task("n", { scheduled: at("2026-10-02T08:00") });
+			const t = task("n", { scheduled: timed("2026-10-02T08:00") });
 			const [s] = seg([t], "2026-10-02");
 			expect(s).toMatchObject({ startMin: 480, endMin: 510, durationMin: 30, noDuration: true });
 		});
 
 		it("splits a block that crosses midnight into two segments", () => {
-			const t = task("late", { scheduled: at("2026-10-02T23:30"), plannedDurationMin: 60 });
+			const t = task("late", { scheduled: timed("2026-10-02T23:30"), plannedDurationMin: 60 });
 			const [first] = seg([t], "2026-10-02");
 			const [second] = seg([t], "2026-10-03");
 			expect(first).toMatchObject({ startMin: 1410, endMin: 1440, durationMin: 60, continued: false });
@@ -302,20 +300,20 @@ describe("calendar layout", () => {
 		});
 
 		it("drops the continued segment when the next day is outside the visible days", () => {
-			const t = task("sun", { scheduled: at("2026-10-04T23:30"), plannedDurationMin: 60 });
+			const t = task("sun", { scheduled: timed("2026-10-04T23:30"), plannedDurationMin: 60 });
 			const layout = layoutWeek([t], WEEK, ctx);
 			expect(layout.timed.get("2026-10-04")).toHaveLength(1);
 			expect([...layout.timed.keys()]).toEqual(WEEK);
 		});
 
 		it("shows the continued part of a block that started the day before the visible days", () => {
-			const t = task("pre", { scheduled: at("2026-09-27T23:00"), plannedDurationMin: 120 });
+			const t = task("pre", { scheduled: timed("2026-09-27T23:00"), plannedDurationMin: 120 });
 			const [s] = seg([t], "2026-09-28");
 			expect(s).toMatchObject({ startMin: 0, endMin: 60, continued: true, durationMin: 120 });
 		});
 
 		it("splits a block longer than a day across several days", () => {
-			const t = task("long", { scheduled: at("2026-09-30T12:00"), plannedDurationMin: 3000 });
+			const t = task("long", { scheduled: timed("2026-09-30T12:00"), plannedDurationMin: 3000 });
 			expect(seg([t], "2026-09-30")[0]).toMatchObject({ startMin: 720, endMin: 1440, continued: false });
 			expect(seg([t], "2026-10-01")[0]).toMatchObject({ startMin: 0, endMin: 1440, continued: true });
 			expect(seg([t], "2026-10-02")[0]).toMatchObject({ startMin: 0, endMin: 840, continued: true });
@@ -323,7 +321,7 @@ describe("calendar layout", () => {
 		});
 
 		it("an absurd duration does not blow up", () => {
-			const t = task("huge", { scheduled: at("2026-09-28T00:00"), plannedDurationMin: 1_000_000_000 });
+			const t = task("huge", { scheduled: timed("2026-09-28T00:00"), plannedDurationMin: 1_000_000_000 });
 			const layout = layoutWeek([t], WEEK, ctx);
 			for (const d of WEEK) expect(layout.timed.get(d)).toHaveLength(1);
 		});
@@ -332,7 +330,7 @@ describe("calendar layout", () => {
 			const zone = "America/New_York";
 			const days = ["2026-11-01"];
 			const c = { zone, today: "2026-11-01", now: "2026-11-01T00:00:00.000Z", weekStart: "MO" as const, records: new Map() };
-			const t = task("fb", { scheduled: at("2026-11-01T01:30", zone), plannedDurationMin: 60 });
+			const t = task("fb", { scheduled: timed("2026-11-01T01:30", zone), plannedDurationMin: 60 });
 			const [s] = seg([t], "2026-11-01", c, days);
 			expect(s).toMatchObject({ startMin: 90, endMin: 150 });
 			expect(layoutWeek([t], days, c).hours[0]?.repeated).toEqual({ startMin: 60, endMin: 120 });
@@ -346,23 +344,23 @@ describe("calendar layout", () => {
 			};
 
 			it("is plain wall arithmetic on a normal day", () => {
-				const t = task("n", { scheduled: at("2026-10-02T19:00"), plannedDurationMin: 45 });
+				const t = task("n", { scheduled: timed("2026-10-02T19:00"), plannedDurationMin: 45 });
 				expect(seg([t], "2026-10-02")[0]?.endLocal).toBe("19:45");
 			});
 
 			it("spring forward: 01:30 + 60 min ends at 03:30, not 02:30", () => {
-				const t = task("s", { scheduled: at("2026-03-08T01:30", zone), plannedDurationMin: 60 });
+				const t = task("s", { scheduled: timed("2026-03-08T01:30", zone), plannedDurationMin: 60 });
 				const [s] = run(t, "2026-03-08");
 				expect(s).toMatchObject({ startMin: 90, endMin: 150, endLocal: "03:30" });
 			});
 
 			it("spring forward: a block spanning the skipped hour (01:00 + 120 min) ends at 04:00", () => {
-				const t = task("s2", { scheduled: at("2026-03-08T01:00", zone), plannedDurationMin: 120 });
+				const t = task("s2", { scheduled: timed("2026-03-08T01:00", zone), plannedDurationMin: 120 });
 				expect(run(t, "2026-03-08")[0]?.endLocal).toBe("04:00");
 			});
 
 			it("fall back: 00:30 + 120 min ends at 01:30 (second occurrence), not 02:30", () => {
-				const t = task("f", { scheduled: at("2026-11-01T00:30", zone), plannedDurationMin: 120 });
+				const t = task("f", { scheduled: timed("2026-11-01T00:30", zone), plannedDurationMin: 120 });
 				const [s] = run(t, "2026-11-01");
 				expect(s).toMatchObject({ startMin: 30, endMin: 150, endLocal: "01:30" });
 			});
@@ -379,7 +377,7 @@ describe("calendar layout", () => {
 
 			it("a midnight block on a spring-forward day splits and both halves carry the block's end", () => {
 				// 23:30 EST on Mar 7 + 180 min = 02:30 EST = 03:30 EDT on Mar 8.
-				const t = task("m", { scheduled: at("2026-03-07T23:30", zone), plannedDurationMin: 180 });
+				const t = task("m", { scheduled: timed("2026-03-07T23:30", zone), plannedDurationMin: 180 });
 				const days = ["2026-03-07", "2026-03-08"];
 				const c = { zone, today: "2026-03-07", now: "2026-01-01T00:00:00.000Z", weekStart: "MO" as const, records: new Map() };
 				const layout = layoutWeek([t], days, c);
@@ -389,7 +387,7 @@ describe("calendar layout", () => {
 
 			it("a midnight block on a fall-back day splits and both halves carry the block's end", () => {
 				// 23:30 EDT on Oct 31 + 180 min = 02:30 EDT = 01:30 EST on Nov 1.
-				const t = task("m2", { scheduled: at("2026-10-31T23:30", zone), plannedDurationMin: 180 });
+				const t = task("m2", { scheduled: timed("2026-10-31T23:30", zone), plannedDurationMin: 180 });
 				const days = ["2026-10-31", "2026-11-01"];
 				const c = { zone, today: "2026-10-31", now: "2026-01-01T00:00:00.000Z", weekStart: "MO" as const, records: new Map() };
 				const layout = layoutWeek([t], days, c);
@@ -398,19 +396,19 @@ describe("calendar layout", () => {
 			});
 
 			it("converts from the task's zone: 19:00 New York on Oct 2 is 01:00 Berlin, +30 min ends 01:30", () => {
-				const t = task("c", { scheduled: at("2026-10-02T19:00", zone), plannedDurationMin: 30 });
+				const t = task("c", { scheduled: timed("2026-10-02T19:00", zone), plannedDurationMin: 30 });
 				expect(seg([t], "2026-10-03")[0]?.endLocal).toBe("01:30");
 			});
 
 			it("no-duration blocks end 30 minutes after the start", () => {
-				const t = task("nd", { scheduled: at("2026-10-02T08:00") });
+				const t = task("nd", { scheduled: timed("2026-10-02T08:00") });
 				expect(seg([t], "2026-10-02")[0]?.endLocal).toBe("08:30");
 			});
 		});
 
 		it("places subtasks like any task", () => {
-			const parent = task("p", { scheduled: date("2026-10-02") });
-			const sub = task("s", { parentId: "p", scheduled: at("2026-10-02T10:00") });
+			const parent = task("p", { scheduled: day("2026-10-02") });
+			const sub = task("s", { parentId: "p", scheduled: timed("2026-10-02T10:00") });
 			const layout = layoutWeek([parent, sub], WEEK, ctx);
 			expect(layout.allDay.get("2026-10-02")).toHaveLength(1);
 			expect(layout.timed.get("2026-10-02")).toHaveLength(1);
@@ -419,10 +417,10 @@ describe("calendar layout", () => {
 		it("ignores tasks outside the visible days and tasks with neither date", () => {
 			const layout = layoutWeek(
 				[
-					task("far", { scheduled: date("2026-12-01") }),
+					task("far", { scheduled: day("2026-12-01") }),
 					task("none"),
-					task("farT", { scheduled: at("2026-12-01T10:00") }),
-					task("farD", { deadline: date("2026-12-01") }),
+					task("farT", { scheduled: timed("2026-12-01T10:00") }),
+					task("farD", { deadline: day("2026-12-01") }),
 				],
 				WEEK,
 				ctx,
@@ -434,7 +432,7 @@ describe("calendar layout", () => {
 		});
 
 		it("accepts any iterable of tasks", () => {
-			const layout = layoutWeek(new Set([task("a", { scheduled: date("2026-10-02") })]), WEEK, ctx);
+			const layout = layoutWeek(new Set([task("a", { scheduled: day("2026-10-02") })]), WEEK, ctx);
 			expect(layout.allDay.get("2026-10-02")).toHaveLength(1);
 		});
 	});
@@ -443,10 +441,10 @@ describe("calendar layout", () => {
 		it("orders all-day entries as date entries then deadlines, each by sort key", () => {
 			const layout = layoutWeek(
 				[
-					task("b", { sortKey: "B", deadline: date("2026-10-02") }),
-					task("z", { sortKey: "Z", scheduled: date("2026-10-02") }),
-					task("a", { sortKey: "A", deadline: date("2026-10-02") }),
-					task("m", { sortKey: "M", scheduled: date("2026-10-02") }),
+					task("b", { sortKey: "B", deadline: day("2026-10-02") }),
+					task("z", { sortKey: "Z", scheduled: day("2026-10-02") }),
+					task("a", { sortKey: "A", deadline: day("2026-10-02") }),
+					task("m", { sortKey: "M", scheduled: day("2026-10-02") }),
 				],
 				WEEK,
 				ctx,
@@ -456,30 +454,30 @@ describe("calendar layout", () => {
 		});
 
 		it("orders timed segments by start, then longer first, then sort key", () => {
-			const day = "2026-10-02";
+			const onDay = "2026-10-02";
 			const got = seg(
 				[
-					task("late", { sortKey: "A", scheduled: at(`${day}T11:00`), plannedDurationMin: 60 }),
-					task("shortB", { sortKey: "B", scheduled: at(`${day}T09:00`), plannedDurationMin: 30 }),
-					task("long", { sortKey: "C", scheduled: at(`${day}T09:00`), plannedDurationMin: 90 }),
-					task("shortA", { sortKey: "A", scheduled: at(`${day}T09:00`), plannedDurationMin: 30 }),
+					task("late", { sortKey: "A", scheduled: timed(`${onDay}T11:00`), plannedDurationMin: 60 }),
+					task("shortB", { sortKey: "B", scheduled: timed(`${onDay}T09:00`), plannedDurationMin: 30 }),
+					task("long", { sortKey: "C", scheduled: timed(`${onDay}T09:00`), plannedDurationMin: 90 }),
+					task("shortA", { sortKey: "A", scheduled: timed(`${onDay}T09:00`), plannedDurationMin: 30 }),
 				],
-				day,
+				onDay,
 			).map((s) => s.task.id);
 			expect(got).toEqual(["long", "shortA", "shortB", "late"]);
 		});
 	});
 
 	describe("overlap columns", () => {
-		const day = "2026-10-02";
+		const onDay = "2026-10-02";
 		function block(id: string, startMin: number, len: number): Task {
 			const h = String(Math.floor(startMin / 60)).padStart(2, "0");
 			const m = String(startMin % 60).padStart(2, "0");
-			return task(id, { scheduled: at(`${day}T${h}:${m}`), plannedDurationMin: len });
+			return task(id, { scheduled: timed(`${onDay}T${h}:${m}`), plannedDurationMin: len });
 		}
 		function cols(tasks: Task[]): Record<string, [number, number]> {
 			const out: Record<string, [number, number]> = {};
-			for (const s of seg(tasks, day)) out[s.task.id] = [s.column, s.columns];
+			for (const s of seg(tasks, onDay)) out[s.task.id] = [s.column, s.columns];
 			return out;
 		}
 
@@ -540,7 +538,7 @@ describe("calendar layout", () => {
 			fc.assert(
 				fc.property(input, (items) => {
 					const tasks = items.map((it, i) => block(`t${i}`, it.start, it.len));
-					const segments = seg(tasks, day);
+					const segments = seg(tasks, onDay);
 					for (const s of segments) {
 						expect(s.column).toBeGreaterThanOrEqual(0);
 						expect(s.column).toBeLessThan(s.columns);
@@ -565,37 +563,37 @@ describe("calendar layout", () => {
 		}
 
 		it("a timed task that ended 1 minute ago is past", () => {
-			expect(timedPast({ scheduled: at("2026-10-02T11:00"), plannedDurationMin: 59 })).toBe(true);
+			expect(timedPast({ scheduled: timed("2026-10-02T11:00"), plannedDurationMin: 59 })).toBe(true);
 		});
 
 		it("a running timed task is not past", () => {
-			expect(timedPast({ scheduled: at("2026-10-02T11:00"), plannedDurationMin: 90 })).toBe(false);
+			expect(timedPast({ scheduled: timed("2026-10-02T11:00"), plannedDurationMin: 90 })).toBe(false);
 		});
 
 		it("a task ending exactly now is not past yet (end < now)", () => {
-			expect(timedPast({ scheduled: at("2026-10-02T11:00"), plannedDurationMin: 60 })).toBe(false);
+			expect(timedPast({ scheduled: timed("2026-10-02T11:00"), plannedDurationMin: 60 })).toBe(false);
 		});
 
 		it("a future timed task is not past", () => {
-			expect(timedPast({ scheduled: at("2026-10-02T15:00"), plannedDurationMin: 30 })).toBe(false);
+			expect(timedPast({ scheduled: timed("2026-10-02T15:00"), plannedDurationMin: 30 })).toBe(false);
 		});
 
 		it("a timed task with no duration uses the 30 minute default for its end", () => {
 			// ends 11:30 Berlin, before now 12:00
-			expect(timedPast({ scheduled: at("2026-10-02T11:00") })).toBe(true);
+			expect(timedPast({ scheduled: timed("2026-10-02T11:00") })).toBe(true);
 			// ends 12:30 Berlin, after now
-			expect(timedPast({ scheduled: at("2026-10-02T12:00") })).toBe(false);
+			expect(timedPast({ scheduled: timed("2026-10-02T12:00") })).toBe(false);
 		});
 
 		it("the end instant is computed in the task's own zone", () => {
 			// 06:00 New York (EDT) = 10:00Z = now; with 30 minutes it ends after now.
-			expect(timedPast({ scheduled: at("2026-10-02T06:00", "America/New_York"), plannedDurationMin: 30 })).toBe(false);
+			expect(timedPast({ scheduled: timed("2026-10-02T06:00", "America/New_York"), plannedDurationMin: 30 })).toBe(false);
 			// 05:00 New York = 09:00Z, 30 minutes: ended 30 minutes ago.
-			expect(timedPast({ scheduled: at("2026-10-02T05:00", "America/New_York"), plannedDurationMin: 30 })).toBe(true);
+			expect(timedPast({ scheduled: timed("2026-10-02T05:00", "America/New_York"), plannedDurationMin: 30 })).toBe(true);
 		});
 
 		it("both segments of a split block share the block's past flag", () => {
-			const t = task("split", { scheduled: at("2026-10-01T23:30"), plannedDurationMin: 60 });
+			const t = task("split", { scheduled: timed("2026-10-01T23:30"), plannedDurationMin: 60 });
 			const layout = layoutWeek([t], WEEK, ctx);
 			expect(layout.timed.get("2026-10-01")?.[0]?.past).toBe(true);
 			expect(layout.timed.get("2026-10-02")?.[0]?.past).toBe(true);
@@ -604,9 +602,9 @@ describe("calendar layout", () => {
 		it("date-only entries are past when the date is before today", () => {
 			const layout = layoutWeek(
 				[
-					task("y", { scheduled: date("2026-10-01") }),
-					task("t", { scheduled: date("2026-10-02") }),
-					task("n", { scheduled: date("2026-10-03") }),
+					task("y", { scheduled: day("2026-10-01") }),
+					task("t", { scheduled: day("2026-10-02") }),
+					task("n", { scheduled: day("2026-10-03") }),
 				],
 				WEEK,
 				ctx,
@@ -624,8 +622,8 @@ describe("calendar layout", () => {
 			};
 			const layout = layoutWeek(
 				[
-					task("d", { ...done, scheduled: date("2026-10-01"), deadline: date("2026-09-30") }),
-					task("t", { ...done, scheduled: at("2026-10-02T08:00"), plannedDurationMin: 30 }),
+					task("d", { ...done, scheduled: day("2026-10-01"), deadline: day("2026-09-30") }),
+					task("t", { ...done, scheduled: timed("2026-10-02T08:00"), plannedDurationMin: 30 }),
 				],
 				WEEK,
 				ctx,
@@ -642,7 +640,7 @@ describe("calendar layout", () => {
 
 	describe("deadline entries", () => {
 		it("a date deadline shows in the all-day row on its date", () => {
-			const t = task("d", { deadline: date("2026-10-05") });
+			const t = task("d", { deadline: day("2026-10-05") });
 			const days = weekDays("2026-10-05", "MO");
 			const layout = layoutWeek([t], days, ctx);
 			expect(layout.allDay.get("2026-10-05")).toEqual([{ kind: "deadline", task: t, date: "2026-10-05", missed: false, occurrence: null }]);
@@ -650,7 +648,7 @@ describe("calendar layout", () => {
 
 		it("a datetime deadline shows in the all-day row on its display-zone date", () => {
 			// 23:30 in New York on Oct 2 is 05:30 on Oct 3 in Berlin.
-			const t = task("dt", { deadline: at("2026-10-02T23:30", "America/New_York") });
+			const t = task("dt", { deadline: timed("2026-10-02T23:30", "America/New_York") });
 			const layout = layoutWeek([t], WEEK, ctx);
 			expect(layout.allDay.get("2026-10-02")).toEqual([]);
 			expect(layout.allDay.get("2026-10-03")).toEqual([
@@ -661,14 +659,14 @@ describe("calendar layout", () => {
 
 		it("missed matches isDeadlineMissed for date and datetime deadlines", () => {
 			const cases: Task[] = [
-				task("yd", { deadline: date("2026-10-01") }),
-				task("td", { deadline: date("2026-10-02") }),
-				task("fd", { deadline: date("2026-10-03") }),
-				task("ydt", { deadline: at("2026-10-01T09:00") }),
-				task("tdt", { deadline: at("2026-10-02T09:00") }),
-				task("done", { deadline: date("2026-10-01"), status: "completed", completedAt: "2026-10-01T10:00:00.000Z" }),
+				task("yd", { deadline: day("2026-10-01") }),
+				task("td", { deadline: day("2026-10-02") }),
+				task("fd", { deadline: day("2026-10-03") }),
+				task("ydt", { deadline: timed("2026-10-01T09:00") }),
+				task("tdt", { deadline: timed("2026-10-02T09:00") }),
+				task("done", { deadline: day("2026-10-01"), status: "completed", completedAt: "2026-10-01T10:00:00.000Z" }),
 				// Deadline instant is on Oct 1 in New York but Oct 2 in Berlin: not missed in Berlin.
-				task("zone", { deadline: at("2026-10-01T20:00", "America/New_York") }),
+				task("zone", { deadline: timed("2026-10-01T20:00", "America/New_York") }),
 			];
 			const layout = layoutWeek(cases, WEEK, ctx);
 			const entries = [...layout.allDay.values()].flat();
@@ -683,14 +681,14 @@ describe("calendar layout", () => {
 		});
 
 		it("a task with a schedule and a deadline yields both entries", () => {
-			const t = task("both", { scheduled: at("2026-10-02T09:00"), plannedDurationMin: 30, deadline: date("2026-10-04") });
+			const t = task("both", { scheduled: timed("2026-10-02T09:00"), plannedDurationMin: 30, deadline: day("2026-10-04") });
 			const layout = layoutWeek([t], WEEK, ctx);
 			expect(layout.timed.get("2026-10-02")).toHaveLength(1);
 			expect(layout.allDay.get("2026-10-04")).toEqual([{ kind: "deadline", task: t, date: "2026-10-04", missed: false, occurrence: null }]);
 		});
 
 		it("a task with a schedule and a deadline on the same day yields both entries on that day", () => {
-			const t = task("same", { scheduled: date("2026-10-03"), deadline: date("2026-10-03") });
+			const t = task("same", { scheduled: day("2026-10-03"), deadline: day("2026-10-03") });
 			const got = layoutWeek([t], WEEK, ctx).allDay.get("2026-10-03")?.map((e) => e.kind);
 			expect(got).toEqual(["date", "deadline"]);
 		});
@@ -723,15 +721,15 @@ describe("calendar layout", () => {
 		});
 
 		it("shows the first 3 and counts the rest as '+k more'", () => {
-			const day = "2026-10-08";
+			const onDay = "2026-10-08";
 			const tasks = [
-				task("d1", { sortKey: "1", scheduled: date(day) }),
-				task("d2", { sortKey: "2", scheduled: date(day) }),
-				task("t1", { sortKey: "3", scheduled: at(`${day}T08:00`) }),
-				task("t2", { sortKey: "4", scheduled: at(`${day}T09:00`) }),
-				task("dl", { sortKey: "5", deadline: date(day) }),
+				task("d1", { sortKey: "1", scheduled: day(onDay) }),
+				task("d2", { sortKey: "2", scheduled: day(onDay) }),
+				task("t1", { sortKey: "3", scheduled: timed(`${onDay}T08:00`) }),
+				task("t2", { sortKey: "4", scheduled: timed(`${onDay}T09:00`) }),
+				task("dl", { sortKey: "5", deadline: day(onDay) }),
 			];
-			const c = cell(layoutMonth(tasks, grid, month, ctx), day);
+			const c = cell(layoutMonth(tasks, grid, month, ctx), onDay);
 			expect(c.count).toBe(5);
 			expect(c.shown).toHaveLength(3);
 			expect(c.more).toBe(2);
@@ -739,51 +737,51 @@ describe("calendar layout", () => {
 		});
 
 		it("orders date entries, then timed by start, then deadlines", () => {
-			const day = "2026-10-08";
+			const onDay = "2026-10-08";
 			const tasks = [
-				task("dl", { sortKey: "A", deadline: date(day) }),
-				task("t2", { sortKey: "B", scheduled: at(`${day}T09:00`) }),
-				task("t1", { sortKey: "C", scheduled: at(`${day}T08:00`) }),
-				task("d", { sortKey: "D", scheduled: date(day) }),
+				task("dl", { sortKey: "A", deadline: day(onDay) }),
+				task("t2", { sortKey: "B", scheduled: timed(`${onDay}T09:00`) }),
+				task("t1", { sortKey: "C", scheduled: timed(`${onDay}T08:00`) }),
+				task("d", { sortKey: "D", scheduled: day(onDay) }),
 			];
-			const c = cell(layoutMonth(tasks, grid, month, ctx, 10), day);
+			const c = cell(layoutMonth(tasks, grid, month, ctx, 10), onDay);
 			expect(c.shown.map((e) => e.task.id)).toEqual(["d", "t1", "t2", "dl"]);
 			expect(c.more).toBe(0);
 			expect(c.count).toBe(4);
 		});
 
 		it("honors maxTitles", () => {
-			const day = "2026-10-08";
-			const tasks = [1, 2, 3].map((i) => task(`d${i}`, { sortKey: String(i), scheduled: date(day) }));
-			expect(cell(layoutMonth(tasks, grid, month, ctx, 2), day)).toMatchObject({ count: 3, more: 1 });
-			expect(cell(layoutMonth(tasks, grid, month, ctx, 2), day).shown).toHaveLength(2);
-			expect(cell(layoutMonth(tasks, grid, month, ctx, 0), day)).toMatchObject({ count: 3, more: 3, shown: [] });
+			const onDay = "2026-10-08";
+			const tasks = [1, 2, 3].map((i) => task(`d${i}`, { sortKey: String(i), scheduled: day(onDay) }));
+			expect(cell(layoutMonth(tasks, grid, month, ctx, 2), onDay)).toMatchObject({ count: 3, more: 1 });
+			expect(cell(layoutMonth(tasks, grid, month, ctx, 2), onDay).shown).toHaveLength(2);
+			expect(cell(layoutMonth(tasks, grid, month, ctx, 0), onDay)).toMatchObject({ count: 3, more: 3, shown: [] });
 		});
 
 		it("counts each entry of a task that has both a schedule and a deadline that day", () => {
-			const day = "2026-10-08";
+			const onDay = "2026-10-08";
 			const c = cell(
-				layoutMonth([task("both", { scheduled: date(day), deadline: date(day) })], grid, month, ctx),
-				day,
+				layoutMonth([task("both", { scheduled: day(onDay), deadline: day(onDay) })], grid, month, ctx),
+				onDay,
 			);
 			expect(c.count).toBe(2);
 			expect(c.shown).toHaveLength(2);
 		});
 
 		it("does not repeat the continued part of a block that crossed midnight", () => {
-			const t = task("late", { scheduled: at("2026-10-08T23:30"), plannedDurationMin: 90 });
+			const t = task("late", { scheduled: timed("2026-10-08T23:30"), plannedDurationMin: 90 });
 			const cells = layoutMonth([t], grid, month, ctx);
 			expect(cell(cells, "2026-10-08").count).toBe(1);
 			expect(cell(cells, "2026-10-09").count).toBe(0);
 		});
 
 		it("places entries in the leading and trailing out-of-month cells too", () => {
-			const t = task("lead", { scheduled: date("2026-09-29") });
+			const t = task("lead", { scheduled: day("2026-09-29") });
 			expect(cell(layoutMonth([t], grid, month, ctx), "2026-09-29")).toMatchObject({ inMonth: false, count: 1 });
 		});
 
 		it("exposes a timed segment as the entry for a timed task", () => {
-			const t = task("t", { scheduled: at("2026-10-08T08:00"), plannedDurationMin: 45 });
+			const t = task("t", { scheduled: timed("2026-10-08T08:00"), plannedDurationMin: 45 });
 			const [entry] = cell(layoutMonth([t], grid, month, ctx), "2026-10-08").shown;
 			expect(entry).toMatchObject({ startMin: 480, endMin: 525, durationMin: 45 });
 		});
@@ -809,9 +807,9 @@ describe("calendar layout", () => {
 							for (const dur of [null, 30, 1500, 3 * 1440, 10 * 1440]) {
 								tasks.push(
 									task(`e${n++}`, {
-										scheduled: at(`${addD(dayBase, off)}T${time}`, tz),
+										scheduled: timed(`${addD(dayBase, off)}T${time}`, tz),
 										plannedDurationMin: dur,
-										deadline: dur === 30 ? at(`${addD(dayBase, off)}T${time}`, tz) : null,
+										deadline: dur === 30 ? timed(`${addD(dayBase, off)}T${time}`, tz) : null,
 									}),
 								);
 							}

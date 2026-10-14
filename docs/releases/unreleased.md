@@ -56,7 +56,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 ## Fixed
 
 - (#190) Fixed a task block `tag:` list keeping one tag twice when its accented letters were typed in two ways.
-- (#190) Fixed the TickTick link window not preselecting the list whose name differs only in spaces, `-` or `_`.
+- (#190) Fixed the TickTick link window not preselecting the TickTick project whose name differs from the list's only in spaces, `-` or `_`.
 
 - Fixed Quick Add suggesting the wrong start for a range ending in a time, such as `Party Friday until midnight` on a Wednesday.
 - Fixed a task changed in TickTick and briefly left out of its list going to the Trash; deletes there now arrive one sync later.

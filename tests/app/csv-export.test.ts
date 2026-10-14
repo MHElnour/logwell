@@ -7,7 +7,6 @@ import { csvValues } from "../../e2e/limits/csv";
 
 // One CSV per entity, RFC 4180, UTF-8 with a BOM.
 
-
 describe("CSV writing", () => {
 	it("quotes fields with a comma, a quote, CR or LF and doubles the quotes", () => {
 		expect(csvField("plain")).toBe("plain");

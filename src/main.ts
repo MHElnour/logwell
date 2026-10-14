@@ -538,7 +538,7 @@ export default class CheckpointPlugin extends Plugin {
 				systemNotify: (title, body) => this.notifier.notify(title, body, () => void this.openApp("habits")),
 				openHabits: (id, focusControl) => void this.openHabits(id, focusControl),
 				// `undo` acts on the database the check-in went to (the host binds it).
-				notifyUndo: (message, _label, undo) => void boundUndoNotice(message, undo),
+				notifyUndo: (message, undo) => void boundUndoNotice(message, undo),
 				requestNotifyPermission: () => this.notifier.requestPermission(),
 				error: showError,
 			},

@@ -15,6 +15,7 @@ import {
 } from "../../src/domain/ticktick/mapping";
 import type { TtTask } from "../../src/domain/ticktick/types";
 import type { DateSpec } from "../../src/domain/types";
+import { day, timed } from "../persistence/fixtures";
 import recorded from "../fixtures/ticktick/recorded.json";
 
 // The pure field mapping between Logwell and TickTick. Driven by responses recorded from
@@ -30,9 +31,6 @@ function task(key: string, index = 0): TtTask {
 	const t: unknown = Array.isArray(v) ? (v as unknown[])[index] : v;
 	return t as TtTask;
 }
-
-const date = (d: string): DateSpec => ({ kind: "date", date: d });
-const timed = (local: string, tz: string): DateSpec => ({ kind: "datetime", local, tz });
 
 describe("priority", () => {
 	it("maps TickTick 5/3/1/0 to Logwell high/medium/low/none", () => {
@@ -111,8 +109,8 @@ describe("isSyncable", () => {
 });
 
 describe("syncDateOf (push)", () => {
-	const a = date("2026-10-08");
-	const b = date("2026-10-12");
+	const a = day("2026-10-08");
+	const b = day("2026-10-12");
 	it("is the deadline when set", () => {
 		expect(syncDateOf({ scheduled: a, deadline: b })).toEqual(b);
 		expect(syncDateOf({ scheduled: null, deadline: b })).toEqual(b);
@@ -127,7 +125,7 @@ describe("syncDateOf (push)", () => {
 
 describe("dateToTt (push)", () => {
 	it("sends a date as local midnight of the display zone, start equal to due", () => {
-		expect(dateToTt(date("2026-10-08"), "Europe/Moscow")).toEqual({
+		expect(dateToTt(day("2026-10-08"), "Europe/Moscow")).toEqual({
 			startDate: "2026-10-08T00:00:00+0300",
 			dueDate: "2026-10-08T00:00:00+0300",
 			isAllDay: true,
@@ -136,11 +134,11 @@ describe("dateToTt (push)", () => {
 	});
 
 	it("uses the offset of that date in the display zone (New York, both sides of a DST change)", () => {
-		expect(dateToTt(date("2026-03-07"), "America/New_York").dueDate).toBe("2026-03-07T00:00:00-0500");
-		expect(dateToTt(date("2026-03-08"), "America/New_York").dueDate).toBe("2026-03-08T00:00:00-0500");
-		expect(dateToTt(date("2026-03-09"), "America/New_York").dueDate).toBe("2026-03-09T00:00:00-0400");
-		expect(dateToTt(date("2026-11-01"), "America/New_York").dueDate).toBe("2026-11-01T00:00:00-0400");
-		expect(dateToTt(date("2026-11-02"), "America/New_York").dueDate).toBe("2026-11-02T00:00:00-0500");
+		expect(dateToTt(day("2026-03-07"), "America/New_York").dueDate).toBe("2026-03-07T00:00:00-0500");
+		expect(dateToTt(day("2026-03-08"), "America/New_York").dueDate).toBe("2026-03-08T00:00:00-0500");
+		expect(dateToTt(day("2026-03-09"), "America/New_York").dueDate).toBe("2026-03-09T00:00:00-0400");
+		expect(dateToTt(day("2026-11-01"), "America/New_York").dueDate).toBe("2026-11-01T00:00:00-0400");
+		expect(dateToTt(day("2026-11-02"), "America/New_York").dueDate).toBe("2026-11-02T00:00:00-0500");
 	});
 
 	it("sends a datetime as its wall time in its own zone, ignoring the display zone", () => {
@@ -162,8 +160,8 @@ describe("dateToTt (push)", () => {
 
 	it("keeps the day for a date whose midnight does not exist in the zone", () => {
 		// Sao Paulo skipped 00:00 on 2018-11-04 (clocks went from 00:00 to 01:00).
-		const sent = dateToTt(date("2018-11-04"), "America/Sao_Paulo");
-		expect(dateFromTt({ ...sent, timeZone: "America/Sao_Paulo" }, "UTC")).toEqual(date("2018-11-04"));
+		const sent = dateToTt(day("2018-11-04"), "America/Sao_Paulo");
+		expect(dateFromTt({ ...sent, timeZone: "America/Sao_Paulo" }, "UTC")).toEqual(day("2018-11-04"));
 	});
 });
 
@@ -184,7 +182,7 @@ describe("dateFromTt (pull)", () => {
 	it("reads the recorded all-day task as the date in its own zone", () => {
 		const t = task("10-tasks/01-create-all-day-task");
 		expect(t.dueDate).toBe("2026-10-07T21:00:00.000+0000");
-		expect(dateFromTt(t, "UTC")).toEqual(date("2026-10-08"));
+		expect(dateFromTt(t, "UTC")).toEqual(day("2026-10-08"));
 	});
 
 	it("reads the recorded timed task as wall time in its zone with that tz", () => {
@@ -202,15 +200,15 @@ describe("dateFromTt (pull)", () => {
 	});
 
 	it("reads an all-day task of the weekly repeating probe", () => {
-		expect(dateFromTt(task("30-recurrence/01-create-weekly-repeating-task"), "UTC")).toEqual(date("2026-10-08"));
+		expect(dateFromTt(task("30-recurrence/01-create-weekly-repeating-task"), "UTC")).toEqual(day("2026-10-08"));
 	});
 
 	it("reads an all-day task in New York across the DST change", () => {
 		const base = { isAllDay: true, timeZone: "America/New_York" };
-		expect(dateFromTt({ ...base, dueDate: "2026-11-01T04:00:00.000+0000" }, "UTC")).toEqual(date("2026-11-01"));
-		expect(dateFromTt({ ...base, dueDate: "2026-11-02T05:00:00.000+0000" }, "UTC")).toEqual(date("2026-11-02"));
-		expect(dateFromTt({ ...base, dueDate: "2026-03-08T05:00:00.000+0000" }, "UTC")).toEqual(date("2026-03-08"));
-		expect(dateFromTt({ ...base, dueDate: "2026-03-09T04:00:00.000+0000" }, "UTC")).toEqual(date("2026-03-09"));
+		expect(dateFromTt({ ...base, dueDate: "2026-11-01T04:00:00.000+0000" }, "UTC")).toEqual(day("2026-11-01"));
+		expect(dateFromTt({ ...base, dueDate: "2026-11-02T05:00:00.000+0000" }, "UTC")).toEqual(day("2026-11-02"));
+		expect(dateFromTt({ ...base, dueDate: "2026-03-08T05:00:00.000+0000" }, "UTC")).toEqual(day("2026-03-08"));
+		expect(dateFromTt({ ...base, dueDate: "2026-03-09T04:00:00.000+0000" }, "UTC")).toEqual(day("2026-03-09"));
 	});
 
 	it("reads a timed task in New York on the fall-back day", () => {
@@ -220,7 +218,7 @@ describe("dateFromTt (pull)", () => {
 
 	it("is independent of the display zone (fallback only applies to a missing zone)", () => {
 		const t = task("10-tasks/01-create-all-day-task");
-		expect(dateFromTt(t, "America/New_York")).toEqual(date("2026-10-08"));
+		expect(dateFromTt(t, "America/New_York")).toEqual(day("2026-10-08"));
 	});
 
 	it("uses the fallback zone when the task has no usable zone", () => {
@@ -242,16 +240,16 @@ describe("dateFromTt (pull)", () => {
 		const x = dateFromTt(t, "UTC");
 		if (x === null || x.kind !== "date") throw new Error("expected a date");
 		x.date = "1999-01-01";
-		expect(dateFromTt(t, "UTC")).toEqual(date("2026-10-08"));
+		expect(dateFromTt(t, "UTC")).toEqual(day("2026-10-08"));
 	});
 
 	it("round-trips every date and datetime through the push format", () => {
 		const specs: [DateSpec, string][] = [
-			[date("2026-10-08"), "Europe/Moscow"],
-			[date("2026-03-08"), "America/New_York"],
-			[date("2026-11-01"), "America/New_York"],
-			[date("2026-10-04"), "Pacific/Auckland"],
-			[date("2026-12-31"), "Pacific/Kiritimati"],
+			[day("2026-10-08"), "Europe/Moscow"],
+			[day("2026-03-08"), "America/New_York"],
+			[day("2026-11-01"), "America/New_York"],
+			[day("2026-10-04"), "Pacific/Auckland"],
+			[day("2026-12-31"), "Pacific/Kiritimati"],
 			[timed("2026-10-08T09:30", "Europe/Moscow"), "UTC"],
 			[timed("2026-11-01T01:30", "America/New_York"), "UTC"],
 			[timed("2026-07-01T23:59", "America/New_York"), "Europe/Moscow"],
@@ -264,9 +262,9 @@ describe("dateFromTt (pull)", () => {
 });
 
 describe("pulledDatePatch (pull)", () => {
-	const a = date("2026-10-08");
-	const b = date("2026-10-12");
-	const c = date("2026-10-15");
+	const a = day("2026-10-08");
+	const b = day("2026-10-12");
+	const c = day("2026-10-15");
 
 	it("a new task gets the date as both schedule and deadline", () => {
 		expect(pulledDatePatch(null, a)).toEqual({ scheduled: a, deadline: a });
@@ -300,7 +298,7 @@ describe("pulledDatePatch (pull)", () => {
 	});
 
 	it("a date and a datetime on the same day are not equal", () => {
-		const d = date("2026-10-08");
+		const d = day("2026-10-08");
 		const t = timed("2026-10-08T09:00", "Europe/Moscow");
 		expect(pulledDatePatch({ scheduled: d, deadline: t }, c)).toEqual({ deadline: c });
 	});
@@ -333,7 +331,7 @@ describe("fieldHashes", () => {
 		title: "Call the bank",
 		status: "open",
 		priority: 1,
-		date: date("2026-10-08"),
+		date: day("2026-10-08"),
 		parent: null,
 		section: null,
 		tags: [],
@@ -349,7 +347,7 @@ describe("fieldHashes", () => {
 		const reordered: SyncFields = {
 			section: null,
 			parent: null,
-			date: date("2026-10-08"),
+			date: day("2026-10-08"),
 			priority: 1,
 			status: "open",
 			title: "Call the bank",
@@ -381,8 +379,8 @@ describe("fieldHashes", () => {
 	it("tells apart every value of a field", () => {
 		const hashes = [
 			fieldHashes({ ...base, date: null }).date,
-			fieldHashes({ ...base, date: date("2026-10-08") }).date,
-			fieldHashes({ ...base, date: date("2026-10-09") }).date,
+			fieldHashes({ ...base, date: day("2026-10-08") }).date,
+			fieldHashes({ ...base, date: day("2026-10-09") }).date,
 			fieldHashes({ ...base, date: timed("2026-10-08T09:00", "Europe/Moscow") }).date,
 			fieldHashes({ ...base, date: timed("2026-10-08T09:00", "UTC") }).date,
 			fieldHashes({ ...base, date: timed("2026-10-08T09:01", "Europe/Moscow") }).date,
@@ -399,7 +397,7 @@ describe("fieldHashes", () => {
 	});
 
 	it("matches between a Logwell value and the same value read back from TickTick", () => {
-		const fromTt = dateFromTt(dateToTt(date("2026-10-08"), "Europe/Moscow"), "UTC");
+		const fromTt = dateFromTt(dateToTt(day("2026-10-08"), "Europe/Moscow"), "UTC");
 		expect(fieldHashes({ ...base, date: fromTt }).date).toBe(fieldHashes(base).date);
 	});
 });

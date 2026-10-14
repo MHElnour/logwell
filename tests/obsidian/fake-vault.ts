@@ -1,8 +1,8 @@
-import { TFile } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 import { MemoryFileGateway } from "../persistence/memoryGateway";
 
 // A fake Obsidian App for plugin-level tests: an in-memory vault with the
-// calls DbSession and CheckpointPlugin use, a DataAdapter over the same
+// calls DbSession and CheckpointPlugin use (files and folders), a DataAdapter over the same
 // memory gateway as the backups, and per-vault local storage.
 
 export type Handler = (...args: unknown[]) => unknown;
@@ -26,6 +26,7 @@ export function fileOf(path: string): TFile {
 
 export function fakeApp() {
 	const files = new Map<string, string>();
+	const folders = new Set<string>();
 	const plugin = new MemoryFileGateway();
 	const handlers = new Map<string, Handler>();
 	const local = new Map<string, unknown>();
@@ -41,7 +42,17 @@ export function fakeApp() {
 			return {};
 		},
 		getFileByPath: (path: string) => (files.has(path) ? fileOf(path) : null),
-		getAbstractFileByPath: (path: string) => (files.has(path) ? fileOf(path) : null),
+		getAbstractFileByPath: (path: string) => (files.has(path) ? fileOf(path) : folders.has(path) ? Object.assign(new TFolder(), { path }) : null),
+		create: (path: string, data: string) => {
+			if (files.has(path) || folders.has(path)) return Promise.reject(new Error("File already exists."));
+			files.set(path, data);
+			return Promise.resolve(fileOf(path));
+		},
+		createFolder: (path: string) => {
+			if (files.has(path) || folders.has(path)) return Promise.reject(new Error("Folder already exists."));
+			folders.add(path);
+			return Promise.resolve(Object.assign(new TFolder(), { path }));
+		},
 		read: (file: TFile) => Promise.resolve(files.get(file.path) ?? ""),
 		cachedRead: (file: TFile) => Promise.resolve(files.get(file.path) ?? ""),
 		process: (file: TFile, fn: (data: string) => string) => {
@@ -86,6 +97,7 @@ export function fakeApp() {
 	return {
 		app,
 		files,
+		folders,
 		local,
 		secrets,
 		plugin,

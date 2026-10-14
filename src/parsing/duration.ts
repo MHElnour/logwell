@@ -25,8 +25,6 @@ function isHourUnit(unit: string): boolean {
 	return unit.toLowerCase().startsWith("h");
 }
 
-
-
 /** Parses a duration that starts exactly at `from`. */
 function matchDurationAt(s: string, from: number): DurationMatch | null {
 	const words = sticky(WORDS_RE, s, from);

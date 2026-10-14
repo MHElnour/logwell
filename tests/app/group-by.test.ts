@@ -3,13 +3,12 @@ import { buildBoard, buildList, type TaskView, type ViewGroup, viewTitle } from 
 import { defaultGroupBy, effectiveGroupBy, type GroupBy, groupByOptions, type GroupViewKind } from "../../src/domain/groupBy";
 import { emptyFilter, type TaskSort } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
+import { day } from "../persistence/fixtures";
 import { type AppHarness, appHarness } from "./harness";
 
 describe("grouping in views", () => {
 	// Grouping of the list view. FakeClock starts at 2026-10-01T10:00Z; the display zone is
 	// Europe/Berlin, so today is Thursday 2026-10-01.
-
-	const date = (d: string) => ({ kind: "date" as const, date: d });
 
 	function group(h: AppHarness, view: TaskView, by: GroupBy | undefined, sort: TaskSort = "manual", held?: ReadonlySet<string>): ViewGroup[] {
 		return buildList(h.app.store.state, view, h.app.queryContext(), { ...emptyFilter(), sort }, "", held, { groupBy: by }).groups;
@@ -22,12 +21,12 @@ describe("grouping in views", () => {
 		const t = h.app.tasks;
 		await h.app.tags.create("Work");
 		await h.app.tags.create("Home");
-		const a = (await t.create({ title: "A", scheduled: date("2026-09-29"), priority: 1, tagKeys: ["work"] })).task;
-		await t.create({ title: "A sub", parentId: a.id, scheduled: date("2026-10-05"), priority: 3 });
+		const a = (await t.create({ title: "A", scheduled: day("2026-09-29"), priority: 1, tagKeys: ["work"] })).task;
+		await t.create({ title: "A sub", parentId: a.id, scheduled: day("2026-10-05"), priority: 3 });
 		await t.create({ title: "B", scheduled: { kind: "datetime", local: "2026-10-01T21:00", tz: "Europe/Berlin" }, priority: 2 });
-		await t.create({ title: "C", scheduled: date("2026-10-02"), tagKeys: ["home", "work"] });
+		await t.create({ title: "C", scheduled: day("2026-10-02"), tagKeys: ["home", "work"] });
 		await t.create({ title: "D", priority: 3 });
-		await t.create({ title: "E", deadline: date("2026-10-03"), priority: 1, tagKeys: ["home"] });
+		await t.create({ title: "E", deadline: day("2026-10-03"), priority: 1, tagKeys: ["home"] });
 		return { h, a };
 	}
 
@@ -109,7 +108,7 @@ describe("grouping in views", () => {
 
 		it("orders inside a group by the sort, and drops are allowed on dates but not on No date", async () => {
 			const { h } = await seed();
-			await h.app.tasks.create({ title: "B2", scheduled: date("2026-10-01"), priority: 1 });
+			await h.app.tasks.create({ title: "B2", scheduled: day("2026-10-01"), priority: 1 });
 			const manual = group(h, INBOX, "date", "manual").find((g) => g.key === "2026-10-01")!;
 			expect(titles(manual)).toEqual(["B", "B2"]);
 			const byPriority = group(h, INBOX, "date", "priority").find((g) => g.key === "2026-10-01")!;
@@ -193,7 +192,7 @@ describe("grouping in views", () => {
 				["priority:2", "Medium", undefined, ["B"]],
 			]);
 			const sub = [...h.app.store.state.tasks.values()].find((x) => x.title === "A sub")!;
-			await h.app.tasks.update(sub.id, { scheduled: date("2026-10-01") });
+			await h.app.tasks.update(sub.id, { scheduled: day("2026-10-01") });
 			const again = group(h, { kind: "today" }, "priority");
 			expect(shape(again).map((r) => r[3])).toEqual([["A"], ["B"], ["A sub"]]);
 			expect(again[2]!.entries[0]).toMatchObject({ depth: 0, parentTitle: "A" });
@@ -241,7 +240,7 @@ describe("grouping in views", () => {
 			const h = await appHarness();
 			const work = await h.app.categories.create("Work");
 			const home = await h.app.categories.create("Home");
-			const today = date("2026-10-01");
+			const today = day("2026-10-01");
 			await h.app.tasks.create({ title: "H", categoryId: home.id, scheduled: today });
 			await h.app.tasks.create({ title: "W", categoryId: work.id, scheduled: today });
 			await h.app.tasks.create({ title: "I", scheduled: today });
@@ -259,7 +258,7 @@ describe("grouping in views", () => {
 		it("#27: names a list that is missing Inbox, like every other place", async () => {
 			const h = await appHarness();
 			const gone = await h.app.categories.create("Gone");
-			await h.app.tasks.create({ title: "G", categoryId: gone.id, scheduled: date("2026-10-01") });
+			await h.app.tasks.create({ title: "G", categoryId: gone.id, scheduled: day("2026-10-01") });
 			(h.app.store.state.categories as Map<string, unknown>).delete(gone.id);
 			expect(group(h, { kind: "today" }, "list").map((g) => g.label)).toEqual(["Inbox"]);
 			expect(viewTitle({ kind: "category", id: gone.id }, h.app.store.state)).toBe("Inbox");

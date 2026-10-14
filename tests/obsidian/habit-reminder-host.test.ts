@@ -211,7 +211,7 @@ describe("reminder host", () => {
 			await press(shown[0]!, "Check in");
 			expect(toggle).toHaveBeenCalledWith(med.id, "2026-10-14", true);
 			expect(app.habits.index().active(med.id)).toHaveLength(1);
-			expect(ui.notifyUndo).toHaveBeenCalledWith("Checked in Meditate.", CHECKIN_LABEL, expect.any(Function));
+			expect(ui.notifyUndo).toHaveBeenCalledWith("Checked in Meditate.", expect.any(Function));
 			expect(app.store.undoLabel).toBe(CHECKIN_LABEL);
 			expect(ui.error).not.toHaveBeenCalled();
 		});
@@ -236,7 +236,7 @@ describe("reminder host", () => {
 			await press(shown[0]!, "Check in");
 			const active = app.habits.index().active(water.id);
 			expect(active.map((c) => c.value)).toEqual([1]);
-			expect(ui.notifyUndo).toHaveBeenCalledWith("Checked in Water.", CHECKIN_LABEL, expect.any(Function));
+			expect(ui.notifyUndo).toHaveBeenCalledWith("Checked in Water.", expect.any(Function));
 			expect(app.store.undoLabel).toBe(CHECKIN_LABEL);
 		});
 
@@ -588,15 +588,14 @@ describe("reminder host", () => {
 			host.attach(r(app));
 			tickAt(AT_20);
 			await press(shown[0]!, "Check in");
-			expect(ui.notifyUndo.mock.calls[0]![1]).toBe(CHECKIN_LABEL);
-			const undo = ui.notifyUndo.mock.calls[0]![2] as () => Promise<boolean>;
+			const undo = ui.notifyUndo.mock.calls[0]![1] as () => Promise<boolean>;
 			await expect(undo()).resolves.toBe(true);
 			expect(app.habits.index().active(med.id)).toHaveLength(0);
 			await expect(undo()).rejects.toThrow(); // its write is no longer the latest: UndoConflict
 
 			// After a switch the Undo of the old database resolves false ("Nothing to undo.") and writes nothing.
 			await press(shown[0]!, "Check in"); // the host is still on this app: writes again
-			const undo2 = ui.notifyUndo.mock.calls[1]![2] as () => Promise<boolean>;
+			const undo2 = ui.notifyUndo.mock.calls[1]![1] as () => Promise<boolean>;
 			host.detach();
 			await expect(undo2()).resolves.toBe(false);
 			expect(app.habits.index().active(med.id)).toHaveLength(1);
@@ -846,7 +845,6 @@ describe("reminder host", () => {
 
 describe("reminder state in local storage", () => {
 	// The habit reminder state in the vault's local storage, per database (modeled on activeTimer).
-
 
 	const state = () => ({ ...emptyReminderState("2026-10-14"), fired: { "h-1": true as const }, times: { "h-1": "20:00" } });
 

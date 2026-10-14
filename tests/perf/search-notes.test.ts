@@ -27,8 +27,6 @@ beforeAll(() => {
 	};
 });
 
-
-
 async function bigState() {
 	const h = await appHarness();
 	const data = h.store.data;

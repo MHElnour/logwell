@@ -23,8 +23,6 @@ import { HOUR_PX } from "./geometry";
 // all-day cell or a month cell) by hit testing the rendered elements; the value to store comes from
 // the pure helpers in src/domain/calendar.ts. One drop is one TaskService.update call.
 
-
-
 type DragSource =
 	/** A timed block (either half of a split one): moves the whole task. */
 	| { kind: "timed"; task: Task; seg: TimedSegment }

@@ -286,10 +286,6 @@ function convert(spec: Extract<DateSpec, { kind: "datetime" }>, displayZone: str
 }
 
 /**
- * The local day an instant falls on in `zone`, or null when the instant does not parse. Memoized for IANA
- * names, like `convert`: the Completed group asks for it once per completed task on every render.
- */
-/**
  * An instant as a DateTime in `zone`: ISO text with "Z" or an offset (a stored instant, a TickTick date). Invalid when
  * the text or the zone is. One Luxon parse: cache the result when it is read per task.
  */
@@ -297,6 +293,10 @@ export function instantInZone(instant: string, zone: string): DateTime {
 	return DateTime.fromISO(instant, { setZone: true }).setZone(zone);
 }
 
+/**
+ * The local day an instant falls on in `zone`, or null when the instant does not parse. Memoized for IANA
+ * names, like `convert`: the Completed group asks for it once per completed task on every render.
+ */
 export function instantDay(instant: Instant, zone: string): LocalDate | null {
 	const cacheable = isValidZone(zone);
 	const key = cacheable ? `${zone}|${instant}` : "";

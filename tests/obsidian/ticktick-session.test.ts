@@ -215,8 +215,6 @@ describe("the Sync now command", () => {
 		checkCallback?: (checking: boolean) => boolean;
 	}
 
-
-
 	async function setup(options: { linked?: boolean; device?: boolean; token?: boolean; minutes?: number } = {}) {
 		const commands: Cmd[] = [];
 		vi.spyOn(Plugin.prototype, "addCommand").mockImplementation(((c: Cmd) => void commands.push(c)) as never);
@@ -310,7 +308,6 @@ describe("the token and device ports", () => {
 			},
 		};
 	}
-
 
 	describe("SecretStorageTickTickSecret", () => {
 		it("stores the token under a valid secret id and reads it back", () => {

@@ -28,8 +28,6 @@ export interface BoardColumn {
 	completed: ListEntry[];
 }
 
-
-
 /**
  * Nests a subtask in its parent's card when the parent is in the same column; any other
  * subtask is a card of its own with the "Parent ›" prefix. Order follows `entries`.

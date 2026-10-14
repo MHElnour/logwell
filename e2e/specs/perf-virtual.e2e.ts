@@ -8,6 +8,7 @@ import { browser, expect } from "@wdio/globals";
 import { INBOX_ID, type Section, type Task } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
+import { taskId } from "../../tests/helpers";
 import {
 	DB_PATH,
 	allTasks,
@@ -25,7 +26,6 @@ const COUNT = 2000;
 const LATER = "00000000-0000-4000-8000-00000000a001";
 const NOW = "2026-10-01T08:00:00.000Z";
 
-const id = (i: number) => `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
 const indexOf = (taskId: string | undefined | null) => (taskId == null ? -1 : parseInt(taskId.slice(-12), 16) - 1);
 
 function bigDatabase(): string {
@@ -33,8 +33,8 @@ function bigDatabase(): string {
 	const later: Section = { id: LATER, categoryId: INBOX_ID, name: "Later", nameKey: "later", sortKey: "V00001", createdAt: NOW, modifiedAt: NOW };
 	const tasks = new Map<string, Task>();
 	for (let i = 0; i < COUNT; i++) {
-		tasks.set(id(i), {
-			id: id(i),
+		tasks.set(taskId(i + 1), {
+			id: taskId(i + 1),
 			title: `Row ${String(i).padStart(4, "0")}`,
 			descriptionNote: null,
 			categoryId: INBOX_ID,
@@ -77,7 +77,7 @@ async function openBigInbox(): Promise<WebdriverIO.Element> {
 	);
 	const section = await visibleTasksSection();
 	await showSidebarView(section, "Inbox");
-	await section.$(`.cp-task-row[data-task-id="${id(0)}"]`).waitForExist({ timeout: 10000, timeoutMsg: "the Inbox did not show its first row" });
+	await section.$(`.cp-task-row[data-task-id="${taskId(1)}"]`).waitForExist({ timeout: 10000, timeoutMsg: "the Inbox did not show its first row" });
 	return section;
 }
 
@@ -130,7 +130,7 @@ describe("Long lists draw only the rows near the viewport (performance release B
 			Array.from(document.querySelectorAll<HTMLElement>(`.cp-task-row[data-task-id="${rid}"]`))
 				.find((e) => e.offsetParent !== null)!
 				.focus();
-		}, id(0));
+		}, taskId(1));
 		for (let at = 0; at < COUNT - 1; ) {
 			const n = Math.min(100, COUNT - 1 - at);
 			await browser.keys(Array.from({ length: n }, () => "ArrowDown"));
@@ -154,7 +154,7 @@ describe("Long lists draw only the rows near the viewport (performance release B
 	it("auto-scroll while dragging keeps the dragged row drawn and dragging, far past where it was", async function () {
 		this.timeout(120_000);
 		const section = await openBigInbox();
-		const first = section.$(`.cp-task-row[data-task-id="${id(0)}"] .cp-task-title`);
+		const first = section.$(`.cp-task-row[data-task-id="${taskId(1)}"] .cp-task-title`);
 		await waitForStableRect(first);
 		await dragPointer(
 			() => centerOf(first),
@@ -174,10 +174,10 @@ describe("Long lists draw only the rows near the viewport (performance release B
 		const dragged = await browser.execute((rid) => {
 			const row = Array.from(document.querySelectorAll<HTMLElement>(`.cp-task-row[data-task-id="${rid}"]`)).find((e) => e.closest(".cp-tasks")?.clientHeight);
 			return row !== undefined && row.classList.contains("is-dragging") && row.closest(".cp-task-list")!.classList.contains("is-reordering");
-		}, id(0));
+		}, taskId(1));
 		expect(dragged).toBe(true);
 		await browser.keys("Escape");
 		await browser.releaseActions();
-		expect(await storedOrder(null).then((o) => o[0])).toBe(id(0));
+		expect(await storedOrder(null).then((o) => o[0])).toBe(taskId(1));
 	});
 });

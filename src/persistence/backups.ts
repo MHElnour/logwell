@@ -1,6 +1,6 @@
 import type { Clock } from "../domain/ports";
 import { fileNameOf, joinPath } from "../domain/notes";
-import { instantFromNow } from "../domain/time";
+import { instantDay, instantFromNow } from "../domain/time";
 import type { FileGateway } from "./gateway";
 import { type JournalEntry, journalLine, parseJournal } from "./journal";
 import { DB_EXTENSION, isSafeId } from "./schema";
@@ -87,8 +87,6 @@ function kindRank(kind: BackupInfo["kind"]): number {
 	return kind.startsWith("pre-") ? 0 : 1;
 }
 
-
-
 const EXT = `.${DB_EXTENSION}`;
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$/;
 const COMPACT_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/;
@@ -159,7 +157,7 @@ export class BackupStore {
 	private dailyDate: string | null = null;
 
 	async hasDailySnapshot(date: Date): Promise<boolean> {
-		const day = date.toISOString().slice(0, 10);
+		const day = instantDay(date.toISOString(), "UTC") ?? "";
 		if (this.dailyDate === day) return true;
 		const found = (await this.fs.list(this.snapshotDir)).some((p) => {
 			const parsed = parseSnapshotName(p);

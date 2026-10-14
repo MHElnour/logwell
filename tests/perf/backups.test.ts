@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BackupStore, SNAPSHOT_INTERVAL_MS, type SnapshotKind } from "../../src/persistence/backups";
-import { FakeClock } from "../helpers";
+import { FakeClock, taskId } from "../helpers";
 import { BACKUP_ROOT, emptyDbText, harness, makeTask } from "../persistence/fixtures";
 import { MemoryFileGateway } from "../persistence/memoryGateway";
 import { elapsedAsync, measuredAsync, median, perfLog } from "./measure";
@@ -47,7 +47,7 @@ describe("#35: backup retention listings", () => {
 		for (let i = 0; i < PLAIN_SAVES; i++) {
 			// Seconds apart, far below the hourly interval, so no snapshot is due.
 			h.clock.advance(1000);
-			h.addTask(makeTask(`00000000-0000-4000-8000-${i.toString(16).padStart(12, "0")}`, { title: `Task ${i}` }));
+			h.addTask(makeTask(taskId(i), { title: `Task ${i}` }));
 			await h.saveNow();
 		}
 		const snapshotsWritten = h.fs.writes.filter((p) => p.includes("/snapshots/")).length - writesBefore;

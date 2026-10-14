@@ -9,7 +9,6 @@ import type { UiHost } from "../host";
 import { PHASE_LABEL, focusedText, gapSec, roundsText, summaryText } from "./format";
 import { formatDuration } from "../format";
 
-
 // The stage around the ring: the "Focus on" pill, the buttons, the set settings or the set line,
 // the set-done summary and the recovery banner.
 
@@ -34,8 +33,6 @@ export const toConfig = (m: SetMinutes): FocusSetConfig => ({
 	breakSec: m.breakMin * 60,
 	longBreakSec: m.longBreakMin * 60,
 });
-
-
 
 interface Field {
 	key: keyof SetMinutes;

@@ -425,8 +425,6 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 
 // -- More menu ------------------------------------------------------------------
 
-
-
 export function MorePopover(props: PopoverProps & { pickNote: () => Promise<string | null> }) {
 	const { model, setIcon } = props;
 	const id = useUniqueId("cp-more-pop");

@@ -189,8 +189,6 @@ export function priorityItems(host: UiHost, task: Task, title: (p: Priority) => 
 	}));
 }
 
-
-
 /** The menu of a Completed history row: one done occurrence of a repeating task. */
 export function occurrenceMenu(host: UiHost, task: Task, date: LocalDate, onOpen: () => void): MenuSpec {
 	return [

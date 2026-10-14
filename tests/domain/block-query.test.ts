@@ -7,7 +7,7 @@ import type { Category, DateSpec, ID, OccurrenceRecord, Priority, Section, Tag, 
 import { type BlockFilters, parseBlockQuery } from "../../src/parsing/blockQuery";
 import { done, repeating, rule, series } from "./recurrence-fixtures";
 import { resolveTagNames, TagNames } from "../../src/domain/tags";
-import { day } from "../persistence/fixtures";
+import { day, timed } from "../persistence/fixtures";
 
 // The task block matcher. 2026-10-14 is a Wednesday. Which tasks pass which filters is the property's to check (it
 // compares every filter combination and week start with an independent reference); the examples here are what it
@@ -56,7 +56,6 @@ function task(id: string, patch: Partial<Task> = {}): Task {
 	};
 }
 
-const timed = (local: string, tz = ZONE): DateSpec => ({ kind: "datetime", local, tz });
 const noteOf = (path: string) => ({ path, linkedAt: TS });
 
 interface Fixture {

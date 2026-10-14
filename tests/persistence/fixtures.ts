@@ -54,9 +54,10 @@ export function load(text: string): DbData {
 	return loadWithIssues(text).data;
 }
 
-/** A date without a time, and a time in a zone (Europe/Berlin by default), as a task stores them. */
+/** A date without a time, and a time in a zone (Europe/Berlin by default), as a task stores them. `timed` takes the whole local time. */
 export const day = (date: string): DateSpec => ({ kind: "date", date });
-export const at = (date: string, time: string, tz = "Europe/Berlin"): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz });
+export const timed = (local: string, tz = "Europe/Berlin"): DateSpec => ({ kind: "datetime", local, tz });
+export const at = (date: string, time: string, tz = "Europe/Berlin"): DateSpec => timed(`${date}T${time}`, tz);
 
 /** Another device's write that descends from `base` (history capped like the store does). */
 export function descendant(base: string, change: (d: DbData) => DbData, revision: string): string {

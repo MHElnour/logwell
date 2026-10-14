@@ -10,7 +10,7 @@ import { serializeDb } from "../../src/persistence/serializer";
 import { FakeTickTick } from "./fake-ticktick";
 import { appHarness, expectDomainError } from "./harness";
 import { load, makeTask } from "../persistence/fixtures";
-import { FakeClock } from "../helpers";
+import { FakeClock, uuid } from "../helpers";
 import { TickTickError } from "../../src/app/ports";
 import { InboxAliasApi } from "../../src/app/tickTickInbox";
 import type { TtTask } from "../../src/domain/ticktick/types";
@@ -177,7 +177,6 @@ describe("the open-task cap of a synced list", () => {
 	const HOME = "00000000-0000-4000-8000-00000000000b";
 	const FULL = "Can't add the task: Work is synced with TickTick and already has 999 open tasks.";
 
-	const uuid = (n: number) => `00000001-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 	const list = (id: string, name: string, sortKey: string): Category => ({
 		id,
 		name,
@@ -221,7 +220,7 @@ describe("the open-task cap of a synced list", () => {
 		const tasks = new Map<string, Task>();
 		let n = 0;
 		const add = (categoryId: string, title: string, patch: Partial<Task> = {}) => {
-			const t = makeTask(uuid(n), { title, categoryId, sortKey: `V${n.toString(36).padStart(4, "0")}`, ...patch });
+			const t = makeTask(uuid(1, n), { title, categoryId, sortKey: `V${n.toString(36).padStart(4, "0")}`, ...patch });
 			tasks.set(t.id, t);
 			n++;
 		};
@@ -262,17 +261,17 @@ describe("the open-task cap of a synced list", () => {
 
 		it("refuses a subtask of a task in the full list", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999 }) });
-			await refused(h.app.tasks.create({ title: "Sub", parentId: uuid(0) }));
+			await refused(h.app.tasks.create({ title: "Sub", parentId: uuid(1, 0) }));
 		});
 
 		it("refuses a move into the full list (category change), the subtasks counted with their parent", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999, home: 1 }) });
-			const homeTask = uuid(999);
+			const homeTask = uuid(1, 999);
 			await refused(h.app.tasks.update(homeTask, { categoryId: WORK }));
 			expect(h.app.store.state.tasks.get(homeTask)?.categoryId).toBe(HOME);
 
 			const h2 = await appHarness({ initial: capDb({ open: 997, home: 1 }) });
-			const parent = uuid(997);
+			const parent = uuid(1, 997);
 			await h2.app.tasks.create({ title: "Sub 1", parentId: parent });
 			await h2.app.tasks.create({ title: "Sub 2", parentId: parent });
 			// 997 + the parent + 2 subtasks = 1000.
@@ -282,41 +281,41 @@ describe("the open-task cap of a synced list", () => {
 
 		it("refuses a drop into the full list (place with a list change)", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999, home: 1 }) });
-			const homeTask = uuid(999);
+			const homeTask = uuid(1, 999);
 			await refused(h.app.tasks.place(homeTask, [homeTask], { categoryId: WORK }));
 			expect(h.app.store.state.tasks.get(homeTask)?.categoryId).toBe(HOME);
 		});
 
 		it("refuses making a task of another list a subtask of a task in the full list", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999, home: 1 }) });
-			await refused(h.app.tasks.setParent(uuid(999), uuid(0)));
+			await refused(h.app.tasks.setParent(uuid(1, 999), uuid(1, 0)));
 		});
 
 		it("refuses reopening a task in the full list; one below the cap reopens", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999, completed: 1 }) });
-			const done = uuid(999);
+			const done = uuid(1, 999);
 			await refused(h.app.tasks.reopen(done));
 			expect(h.app.store.state.tasks.get(done)?.status).toBe("completed");
-			await h.app.tasks.complete(uuid(0));
+			await h.app.tasks.complete(uuid(1, 0));
 			await h.app.tasks.reopen(done);
 			expect(openIn(h, WORK)).toBe(999);
 		});
 
 		it("refuses a duplicate and a restore from Trash into the full list", async () => {
 			const h = await appHarness({ initial: capDb({ open: 999 }) });
-			await refused(h.app.tasks.duplicate(uuid(0)));
-			const trashed = await h.app.tasks.delete(uuid(1));
+			await refused(h.app.tasks.duplicate(uuid(1, 0)));
+			const trashed = await h.app.tasks.delete(uuid(1, 1));
 			await h.app.tasks.create({ title: "Takes its place", categoryId: WORK });
 			await refused(h.app.tasks.restore(trashed.batchId));
 		});
 
 		it("edits that add no open task still work in a full list, and in a list over the cap", async () => {
 			const h = await appHarness({ initial: capDb({ open: 1005 }) });
-			await h.app.tasks.update(uuid(0), { title: "Renamed" });
-			await h.app.tasks.complete(uuid(1));
-			await h.app.tasks.place(uuid(2), [uuid(3), uuid(2)]);
-			expect(h.app.store.state.tasks.get(uuid(0))?.title).toBe("Renamed");
-			await refused(h.app.tasks.reopen(uuid(1)));
+			await h.app.tasks.update(uuid(1, 0), { title: "Renamed" });
+			await h.app.tasks.complete(uuid(1, 1));
+			await h.app.tasks.place(uuid(1, 2), [uuid(1, 3), uuid(1, 2)]);
+			expect(h.app.store.state.tasks.get(uuid(1, 0))?.title).toBe("Renamed");
+			await refused(h.app.tasks.reopen(uuid(1, 1)));
 		});
 
 		it("follows undo and a reload: the count is never stale", async () => {
@@ -327,7 +326,7 @@ describe("the open-task cap of a synced list", () => {
 			await refused(h.app.tasks.create({ title: "The 1000th", categoryId: WORK }));
 			// A reload from outside with one open task fewer.
 			h.app.store.notifyReloaded();
-			await h.app.tasks.complete(uuid(0));
+			await h.app.tasks.complete(uuid(1, 0));
 			await h.app.tasks.create({ title: "Fits after the completion", categoryId: WORK });
 		});
 	});
@@ -356,7 +355,7 @@ describe("the open-task cap of a synced list", () => {
 			const tasks = new Map<string, Task>();
 			const syncLinks = new Map<string, SyncLink>([[`list:${WORK}`, listLink(WORK, project.id)]]);
 			for (let i = 0; i < 999; i++) {
-				const t = makeTask(uuid(i), { title: `Open ${i}`, categoryId: WORK, sortKey: `V${i.toString(36).padStart(4, "0")}` });
+				const t = makeTask(uuid(1, i), { title: `Open ${i}`, categoryId: WORK, sortKey: `V${i.toString(36).padStart(4, "0")}` });
 				tasks.set(t.id, t);
 				const made = tt.add(project.id, { title: t.title });
 				const base = fieldHashes({ title: t.title, status: "open", priority: 0, date: null, parent: null, section: null, tags: [] });

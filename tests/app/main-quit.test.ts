@@ -145,12 +145,12 @@ describe("plugin lifecycle", () => {
 
 	it("the reminder's Undo runs the undo the host bound, and says so when there is nothing to undo", async () => {
 		const { plugin } = await loadPlugin();
-		const ui = (plugin.reminderHost as unknown as { ui: { notifyUndo(m: string, l: string, u: () => Promise<boolean>): void } }).ui;
+		const ui = (plugin.reminderHost as unknown as { ui: { notifyUndo(m: string, u: () => Promise<boolean>): void } }).ui;
 		shown.notices.length = 0;
 		shown.actions.length = 0;
 		const results = [true, false];
 		const undo = vi.fn(() => Promise.resolve(results.shift()!));
-		ui.notifyUndo("Checked in Meditate.", "Check in", undo);
+		ui.notifyUndo("Checked in Meditate.", undo);
 		expect(shown.actions).toHaveLength(1);
 		expect(shown.actions[0]!.message).toBe("Checked in Meditate.");
 		const button = shown.actions[0]!.actions.find((a) => a.label === "Undo")!;

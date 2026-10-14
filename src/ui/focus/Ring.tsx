@@ -7,7 +7,6 @@ import { PHASE_LABEL, clockText, roundText, roundsText, summaryText } from "./fo
 
 // The ring timer: time left, the phase, "Round n of N" and the round bars.
 
-
 const RADIUS = 140;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 

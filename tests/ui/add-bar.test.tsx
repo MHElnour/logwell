@@ -538,7 +538,7 @@ describe("token highlighting and chips", () => {
 		expect(mirror.textContent).toBe(text);
 	});
 
-	it("priority chip labels read 'High priority', 'Medium' and 'Low priority'", () => {
+	it("priority chip labels read 'High', 'Medium' and 'Low'", () => {
 		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: [], tags: new Map() };
 		const chip = (priority: 1 | 2 | 3) => ({ kind: "priority", status: "applied", priority, text: `!${priority}` }) as never;
 		expect(chipLabel(chip(1), env)).toBe("High");

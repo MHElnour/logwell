@@ -1,4 +1,3 @@
-
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
 import { capitalize, clamp, plural } from "../../domain/text";
 import { addDays, clockTimeOf, instantInZone, utcDay } from "../../domain/time";

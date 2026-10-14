@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { browser, expect } from "@wdio/globals";
 import { INBOX_ID, type Task } from "../../src/domain/types";
 import { createEmptyDb } from "../../src/persistence/schema";
+import { taskId } from "../../tests/helpers";
 import { serializeDb } from "../../src/persistence/serializer";
 import { DB_PATH, clickUndoNotice, createCategory, createTask, flush, freshDatabase, getTask, waitForNotice } from "../helpers";
 
@@ -364,7 +365,7 @@ describe("The logwell dashboard block", function () {
 		const db = createEmptyDb({ dbId: randomUUID(), revision: "r-dashboardblk1", deviceId: "d-e2e", now: NOW });
 		const tasks = new Map<string, Task>();
 		for (let i = 0; i < 2000; i++) {
-			const id = `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
+			const id = taskId(i + 1);
 			tasks.set(id, {
 				id,
 				title: `Row ${String(i).padStart(4, "0")}`,

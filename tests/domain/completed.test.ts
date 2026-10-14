@@ -34,7 +34,6 @@ function task(id: string, patch: Partial<Task> = {}): Task {
 	};
 }
 
-
 const inScope = (t: Task, scope: CompletedScope) => inCompletedScope(t, scope, ctx);
 
 describe("Today scope", () => {

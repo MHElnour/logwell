@@ -18,7 +18,6 @@ import { checkedOf, menuItems, menuTitles, openViewMenu, pickItem } from "./view
 const headingTexts = (m: AppMount) =>
 	[...m.root.querySelectorAll(".cp-tasks .cp-task-group > .cp-group-heading")].map((h) => h.textContent.replace(/\s+/g, " ").trim());
 
-
 /** Opens the view menu, then "Group by…", and returns the options menu. */
 async function groupMenu(m: AppMount) {
 	const menu = await openViewMenu(m, tasksEl(m));

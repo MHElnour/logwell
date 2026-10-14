@@ -27,8 +27,6 @@ describe("sync at the limits", () => {
 	const PER_LIST = 999;
 	const NOW = "2026-10-01T09:59:00.000Z";
 
-
-
 	/** A database with LISTS linked lists of PER_LIST synced tasks, `total` tasks in all, and the matching TickTick. */
 	/** With `tagged`, every task carries two tags (one nested), in Logwell and in TickTick, and the bases hash them. */
 	/** With `notes`, the first `notes` tasks of the first list have a sync-created description note. */

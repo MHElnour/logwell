@@ -75,7 +75,7 @@ function recordLabel(collection: CollectionName, id: string, record: unknown): s
 }
 
 export function exportFileName(date: Date): string {
-	return `logwell-backup-${date.toISOString().slice(0, 10)}.json`;
+	return `logwell-backup-${instantDay(date.toISOString(), "UTC") ?? ""}.json`;
 }
 
 // -- CSV export -----------------------------------------------------------------------

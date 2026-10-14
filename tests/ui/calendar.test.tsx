@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DateSpec } from "../../src/domain/types";
 import { LABEL_PEEK_PX } from "../../src/ui/calendar/geometry";
 import { checkedOf, menuTitles, openViewMenu, pickItem, viewButton } from "./view-menu-helpers";
 import { type AppMount, at, byLabel, click, day, dragTo, expectLabelsResolve, keydown, mountApp, q, recordNotices, settle, strayAriaLabels } from "./app-helpers";
@@ -770,7 +769,6 @@ describe("calendar section", () => {
 		// The clock is set a day earlier, in the same week, so no block is overdue.
 		// The display zone is Europe/Berlin: spring forward 2026-03-29 at 02:00 (to 03:00), fall back
 		// 2026-10-25 at 03:00 (to 02:00). The visible range is the real elapsed one, not wall arithmetic.
-		const berlin = (date: string, time: string): DateSpec => ({ kind: "datetime", local: `${date}T${time}`, tz: "Europe/Berlin" });
 		async function dstMount(now: string) {
 			const m = await mountApp();
 			m.h.clock.set(now);
@@ -785,7 +783,7 @@ describe("calendar section", () => {
 
 		it("spring forward: 01:30 + 60 min reads 01:30-03:30", async () => {
 			const m = await dstMount("2026-03-28T08:00:00Z");
-			await m.h.app.tasks.create({ title: "Early", scheduled: berlin("2026-03-29", "01:30"), plannedDurationMin: 60 });
+			await m.h.app.tasks.create({ title: "Early", scheduled: at("2026-03-29", "01:30"), plannedDurationMin: 60 });
 			await show(m);
 			const b = entry(cell(m.root, "daycol", "2026-03-29"), "Early");
 			expect(entryName(b)).toBe("Early, Sun Mar 29, 01:30–03:30");
@@ -794,7 +792,7 @@ describe("calendar section", () => {
 
 		it("fall back: 01:30 + 120 min reads 01:30-02:30 (the end is after the repeated hour)", async () => {
 			const m = await dstMount("2026-10-24T08:00:00Z");
-			await m.h.app.tasks.create({ title: "Late", scheduled: berlin("2026-10-25", "01:30"), plannedDurationMin: 120 });
+			await m.h.app.tasks.create({ title: "Late", scheduled: at("2026-10-25", "01:30"), plannedDurationMin: 120 });
 			await show(m);
 			const b = entry(cell(m.root, "daycol", "2026-10-25"), "Late");
 			expect(entryName(b)).toBe("Late, Sun Oct 25, 01:30–02:30");
@@ -803,7 +801,7 @@ describe("calendar section", () => {
 
 		it("a block that crosses midnight into a spring-forward day names its real end on both halves", async () => {
 			const m = await dstMount("2026-03-28T08:00:00Z");
-			await m.h.app.tasks.create({ title: "Night", scheduled: berlin("2026-03-28", "23:30"), plannedDurationMin: 180 });
+			await m.h.app.tasks.create({ title: "Night", scheduled: at("2026-03-28", "23:30"), plannedDurationMin: 180 });
 			await show(m);
 			expect(entryName(entry(cell(m.root, "daycol", "2026-03-28"), "Night"))).toBe("Night, Sat Mar 28, 23:30–03:30");
 			expect(entryName(entry(cell(m.root, "daycol", "2026-03-29"), "Night"))).toBe("Night, Sun Mar 29, 00:00–03:30, continued");

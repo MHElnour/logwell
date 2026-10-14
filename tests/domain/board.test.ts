@@ -10,7 +10,6 @@ import { day, makeTask } from "../persistence/fixtures";
 
 const ctx: QueryContext = { today: "2026-10-01", zone: "Europe/Berlin", upcomingDays: 3, weekStart: "MO" };
 
-
 function db(tasks: Task[]): DbData {
 	const d = createEmptyDb({ dbId: "db", revision: "r", deviceId: "d", now: "2026-10-01T08:00:00.000Z" });
 	return { ...d, tasks: new Map(tasks.map((x) => [x.id, x])) };
@@ -69,8 +68,6 @@ describe("default order is the sort key", () => {
 		expect(groups[0]!.entries.map((e) => e.task.id)).toEqual(["early", "late"]);
 	});
 });
-
-
 
 describe("buildBoard: Today", () => {
 	it("has Overdue then Today, with titles, tones and drop rules; sorted by sortKey", () => {

@@ -18,6 +18,7 @@ import type {
 import { INBOX_ID, TAG_COLORS } from "../../src/domain/types";
 import { type DbData, createEmptyDb } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
+import { uuid } from "../../tests/helpers";
 
 // The data side of the limits harness (docs/development/performance.md). `generateDb(dimension, count)` builds a valid
 // current-schema database through the project's own types and `serializeDb`, with one dimension at its matrix count
@@ -149,7 +150,6 @@ function mulberry32(seed: number): () => number {
 	};
 }
 
-const uuid = (kind: number, n: number): string => `${kind.toString(16).padStart(8, "0")}-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 const K_TASK = 1;
 const K_HABIT = 2;
 const K_CHECKIN = 3;

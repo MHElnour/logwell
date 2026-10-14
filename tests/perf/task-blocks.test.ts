@@ -28,8 +28,6 @@ vi.mock("../../src/domain/blockQuery", async (importActual) => {
 	return { ...actual, runBlockQuery: vi.fn(actual.runBlockQuery) };
 });
 
-
-
 /** The lists whose block queried since the counters were cleared. */
 const queried = new Map<string, number>();
 

@@ -276,8 +276,6 @@ function bucketize<K>(entries: ListEntry[], keyOf: (t: Task) => K): Map<K, ListE
 	return buckets;
 }
 
-
-
 /** Rows of `view` where `keepTask` decides which completed tasks show among the open ones, grouped as `groupBy` says. */
 function viewGroups(
 	state: DbData,

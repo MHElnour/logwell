@@ -17,8 +17,6 @@ interface LabelEnv {
 	anchor?: LocalDate;
 }
 
-
-
 function dateText(chip: Chip, env: LabelEnv): string {
 	return chip.date === undefined ? chip.text : formatDateSpec(chip.date, env.zone, env.today);
 }

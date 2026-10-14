@@ -1,4 +1,3 @@
-
 import type { HabitService } from "../app/HabitService";
 import type { ReminderStatePort, SettingsPort } from "../app/ports";
 import type { AppStore } from "../app/store";
@@ -12,7 +11,7 @@ import {
 } from "../domain/habitReminders";
 import { type HabitIndex, versionAt } from "../domain/habits";
 import { type Clock, nowInstant } from "../domain/ports";
-import { clockTimeOf, instantDay, instantFromNow, instantInZone } from "../domain/time";
+import { clockTimeOf, instantFromNow, instantInZone } from "../domain/time";
 import type { Habit, ID, LocalDate } from "../domain/types";
 import { progressText } from "../ui/habits/format";
 import type { NoticeAction } from "./notices";
@@ -32,7 +31,7 @@ export interface ReminderHostUi {
 	 * The Undo notice of a check-in. `undo` acts on the database the check-in went to and resolves false
 	 * when there is nothing to undo there any more (the caller then says "Nothing to undo.").
 	 */
-	notifyUndo(message: string, label: string, undo: () => Promise<boolean>): void;
+	notifyUndo(message: string, undo: () => Promise<boolean>): void;
 	/** Asks for the system notification permission; only called from a user gesture. */
 	requestNotifyPermission(): void;
 	error(err: unknown): void;
@@ -168,8 +167,10 @@ export class HabitReminderHost {
 	private wallNow(app: ReminderApp): { date: LocalDate; time: string; minute: string; instant: string } {
 		const instant = nowInstant(this.clock);
 		const zone = app.settings.zone();
-		const date = instantDay(instant, zone) ?? "";
-		const time = clockTimeOf(instantInZone(instant, zone));
+		// One parse, not the cached `instantDay`: every tick has a new instant, so a cache entry would never be read again.
+		const dt = instantInZone(instant, zone);
+		const date = dt.toISODate() ?? "";
+		const time = clockTimeOf(dt);
 		return { date, time, minute: `${date} ${time}`, instant };
 	}
 
@@ -274,7 +275,7 @@ export class HabitReminderHost {
 			// The Undo acts on the database written to, and only while the host still points at it.
 			const undoWrite = app.store.undoFor(mark, label);
 			const undo = (): Promise<boolean> => (this.app === app ? undoWrite() : Promise.resolve(false));
-			this.ui.notifyUndo(`Checked in ${habit.name}.`, label, undo);
+			this.ui.notifyUndo(`Checked in ${habit.name}.`, undo);
 		} catch (err) {
 			this.ui.error(err);
 		}
