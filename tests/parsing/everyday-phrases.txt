@@ -1,0 +1,433 @@
+# Everyday Quick Add phrases: a change detector, not a test of right answers.
+# One phrase per line; a line "phrase<TAB>en-GB" reads in British English, any other line in English.
+# A line starting with "# " is a comment (a phrase may start with #, like #Work). No expectations are stored here:
+# node scripts/parser-oracle.mjs --compare <ref> reads every phrase with the parser at <ref> and with the working tree
+# and lists the ones that read differently.
+Wow! tomorrow
+Plan: tomorrow review
+Q&A: Friday?
+Call Ann tomorrow - about
+Re: invoice tomorrow
+Call mom, tomorrow
+Hi. tomorrow
+Done? tomorrow
+Ready... tomorrow
+Note: tomorrow
+Pay rent - tomorrow
+Pay rent tomorrow.
+Self-review tomorrow
+Buy milk (tomorrow)
+Buy milk (tomorrow) now
+Buy (milk) tomorrow
+Gym every day at 0900
+Gym every day at 9am
+Gym every monday at 0900
+Standup tomorrow at 0900
+Standup at 0900 tomorrow
+Pills daily at 1730
+f(#Work) x
+f(!1) x
+f(@home) x
+note(#Work)
+a(@b) c
+Call (555) tomorrow
+Note (see #Work)
+(#Work) Report
+Report ((#Work))
+Say "hi" tomorrow
+Read "Friday" tomorrow
+He said "meet me tomorrow" ok
+Read ""Friday""
+Read "a" "b" tomorrow
+Read “Friday" book
+Pay \ tomorrow
+Pay C:\temp tomorrow
+Pay a\b tomorrow
+Pay \\today
+Pay \today\ x
+Pay \every day
+Pay \[[Note]]
+Pay \tomorrow.
+Mail bob@example.com tomorrow
+Ping @bob tomorrow
+Ping (@bob) tomorrow
+Ping @4pm
+Ping @4PM
+Ping @12pm
+Ping @13pm
+Ping @0am
+Ping @noon!
+Ping @noon.
+Ping @midnight
+Ping @4pm.
+Ping @4pm,
+Ping (@4pm)
+Meet @4pm tomorrow
+Meet tomorrow @4pm
+Meet every day @4pm
+Ping @4:30pm
+Ping @4.30pm
+Ping @4 pm
+Read #Work/Admin/x
+Read #Work/admin
+Read #Home/Admin
+Read #Work//Admin
+Read #/Admin
+#Work/Admin
+Read #work/
+Dentist Oct 15	en-GB
+Dentist October 15th	en-GB
+Dentist Oct 15 2027	en-GB
+Dentist Oct 15, 2027	en-GB
+Dentist Oct 2027	en-GB
+Dentist Oct 15 at 3pm	en-GB
+Dentist Oct 15 to Oct 20	en-GB
+Dentist Oct 2	en-GB
+Dentist Oct 31	en-GB
+Dentist Oct 32	en-GB
+Pay rent Jan 2026	en-GB
+Report Mar 20	en-GB
+Meet Oct 15 - 20 people	en-GB
+Buy May 20 tickets	en-GB
+Buy May 20 tickets
+Every year Oct 15	en-GB
+Pay every month until Oct 15	en-GB
+Dentist Sep 30	en-GB
+Rent Dec 25 2026	en-GB
+Read chapter Oct 99	en-GB
+Meeting 9-10
+Meeting 9-10am
+Meeting 3-4
+Meeting 3pm-4
+Meeting 3 - 4pm
+Meeting 3 to 4pm
+Meeting 3pm to 4pm
+Meeting from 3 to 4pm
+Meeting from 9am until 5pm
+Work 9am until 5pm
+Meeting 3pm - 5pm tomorrow
+Meeting tomorrow 3pm-5pm
+Meeting 11am-1pm
+Meeting 11-1pm
+Meeting 11pm-1am
+Meeting 3:30-4:15pm
+Meeting 2026-10-08 3-4pm
+Meeting Oct 8 3pm - Oct 9 4pm
+Meeting Oct 8 to Oct 9
+Gym every day 3-4pm
+Gym every day from 3pm to 5pm
+Gym every day at 3-4pm
+Gym at 3-4pm
+Call 5-6pm by friday
+Meeting 3-4pm for 2h
+Meeting 3-4pm !1
+Meeting at 3pm to 4pm
+Ages 3-5pm
+Pages 10-20
+Score 3-4 tomorrow
+Exam 1-2pm 
+Gym 2 hours
+Gym 1.5h
+Gym in 2h
+Gym 2h tomorrow
+Study 5 hours from now
+Remind me in 30 min
+Gym 3pm 2h
+Run 10m
+Run 5 m
+Meet tomorrow at 4pm
+Meet Friday @noon
+Meet @noon Friday
+Meet Oct 9 @4:30pm
+Gym every day 3pm
+Gym every day at 4pm
+Gym every day @4pm
+Gym every monday @9am
+Gym every day at 0900 starting tomorrow
+Every year Oct 15
+Pay every month until Oct 15
+Meeting 3-4pm tomorrow at 5pm
+Meeting at 0900-1000
+Call at 0900 for 30m
+Call at 0900pm
+Call at 09:00
+Call at 0900.
+Call at 0900,
+Call at 2359
+Call at 0000
+Call at 1200
+Call by 0900
+Call until 0900
+Call at 09001
+Call at 0900x
+Lunch at 1230 tomorrow
+Wake at 0600 every day
+Call mom @4pm @home
+Call mom @home @4pm
+Call @4pm and @5pm
+Rent "every month" tomorrow
+Note “a” and “b” tomorrow
+Note "a" tomorrow "b"
+Ask "why?" tomorrow
+Ask "x", tomorrow
+Pay rent !1!
+Pay rent !1)
+Pay rent !1]
+Pay rent [!1]
+Pay rent [#Work]
+Fix (#Work, @home)
+Fix (#Work @home)
+Fix ( #Work )
+Pay rent (!1) now.
+Fix sink @urgent?
+Fix sink @a.b
+Fix sink @home.
+Call #Work.
+Call #Work:
+Call #Work)
+Visit #Home/garden
+Read #work/admin/
+Meet @4pm-5pm
+Meet 4pm-5pm
+Meet 3–4pm
+Meet 3 – 4pm
+Meet tomorrow - 3pm
+Meet - tomorrow - 3pm
+Meet -tomorrow
+Item - tomorrow -
+Buy - eggs tomorrow
+x – tomorrow
+Plan; tomorrow
+1. tomorrow call
+Q: tomorrow?
+Call tomorrow!!
+Call tomorrow?!
+Call tomorrow...
+Call... tomorrow
+Pay rent (every month)
+Pay rent (every month) now
+Pay rent (tomorrow at 5pm)
+Pay rent (by friday)
+Pay (tomorrow) (!1)
+Shift at 0900-1700
+Shift at 0900 - 1700
+Shift at 0900 to 1700
+Shift from 0900 to 1700
+Shift at 0900-5pm
+Pay \[[Budget]]
+Pay \by friday
+Pay \at 5pm
+Pay \every monday
+Pay \for 2h
+Pay (\today)
+Pay \!high
+Pay \Friday's bill
+Pay \today's bill
+Read "Friday"s
+Read "a b" c "d
+Read "x" "Friday
+Gym every day @9am starting tomorrow
+Report #Work/Admin #Home
+Report #Home #Work/Admin
+Report #Work/Nope #Home
+Report #Home #Work/Nope
+Dentist 15 Oct	en-GB
+Dentist Oct 15th 2027	en-GB
+Dentist Oct the 15th	en-GB
+Dentist October	en-GB
+Dentist Oct 1999	en-GB
+Pay Oct 12 to Dec 1	en-GB
+Pay every year Feb 29	en-GB
+Pay Feb 29	en-GB
+Call 3pm-4pm until Friday
+Meeting 3pm–4pm
+Meeting 3-4 pm
+Meeting 3–4 pm tomorrow
+Meeting 12-1pm
+Meeting 12am-1am
+Meeting 9:00-17:00
+Meeting 09:00-10:30
+Meeting 9-5
+Kids 3-4pm on friday
+Gym 3-4pm every day
+Meet Friday at noon
+Call at 4pm and at 5pm
+Gym every day @9am
+Call at 9am!1
+Call at 0900!1
+Meet tomorrow@4pm
+Mail bob@4pm.com
+Meet @4pm's
+Meet at 4pm's
+Gym every 2 days at 6:00am starting tomorrow
+Call @4pm!1
+Pay rent ?
+- tomorrow
+Call . tomorrow
+Buy 2 - 3 apples tomorrow
+Fix A - B tomorrow
+Fix A - tomorrow B
+Fix it! tomorrow
+Hello: tomorrow
+Tomorrow: call mom
+tomorrow - call mom
+Call mom - !1
+Call mom (tomorrow!)
+Call mom (!1 tomorrow)
+Call (mom) tomorrow
+Read Ch. 3 tomorrow
+Buy eggs... tomorrow
+Buy eggs ... tomorrow
+Done?! tomorrow
+Call ?! tomorrow
+Call tomorrow ?!
+Call tomorrow -- x
+Call - - tomorrow
+a.m. tomorrow
+Pay rent, tomorrow, please
+Pay rent; tomorrow.
+Fix the A/B tomorrow
+Fix [tomorrow]
+Fix (tomorrow
+Fix tomorrow)
+Call mom :) tomorrow
+Call mom tomorrow :)
+Call mom tomorrow :-)
+Work 9-5pm
+Lunch 11-1pm
+Shift 10pm-2am
+Shift 10pm to 2am
+Work 9am-5pm
+Night 11pm-1am tomorrow
+Work 9-17
+Gym 6-7am
+Gym 6-7
+Class 1-3
+Lunch 12-2pm
+Tomorrow!
+tomorrow.
+Friday?
+!1.
+#Work.
+(#Work)
+@4pm
+at 0900
+every day.
+Pay rent .
+Pay rent tomorrow .
+Call - tomorrow - Ann
+Call tomorrow, at noon
+Meet (at 0900)
+Meet (@4pm, tomorrow)
+Pay \(#Work)
+Pay (\#Work)
+Pay \"today\"
+Call \@4pm
+Call \at 0900 tomorrow
+Meet "@4pm" @5pm
+Meet\ tomorrow
+Fix \\today
+a\today
+Pay \
+\
+\ tomorrow
+Pay \[[
+Pay \[[]] tomorrow
+Pay \[[Note tomorrow
+Gym every day at 3pm
+Report #Home #Work
+Gym every day at 0900-1000
+Gym every day @9am-10am
+Gym every day @9:00am-10am
+Gym every day at 9am-10am
+Gym every day at 9:00am-10:00am
+Gym every day at 9am to 10am
+Gym every monday at 1730-1830
+Gym every monday at 5:30pm-6:30pm
+Gym every day from 9am to 10am
+Gym at 0900-1000 every day
+Report due Friday
+Report due by Friday
+Report before Friday
+Report deadline: Friday
+Report within 3 days
+Report end of week
+Report end of month
+Report EOD
+Party Friday 16th
+Party Friday 15th
+Party Fri 16
+Party on the 20th
+Call next weekday
+Call this morning
+Trip Oct 20 to Oct 25
+Turn on Monday
+Due diligence tomorrow
+Read before bed
+Pay within budget
+Gym every day at 10am-9am
+Call @4pm-5pm
+Call @4pm to 5pm
+Done tomorrow!
+Is it Friday?
+Email bob@4pm.com tomorrow
+Call tomorrow at noon.
+Pay rent: tomorrow
+Call mom @4pm
+Lunch @noon
+Meet @5
+File @2024
+Call @0900
+Call at 0920
+Meeting 3-4pm
+Meeting 4-3pm
+Meeting 3-4pm for 45m
+Gym 2h
+Gym for 2h
+Buy \today paper
+Pay \#Work
+Report #Work/Admin
+Report #Work/Nope
+Report #Work/
+Pay rent !1.
+Pay rent (#Work)
+Call mom @home!
++loc+
+Meeting 3pm-4pm
+Meeting 10am-11:30am
+Meeting from 3pm to 5pm
+Meeting from 3 to 5pm
+Meeting 3pm to 5pm
+Meeting 3–4pm
+Meeting tomorrow 3-4pm
+Meeting 3-4pm tomorrow
+Meeting Friday 9-10am
+Meeting Oct 20 2-3pm
+Meeting next monday 3pm-4pm
+Meeting at 3-4pm
+Meeting at 3pm-4pm tomorrow
+Lunch 12-1pm
+Lunch 11:30-1pm
+Meet Friday @3pm-4pm
+Call at 0900-1000
+Call at 0900-1730
+Call 0900-1000
+Gym every monday 6-7pm
+Gym mondays 6-7pm
+Gym every weekday at 7am-8am starting tomorrow
+Gym every day 9-10am until Dec 1
+Meeting 3-4pm #Work !1
+Meeting 3-4pm, room 2
+Pages 3-4
+Chapters 3-4 tomorrow
+Score 3-4pm game
+Ages 3-4
+Room 3-4pm
+Read pp 10-20
+Call 555-1234 tomorrow
+Train 9:15-9:45am
+Meeting 3pm-4pm.
+Meeting (3-4pm)
+Meeting 3-4pm?
+2-3pm standup
+3-4pm
