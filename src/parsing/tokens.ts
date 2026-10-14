@@ -97,7 +97,7 @@ export function findNoteTokens(s: string, taken: Taken): NoteToken[] {
 
 export interface LiteralToken {
 	span: Span;
-	/** A word or token after a backslash: the backslash leaves the title. */
+	/** A word, token or phrase after a backslash: the backslash leaves the title. */
 	escape: boolean;
 }
 
@@ -106,11 +106,13 @@ const CLOSING_QUOTE: Readonly<Record<string, string>> = { '"': '"', "\u201c": "\
 
 /**
  * Text Quick Add never reads, found before every other token: a phrase in double quotes, straight or curly (kept in the
- * title with its quotes), and a word or token right after a backslash at a token start (`\today`, `\#Work`, `\!1`; the
- * backslash leaves the title). A quote opens at a word start and closes before a word end; an unclosed quote, a quote
- * inside a word (`5" screen`) and single quotes are plain text.
+ * title with its quotes), and what a backslash at a token start escapes (the backslash leaves the title): the token
+ * right after it (`\#Work`, `\!1`, `\@home`), or the word or note link right after it with the whole phrase it starts
+ * (`\today`, `\[[Note]]`, `\by friday`, `\every monday`). `phraseEnd(from, limit)` is where the reading that starts at
+ * `from` ends, before `limit` (the next backslash), or `from` when none starts there. A quote opens at a word start and closes before a word end; an
+ * unclosed quote, a quote inside a word (`5" screen`) and single quotes are plain text.
  */
-export function findLiteralTokens(s: string, taken: Taken): LiteralToken[] {
+export function findLiteralTokens(s: string, taken: Taken, phraseEnd: (from: number, limit: number) => number): LiteralToken[] {
 	const out: LiteralToken[] = [];
 	// The next closing quote of each kind found so far, so every quote is looked for once.
 	const next = new Map<string, number>();
@@ -119,9 +121,16 @@ export function findLiteralTokens(s: string, taken: Taken): LiteralToken[] {
 		if (ch === "\\") {
 			if (!tokenStartAllowed(s, i)) continue;
 			const trigger = s.charAt(i + 1);
-			const from = trigger === "#" || trigger === "@" || trigger === "!" ? i + 2 : i + 1;
-			const end = tokenRunEnd(s, from);
-			if (end === from || taken(i, end)) continue;
+			const from = trigger === "#" || trigger === "@" || trigger === "!" ? i + 2 : s.startsWith("[[", i + 1) ? i + 3 : i + 1;
+			let end = tokenRunEnd(s, from);
+			if (end === from && from !== i + 3) continue;
+			// A word or a note link may lead a longer phrase; only text after it can make the phrase longer.
+			if (from !== i + 2) {
+				const slash = s.indexOf("\\", end);
+				const limit = slash === -1 ? s.length : slash;
+				if (from === i + 3 || s.slice(end, limit).trim() !== "") end = Math.max(end, phraseEnd(i + 1, limit));
+			}
+			if (taken(i, end)) continue;
 			out.push({ span: { start: i, end }, escape: true });
 			i = end - 1;
 			continue;

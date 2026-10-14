@@ -79,15 +79,34 @@ export function scanFor<T>(
 	return out;
 }
 
-/** `#`, `@`, `!` and a backslash start a token only at the start of the text, after whitespace or after an opening parenthesis. */
+/**
+ * `#`, `@`, `!` and a backslash start a token only at the start of the text or after whitespace, or right after
+ * opening parentheses that themselves start there (`(#Work)`, `((#Work))`; not `print(#Work)`).
+ */
 export function tokenStartAllowed(s: string, index: number): boolean {
-	if (index === 0) return true;
-	const ch = charBefore(s, index);
-	return ch === "(" || isSpaceChar(ch);
+	let i = index;
+	while (i > 0 && s.charAt(i - 1) === "(") i--;
+	return i === 0 || isSpaceChar(charBefore(s, i));
 }
 
-/** The marks that end a token without being part of it (`!1.`, `(!2)`, `@urgent!`). */
-const TRAILING_MARKS = ".,;:!?)]";
+/** A comma or a semicolon: beside a removed span it goes with it, even right after a word ("Call mom, tomorrow"). */
+export const SEPARATOR_MARKS = ",;";
+
+/** Sentence punctuation: the separators, a period, a colon, an exclamation or a question mark. */
+export const SENTENCE_MARKS = `${SEPARATOR_MARKS}.:!?`;
+
+/**
+ * The marks a removed span may leave alone in the title, besides the separators: a period, a colon, an exclamation or
+ * a question mark, a hyphen or an en dash ("Pay rent - tomorrow"). Not a closing bracket, which pairs with its
+ * opening one.
+ */
+export const LONE_MARKS = ".:!?-\u2013";
+
+/**
+ * The marks that end a token without being part of it (`!1.`, `(!2)`, `@urgent!`): sentence punctuation and a closing
+ * bracket. Not a hyphen or a dash, which a token name may hold (`#to-do`).
+ */
+const TRAILING_MARKS = `${SENTENCE_MARKS})]`;
 
 /** Where a run of non-space text from `start` to `end` ends without its trailing marks. */
 export function withoutTrailingMarks(s: string, start: number, end: number): number {
@@ -270,6 +289,91 @@ const AT_CLOCK_RE = /(?:\d{1,2}(?::\d{2})?[ap]m|noon)(?![\p{L}\p{N}_])/iuy;
 export function atClockLength(s: string, at: number): number {
 	const m = sticky(AT_CLOCK_RE, s, at);
 	return m !== null && readClock(m[0]) !== null ? m[0].length : 0;
+}
+
+// `at` and a 24-hour time of four digits, hours 00 to 23 and minutes 00 to 59 ("at 0900", "at 1730"); the end of a
+// range after it may be one too ("at 0900-1000", "at 0900 to 1700").
+const AT_HHMM_RE = /at\s+([01]\d|2[0-3])([0-5]\d)(?![\p{L}\p{N}_:])/giu;
+const HHMM_END_RE = new RegExp(`${RANGE_TO_PATTERN}([01]\\d|2[0-3])([0-5]\\d)(?![\\p{L}\\p{N}_:])`, "iuy");
+
+/** A 24-hour time as the readers read it: "9:00am", "12:30pm", "12:00am". */
+const twelveHour = (hour: number, minute: string): string => `${hour % 12 === 0 ? 12 : hour % 12}:${minute}${hour < 12 ? "am" : "pm"}`;
+
+/**
+ * The text the repeat and date readers see in place of the input: `@` before a clock time `@` reads (`atClockLength`)
+ * is `at ` ("@4pm" reads "at 4pm"), and a four-digit 24-hour time after `at` (and the end of its range) is the same
+ * time with am or pm ("at 0900" reads "at 9:00am"). So both read exactly as `at` that time does, after a date, in a
+ * repeat and in a range. `free(start, end)` says which input text may be rewritten (not a token found before). The
+ * readers' spans come back to the input with `toInput`.
+ */
+export interface Reading {
+	text: string;
+	/** The input index of a reading index; inside rewritten text, the start of what it replaced, or its end with `end`. */
+	toInput: (index: number, end?: boolean) => number;
+	/** The reading index of an input index; inside replaced text, the start of its rewrite, or its end with `end`. */
+	toReading: (index: number, end?: boolean) => number;
+}
+
+export function readingOf(s: string, free: (start: number, end: number) => boolean): Reading {
+	// Each rewrite: the input text [from, to) is `text`. Found left to right, never overlapping.
+	const pieces: { from: number; to: number; text: string }[] = [];
+	for (let i = s.indexOf("@"); i !== -1; i = s.indexOf("@", i + 1)) {
+		const length = tokenStartAllowed(s, i) ? atClockLength(s, i + 1) : 0;
+		if (length > 0 && free(i, i + 1 + length)) pieces.push({ from: i, to: i + 1, text: "at " });
+	}
+	for (const m of s.matchAll(AT_HHMM_RE)) {
+		const from = m.index + m[0].length - 4;
+		if (!wordBoundaryBefore(s, m.index) || !free(m.index, from + 4)) continue;
+		pieces.push({ from, to: from + 4, text: twelveHour(Number(m[1]), m[2]!) });
+		const end = sticky(HHMM_END_RE, s, from + 4);
+		if (end !== null && free(from + 4, from + 4 + end[0].length)) {
+			const to = from + 4 + end[0].length;
+			pieces.push({ from: to - 4, to, text: twelveHour(Number(end[1]), end[2]!) });
+		}
+	}
+	if (pieces.length === 0) {
+		const same = (index: number): number => index;
+		return { text: s, toInput: same, toReading: same };
+	}
+	pieces.sort((a, b) => a.from - b.from);
+	// The reading's index of each piece's start.
+	const at: number[] = [];
+	let text = "";
+	let last = 0;
+	for (const p of pieces) {
+		text += s.slice(last, p.from);
+		at.push(text.length);
+		text += p.text;
+		last = p.to;
+	}
+	text += s.slice(last);
+	// Maps an index on one side (pieces from `startOf` to `endOf`) to the other (`otherStart` to `otherEnd`), by the last
+	// piece that starts at or before it (a binary search).
+	const through = (index: number, end: boolean, startOf: (k: number) => number, endOf: (k: number) => number, otherStart: (k: number) => number, otherEnd: (k: number) => number): number => {
+		let lo = 0;
+		let hi = pieces.length - 1;
+		let k = -1;
+		while (lo <= hi) {
+			const mid = (lo + hi) >> 1;
+			if (startOf(mid) <= index) {
+				k = mid;
+				lo = mid + 1;
+			} else hi = mid - 1;
+		}
+		if (k === -1) return index;
+		if (index === startOf(k)) return otherStart(k);
+		if (index < endOf(k)) return end ? otherEnd(k) : otherStart(k);
+		return otherEnd(k) + (index - endOf(k));
+	};
+	const inStart = (k: number): number => pieces[k]!.from;
+	const inEnd = (k: number): number => pieces[k]!.to;
+	const rdStart = (k: number): number => at[k]!;
+	const rdEnd = (k: number): number => at[k]! + pieces[k]!.text.length;
+	return {
+		text,
+		toInput: (index, end = false) => through(index, end, rdStart, rdEnd, inStart, inEnd),
+		toReading: (index, end = false) => through(index, end, inStart, inEnd, rdStart, rdEnd),
+	};
 }
 
 /** The units of a planned duration: "h", "hrs", "hours", "m", "mins", "minutes". */

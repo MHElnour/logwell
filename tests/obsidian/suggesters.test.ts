@@ -310,22 +310,23 @@ describe("#list and #list/section suggester", () => {
 		return { suggest, input, lookup, render, bound };
 	}
 
-	it("#69: an opening parenthesis starts a token: `(#Wo` offers Work", () => {
-		const { lookup, render } = make("Report (#Wo");
-		expect(lookup().map(render)).toEqual(["Work"]);
+	it.each([
+		// an opening parenthesis at a word start starts a token
+		{ typed: "Report (#Wo", offered: ["Work"] },
+		{ typed: "Report ((#Wo", offered: ["Work"] },
+		{ typed: "print(#Wo", offered: [] },
+		// once `#List/` is typed: that list's sections, narrowed by the part after the slash
+		{ typed: "Report #Work/", offered: ["Work/Admin", "Work/Planning"] },
+		{ typed: "Report #work/pla", offered: ["Work/Planning"] },
+	])("#69: $typed offers $offered", ({ typed, offered }) => {
+		const { lookup, render } = make(typed);
+		expect(lookup().map(render)).toEqual(offered);
 	});
 
-	it("#69: once `#Work/` is typed it offers that list's sections, and a pick binds the list and the section", () => {
-		const { suggest, input, lookup, render, bound } = make("Report #Work/");
-		const items = lookup();
-		expect(items.map(render)).toEqual(["Work/Admin", "Work/Planning"]);
-		suggest.selectSuggestion(items[0] as never);
+	it("#69: a picked section binds the list and the section", () => {
+		const { suggest, input, lookup, bound } = make("Report #Work/");
+		suggest.selectSuggestion(lookup()[0] as never);
 		expect(input.value).toBe("Report #Work/Admin");
 		expect(bound).toMatchObject([{ kind: "category", categoryId: "c-work", sectionId: "s-admin", text: "#Work/Admin" }]);
-	});
-
-	it("#69: the part after the slash narrows the sections", () => {
-		const { lookup, render } = make("Report #work/pla");
-		expect(lookup().map(render)).toEqual(["Work/Planning"]);
 	});
 });

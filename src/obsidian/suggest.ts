@@ -2,7 +2,7 @@ import { categoryText } from "../ui/icons";
 import { AbstractInputSuggest, type App } from "obsidian";
 import type { CheckpointApp } from "../app/App";
 import { noteLinkPath } from "../domain/notes";
-import { resolveListName } from "../domain/tasks";
+import { resolveListPath } from "../domain/tasks";
 import { tagsByLabel } from "../domain/tags";
 import type { SpanDecision } from "../parsing";
 import { tokenAtCursor } from "../parsing";
@@ -86,12 +86,12 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 			const items = lists.map((c): SuggestItem => ({ kind: "category", id: c.id, name: c.name, icon: c.icon }));
 			const byName = filterByQuery(items, (i) => (i.kind === "category" ? i.name : ""), token.query);
 			// `#Work/`: the sections of the list before the first `/`, narrowed by what follows it.
-			const slash = token.query.indexOf("/");
-			const list = slash === -1 ? null : resolveListName(lists, token.query.slice(0, slash));
-			if (list?.kind !== "one") return byName;
-			const sections = this.cpLists.sections?.(list.list.id) ?? [];
-			const inList = sections.map((x): SuggestItem => ({ kind: "category", id: list.list.id, name: list.list.name, icon: list.list.icon, section: { id: x.id, name: x.name } }));
-			return [...filterByQuery(inList, (i) => (i.kind === "category" ? (i.section?.name ?? "") : ""), token.query.slice(slash + 1)), ...byName].slice(0, 20);
+			const path = resolveListPath(lists, token.query);
+			if (path === null) return byName;
+			const { list } = path;
+			const sections = this.cpLists.sections?.(list.id) ?? [];
+			const inList = sections.map((x): SuggestItem => ({ kind: "category", id: list.id, name: list.name, icon: list.icon, section: { id: x.id, name: x.name } }));
+			return [...filterByQuery(inList, (i) => (i.kind === "category" ? (i.section?.name ?? "") : ""), path.section), ...byName].slice(0, 20);
 		}
 		if (token.kind === "tag") {
 			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, label: t.label, path: t.path }));

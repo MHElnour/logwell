@@ -902,6 +902,14 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Call mom @0900", title: "Call mom @0900", brief: [] },
 			{ in: "File the forms @2024", title: "File the forms @2024", brief: [] },
 			{ in: "Call mom @4p", title: "Call mom", nt: ["4p"], brief: ["tag|applied|@4p"] },
+			// read exactly as `at` the same time: after a date, after a repeat, before a start
+			{ in: "Meet tomorrow @4pm", title: "Meet", s: "2026-10-08T16:00", brief: ["scheduled|applied|tomorrow @4pm"] },
+			{ in: "Meet Friday @noon", title: "Meet", s: "2026-10-09T12:00", brief: ["scheduled|applied|Friday @noon"] },
+			{ in: "Meet @noon Friday", title: "Meet", s: "2026-10-09T12:00", brief: ["scheduled|applied|@noon Friday"] },
+			{ in: "Gym every day @9am", title: "Gym", rec: "daily@09:00", brief: ["recurrence|applied|every day @9am"] },
+			{ in: "Gym every monday @4:30pm", title: "Gym", rec: "weekly:MO@16:30" },
+			{ in: "Gym every day @9am starting tomorrow", title: "Gym", rec: "daily@09:00", s: "2026-10-08" },
+			{ in: "Gym every day @9am", title: "Gym", rec: "daily", tags: ["9am"], vault: { tags: [{ key: "9am", displayName: "9am" }] }, brief: ["recurrence|applied|every day", "tag|applied|@9am"] },
 		])("#69: $in", (row) => checkRow(row));
 	});
 
@@ -913,6 +921,16 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Call at 2460", title: "Call at 2460", brief: [] },
 			{ in: "Call at 0975", title: "Call at 0975", brief: [] },
 			{ in: "Call 0900", title: "Call 0900", brief: [] },
+			// read exactly as `at` the same time: after a date, after a repeat, before a start, in a range
+			{ in: "Standup tomorrow at 0900", title: "Standup", s: "2026-10-08T09:00", brief: ["scheduled|applied|tomorrow at 0900"] },
+			{ in: "Lunch at 1230 tomorrow", title: "Lunch", s: "2026-10-08T12:30" },
+			{ in: "Call at 1200", title: "Call", s: "2026-10-07T12:00" },
+			{ in: "Call at 0000", title: "Call", s: "2026-10-08T00:00" },
+			{ in: "Gym every day at 0900", title: "Gym", rec: "daily@09:00", brief: ["recurrence|applied|every day at 0900"] },
+			{ in: "Gym every day at 0900 starting tomorrow", title: "Gym", rec: "daily@09:00", s: "2026-10-08" },
+			{ in: "Shift at 0900-5pm", title: "Shift", s: "2026-10-08T09:00", dur: 480, brief: ["scheduled|applied|at 0900-5pm"] },
+			{ in: "Meeting at 0900-1000", title: "Meeting", s: "2026-10-08T09:00", dur: 60, brief: ["scheduled|applied|at 0900-1000"] },
+			{ in: "Shift at 0900 to 1700", title: "Shift", s: "2026-10-08T09:00", dur: 480 },
 		])("#69: $in", (row) => checkRow(row));
 	});
 
@@ -954,6 +972,13 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Call \\#Work", title: "Call #Work", cat: null, brief: [] },
 			{ in: "Fix \\!1", title: "Fix !1", pri: null, brief: [] },
 			{ in: "Call \\@home", title: "Call @home", tags: [], brief: [] },
+			// a backslash keeps the whole token or phrase that starts there
+			{ in: "Pay \\by friday", title: "Pay by friday", brief: [] },
+			{ in: "Pay \\every monday", title: "Pay every monday", brief: [] },
+			{ in: "Pay \\at 5pm", title: "Pay at 5pm", brief: [] },
+			{ in: "Pay \\for 2h", title: "Pay for 2h", dur: null, brief: [] },
+			{ in: "Read \\[[Big]]", title: "Read [[Big]]", brief: [] },
+			{ in: "Pay \\Friday's bill tomorrow", title: "Pay Friday's bill", s: "2026-10-08" },
 			// an unclosed quote, a quote inside a word and single quotes are not literal
 			{ in: 'Read "Friday', title: 'Read "', s: "2026-10-09" },
 			{ in: 'Buy 5" screen tomorrow', title: 'Buy 5" screen', s: "2026-10-08" },
@@ -987,13 +1012,26 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Pay rent (#Work)", title: "Pay rent", cat: WORK, brief: ["category|applied|#Work"] },
 			{ in: "Pay rent (!2)", title: "Pay rent", pri: 2 },
 			{ in: "Pay rent (@home)", title: "Pay rent", tags: ["home"] },
-			// a lone mark beside a removed token goes with it
-			{ in: "Pay rent tomorrow.", title: "Pay rent", s: "2026-10-08" },
-			{ in: "Pay rent tomorrow!", title: "Pay rent", s: "2026-10-08" },
-			{ in: "Pay rent tomorrow?", title: "Pay rent", s: "2026-10-08" },
-			{ in: "Pay rent: tomorrow", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Fix (#Work, @home)", title: "Fix", cat: WORK, tags: ["home"] },
+			{ in: "Report ((#Work))", title: "Report", cat: WORK },
+			// `(` starts a token only at a word start
+			{ in: "print(#Work)", title: "print(#Work)", cat: null, brief: [] },
+			{ in: "Fix a(@b) c", title: "Fix a(@b) c", nt: [], brief: [] },
+			// a lone mark beside a removed token, with whitespace or the text edge on both sides, at the start or end of the title, goes with it
 			{ in: "Pay rent - tomorrow", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Pay rent (#Work).", title: "Pay rent", cat: WORK },
 			{ in: "Pay rent – tomorrow", title: "Pay rent", s: "2026-10-08" },
+			{ in: "Call mom, tomorrow", title: "Call mom", s: "2026-10-08" },
+			{ in: "Pills every day, until Dec 1", title: "Pills", rec: "daily", end: "2026-12-01" },
+			// a mark a word touches stays, and so does one between title words
+			{ in: "Wow! tomorrow", title: "Wow!", s: "2026-10-08" },
+			{ in: "Plan: tomorrow review", title: "Plan: review", s: "2026-10-08" },
+			{ in: "Hi. tomorrow", title: "Hi.", s: "2026-10-08" },
+			{ in: "Note: tomorrow", title: "Note:", s: "2026-10-08" },
+			{ in: "1. tomorrow call", title: "1. call", s: "2026-10-08" },
+			{ in: "Q&A: Friday?", title: "Q&A: ?", s: "2026-10-09" },
+			{ in: "Call Ann tomorrow - about", title: "Call Ann - about", s: "2026-10-08" },
+			{ in: "Fix sink @a.b", title: "Fix sink .b", nt: ["a"] },
 		])("#69: $in", (row) => checkRow(row));
 	});
 

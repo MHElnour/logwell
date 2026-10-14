@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseQuickAdd } from "../../src/parsing";
+import { readingOf } from "../../src/parsing/text";
 import { makeCtx } from "../parsing/helpers";
 import { perfLog, timeBoth } from "./measure";
 
@@ -30,9 +31,21 @@ describe("Quick Add on long runs of repeat lead words (#12)", () => {
 });
 
 // #69: quotes, backslashes and opening parentheses are each looked at once, so a long run of them parses in time that
-// grows with the text.
-describe("Quick Add on long runs of quotes, backslashes and parentheses (#69)", () => {
-	it.each(['"', "\\", "(", '"a" ', "\\a ", "(#a) "])("%j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
+// grows with the text; so do escaped phrases (each read only up to the next backslash) and the text the readers see for
+// clock times after `@` and `at` (each rewritten once). A long run of times read as dates costs what the date reader
+// costs for `at 4pm`.
+describe("Quick Add on long runs of quotes, backslashes, parentheses and clock times (#69)", () => {
+	it.each(["@4pm ", "at 0900 ", "at 0900-1000 "])("the readers' text of %j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
+		const short = long(unit, 5000);
+		const longer = long(unit, 20000);
+		const free = (): boolean => true;
+		const { small, large } = timeBoth(() => readingOf(short, free).toInput(5000), () => readingOf(longer, free).toInput(20000));
+		const report = `${small.toFixed(2)} ms -> ${large.toFixed(2)} ms`;
+		perfLog(`readers' text ${JSON.stringify(unit)} 5,000 -> 20,000 characters: ${report}`);
+		expect(large, report).toBeLessThan(small * GROWTH + NOISE_MS);
+	});
+
+	it.each(['"', "\\", "(", '"a" ', "\\a ", "(#a) ", "((#a)) ", "at 0900-1000 ", "\\by friday "])("%j at 20,000 characters takes well under 16 times as long as at 5,000", (unit) => {
 		const ctx = makeCtx();
 		const short = long(unit, 5000);
 		const longer = long(unit, 20000);

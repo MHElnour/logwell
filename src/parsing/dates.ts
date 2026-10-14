@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
 import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
-import { atClockLength, DAY_PART_PATTERN, DURATION_UNIT_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, tokenStartAllowed, wordBoundaryBefore } from "./text";
+import { DAY_PART_PATTERN, DURATION_UNIT_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -15,8 +15,9 @@ import type { DateLocale, Span } from "./types";
 const DEFAULT_EVENING_TIME = "20:00";
 const TONIGHT_RE = /\btonight\b/iu;
 const STOP_LIST = new Set(["may", "sun", "sat", "march", "second", "now"]);
-const BARE_DURATION_RE =
-	/^(?:at\s+)?\d+(?:\.\d+)?\s*(?:h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?|d|days?|w|wks?|weeks?)$/iu;
+// An amount of time without `for`: a planned duration's units ("2h", "30 min"), or seconds, days or weeks ("3 days"),
+// after an optional `at`.
+const BARE_DURATION_RE = new RegExp(`^(at\\s+)?\\d+(?:\\.\\d+)?\\s*(?:(${DURATION_UNIT_PATTERN})|s|secs?|seconds?|d|days?|w|wks?|weeks?)$`, "iu");
 // "the week", "a day" ("3 times a day"): a period, not a date.
 const VAGUE_UNIT_RE = /^(?:the\s+|a\s+)?(?:day|week|month|year)$/iu;
 // A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
@@ -28,8 +29,6 @@ const THIS_WORD_RE = /\bthis\b/iu;
 // No lookbehind (iOS): the character before is matched and ignored.
 const LEADING_ZERO_TIME_RE = /(?:^|[^\d:.])0[1-9]:[0-5]\d(?!\d)/u;
 const PAST_WORD_RE = /^(?:last|past|previous)\b/iu;
-// A planned duration without `for` ("2h", "30 min"): no date at all, and no chip.
-const DURATION_TEXT_RE = new RegExp(`^\\d+(?:\\.\\d+)?\\s*${DURATION_UNIT_PATTERN}$`, "iu");
 // What joins the two times of a time range: "-", an en dash or "to" ("3-4pm", "from 3pm to 5pm").
 const TIME_RANGE_JOIN_RE = /\s*(?:\bto\b|[-\u2013])\s*/giu;
 
@@ -81,8 +80,6 @@ interface Lead {
 	kind: LeadKind;
 	/** Only next to a repeat: these are also everyday words ("the movie ending", "the starting lineup"). */
 	repeatOnly?: true;
-	/** Written right before the date, with no space, at a token start: `@` before a clock time ("@4pm", "@noon"). */
-	attached?: true;
 }
 
 /**
@@ -94,7 +91,6 @@ interface Lead {
 const LEADS: readonly Lead[] = [
 	{ words: "by", kind: "deadline" },
 	{ words: "at", kind: "time" },
-	{ words: "@", kind: "time", attached: true },
 	{ words: "until", kind: "end" },
 	{ words: "till", kind: "end", repeatOnly: true },
 	{ words: "ending on", kind: "end", repeatOnly: true },
@@ -123,8 +119,7 @@ function leadBefore(s: string, index: number): LeadFound | null {
 	let best: LeadFound | null = null;
 	for (const lead of LEADS) {
 		let at = index;
-		if (lead.attached === true) at = s.startsWith(lead.words, index - lead.words.length) && tokenStartAllowed(s, index - lead.words.length) && atClockLength(s, index) > 0 ? index - lead.words.length : -1;
-		const words = lead.attached === true ? [] : lead.words.split(" ");
+		const words = lead.words.split(" ");
 		for (let w = words.length - 1; w >= 0 && at !== -1; w--) at = wordBefore(s, at, words[w]!);
 		if (at !== -1 && (best === null || at < best.start)) best = { start: at, words: lead.words, kind: lead.kind, repeatOnly: lead.repeatOnly === true };
 	}
@@ -221,20 +216,9 @@ const dateOverTime: chrono.Refiner = {
 	},
 };
 
-// Four digits after `at` are a 24-hour time, hours 00 to 23 and minutes 00 to 59 ("at 0900", "at 1730"), read with the
-// `at`. Without `at` ("Call 0900") they stay text.
-const AT_24_HOUR_RE = /\bat\s+([01]\d|2[0-3])([0-5]\d)(?![\p{L}\p{N}])/iu;
-const at24Hour: chrono.Parser = {
-	pattern: () => AT_24_HOUR_RE,
-	extract: (_context, match) => {
-		const hour = Number(match[1]);
-		return { hour, minute: Number(match[2]), meridiem: hour < 12 ? 0 : 1 };
-	},
-};
-
 /**
  * chrono's casual English and en-GB readers with `dateOverTime` first, `shortYear` and `impliedYear` right before the
- * filter of impossible dates (the one refiner with a `strictMode` field), and the `at 0900` reader. en-GB reads a month
+ * filter of impossible dates (the one refiner with a `strictMode` field). en-GB reads a month
  * name before a two-digit day as that day ("Oct 15", "Feb 29"), as English does: its month-name-first reader is replaced
  * by a copy that does not skip a day that looks like a year (the one parser with a `shouldSkipYearLikeDate` field).
  * chrono's date range merge stays as it is. Clones: chrono's shared instances stay as they are.
@@ -245,7 +229,6 @@ function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
 	reader.refiners.unshift(dateOverTime);
 	reader.parsers = reader.parsers.map((p) => (Object.hasOwn(p, "shouldSkipYearLikeDate") ? Object.assign(Object.create(Object.getPrototypeOf(p) as object) as chrono.Parser, p, { shouldSkipYearLikeDate: false }) : p));
-	reader.parsers.push(at24Hour);
 	return reader;
 }
 
@@ -299,9 +282,19 @@ export function todayOf(zoneNow: DateTime): LocalDate {
 	return today;
 }
 
+/**
+ * The one reader of an amount of time typed without `for`: "planned" for a planned duration alone ("Gym 2h": no date
+ * at all, and no chip), "other" for any other ("3 days", "at 2h": a weak date), else null.
+ */
+function bareDuration(text: string): "planned" | "other" | null {
+	const m = BARE_DURATION_RE.exec(text.trim());
+	if (m === null) return null;
+	return m[1] === undefined && m[2] !== undefined ? "planned" : "other";
+}
+
 function isWeakText(text: string): boolean {
 	const t = text.trim();
-	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || BARE_DURATION_RE.test(t) || VAGUE_UNIT_RE.test(t);
+	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || bareDuration(t) !== null || VAGUE_UNIT_RE.test(t);
 }
 
 /**
@@ -592,7 +585,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	for (const result of results) {
 		// A span that reaches into a mask, one introduced by "for" ("for 2 days" is not a date), or a duration without
 		// `for` ("Gym 2h").
-		if (result.text.includes(MASK_CHAR) || /^for\s/iu.test(result.text) || DURATION_TEXT_RE.test(result.text.trim())) continue;
+		if (result.text.includes(MASK_CHAR) || /^for\s/iu.test(result.text) || bareDuration(result.text) === "planned") continue;
 		// A time range is its start time and a duration, or its end time alone when the end is not after the start.
 		const range = timeRangeOf(result, parser, clock);
 		const r = range !== null && "end" in range ? range.end : result;

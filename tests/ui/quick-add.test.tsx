@@ -232,13 +232,14 @@ describe("List and section", () => {
 		expect([...qm.h.app.store.state.tasks.values()][0]).toMatchObject({ categoryId: qm.work.id, sectionId: qm.admin.id });
 	});
 
-	it("#69: the chip names the list and its section, or the unknown section", async () => {
+	it.each([
+		{ typed: "Report #Work/Admin", label: "List: Work / Admin" },
+		{ typed: "Report #Work/Nope", label: "Unknown section: Work/Nope" },
+	])("#69: the chip of $typed names the list and its section, or the unknown section", async ({ typed, label }) => {
 		const { h, m } = await workWithSections();
 		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: h.app.categories.list(), sections: h.app.store.state.sections, tags: h.app.store.state.tags };
-		m.setInput("Report #Work/Admin");
-		expect(chipLabel(m.result.chips[0]!, env)).toBe("List: Work / Admin");
-		m.setInput("Report #Work/Nope");
-		expect(chipLabel(m.result.chips[0]!, env)).toBe("Unknown section: Work/Nope");
+		m.setInput(typed);
+		expect(chipLabel(m.result.chips[0]!, env)).toBe(label);
 	});
 
 	it("#69: an unknown section blocks saving and says why", async () => {
