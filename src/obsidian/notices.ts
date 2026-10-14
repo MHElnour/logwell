@@ -8,6 +8,11 @@ export interface NoticeAction {
 	isUndo?: boolean;
 }
 
+/** A plain notice with Obsidian's default timeout: the `notify` port of every host. */
+export function plainNotice(message: string): void {
+	new Notice(message);
+}
+
 /** A "Done, Undo" notice closes after this long (Cmd/Ctrl+Z still undoes every change). */
 export const UNDO_NOTICE_MS = 4000;
 
@@ -45,7 +50,7 @@ export function actionNotice(
  * The Undo button of a notice. `undo` resolves false when there is nothing to undo any more; `onNothing` then
  * says so (a plain notice unless the caller routes it elsewhere). A thrown error reaches `showError` through `actionNotice`.
  */
-export function undoAction(undo: () => Promise<boolean>, onNothing: () => void = () => void new Notice(NOTHING_TO_UNDO)): NoticeAction {
+export function undoAction(undo: () => Promise<boolean>, onNothing: () => void = () => plainNotice(NOTHING_TO_UNDO)): NoticeAction {
 	return {
 		label: "Undo",
 		isUndo: true,

@@ -26,7 +26,11 @@ import {
 // The file is valid JSON. Collections are sorted by ID and keys are in a fixed
 // order, so a git diff shows exactly the records that changed.
 
-function canonical(value: unknown): unknown {
+/**
+ * A deep copy with every object's keys sorted and undefined values left out: the file's record form, and (stringified)
+ * a key-order-independent comparison of values built in different places.
+ */
+export function canonical(value: unknown): unknown {
 	if (Array.isArray(value)) return value.map(canonical);
 	if (typeof value === "object" && value !== null) {
 		const out: Record<string, unknown> = {};

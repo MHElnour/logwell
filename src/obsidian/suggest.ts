@@ -1,6 +1,7 @@
 import { categoryText } from "../ui/icons";
 import { AbstractInputSuggest, type App } from "obsidian";
 import type { CheckpointApp } from "../app/App";
+import { noteLinkPath } from "../domain/notes";
 import { tagsByLabel } from "../domain/tags";
 import type { SpanDecision } from "../parsing";
 import { tokenAtCursor } from "../parsing";
@@ -94,7 +95,7 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 	renderSuggestion(item: SuggestItem, el: HTMLElement): void {
 		if (item.kind === "category") el.setText(categoryText(item));
 		else if (item.kind === "tag") el.setText(`@${item.label}`);
-		else el.setText(item.path.replace(/\.md$/i, ""));
+		else el.setText(noteLinkPath(item.path));
 	}
 
 	override selectSuggestion(item: SuggestItem): void {

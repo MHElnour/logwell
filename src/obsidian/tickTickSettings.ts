@@ -41,10 +41,10 @@ export function tickTickSettingItems(deps: TickTickSettingsDeps): SettingDefinit
 	const session = () => deps.session() ?? null;
 	const hasToken = () => session()?.app.tickTickSecret.get() != null;
 	const on = () => hasToken() && session()?.app.tickTickDevice.isEnabled() === true;
+	// In sidebar order, as every list picker shows them.
 	const lists = () => {
 		const s = session();
-		// By name here, unlike the sync's list order.
-		return s === null ? [] : linkedLists(s.app.store.state).sort((a, b) => a.name.localeCompare(b.name));
+		return s === null ? [] : linkedLists(s.app.store.state);
 	};
 
 	const rows: SettingGroupItem[] = [

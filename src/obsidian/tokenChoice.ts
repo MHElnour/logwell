@@ -1,7 +1,9 @@
 // Pure helpers of the Quick Add suggester. No parsing import: the token
 // shape is structural, so these stay testable without the parser.
 
-import { noteDisplayName } from "../domain/notes";
+import { noteDisplayName, noteLinkPath } from "../domain/notes";
+import { looseListKey } from "../domain/tasks";
+import { clamp } from "../domain/text";
 
 export interface TokenSpan {
 	start: number;
@@ -18,21 +20,17 @@ export interface ChoiceResult {
 
 /** Replaces the token span of `value` with `insertText`. */
 export function applyTokenChoice(value: string, token: { span: TokenSpan }, insertText: string): ChoiceResult {
-	const start = Math.max(0, Math.min(token.span.start, value.length));
-	const end = Math.max(start, Math.min(token.span.end, value.length));
+	const start = clamp(token.span.start, 0, value.length);
+	const end = clamp(token.span.end, start, value.length);
 	const next = value.slice(0, start) + insertText + value.slice(end);
 	const stop = start + insertText.length;
 	return { value: next, span: { start, end: stop }, cursor: stop };
 }
 
-function squash(s: string): string {
-	return s.toLowerCase().replace(/[\s_-]+/g, "");
-}
-
-/** Rank: 0 prefix, 1 substring, 2 subsequence, -1 no match. */
+/** Rank: 0 prefix, 1 substring, 2 subsequence, -1 no match. Case, spaces, "-" and "_" are ignored (`looseListKey`). */
 function rank(label: string, query: string): number {
-	const l = squash(label);
-	const q = squash(query);
+	const l = looseListKey(label);
+	const q = looseListKey(query);
 	if (q === "") return 0;
 	if (l.startsWith(q)) return 0;
 	if (l.includes(q)) return 1;
@@ -65,7 +63,7 @@ function basenameCounts(allPaths: readonly string[]): Map<string, number> {
 /** `[[basename]]` text when the basename is unique among notes, else the path without `.md`. */
 export function noteInsertName(path: string, allPaths: readonly string[] | ReadonlyMap<string, number>): string {
 	const counts = allPaths instanceof Map ? allPaths : basenameCounts(allPaths as readonly string[]);
-	return (counts.get(noteDisplayName(path).toLowerCase()) ?? 0) > 1 ? path.replace(/\.md$/i, "") : noteDisplayName(path);
+	return (counts.get(noteDisplayName(path).toLowerCase()) ?? 0) > 1 ? noteLinkPath(path) : noteDisplayName(path);
 }
 
 export interface NoteFileLike {

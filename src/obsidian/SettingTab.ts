@@ -1,10 +1,10 @@
-import { type App, Notice, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
+import { type App, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
 import { type CheckpointSettings, DEFAULT_SETTINGS, FOCUS_RANGES, UPCOMING_DAYS_RANGE, isValidEveningTime, sanitizeSettings } from "../app/settings";
 import { deviceZone } from "../domain/ports";
 import { isValidZone } from "../domain/time";
 import type CheckpointPlugin from "../main";
 import { DB_EXTENSION } from "../persistence/schema";
-import { showError } from "./notices";
+import { plainNotice, showError } from "./notices";
 import { tickTickSettingItems } from "./tickTickSettings";
 
 /** Declarative settings (minAppVersion 1.13.0). */
@@ -165,7 +165,7 @@ export class CheckpointSettingTab extends PluginSettingTab {
 				setSetting: (key, value) => this.setControlValue(key, value),
 				session: () => this.plugin.session,
 				refresh: () => this.update(),
-				notify: (message) => void new Notice(message),
+				notify: plainNotice,
 				error: showError,
 				now: () => Date.now(),
 			}),

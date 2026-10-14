@@ -1,10 +1,9 @@
 import type { FocusService, OpenResult } from "../app/FocusService";
 import { type ActiveTimer, type FocusMoment, type FocusSetConfig, remainingSec } from "../domain/focus";
 import type { Instant } from "../domain/types";
-import { clockText, summaryText } from "../ui/focus/format";
-import { NOTHING_TO_UNDO } from "../ui/format";
+import { PHASE_LABEL, clockText, roundText, summaryText } from "../ui/focus/format";
 import type { ButtonSpec } from "../ui/host";
-import { type NoticeAction, undoAction } from "./notices";
+import type { NoticeAction } from "./notices";
 
 // The Obsidian side of a running focus set. Reacts to the FocusService bus (notices, sound,
 // status bar, prompts). The 1 s heartbeat itself is a plugin interval in main.ts.
@@ -18,6 +17,8 @@ export type FocusLike = Pick<
 export interface FocusHostUi {
 	notify(message: string): void;
 	actionNotice(message: string, actions: NoticeAction[]): void;
+	/** An Undo notice for `undo` (`boundUndoNotice`); it says so when `undo` resolves false. */
+	notifyUndo(message: string, undo: () => Promise<boolean>): void;
 	/** A desktop notification; a no-op where the platform has none. */
 	systemNotify(title: string, body: string): void;
 	/** Asks for the system notification permission; only called from a user gesture. */
@@ -29,12 +30,12 @@ export interface FocusHostUi {
 	error(err: unknown): void;
 }
 
-/** The status-bar text: "◎ 18:42 · Round 2/4 · Task title". */
+/** The status-bar text: "◎ 18:42 · Round 2 of 4 · Task title". */
 export function formatStatus(t: ActiveTimer, now: Instant): string {
 	const parts = [`◎ ${clockText(remainingSec(t, now))}${t.state === "paused" ? " (paused)" : ""}`];
-	const round = `Round ${t.round}/${t.config.rounds}`;
+	const round = roundText(t.round, t.config.rounds);
 	if (t.phase === "focus") parts.push(round);
-	else parts.push(t.phase === "long-break" ? "Long break" : "Short break", round);
+	else parts.push(PHASE_LABEL[t.phase], round);
 	if (t.taskTitleSnapshot !== "") parts.push(shortTitle(t.taskTitleSnapshot));
 	if (t.needsRecovery) parts.push("Needs your answer");
 	return parts.join(" · ");
@@ -191,9 +192,7 @@ export class FocusHost {
 
 	private onShortDiscarded(sessionId: string): void {
 		const focus = this.focus;
-		this.ui.actionNotice("Focus under a minute was not saved", [
-			undoAction(async () => (await focus?.undoShortDiscard(sessionId)) ?? false, () => this.ui.notify(NOTHING_TO_UNDO)),
-		]);
+		this.ui.notifyUndo("Focus under a minute was not saved", async () => (await focus?.undoShortDiscard(sessionId)) ?? false);
 	}
 
 	/** The recovery prompt. Dismissing it (Escape or "Decide later") leaves the timer paused with the prompt pending. */
@@ -220,7 +219,7 @@ export class FocusHost {
 			if (choice === null || this.focus !== focus) return;
 			const applied = await focus.resolveRecovery(choice);
 			if (choice === "discard" && applied) {
-				this.ui.actionNotice("Focus timer discarded", [undoAction(() => focus.restoreDiscardedTimer(), () => this.ui.notify(NOTHING_TO_UNDO))]);
+				this.ui.notifyUndo("Focus timer discarded", () => focus.restoreDiscardedTimer());
 			}
 		} catch (err) {
 			this.ui.error(err);
