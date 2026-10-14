@@ -126,6 +126,7 @@ export function QuickAddEditor(props: {
 		zone: model.env.app.settings.zone(),
 		today: model.env.app.queryContext().today,
 		categories: model.env.app.categories.list(),
+		sections: model.env.app.store.state.sections,
 		tags: model.env.app.store.state.tags,
 		anchor: model.repeatAnchor(),
 	};

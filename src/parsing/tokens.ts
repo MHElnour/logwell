@@ -27,6 +27,7 @@ import {
 	scanFor,
 	sticky,
 	tokenStartAllowed,
+	withoutTrailingMarks,
 	wordBoundaryBefore,
 } from "./text";
 
@@ -94,12 +95,66 @@ export function findNoteTokens(s: string, taken: Taken): NoteToken[] {
 	return out;
 }
 
-/** `#name` or `@name` tokens. `accept` can reject a candidate (for example an invalid tag key). */
+export interface LiteralToken {
+	span: Span;
+	/** A word, token or phrase after a backslash: the backslash leaves the title. */
+	escape: boolean;
+}
+
+/** The quote that closes each opening quote: straight and curly double quotes. */
+const CLOSING_QUOTE: Readonly<Record<string, string>> = { '"': '"', "\u201c": "\u201d" };
+
+/**
+ * Text Quick Add never reads, found before every other token: a phrase in double quotes, straight or curly (kept in the
+ * title with its quotes), and what a backslash at a token start escapes (the backslash leaves the title): the token
+ * right after it (`\#Work`, `\!1`, `\@home`), or the word or note link right after it with the whole phrase it starts
+ * (`\today`, `\[[Note]]`, `\by friday`, `\every monday`). `phraseEnd(from, limit)` is where the reading that starts at
+ * `from` ends, before `limit` (the next backslash), or `from` when none starts there. A quote opens at a word start and closes before a word end; an
+ * unclosed quote, a quote inside a word (`5" screen`) and single quotes are plain text.
+ */
+export function findLiteralTokens(s: string, taken: Taken, phraseEnd: (from: number, limit: number) => number): LiteralToken[] {
+	const out: LiteralToken[] = [];
+	// The next closing quote of each kind found so far, so every quote is looked for once.
+	const next = new Map<string, number>();
+	for (let i = 0; i < s.length; i++) {
+		const ch = s.charAt(i);
+		if (ch === "\\") {
+			if (!tokenStartAllowed(s, i)) continue;
+			const trigger = s.charAt(i + 1);
+			const from = trigger === "#" || trigger === "@" || trigger === "!" ? i + 2 : s.startsWith("[[", i + 1) ? i + 3 : i + 1;
+			let end = tokenRunEnd(s, from);
+			if (end === from && from !== i + 3) continue;
+			// A word or a note link may lead a longer phrase; only text after it can make the phrase longer.
+			if (from !== i + 2) {
+				const slash = s.indexOf("\\", end);
+				const limit = slash === -1 ? s.length : slash;
+				if (from === i + 3 || s.slice(end, limit).trim() !== "") end = Math.max(end, phraseEnd(i + 1, limit));
+			}
+			if (taken(i, end)) continue;
+			out.push({ span: { start: i, end }, escape: true });
+			i = end - 1;
+			continue;
+		}
+		const close = CLOSING_QUOTE[ch];
+		if (close === undefined || !wordBoundaryBefore(s, i)) continue;
+		let j = next.get(close);
+		if (j === undefined || (j !== -1 && j <= i)) {
+			j = s.indexOf(close, i + 1);
+			next.set(close, j);
+		}
+		if (j === -1 || isWordChar(charAt(s, j + 1)) || taken(i, j + 1)) continue;
+		out.push({ span: { start: i, end: j + 1 }, escape: false });
+		i = j;
+	}
+	return out;
+}
+
+/** `#name` or `@name` tokens. `accept` can reject a candidate (for example an invalid tag key), given its name and where its trigger is. */
 export function findWordTokens(
 	s: string,
 	trigger: "#" | "@",
 	taken: Taken,
-	accept: (name: string) => boolean,
+	accept: (name: string, start: number) => boolean,
 ): WordToken[] {
 	const out: WordToken[] = [];
 	let from = 0;
@@ -111,7 +166,7 @@ export function findWordTokens(
 		const end = tokenRunEnd(s, i + 1);
 		if (end === i + 1) continue;
 		const name = s.slice(i + 1, end);
-		if (taken(i, end) || !accept(name)) continue;
+		if (taken(i, end) || !accept(name, i)) continue;
 		out.push({ span: { start: i, end }, name });
 		from = end;
 	}
@@ -138,6 +193,10 @@ interface RepeatToken {
 	end: RepeatCount | null;
 	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
 	onDate: boolean;
+	/** The end of a time range right after the repeat's time (`-6pm` in "every monday at 5pm-6pm"): title text, never read. */
+	timeEnd: Span | null;
+	/** The repeat's time typed right before it ("at 6am" in "Wake at 6am every day"), where the span starts. */
+	timeBefore: Span | null;
 }
 
 /**
@@ -223,6 +282,13 @@ const EVERY_RE = new RegExp(
 );
 // A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
 const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+// The end of a time range after that time: the repeat takes the start, and the end stays title text ("every monday at
+// 5pm-6pm", "every monday at 6pm to 7pm").
+const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
+// The same time typed right before the repeat, with only spaces between ("Wake at 6am every day"), read in the few
+// characters before it.
+const TIME_BEFORE_RE = new RegExp(`(at\\s+${CLOCK_PATTERN})(\\s+)$`, "iu");
+const TIME_BEFORE_REACH = 32;
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
 const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
@@ -305,6 +371,8 @@ interface RepeatPhrase {
 	silent: boolean;
 	/** "every year on …": the span ends with the "on" that leads into the start date. */
 	onDate: boolean;
+	/** The span ends with the repeat's time ("every monday at 9"). */
+	timed: boolean;
 }
 
 /**
@@ -314,10 +382,10 @@ interface RepeatPhrase {
 function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | null {
 	const body = start + word.length;
 	if (!isSpaceChar(charAt(s, body))) return null;
-	const phrase = (end: number, supported: boolean, onDate = false): RepeatPhrase => ({ end, supported, silent: false, onDate });
+	const phrase = (end: number, supported: boolean, onDate = false, timed = false): RepeatPhrase => ({ end, supported, silent: false, onDate, timed });
 	if (word.toLowerCase() === "each") {
 		const end = repeatWordsEnd(s, body);
-		return end === body ? null : { end, supported: false, silent: true, onDate: false };
+		return end === body ? null : { end, supported: false, silent: true, onDate: false, timed: false };
 	}
 	const form = sticky(EVERY_RE, s, start);
 	if (form === null) {
@@ -334,7 +402,7 @@ function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | 
 	const joined = join === null ? end : end + join[0].length;
 	const more = join === null ? end : repeatWordsEnd(s, joined);
 	const compound = more > joined && !NUMBERS_ONLY_RE.test(s.slice(joined, more));
-	return compound ? phrase(more, false) : phrase(end, true);
+	return compound ? phrase(more, false) : phrase(end, true, false, time !== null);
 }
 
 /**
@@ -367,13 +435,20 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		for (let i = start; i < end; i++) if (covered[i] === 1) return false;
 		return true;
 	};
-	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate">): number => {
+	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate" | "timed">): number => {
 		const found = phrase.onDate || phrase.silent ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate });
-		covered.fill(1, span.start, span.end);
+		const range = end === null && phrase.timed ? sticky(TIME_END_RE, s, span.end) : null;
+		const timeEnd = range !== null && free(span.end, span.end + range[0].length) ? { start: span.end, end: span.end + range[0].length } : null;
+		const reach = Math.max(0, span.start - TIME_BEFORE_REACH);
+		const before = phrase.supported && !phrase.silent && !phrase.onDate && !phrase.timed ? TIME_BEFORE_RE.exec(s.slice(reach, span.start)) : null;
+		const at = before === null ? -1 : span.start - before[2]!.length - before[1]!.length;
+		const timeBefore = before !== null && wordBoundaryBefore(s, at) && free(at, span.start) ? { start: at, end: at + before[1]!.length } : null;
+		const whole = timeBefore === null ? span : { start: timeBefore.start, end: span.end };
+		out.push({ span: whole, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate, timeEnd, timeBefore });
+		covered.fill(1, whole.start, timeEnd?.end ?? span.end);
 		if (end !== null) covered.fill(1, end.span.start, end.span.end);
-		return end === null ? span.end : end.span.end;
+		return end?.span.end ?? timeEnd?.end ?? span.end;
 	};
 	const pushOn = (found: RegExpExecArray, bare: boolean): void => {
 		let end = found.index + found[0].length;
@@ -385,7 +460,7 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		// "on mondays", "on weekends", "on the last friday of the month": the "on" goes with the repeat; not "on daily".
 		const on = bare && !/s$/iu.test(found[0]) ? -1 : wordBefore(s, found.index, "on");
 		const start = on === -1 ? found.index : on;
-		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate });
+		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate, timed: time !== null });
 	};
 
 	// The `every` phrases first, so "every 2nd and 4th tuesday of every month" is one unsupported phrase; the "every" of
@@ -410,9 +485,9 @@ export function findDurationTokens(s: string, taken: Taken): DurationToken[] {
 }
 
 /**
- * `!1 !2 !3 !high !medium !low` (case-insensitive) at the start of the text or after
- * whitespace, ending at whitespace or the end of the text. `Wow!`, `!important`, `!4`, `a!1`,
- * `!!1` and `!1x` are not priorities.
+ * `!1 !2 !3 !high !medium !low` (case-insensitive) at the start of the text, after whitespace or after `(`, ending at
+ * whitespace or the end of the text, without the marks that may follow it (`!1.`, `(!2)`). `Wow!`, `!important`,
+ * `!4`, `a!1`, `!!1` and `!1x` are not priorities.
  */
 export function findPriorityTokens(s: string, taken: Taken): PriorityToken[] {
 	const out: PriorityToken[] = [];
@@ -424,6 +499,7 @@ export function findPriorityTokens(s: string, taken: Taken): PriorityToken[] {
 		if (!tokenStartAllowed(s, i)) continue;
 		let end = i + 1;
 		while (end < s.length && !isSpaceChar(charAt(s, end))) end += charAt(s, end).length;
+		end = withoutTrailingMarks(s, i + 1, end);
 		const word = s.slice(i + 1, end).toLowerCase();
 		const priority = Object.hasOwn(PRIORITY_WORDS, word) ? PRIORITY_WORDS[word] : undefined;
 		if (priority === undefined || taken(i, end)) continue;

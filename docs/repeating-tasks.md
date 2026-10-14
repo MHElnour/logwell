@@ -44,7 +44,7 @@ Quick Add reads a fixed set of phrases. A phrase from the tables below becomes t
 
 A number is written in digits, from 1 to 999: `every 0 days` and `every 1000 days` are refused, and `every two weeks` is not read. A single word such as `daily`, `weekly`, `monthly`, `yearly`, `quarterly`, `weekdays` or `mondays` repeats only when its phrase ends the text: the word alone, or followed only by its `on …`, a time, a start or an end (`Pay rent monthly on the 1st`, `Bday yearly on May 5`). So `Stretch daily` repeats, but `Daily standup` keeps its title.
 
-Add a time with `at` right after the repeat, such as `every monday at 9am` or `daily at 7:30pm`. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00; the repeat applies once you choose, and the task is not saved before: Enter opens the choice, and choosing saves.
+Add a time with `at` right after the repeat, such as `every monday at 9am` or `daily at 7:30pm`. A time typed right before the repeat works the same: `Wake at 6am every day` repeats at 06:00. A time range there, such as `every monday at 5:30pm-6:30pm`, repeats at its start time; the rest, `-6:30pm`, stays in the title. For a bare hour from 1 to 12, such as `at 9`, Quick Add asks whether you mean 09:00 or 21:00; the repeat applies once you choose, and the task is not saved before: Enter opens the choice, and choosing saves.
 
 Set the first and last date in the same line, after the repeat and its time, in any order:
 

@@ -85,6 +85,18 @@ export function resolveListName<T extends { readonly name: string }>(lists: Iter
 	return loose.length === 1 ? { kind: "one", list: loose[0] as T } : { kind: "several", lists: loose };
 }
 
+/**
+ * A typed `list/section` split at its first `/`: the one list the part before it names (`resolveListName`) and the
+ * section name typed after it ("" for `Work/`). Null without a `/` or when that part names no single list. Quick Add's
+ * `#list/section` and its suggester share it.
+ */
+export function resolveListPath<T extends { readonly name: string }>(lists: Iterable<T>, typed: string): { list: T; section: string } | null {
+	const slash = typed.indexOf("/");
+	if (slash === -1) return null;
+	const list = resolveListName(lists, typed.slice(0, slash));
+	return list.kind === "one" ? { list: list.list, section: typed.slice(slash + 1) } : null;
+}
+
 export function requireCategoryName(raw: string): string {
 	const name = normalizedText(raw);
 	if (name.length === 0) {

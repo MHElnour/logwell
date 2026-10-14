@@ -200,10 +200,10 @@ describe("resolution", () => {
 		expect(parseQuickAdd("x [[Big]]", ctx).chips[0]?.status).toBe("missing");
 	});
 
-	it("tokens need a start or whitespace before the trigger", () => {
+	it("tokens need a start, whitespace or an opening parenthesis before the trigger", () => {
 		expect(parse("a@b.com").chips).toEqual([]);
 		expect(parse("a#Study").chips).toEqual([]);
-		expect(parse("(@home)").chips).toEqual([]);
+		expect(parse("(@home)").chips.map((c) => c.text)).toEqual(["@home"]);
 	});
 
 	it("a token of digits only is plain text unless a category or tag of that name exists", () => {

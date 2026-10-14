@@ -170,6 +170,16 @@ describe("tokenAtCursor", () => {
 		expect(tokenAtCursor("#Study", 3)).toEqual({ kind: "category", span: { start: 0, end: 6 }, query: "St" });
 	});
 
+	it.each([
+		{ input: "Read (#Wo", token: { kind: "category", span: { start: 6, end: 9 }, query: "Wo" } },
+		{ input: "Read (@ho", token: { kind: "tag", span: { start: 6, end: 9 }, query: "ho" } },
+		{ input: "Read ((#Wo", token: { kind: "category", span: { start: 7, end: 10 }, query: "Wo" } },
+		// not after a letter
+		{ input: "print(#Wo", token: null },
+	])("#69: an opening parenthesis at a word start before the trigger starts a token: $input", ({ input, token }) => {
+		expect(tokenAtCursor(input, input.length)).toEqual(token);
+	});
+
 	it("gives an empty query right after the trigger", () => {
 		expect(tokenAtCursor("x #", 3)).toEqual({ kind: "category", span: { start: 2, end: 3 }, query: "" });
 		expect(tokenAtCursor("x @", 3)).toEqual({ kind: "tag", span: { start: 2, end: 3 }, query: "" });

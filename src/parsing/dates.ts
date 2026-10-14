@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
 import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
 import type { DateSpec, LocalDate } from "../domain/types";
-import { DAY_PART_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
+import { DAY_PART_PATTERN, DURATION_UNIT_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -15,8 +15,9 @@ import type { DateLocale, Span } from "./types";
 const DEFAULT_EVENING_TIME = "20:00";
 const TONIGHT_RE = /\btonight\b/iu;
 const STOP_LIST = new Set(["may", "sun", "sat", "march", "second", "now"]);
-const BARE_DURATION_RE =
-	/^(?:at\s+)?\d+(?:\.\d+)?\s*(?:h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?|d|days?|w|wks?|weeks?)$/iu;
+// An amount of time without `for`: a planned duration's units ("2h", "30 min"), or seconds, days or weeks ("3 days"),
+// after an optional `at`.
+const BARE_DURATION_RE = new RegExp(`^(at\\s+)?\\d+(?:\\.\\d+)?\\s*(?:(${DURATION_UNIT_PATTERN})|s|secs?|seconds?|d|days?|w|wks?|weeks?)$`, "iu");
 // "the week", "a day" ("3 times a day"): a period, not a date.
 const VAGUE_UNIT_RE = /^(?:the\s+|a\s+)?(?:day|week|month|year)$/iu;
 // A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
@@ -53,6 +54,8 @@ export interface DateCandidate {
 	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
 	rolls: RollKind | null;
 	outcome: DateOutcome;
+	/** A certain hour: "alone" for one time with no day of its own ("at 5pm"), "dated" for any other; absent without one. */
+	time?: "alone" | "dated";
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
@@ -212,15 +215,18 @@ const dateOverTime: chrono.Refiner = {
 };
 
 /**
- * chrono's casual English and en-GB readers with `dateOverTime` first, and `shortYear` and `impliedYear` right before
- * the filter of impossible dates (the one refiner with a `strictMode` field). chrono's date range merge stays as it is.
- * Clones: chrono's shared instances stay as they are.
+ * chrono's casual English and en-GB readers with `dateOverTime` first, `shortYear` and `impliedYear` right before the
+ * filter of impossible dates (the one refiner with a `strictMode` field). en-GB reads a month
+ * name before a two-digit day as that day ("Oct 15", "Feb 29"), as English does: its month-name-first reader is replaced
+ * by a copy that does not skip a day that looks like a year (the one parser with a `shouldSkipYearLikeDate` field).
+ * chrono's date range merge stays as it is. Clones: chrono's shared instances stay as they are.
  */
 function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const reader = base.clone();
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
 	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
 	reader.refiners.unshift(dateOverTime);
+	reader.parsers = reader.parsers.map((p) => (Object.hasOwn(p, "shouldSkipYearLikeDate") ? Object.assign(Object.create(Object.getPrototypeOf(p) as object) as chrono.Parser, p, { shouldSkipYearLikeDate: false }) : p));
 	return reader;
 }
 
@@ -274,9 +280,19 @@ export function todayOf(zoneNow: DateTime): LocalDate {
 	return today;
 }
 
+/**
+ * The one reader of an amount of time typed without `for`: "planned" for a planned duration alone ("Gym 2h": no date
+ * at all, and no chip), "other" for any other ("3 days", "at 2h": a weak date), else null.
+ */
+function bareDuration(text: string): "planned" | "other" | null {
+	const m = BARE_DURATION_RE.exec(text.trim());
+	if (m === null) return null;
+	return m[1] === undefined && m[2] !== undefined ? "planned" : "other";
+}
+
 function isWeakText(text: string): boolean {
 	const t = text.trim();
-	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || BARE_DURATION_RE.test(t) || VAGUE_UNIT_RE.test(t);
+	return STOP_LIST.has(t.toLowerCase()) || /^\d+$/u.test(t) || bareDuration(t) !== null || VAGUE_UNIT_RE.test(t);
 }
 
 /**
@@ -535,8 +551,9 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 
 	const out: DateCandidate[] = [];
 	for (const r of results) {
-		// A span that reaches into a mask, or one introduced by "for" ("for 2 days" is not a date).
-		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text)) continue;
+		// A span that reaches into a mask, one introduced by "for" ("for 2 days" is not a date), or a duration without
+		// `for` ("Gym 2h").
+		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text) || bareDuration(r.text) === "planned") continue;
 		// A range with a side that is only a time: its start as typed alone, still only a suggestion (a choice keeps chrono's reading).
 		const alone = startAlone(r, masked, parser, clock);
 		const aloneRead = alone === null ? null : readResult(alone, clock);
@@ -578,6 +595,7 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,
 			outcome,
+			...(hourCertain ? { time: timeOnly(r) ? ("alone" as const) : ("dated" as const) } : {}),
 		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start

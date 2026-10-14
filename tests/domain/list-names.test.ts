@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runBlockQuery } from "../../src/domain/blockQuery";
-import { resolveListName } from "../../src/domain/tasks";
+import { resolveListName, resolveListPath } from "../../src/domain/tasks";
 import type { Category } from "../../src/domain/types";
 import { parseBlockQuery } from "../../src/parsing/blockQuery";
 import { parseQuickAdd } from "../../src/parsing";
@@ -51,6 +51,20 @@ describe("resolveListName", () => {
 	it("accepts a map's values", () => {
 		const map = new Map([SPACED, WORK].map((c) => [c.id, c]));
 		expect(resolveListName(map.values(), "homework")).toEqual({ kind: "one", list: SPACED });
+	});
+});
+
+describe("resolveListPath", () => {
+	it.each([
+		{ typed: "Work/Admin", path: { list: WORK, section: "Admin" } },
+		{ typed: "work/", path: { list: WORK, section: "" } },
+		// split at the first slash only; the list part is matched like a list name
+		{ typed: "homework/a/b", path: null },
+		{ typed: "Home work/a/b", path: { list: SPACED, section: "a/b" } },
+		{ typed: "Work", path: null },
+		{ typed: "Nope/Admin", path: null },
+	])("#69: $typed is $path", ({ typed, path }) => {
+		expect(resolveListPath([WORK, SPACED, DASHED], typed)).toEqual(path);
 	});
 });
 

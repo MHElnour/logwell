@@ -25,7 +25,11 @@ export const CATEGORIES = [
 	{ id: "cat-deepwork-0003", name: "Deep work" },
 	{ id: "cat-health-0004", name: "Health_Care" },
 	{ id: "cat-cafe-0005", name: "Café" },
+	{ id: "cat-work-0006", name: "Work" },
 ];
+
+/** The sections of the test vault: Admin in Work. */
+export const SECTIONS = [{ id: "sec-admin-0001", categoryId: "cat-work-0006", name: "Admin" }];
 
 export const TAGS = [
 	{ key: "learning", displayName: "Learning" },
@@ -51,6 +55,10 @@ export interface CtxOptions {
 	eveningTime?: string;
 	decisions?: SpanDecision[];
 	manual?: ParsedField[];
+	/** The vault's lists, sections and tags, in place of the test vault's. */
+	categories?: ParseContext["categories"];
+	sections?: NonNullable<ParseContext["sections"]>;
+	tags?: ParseContext["tags"];
 }
 
 export function makeCtx(opts: CtxOptions = {}): ParseContext {
@@ -60,8 +68,9 @@ export function makeCtx(opts: CtxOptions = {}): ParseContext {
 		zone,
 		locale: opts.locale ?? "en",
 		...(opts.eveningTime !== undefined ? { eveningTime: opts.eveningTime } : {}),
-		categories: CATEGORIES,
-		tags: TAGS,
+		categories: opts.categories ?? CATEGORIES,
+		sections: opts.sections ?? SECTIONS,
+		tags: opts.tags ?? TAGS,
 		resolveNote: resolveNoteFixture,
 		decisions: opts.decisions ?? [],
 		manual: new Set(opts.manual ?? []),

@@ -7,6 +7,7 @@ import { INBOX_ID, INBOX_NAME } from "../../src/domain/types";
 import type { Chip } from "../../src/parsing";
 import { QuickAddModal } from "../../src/obsidian/QuickAddModal";
 import { QuickAddModel } from "../../src/ui/quickadd/QuickAddModel";
+import { chipLabel } from "../../src/ui/quickadd/chipLabels";
 import { manualPills } from "../../src/ui/quickadd/manualPills";
 import { DEADLINE_CLEARED_TEXT } from "../../src/ui/repeatActions";
 import { FakeNotes, appHarness } from "../app/harness";
@@ -203,6 +204,50 @@ describe("Unresolved category", () => {
 		await typeInto(titleInput(m.root), "Plan #deepwork");
 		await pressKey(titleInput(m.root), "Enter");
 		expect(formTasks(m)[0]!.categoryId).toBe(c.id);
+	});
+});
+
+describe("List and section", () => {
+	async function workWithSections() {
+		const qm = await quickModel();
+		const work = await qm.h.app.categories.create("Work");
+		const admin = await qm.h.app.sections.create(work.id, "Admin");
+		const planning = await qm.h.app.sections.create(work.id, "Planning");
+		return { ...qm, work, admin, planning };
+	}
+
+	it("#69: `#Work/Admin` saves the task into the Admin section of Work", async () => {
+		const { h, m, work, admin } = await workWithSections();
+		m.setInput("Report #Work/Admin");
+		expect(m.result.chips[0]).toMatchObject({ kind: "category", status: "applied", categoryId: work.id, sectionId: admin.id });
+		expect(await m.submit()).toBe("saved");
+		expect([...h.app.store.state.tasks.values()][0]).toMatchObject({ title: "Report", categoryId: work.id, sectionId: admin.id });
+	});
+
+	it("#69: a typed section beats the view's preset section", async () => {
+		const qm = await workWithSections();
+		const { m } = await quickModel({ h: qm.h, preset: { categoryId: qm.work.id, sectionId: qm.planning.id } });
+		m.setInput("Report #Work/Admin");
+		expect(await m.submit()).toBe("saved");
+		expect([...qm.h.app.store.state.tasks.values()][0]).toMatchObject({ categoryId: qm.work.id, sectionId: qm.admin.id });
+	});
+
+	it.each([
+		{ typed: "Report #Work/Admin", label: "List: Work / Admin" },
+		{ typed: "Report #Work/Nope", label: "Unknown section: Work/Nope" },
+	])("#69: the chip of $typed names the list and its section, or the unknown section", async ({ typed, label }) => {
+		const { h, m } = await workWithSections();
+		const env = { zone: "Europe/Berlin", today: "2026-10-01", categories: h.app.categories.list(), sections: h.app.store.state.sections, tags: h.app.store.state.tags };
+		m.setInput(typed);
+		expect(chipLabel(m.result.chips[0]!, env)).toBe(label);
+	});
+
+	it("#69: an unknown section blocks saving and says why", async () => {
+		const { h, m } = await workWithSections();
+		m.setInput("Report #Work/Nope");
+		expect(await m.submit()).toBe("invalid");
+		expect(m.message).toBe("No section named Nope in Work");
+		expect(h.app.store.state.tasks.size).toBe(0);
 	});
 });
 

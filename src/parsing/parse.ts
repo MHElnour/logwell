@@ -1,5 +1,5 @@
 import type { RepeatFreq, RepeatRule } from "../domain/types";
-import { resolveListName } from "../domain/tasks";
+import { resolveListName, resolveListPath } from "../domain/tasks";
 import { collapseWhitespace } from "../domain/text";
 import { sameDateSpec } from "../domain/time";
 import { TagNames, hasAllowedTagDepth, hasRepeatedTagName, isValidTagKey, normalizeTagKey, resolveTagName, tagPrefixes } from "../domain/tags";
@@ -8,10 +8,10 @@ import { isValidDuration } from "./duration";
 import { tokenAtCursor } from "./cursor";
 import { rebaseDecisions } from "./rebase";
 import { parseRepeatText } from "./recurrence";
-import { MASK_CHAR, isWordChar } from "./text";
+import { LONE_MARKS, MASK_CHAR, SENTENCE_MARKS, SEPARATOR_MARKS, atClockLength, isSpaceChar, isWordChar, readingOf } from "./text";
 import { type Draft, NOTICE, draft } from "./chipDraft";
 import { bindEnds, endDraft, partsStart, pickedEndDraft, requireStartDate } from "./repeatBinding";
-import { findDurationTokens, findNoteTokens, findPriorityTokens, findRecurrence, findRepeatCounts, findWordTokens, type RepeatCount } from "./tokens";
+import { findDurationTokens, findLiteralTokens, findNoteTokens, findPriorityTokens, findRecurrence, findRepeatCounts, findWordTokens, type RepeatCount } from "./tokens";
 import type {
 	Chip,
 	ChipKind,
@@ -25,8 +25,9 @@ import type {
 export { rebaseDecisions, tokenAtCursor };
 
 // The Quick Add parser. Pipeline:
-//   1. plugin tokens ([[note]], #category, @tag, every …, for <duration>) and
-//      the spans bound by decisions are found and masked;
+//   1. the spans bound by decisions, literal text ("…", \word), then plugin tokens ([[note]], #category, @tag,
+//      every …, for <duration>) are found and masked; the repeat and date readers read `@4pm` and `at 0900` as `at`
+//      that time (readingOf);
 //   2. chrono reads the masked text, and `by` turns its span into a deadline;
 //   3. each span becomes a chip: applied, suggestion, choice, unresolved …;
 //   4. manual fields and one-value-per-field rules are applied;
@@ -64,6 +65,7 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 		latest.set(`${start}:${end}`, d);
 	}
 	const categoryIds = new Set(ctx.categories.map((c) => c.id));
+	const sectionLists = new Map((ctx.sections ?? []).map((x) => [x.id, x.categoryId]));
 	const tagKeys = new Set(ctx.tags.map((t) => normalizeTagKey(t.key)));
 	const literal: Span[] = [];
 	const boundAll: Decisions["bound"] = [];
@@ -71,7 +73,8 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 	for (const d of latest.values()) {
 		if (d.kind === "literal") literal.push(d.span);
 		else if (d.kind === "category") {
-			if (categoryIds.has(d.categoryId)) boundAll.push(d);
+			// A section deleted or moved since the binding: the span is read again.
+			if (categoryIds.has(d.categoryId) && (d.sectionId === undefined || sectionLists.get(d.sectionId) === d.categoryId)) boundAll.push(d);
 		} else if (d.kind === "tag") {
 			// A tag deleted since the binding is not bound any more: the span is recognized again (a new tag).
 			const key = normalizeTagKey(d.key);
@@ -87,6 +90,28 @@ function usableDecisions(input: string, ctx: ParseContext): Decisions {
 		bound.push(d);
 	}
 	return { literal, bound, byChip };
+}
+
+type ListReading = { kind: "list"; categoryId: string; sectionId?: string } | { kind: "unresolved" | "invalid"; notice: string };
+
+/**
+ * What a typed `#name` names: the list of that whole name; else, split at the first `/`, a list and one of its sections
+ * (`#Work/Admin`, `#Work/` alone is the list), each matched as list names are. A list with no such section is invalid;
+ * no list at all is unresolved, by the whole name.
+ */
+function readListName(ctx: ParseContext, name: string): ListReading {
+	const whole = resolveListName(ctx.categories, name);
+	if (whole.kind === "one") return { kind: "list", categoryId: whole.list.id };
+	const path = resolveListPath(ctx.categories, name);
+	if (path !== null) {
+		const { list, section: sectionName } = path;
+		if (sectionName === "") return { kind: "list", categoryId: list.id };
+		const section = resolveListName((ctx.sections ?? []).filter((x) => x.categoryId === list.id), sectionName);
+		if (section.kind === "one") return { kind: "list", categoryId: list.id, sectionId: section.list.id };
+		return { kind: "invalid", notice: `No section named ${sectionName} in ${list.name}` };
+	}
+	const notice = whole.kind === "several" ? `\u201c${name}\u201d matches several lists. Use the exact name.` : `No list named ${name}`;
+	return { kind: "unresolved", notice };
 }
 
 function plainResult(input: string): ParseResult {
@@ -113,11 +138,34 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	};
 
 	const drafts: Draft[] = [];
+	const dateEnv = { now: ctx.now, zone: ctx.zone, locale: ctx.locale, ...(ctx.eveningTime !== undefined ? { eveningTime: ctx.eveningTime } : {}) };
+
+	// Quoted phrases and escaped words are never read; the title keeps them (an escape without its backslash). An
+	// escaped word keeps the phrase it leads with it: the longest reading that starts at the word.
+	const phraseEnd = (from: number, limit: number): number => {
+		const text = input.slice(from, limit);
+		const reading = readingOf(text, () => true);
+		const none = (): boolean => false;
+		let end = 0;
+		const note = findNoteTokens(text, none)[0];
+		if (note?.span.start === 0) end = note.span.end;
+		const repeat = findRecurrence(reading.text, none)[0];
+		if (repeat?.span.start === 0) end = Math.max(end, reading.toInput((repeat.end ?? repeat).span.end, true));
+		const duration = findDurationTokens(text, none)[0];
+		if (duration?.span.start === 0) end = Math.max(end, duration.span.end);
+		const date = findDates(reading.text, dateEnv).find((c) => c.span.start === 0);
+		if (date !== undefined) end = Math.max(end, reading.toInput(date.span.end, true));
+		return from + end;
+	};
+	const literalTokens = findLiteralTokens(input, isTaken, phraseEnd);
+	for (const t of literalTokens) take(t.span);
+	const keptText = [...decisions.literal, ...literalTokens.map((t) => t.span)];
+	const escapes = literalTokens.filter((t) => t.escape).map((t) => t.span.start);
 
 	// Bound spans first: they define a token even when it contains spaces.
 	for (const d of decisions.bound) {
 		if (d.kind === "category") {
-			drafts.push(draft(input, "category", d.span, "applied", { categoryId: d.categoryId }));
+			drafts.push(draft(input, "category", d.span, "applied", { categoryId: d.categoryId, ...(d.sectionId === undefined ? {} : { sectionId: d.sectionId }) }));
 		} else if (d.kind === "tag") {
 			drafts.push(draft(input, "tag", d.span, "applied", { tagKey: d.key }));
 		} else {
@@ -148,12 +196,9 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	const categoryExists = (name: string): boolean => resolveListName(ctx.categories, name).kind !== "none";
 	for (const t of findWordTokens(input, "#", isTaken, (name) => !digitsOnly(name) || categoryExists(name))) {
 		take(t.span);
-		const match = resolveListName(ctx.categories, t.name);
-		if (match.kind === "one") drafts.push(draft(input, "category", t.span, "applied", { categoryId: match.list.id }));
-		else {
-			const notice = match.kind === "several" ? `\u201c${t.name}\u201d matches several lists. Use the exact name.` : `No list named ${t.name}`;
-			drafts.push(draft(input, "category", t.span, "unresolved", { notice }));
-		}
+		const found = readListName(ctx, t.name);
+		if (found.kind === "list") drafts.push(draft(input, "category", t.span, "applied", { categoryId: found.categoryId, ...(found.sectionId === undefined ? {} : { sectionId: found.sectionId }) }));
+		else drafts.push(draft(input, "category", t.span, found.kind, { notice: found.notice }));
 	}
 
 	// The names in use: the existing tags, then each new tag this input accepts, in order. Built when a tag is not found by its key.
@@ -164,13 +209,15 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		const resolved = resolveTagName(namesOfTags(), key);
 		return resolved === null ? undefined : ctx.tags.find((x) => normalizeTagKey(x.key) === resolved);
 	};
-	for (const t of findWordTokens(input, "@", isTaken, (name) => {
+	for (const t of findWordTokens(input, "@", isTaken, (name, at) => {
 		const key = normalizeTagKey(name);
 		if (!isValidTagKey(key)) return false;
 		// A key too deep to create is not a token (it stays in the title) unless the tag already exists.
 		// So is a new key whose name another tag (or an earlier new tag of this input) already uses
 		// under another parent, or that repeats its parent's name.
 		if (tagFor(key) !== undefined) return true;
+		// A clock time ("@4pm", "@noon") is a time, unless a tag of that name exists.
+		if (atClockLength(input, at + 1) === name.length) return false;
 		if (digitsOnly(key) || !hasAllowedTagDepth(key) || hasRepeatedTagName(key)) return false;
 		const names = namesOfTags();
 		// A new name longer than 64 characters stays in the title too.
@@ -187,6 +234,13 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		else drafts.push(draft(input, "tag", t.span, "applied", { tagKey: key, newTag: true }));
 	}
 
+	// The repeat and date readers read the input with `@4pm` and `at 0900` as `at` that time; their spans come back to
+	// the input.
+	const reading = readingOf(input, (start, end) => !isTaken(start, end));
+	const toInputSpan = (span: Span): Span => ({ start: reading.toInput(span.start), end: reading.toInput(span.end, true) });
+	const toReadingSpan = (span: Span): Span => ({ start: reading.toReading(span.start), end: reading.toReading(span.end, true) });
+	const takenInReading = (start: number, end: number): boolean => isTaken(reading.toInput(start), reading.toInput(end, true));
+
 	// A form Quick Add can build becomes a rule; any other `every …` stays unsupported (and in the title); `each …` is
 	// only taken (title text, never a date). The end typed right after a repeat (`for 5 times`, `for 2 weeks`) is its
 	// own chip.
@@ -202,13 +256,20 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		drafts.push(end);
 		return end;
 	};
-	const repeatTokens = findRecurrence(input, isTaken).filter((t) => {
-		if (t.silent) take(t.span);
-		return !t.silent;
-	});
+	const repeatTokens = findRecurrence(reading.text, takenInReading)
+		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), timeEnd: t.timeEnd === null ? null : toInputSpan(t.timeEnd), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
+		.filter((t) => {
+			if (t.silent) take(t.span);
+			return !t.silent;
+		});
 	for (const t of repeatTokens) {
 		take(t.span);
-		const built = t.supported ? parseRepeatText(input.slice(t.span.start, t.span.end), ctx.zone) : null;
+		// The end of a time range after the repeat's time stays title text, never a date: the repeat takes the start.
+		if (t.timeEnd !== null) take(t.timeEnd);
+		// A time typed before the repeat reads as one typed after it.
+		const before = t.timeBefore;
+		const text = before === null ? reading.text.slice(t.read.start, t.read.end) : `${reading.text.slice(before.end, t.read.end)} ${reading.text.slice(before.start, before.end)}`;
+		const built = t.supported ? parseRepeatText(text, ctx.zone) : null;
 		let repeat: Draft;
 		if (built === null) repeat = draft(input, "recurrence", t.span, "unsupported", { notice: NOTICE.recurrence });
 		else if (built.other !== null) {
@@ -246,8 +307,16 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	}
 
 	// chrono reads the text with every taken span masked out.
-	const dateEnv = { now: ctx.now, zone: ctx.zone, locale: ctx.locale, repeatRange: repeatTokens.length > 0, ...(ctx.eveningTime !== undefined ? { eveningTime: ctx.eveningTime } : {}) };
-	const datesNow = (): DateCandidate[] => findDates(maskSpans(input, taken), dateEnv).filter((c) => !isTaken(c.span.start, c.span.end));
+	const env = { ...dateEnv, repeatRange: repeatTokens.length > 0 };
+	const toInputCandidate = (c: DateCandidate): DateCandidate => ({ ...c, span: toInputSpan(c.span), textStart: reading.toInput(c.textStart) });
+	const datesNow = (): DateCandidate[] =>
+		findDates(maskSpans(reading.text, taken.map(toReadingSpan)), env)
+			.map((c) => {
+				const out = toInputCandidate(c);
+				if (c.range !== undefined) out.range = { ...c.range, start: toInputCandidate(c.range.start), end: toInputCandidate(c.range.end) };
+				return out;
+			})
+			.filter((c) => !isTaken(c.span.start, c.span.end));
 	let dates = datesNow();
 
 	// A bare repeat word counts only at the end of the text, after title text ("Stretch daily", not "Daily standup"). A
@@ -311,7 +380,17 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// The ends typed as a bare weekday or a month and day with no year: before the start they move past it (bindEnds).
 	const rolling = new Map<string, RollKind>();
 	const readings = dates.flatMap((c) => (c.range !== undefined && built && isPart(c) && !onWeekly(c) && (c.range.led || afterRepeat(c.span.start)) ? [c.range.start, rangeEnd(c.range)] : [c]));
-	for (const c of readings) {
+	// With no typed repeat the task's first time wins: a later time alone stays title text, with no chip ("Call at 4pm and
+	// at 5pm"). A time that is only a suggestion is not the first one; a later date keeps the rule below that the later
+	// value wins.
+	let timed = false;
+	const firstTime = (c: DateCandidate): boolean => {
+		if (typed || c.kind !== "scheduled" || c.time === undefined) return true;
+		const keep = !timed || c.time !== "alone";
+		if (c.outcome.status === "applied" || c.outcome.status === "choice") timed = true;
+		return keep;
+	};
+	for (const c of readings.filter(firstTime)) {
 		if (!isPart(c)) {
 			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words. `until <date>`
 			// without a repeat is a deadline (decision 8).
@@ -355,7 +434,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 	// A typed repeat whose hour is a choice blocks saving until it is chosen, unless a repeat picked by hand wins.
 	if (!ctx.manual.has("recurrence")) for (const c of chips) if (c.kind === "recurrence" && c.status === "choice") open.push(c.id);
 	bindEnds(chips, periods, rolling, { zone: ctx.zone, start: ctx.startDate ?? today, weekStart: ctx.weekStart ?? "MO", ...(ctx.pickedRule === undefined ? {} : { pickedRule: ctx.pickedRule }) });
-	return finish(input, chips, open, decisions.literal);
+	return finish(input, chips, open, keptText, escapes);
 }
 
 /**
@@ -451,52 +530,117 @@ function supersede(drafts: Draft[]): void {
 			d.chip.notice = NOTICE.superseded;
 		}
 	}
-	// An unresolved category before a later applied one no longer blocks: the later value wins.
+	// An unresolved list or an unknown section before a later applied one no longer blocks: the later value wins.
 	const lastCategory = lastOf.get("category");
 	for (const d of drafts) {
-		if (d.chip.kind === "category" && d.chip.status === "unresolved" && lastCategory && d.chip.span.start < lastCategory.chip.span.start) {
+		if (d.chip.kind === "category" && (d.chip.status === "unresolved" || d.chip.status === "invalid") && lastCategory && d.chip.span.start < lastCategory.chip.span.start) {
 			d.chip.status = "superseded";
 			d.chip.notice = NOTICE.superseded;
 		}
 	}
 }
 
-// A lone "," or ";" right before or after a removed span: it belonged to the span ("Read every day, 20 pages").
-const COMMA_AFTER_RE = /^\s*[,;]/u;
-const COMMA_BEFORE_RE = /[,;]\s*$/u;
-
 /**
- * The title: the input without the applied spans, or the full text if nothing remains. A lone comma or semicolon left next to a
- * removed span goes with it, as does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
- * every sunday."): no stray punctuation or spaces. Text the user kept as it is (`literal`, a
- * dismissed chip) is never touched.
+ * The title: the input without the applied spans, or the full text if nothing remains, with no stray punctuation or
+ * spaces. Beside a removed span (over spaces), a comma or a semicolon goes with it (SEPARATOR_MARKS: "Read every day, 20
+ * pages"); another mark (LONE_MARKS) goes only when it is lone and left at the start or the end of the title: lone is
+ * only whitespace, the text's edge or removed text touching it on both sides ("Pay rent - tomorrow", "Pay rent !1.",
+ * "Q&A: Friday?" is "Q&A:"); a mark a word of the title touches is the user's ("Wow! tomorrow", "Pay rent: tomorrow"),
+ * and so is one between title words ("Call Ann tomorrow - about"). Parentheses with only removed text between them go ("Pay rent (#Work)", "Fix (#Work,
+ * @home)", "((#Work))"), and so does a sentence's last punctuation after a repeat that leaves the title ("Plan meals
+ * every sunday."). An escaped phrase loses its backslash (`escapes`, their indexes). Text the user kept as it is
+ * (`literal`: a dismissed chip, a quoted or an escaped phrase) is never touched.
  */
-function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]): string {
-	const parts: string[] = [];
-	const starts: number[] = [];
-	let at = 0;
-	for (const c of chips) {
-		if (c.status !== "applied") continue;
-		parts.push(input.slice(at, c.span.start));
-		starts.push(at);
-		at = c.span.end;
+function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[], escapes: readonly number[]): string {
+	const n = input.length;
+	const applied = chips.filter((c) => c.status === "applied");
+	const gone = new Uint8Array(n);
+	for (const c of applied) gone.fill(1, c.span.start, c.span.end);
+	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end);
+	const space = (i: number): boolean => i < 0 || i >= n || isSpaceChar(input.charAt(i));
+	// The first and the last word character of the title.
+	let first = -1;
+	let last = -1;
+	for (let i = 0; i < n; i++) {
+		if (gone[i] === 1 || !isWordChar(input.charAt(i))) continue;
+		if (first === -1) first = i;
+		last = i;
 	}
-	parts.push(input.slice(at));
-	starts.push(at);
-	const kept = (index: number): boolean => literal.some((l) => l.start <= index && index < l.end);
-	for (let i = 0; i + 1 < parts.length; i++) {
-		const before = COMMA_BEFORE_RE.exec(parts[i]!);
-		if (before !== null && !kept(starts[i]! + before.index)) parts[i] = parts[i]!.slice(0, before.index);
-		const after = COMMA_AFTER_RE.exec(parts[i + 1]!);
-		if (after !== null && !kept(starts[i + 1]! + after[0].length - 1)) parts[i + 1] = parts[i + 1]!.slice(after[0].length);
+	// A mark is lone when only whitespace, the text's edge or removed text touches it: no word of the title, no other mark.
+	const lone = (m: number): boolean => (space(m - 1) || gone[m - 1] === 1) && (space(m + 1) || gone[m + 1] === 1);
+	const dropMark = (m: number): void => {
+		if (m < 0 || m >= n || gone[m] === 1 || kept(m)) return;
+		const ch = input.charAt(m);
+		if (SEPARATOR_MARKS.includes(ch) || (LONE_MARKS.includes(ch) && lone(m) && (m > last || m < first))) gone[m] = 1;
+	};
+	const markAfter = (end: number): void => {
+		let j = end;
+		while (j < n && gone[j] === 0 && space(j)) j++;
+		dropMark(j);
+	};
+	for (const c of applied) {
+		let i = c.span.start - 1;
+		while (i >= 0 && gone[i] === 0 && space(i)) i--;
+		dropMark(i);
+		markAfter(c.span.end);
 	}
-	const lastKind = chips.filter((c) => c.status === "applied").at(-1)?.kind;
-	const tail = parts.at(-1)!;
-	if (parts.length > 1 && (lastKind === "recurrence" || lastKind === "repeatEnd") && /^[.,;:!?]+\s*$/u.test(tail) && /\s$/u.test(parts.at(-2)!)) parts[parts.length - 1] = "";
-	return collapseWhitespace(parts.join(""));
+	// Parentheses around removed text only: the nearest character before and after each removed span that is neither
+	// removed nor a space, innermost pair first.
+	const solid = (i: number): boolean => gone[i] === 0 && !space(i);
+	const before = new Int32Array(n + 1);
+	for (let i = 0, p = -1; i <= n; i++) {
+		before[i] = p;
+		if (i < n && solid(i)) p = i;
+	}
+	const after = new Int32Array(n + 1);
+	for (let i = n, q = n; i >= 0; i--) {
+		if (i < n && solid(i)) q = i;
+		after[i] = q;
+	}
+	const paren = (i: number, ch: string): boolean => i >= 0 && i < n && input.charAt(i) === ch && gone[i] === 0 && !kept(i);
+	for (const c of applied) {
+		const opens: number[] = [];
+		for (let i = before[c.span.start]!; paren(i, "("); i = before[i]!) opens.push(i);
+		const closes: number[] = [];
+		for (let j = after[c.span.end]!; paren(j, ")"); j = after[j + 1]!) closes.push(j);
+		const pairs = Math.min(opens.length, closes.length);
+		for (let k = 0; k < pairs; k++) gone[opens[k]!] = gone[closes[k]!] = 1;
+		// "Pay rent (#Work).": the mark after the parentheses is beside removed text too.
+		if (pairs > 0) markAfter(closes[pairs - 1]! + 1);
+	}
+	// A closing bracket a removed `#`, `@` or `!` token left unpaired ("Pay rent !1)") goes like a lone mark; one that
+	// closes a bracket of the title stays ("Note (see #Work)").
+	// How many brackets of the title are open before each index: one pass; removing an unpaired one changes none.
+	const openRound = new Int32Array(n + 1);
+	const openSquare = new Int32Array(n + 1);
+	for (let i = 0; i < n; i++) {
+		const ch = gone[i] === 1 ? "" : input.charAt(i);
+		openRound[i + 1] = Math.max(0, openRound[i]! + (ch === "(" ? 1 : ch === ")" ? -1 : 0));
+		openSquare[i + 1] = Math.max(0, openSquare[i]! + (ch === "[" ? 1 : ch === "]" ? -1 : 0));
+	}
+	for (const c of applied) {
+		const m = c.span.end;
+		const ch = input.charAt(m);
+		if (m >= n || !")]".includes(ch) || (c.kind !== "category" && c.kind !== "tag" && c.kind !== "priority")) continue;
+		const opened = (ch === ")" ? openRound : openSquare)[m]! > 0;
+		if (gone[m] === 0 && !kept(m) && !opened && lone(m) && (m > last || m < first)) gone[m] = 1;
+	}
+	// A sentence's last punctuation after a repeat that ends the chips, with a space before the repeat.
+	const lastChip = applied.at(-1);
+	if (lastChip !== undefined && (lastChip.kind === "recurrence" || lastChip.kind === "repeatEnd") && lastChip.span.start > 0 && gone[lastChip.span.start - 1] === 0 && space(lastChip.span.start - 1)) {
+		let i = lastChip.span.end;
+		while (i < n && (gone[i] === 1 || SENTENCE_MARKS.includes(input.charAt(i)))) i++;
+		const marks = i > lastChip.span.end;
+		while (i < n && (gone[i] === 1 || space(i))) i++;
+		if (marks && i === n) for (let k = lastChip.span.end; k < n; k++) if (!kept(k)) gone[k] = 1;
+	}
+	const dropped = new Set(escapes);
+	let out = "";
+	for (let i = 0; i < n; i++) if (gone[i] === 0 && !dropped.has(i)) out += input.charAt(i);
+	return collapseWhitespace(out);
 }
 
-function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[]): ParseResult {
+function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[]): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
 	for (const c of chips) {
@@ -517,6 +661,7 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 			case "category":
 				if (c.categoryId !== undefined) fields.categoryId = c.categoryId;
+				if (c.sectionId !== undefined) fields.sectionId = c.sectionId;
 				break;
 			case "note":
 				if (c.notePath !== undefined) fields.notePath = c.notePath;
@@ -539,16 +684,16 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 		}
 	}
-	const collapsed = titleOf(input, chips, literal);
+	const collapsed = titleOf(input, chips, literal, escapes);
 	return {
 		input,
 		chips,
 		title: collapsed === "" ? input : collapsed,
 		titleFallback: collapsed === "" && appliedCount > 0,
 		fields,
-		// An unresolved list, an invalid repeat end, and a typed repeat or a yearly repeat's start whose hour is still a
-		// choice (`open`) block saving until fixed, chosen or dismissed.
-		blocking: chips.filter((c) => c.status === "unresolved" || (c.kind === "repeatEnd" && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
+		// An unresolved list, an unknown section, an invalid repeat end, and a typed repeat or a yearly repeat's start whose
+		// hour is still a choice (`open`) block saving until fixed, chosen or dismissed.
+		blocking: chips.filter((c) => c.status === "unresolved" || ((c.kind === "repeatEnd" || c.kind === "category") && c.status === "invalid") || open.includes(c.id)).map((c) => c.id),
 	};
 }
 

@@ -48,6 +48,7 @@ In the list layout, choose **View options**, **Group by…**, then **Section**. 
 - Drag the task into the section, in the list or on the board.
 - Choose **Move to section…** in the row menu, then a section or **No section**. It shows for top-level tasks when the list has sections.
 - Click the plus button on a section's heading or column to add a task to it.
+- Type `#Work/Admin` in Quick Add to add a task to the Admin section of Work. See [Quick Add](quick-add.md#what-you-can-type).
 
 Moving a task to another list clears its section.
 

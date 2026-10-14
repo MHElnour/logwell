@@ -281,3 +281,52 @@ describe("a tag by its own name", () => {
 		});
 	});
 });
+
+describe("#list and #list/section suggester", () => {
+	const lists = [
+		{ id: "c-work", name: "Work", icon: null },
+		{ id: "c-study", name: "Study", icon: null },
+	];
+	const sections = [
+		{ id: "s-admin", categoryId: "c-work", name: "Admin" },
+		{ id: "s-plan", categoryId: "c-work", name: "Planning" },
+		{ id: "s-read", categoryId: "c-study", name: "Reading" },
+	];
+
+	function make(value: string) {
+		const input = document.createElement("input");
+		input.value = value;
+		input.setSelectionRange(value.length, value.length);
+		const bound: unknown[] = [];
+		const app = { vault: { getMarkdownFiles: () => [] } };
+		const suggest = new QuickAddSuggest(app as never, input, { categories: () => lists, sections: (id) => sections.filter((x) => x.categoryId === id), tags: () => [] }, (d) => bound.push(d));
+		const lookup = (): unknown[] => (suggest as unknown as { getSuggestions(q: string): unknown[] }).getSuggestions(input.value);
+		const render = (item: unknown): string => {
+			const el = document.createElement("div");
+			(el as unknown as { setText(t: string): void }).setText = (t) => void (el.textContent = t);
+			suggest.renderSuggestion(item as never, el);
+			return el.textContent ?? "";
+		};
+		return { suggest, input, lookup, render, bound };
+	}
+
+	it.each([
+		// an opening parenthesis at a word start starts a token
+		{ typed: "Report (#Wo", offered: ["Work"] },
+		{ typed: "Report ((#Wo", offered: ["Work"] },
+		{ typed: "print(#Wo", offered: [] },
+		// once `#List/` is typed: that list's sections, narrowed by the part after the slash
+		{ typed: "Report #Work/", offered: ["Work/Admin", "Work/Planning"] },
+		{ typed: "Report #work/pla", offered: ["Work/Planning"] },
+	])("#69: $typed offers $offered", ({ typed, offered }) => {
+		const { lookup, render } = make(typed);
+		expect(lookup().map(render)).toEqual(offered);
+	});
+
+	it("#69: a picked section binds the list and the section", () => {
+		const { suggest, input, lookup, bound } = make("Report #Work/");
+		suggest.selectSuggestion(lookup()[0] as never);
+		expect(input.value).toBe("Report #Work/Admin");
+		expect(bound).toMatchObject([{ kind: "category", categoryId: "c-work", sectionId: "s-admin", text: "#Work/Admin" }]);
+	});
+});

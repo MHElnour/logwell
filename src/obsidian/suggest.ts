@@ -2,6 +2,7 @@ import { categoryText } from "../ui/icons";
 import { AbstractInputSuggest, type App } from "obsidian";
 import type { CheckpointApp } from "../app/App";
 import { noteLinkPath } from "../domain/notes";
+import { resolveListPath } from "../domain/tasks";
 import { tagsByLabel } from "../domain/tags";
 import type { SpanDecision } from "../parsing";
 import { tokenAtCursor } from "../parsing";
@@ -10,7 +11,7 @@ import { applyTokenChoice, filterByQuery, suggestNotes } from "./tokenChoice";
 type Token = NonNullable<ReturnType<typeof tokenAtCursor>>;
 
 export type SuggestItem =
-	| { kind: "category"; id: string; name: string; icon: string | null }
+	| { kind: "category"; id: string; name: string; icon: string | null; section?: { id: string; name: string } }
 	| { kind: "tag"; key: string; label: string; path: string }
 	| { kind: "note"; path: string; basename: string; insert: string };
 
@@ -33,6 +34,8 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 		private readonly cpInput: HTMLInputElement,
 		private readonly cpLists: {
 			categories: () => { id: string; name: string; icon: string | null }[];
+			/** A list's sections in their order, offered once `#List/` is typed. */
+			sections?: (categoryId: string) => { id: string; name: string }[];
 			/** `label` is how the tag is shown (`tagLabel`): what is listed and what is inserted, and it finds the same tag. `path` is its full name, which a typed path matches. */
 			tags: () => { key: string; label: string; path: string }[];
 		},
@@ -79,8 +82,16 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 		const token = this.cpToken;
 		if (token === null) return [];
 		if (token.kind === "category") {
-			const items = this.cpLists.categories().map((c): SuggestItem => ({ kind: "category", id: c.id, name: c.name, icon: c.icon }));
-			return filterByQuery(items, (i) => (i.kind === "category" ? i.name : ""), token.query);
+			const lists = this.cpLists.categories();
+			const items = lists.map((c): SuggestItem => ({ kind: "category", id: c.id, name: c.name, icon: c.icon }));
+			const byName = filterByQuery(items, (i) => (i.kind === "category" ? i.name : ""), token.query);
+			// `#Work/`: the sections of the list before the first `/`, narrowed by what follows it.
+			const path = resolveListPath(lists, token.query);
+			if (path === null) return byName;
+			const { list } = path;
+			const sections = this.cpLists.sections?.(list.id) ?? [];
+			const inList = sections.map((x): SuggestItem => ({ kind: "category", id: list.id, name: list.name, icon: list.icon, section: { id: x.id, name: x.name } }));
+			return [...filterByQuery(inList, (i) => (i.kind === "category" ? (i.section?.name ?? "") : ""), path.section), ...byName].slice(0, 20);
 		}
 		if (token.kind === "tag") {
 			const items = this.cpLists.tags().map((t): SuggestItem => ({ kind: "tag", key: t.key, label: t.label, path: t.path }));
@@ -93,7 +104,7 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 	}
 
 	renderSuggestion(item: SuggestItem, el: HTMLElement): void {
-		if (item.kind === "category") el.setText(categoryText(item));
+		if (item.kind === "category") el.setText(item.section === undefined ? categoryText(item) : `${categoryText(item)}/${item.section.name}`);
 		else if (item.kind === "tag") el.setText(`@${item.label}`);
 		else el.setText(noteLinkPath(item.path));
 	}
@@ -104,7 +115,7 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 			this.close();
 			return;
 		}
-		const insert = item.kind === "category" ? `#${item.name}` : item.kind === "tag" ? `@${item.label}` : `[[${item.insert}]]`;
+		const insert = item.kind === "category" ? `#${item.name}${item.section === undefined ? "" : `/${item.section.name}`}` : item.kind === "tag" ? `@${item.label}` : `[[${item.insert}]]`;
 		const result = applyTokenChoice(this.cpInput.value, token, insert);
 		this.close();
 		this.cpHold = true;
@@ -112,7 +123,7 @@ export class QuickAddSuggest extends AbstractInputSuggest<SuggestItem> {
 		this.cpInput.setSelectionRange(result.cursor, result.cursor);
 		this.cpInput.dispatchEvent(new Event("input", { bubbles: true }));
 		const base = { span: result.span, text: insert };
-		if (item.kind === "category") this.cpOnBind({ ...base, kind: "category", categoryId: item.id });
+		if (item.kind === "category") this.cpOnBind({ ...base, kind: "category", categoryId: item.id, ...(item.section === undefined ? {} : { sectionId: item.section.id }) });
 		else if (item.kind === "tag") this.cpOnBind({ ...base, kind: "tag", key: item.key });
 		else this.cpOnBind({ ...base, kind: "note", path: item.path });
 	}
@@ -134,6 +145,7 @@ export function attachTokenSuggest(
 		input,
 		{
 			categories: () => app.categories.list().map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+			sections: (categoryId) => app.sections.inList(categoryId),
 			tags: () => tagsByLabel(app.store.state.tags).map(({ tag, label }) => ({ key: tag.key, label, path: tag.displayName })),
 		},
 		onBind,

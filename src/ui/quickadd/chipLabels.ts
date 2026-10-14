@@ -1,7 +1,7 @@
 import { DST_WARNING_TEXT } from "../../app/TaskService";
 import { describeEnd } from "../../domain/recurrence";
 import { tagLabel } from "../../domain/tags";
-import { type Category, type LocalDate, priorityLabel, type Tag } from "../../domain/types";
+import { type Category, type LocalDate, priorityLabel, type Section, type Tag } from "../../domain/types";
 import type { Chip } from "../../parsing";
 import { formatDateSpec, formatDuration } from "../format";
 import { NEVER_END, ruleText } from "../repeat";
@@ -12,6 +12,8 @@ interface LabelEnv {
 	zone: string;
 	today: LocalDate;
 	categories: readonly Category[];
+	/** The sections, for a `#list/section` chip; absent shows the typed text. */
+	sections?: ReadonlyMap<string, Section>;
 	tags: ReadonlyMap<string, Tag>;
 	/** The date a typed repeat starts from (the picked date, else today); it names "on the 9th" for "every month". */
 	anchor?: LocalDate;
@@ -32,7 +34,10 @@ export function chipLabel(chip: Chip, env: LabelEnv): string {
 			return chip.durationMin === undefined ? `Duration: ${chip.text}` : `Duration: ${formatDuration(chip.durationMin)}`;
 		case "category": {
 			if (chip.status === "unresolved") return `Unknown list: ${chip.text.replace(/^#/u, "")}`;
+			if (chip.status === "invalid") return `Unknown section: ${chip.text.replace(/^#/u, "")}`;
 			const name = env.categories.find((c) => c.id === chip.categoryId)?.name;
+			const section = chip.sectionId === undefined ? undefined : env.sections?.get(chip.sectionId)?.name;
+			if (chip.sectionId !== undefined) return `List: ${name !== undefined && section !== undefined ? `${name} / ${section}` : chip.text}`;
 			return `List: ${name ?? chip.text}`;
 		}
 		case "tag": {

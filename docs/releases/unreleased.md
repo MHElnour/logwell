@@ -19,6 +19,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
+- (#69) Type `#Work/Admin` in Quick Add to add a task to a section; after `#Work/` the suggestions list its sections.
+- (#69) In Quick Add, text in double quotes is never read, and a backslash keeps the word or phrase after it as text: `Buy \today paper`, `Pay \by friday`.
 - (#11) Type a nested tag by its own name, like `@calls` for `home/calls`, in Quick Add, the tag field and task blocks.
 - (#7) Create a tag from the sidebar with **New tag**: pick a name, parent and color; the name is checked as you type.
 - (#52) `tag:` in a task block takes several tags separated by commas and shows a task with any of them.
@@ -29,6 +31,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Changed
 
+- (#69) In Quick Add, `@4pm`, `@4:30pm` and `@noon` are times unless you have such a tag; `at 0900` is 09:00.
+- (#69) In Quick Add, a duration without `for`, like `Gym 2h`, now stays in the title instead of being offered as a date.
 - (#190) Priority pickers, menus, groups and filters all list High, Medium, Low, None, and Quick Add names priorities the same way.
 - (#190) Upcoming board columns name days as rows do, like "Mon, Oct 5"; Focus writes "1h 30m focus" and "Round 2 of 4".
 - (#190) TickTick settings list the linked lists in sidebar order, as every list picker does.
@@ -55,6 +59,11 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#69) Fixed Quick Add reading `Wake at 6am every day` as a separate date; a time right before a repeat is the repeat's time.
+- (#69) Fixed Quick Add using the last of several times; the first time wins, as in `Call at 4pm and at 5pm`.
+- (#69) Fixed Quick Add reading a range after a repeat's time, like `every monday at 5pm-6pm`, as a separate date; the repeat takes the start time.
+- (#69) Fixed Quick Add missing `!1.`, `(#Work)` or `@urgent!` beside punctuation, and leaving stray marks like `.` or `()` in titles.
+- (#69) Fixed Quick Add with the Day/month date order only suggesting `Oct 15` and missing `Feb 29`; month-first dates now apply.
 - (#190) Fixed a task block `tag:` list keeping one tag twice when its accented letters were typed in two ways.
 - (#190) Fixed the TickTick link window not preselecting the TickTick project whose name differs from the list's only in spaces, `-` or `_`.
 

@@ -235,24 +235,14 @@ const LEAP_DAYS: ReadonlyArray<readonly [string, DateLocale, string | undefined]
 	["02/29 party", "en-GB", "2028-02-29"],
 	["29/02 party", "en-GB", "2028-02-29"],
 	["the 29th of February party", "en-GB", "2028-02-29"],
-];
-
-// Known defect (#69), not the intended reading: in en-GB, a month name before a leap day reads no date or the day
-// after it. Each row is expected to fail until #69 is fixed; the fix makes them plain cases.
-// [input, the intended scheduled value, what the parser reads today]
-const LEAP_DAY_DEFECTS: ReadonlyArray<readonly [string, string, string | undefined]> = [
-	["Feb 29 party", "2028-02-29", undefined],
-	["Feb 29 9am party", "2028-02-29T09:00", "2028-03-01T09:00"],
+	// #69: a month name before the day reads as that day in en-GB too.
+	["Feb 29 party", "en-GB", "2028-02-29"],
+	["Feb 29 9am party", "en-GB", "2028-02-29T09:00"],
 ];
 
 describe("a leap day without a year or a repeat", () => {
 	it.each(LEAP_DAYS)("#88: %s (%s) is that day", (input, locale, expected) => {
 		const r = parseAt(input, TOKYO, { local: "2028-02-29T21:00", locale });
 		expect(scheduledOf(r)).toBe(expected);
-	});
-
-	it.fails.each(LEAP_DAY_DEFECTS)("#69: %s (en-GB) is that day, %s", (input, intended) => {
-		const r = parseAt(input, TOKYO, { local: "2028-02-29T21:00", locale: "en-GB" });
-		expect(scheduledOf(r)).toBe(intended);
 	});
 });
