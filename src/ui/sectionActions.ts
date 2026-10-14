@@ -1,3 +1,4 @@
+import { DELETE_SECTION_LABEL } from "../app/SectionService";
 import { isDomainError } from "../domain/errors";
 import { plural } from "../domain/text";
 import type { ID, Section } from "../domain/types";
@@ -46,7 +47,7 @@ async function deleteSection(host: UiHost, section: Section): Promise<void> {
 		const moved = await host.app.sections.delete(section.id);
 		host.notifyUndo(
 			moved > 0 ? `Deleted section "${section.name}". ${plural(moved, "task")} moved to No section.` : `Deleted section "${section.name}".`,
-			"Delete section",
+			DELETE_SECTION_LABEL,
 			mark,
 		);
 	} catch (err) {

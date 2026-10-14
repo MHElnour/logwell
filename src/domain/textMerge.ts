@@ -1,6 +1,8 @@
 // A line-based three-way merge: the text of a description note the sync created, merged against
 // the text both sides last agreed on. Pure.
 
+import { unixLineEnds } from "./text";
+
 /**
  * The line put before TickTick's version of a passage that both sides changed differently. Logwell's lines stay
  * first, then this line, then TickTick's.
@@ -191,7 +193,7 @@ export function mergeLines(
 
 /** Lines of a text: line endings as "\n"; the empty text has none. */
 export function textLines(text: string): string[] {
-	return text === "" ? [] : text.replace(/\r\n?/gu, "\n").split("\n");
+	return text === "" ? [] : unixLineEnds(text).split("\n");
 }
 
 /** `mergeLines` over texts. Line endings come out as "\n". */

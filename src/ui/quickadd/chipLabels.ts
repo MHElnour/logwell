@@ -1,7 +1,7 @@
 import { DST_WARNING_TEXT } from "../../app/TaskService";
 import { describeEnd } from "../../domain/recurrence";
 import { tagLabel } from "../../domain/tags";
-import type { Category, LocalDate, Priority, Tag } from "../../domain/types";
+import { type Category, type LocalDate, priorityLabel, type Tag } from "../../domain/types";
 import type { Chip } from "../../parsing";
 import { formatDateSpec, formatDuration } from "../format";
 import { NEVER_END, ruleText } from "../repeat";
@@ -17,10 +17,7 @@ interface LabelEnv {
 	anchor?: LocalDate;
 }
 
-/** "High priority", "Medium priority", "Low priority"; none has no label of its own. */
-export function priorityLabel(priority: Priority): string {
-	return priority === 1 ? "High priority" : priority === 2 ? "Medium priority" : priority === 3 ? "Low priority" : "No priority";
-}
+
 
 function dateText(chip: Chip, env: LabelEnv): string {
 	return chip.date === undefined ? chip.text : formatDateSpec(chip.date, env.zone, env.today);

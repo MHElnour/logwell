@@ -1,3 +1,4 @@
+import { capitalize } from "./text";
 // Entity types. Records are treated as immutable values:
 // every change produces a new object, which the serializer's line cache and
 // the undo stack rely on.
@@ -28,9 +29,15 @@ export type TaskStatus = "open" | "completed";
 
 /** 0 none, 1 high, 2 medium, 3 low. Independent of urgent/important. */
 export type Priority = 0 | 1 | 2 | 3;
-export const PRIORITIES: readonly Priority[] = [0, 1, 2, 3];
+/** Every priority in the one display order of every picker, menu, group and filter: High, Medium, Low, None. */
+export const PRIORITIES: readonly Priority[] = [1, 2, 3, 0];
 /** The word for each priority, lowercase: "high" … "none". */
 export const PRIORITY_NAME: Readonly<Record<Priority, string>> = { 1: "high", 2: "medium", 3: "low", 0: "none" };
+
+/** The name a priority is shown under: "High", "Medium", "Low", "None". */
+export function priorityLabel(p: Priority): string {
+	return capitalize(PRIORITY_NAME[p]);
+}
 
 export function isPriority(value: unknown): value is Priority {
 	return value === 0 || value === 1 || value === 2 || value === 3;

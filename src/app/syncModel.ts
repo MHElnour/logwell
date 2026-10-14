@@ -1,7 +1,8 @@
 import { DomainError } from "../domain/errors";
 import { keyBetween } from "../domain/sortKey";
-import { childTagKey, normalizeTagKey, tagDisplayPath, TagNames, tagNamesOf, tagPath } from "../domain/tags";
+import { childTagPath, normalizeTagKey, tagDisplayPath, TagNames, tagNamesOf, tagPath } from "../domain/tags";
 import { requireTitle } from "../domain/tasks";
+import { normalizedText } from "../domain/text";
 import { instantOf } from "../domain/time";
 import { dateFromTt, fieldHashes, priorityFromTt, pulledDatePatch, statusFromTt, syncDateOf, type SyncFields, tagsHash } from "../domain/ticktick/mapping";
 import { isSyncedTag, pullableTagName, syncedTagLeaves, ttTagName } from "../domain/ticktick/tags";
@@ -204,6 +205,11 @@ export type LinkDraft = Pick<SyncLink, "kind" | "logwellId" | "ttId" | "ttProjec
 export function failureOf(err: unknown, list: { listId: ID; name: string } | null): SyncFailure {
 	if (!(err instanceof TickTickError)) throw err;
 	return { listId: list?.listId ?? null, listName: list?.name ?? null, kind: err.kind, message: err.message, retryAfterSec: err.retryAfterSec };
+}
+
+/** A failure's message without the "TickTick: " its errors start with, for a text that names TickTick already. */
+export function failureReason(message: string): string {
+	return message.replace(/^TickTick: /u, "");
 }
 
 export function isNotFound(err: unknown): boolean {
@@ -477,7 +483,7 @@ export function pullTags(tx: Tx, remote: ReadonlyMap<string, TtTag> | null): Pul
 	/** TickTick's label when it spells the name (any casing), else the name. */
 	const labelOf = (name: string): string => {
 		const label = remote?.get(name)?.label;
-		return label !== undefined && normalizeTagKey(label) === name ? label.normalize("NFC").trim() : name;
+		return label !== undefined && normalizeTagKey(label) === name ? normalizedText(label) : name;
 	};
 	const keyFor = (name: string): string | null => {
 		const owner = names.owner(name);
@@ -494,9 +500,9 @@ export function pullTags(tx: Tx, remote: ReadonlyMap<string, TtTag> | null): Pul
 				parentKey = parentOwner;
 			}
 		}
-		const key = childTagKey(parentKey, name);
+		const key = childTagPath(parentKey, name);
 		if (names.clash(key) !== null) return null;
-		ensure(key, parentKey === null ? labelOf(name) : `${display(parentKey)}/${labelOf(name)}`);
+		ensure(key, childTagPath(parentKey === null ? null : display(parentKey), labelOf(name)));
 		return key;
 	};
 	return {

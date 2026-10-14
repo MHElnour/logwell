@@ -2,7 +2,7 @@ import { type App, FuzzySuggestModal, Setting, type TFile, type TFolder, getIcon
 import { TAG_COLORS, type TagColor } from "../domain/types";
 import type { ButtonSpec, NewListOptions, NewListValues } from "../ui/host";
 import { LIST_ICONS } from "../ui/icons";
-import { capitalize } from "../ui/format";
+import { capitalize } from "../domain/text";
 import { el } from "./dom";
 import { openFormModal } from "./formModal";
 import { ResolvingModal } from "./resolvingModal";

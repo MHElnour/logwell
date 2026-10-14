@@ -1,4 +1,4 @@
-import { collapseWhitespace } from "../text";
+import { collapseWhitespace, unixLineEnds } from "../text";
 import { type ConflictResolver, diffLines, mergeLines, mergeText, sameLines, textLines } from "../textMerge";
 import type { TtChecklistItem, TtChecklistItemWrite, TtTask, TtTaskWrite } from "./types";
 
@@ -47,8 +47,7 @@ const EMBED_RE = /!\[\[[^\]\n]*\]\]/gu;
 
 /** Line endings as "\n", no blank lines at the start, no whitespace at the end. */
 export function normalizeNoteText(text: string): string {
-	return text
-		.replace(/\r\n?/gu, "\n")
+	return unixLineEnds(text)
 		.replace(/^(?:[ \t]*\n)+/u, "")
 		.replace(/\s+$/u, "");
 }
@@ -172,7 +171,8 @@ function renderLine(line: string): { text: string; embed: boolean } {
  * apart would break the round trip; TickTick's `[[` inside code is escaped like anywhere else.
  */
 function renderBody(body: string, checklist: boolean): RenderedBody {
-	const raw = body.replace(/\r\n?/gu, "\n").split("\n");
+	// An empty body is one empty line here (`textLines` reads it as none): the body's line indexes start at 0.
+	const raw = unixLineEnds(body).split("\n");
 	const out: RenderedBody = { raw, lines: [], at: [], item: [] };
 	raw.forEach((line, i) => {
 		const escaped = ESCAPED_ITEM_RE.exec(line);

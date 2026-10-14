@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type LocalDate, REPEAT_FREQS, type RepeatFreq, type Weekday, type WeekStart } from "../domain/types";
 import { SrOnly } from "./common";
-import { capitalize } from "./format";
+import { capitalize } from "../domain/text";
 import { useUniqueId } from "./hooks";
 import { popoverKeyDown } from "./popoverKeys";
 import { QaIcon, type SetIcon } from "./quickadd/QaIcon";

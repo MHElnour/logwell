@@ -2,6 +2,7 @@ import { categoryText } from "../icons";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
+import { clamp } from "../../domain/text";
 import type { Chip } from "../../parsing";
 import { SrOnly } from "../common";
 import { specFromInputs, specInputs } from "../format";
@@ -103,7 +104,7 @@ export function QuickAddEditor(props: {
 	const active = chips.some((c) => c.id === roving) ? roving : (chips[0]?.id ?? null);
 
 	const moveFocus = (from: number, to: number) => {
-		const target = chips[Math.max(0, Math.min(chips.length - 1, to))];
+		const target = chips[clamp(to, 0, chips.length - 1)];
 		if (target === undefined || to === from) return;
 		rootRef.current?.querySelector<HTMLElement>(`[data-chip-id="${target.id}"] .cp-qa-chip-main`)?.focus();
 	};

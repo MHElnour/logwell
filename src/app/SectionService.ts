@@ -15,6 +15,10 @@ function requireSection(tx: Tx, id: ID): Section {
 	return s;
 }
 
+/** The store labels of section commands a view names in its Undo notice. */
+export const DELETE_SECTION_LABEL = "Delete section";
+export const MOVE_SECTION_LABEL = "Move section";
+
 export class SectionService {
 	constructor(
 		private readonly store: AppStore,
@@ -63,7 +67,7 @@ export class SectionService {
 
 	/** The section's tasks (subtasks included) move to No section in the same write; returns their count. */
 	delete(id: ID): Promise<number> {
-		return this.store.run("Delete section", (tx) => {
+		return this.store.run(DELETE_SECTION_LABEL, (tx) => {
 			requireSection(tx, id);
 			let moved = 0;
 			for (const t of tx.all("tasks")) {
@@ -82,7 +86,7 @@ export class SectionService {
 	 * are not strictly ascending, `order` gets new ascending keys between the list's sections outside it.
 	 */
 	place(id: ID, order: ID[]): Promise<{ changed: boolean }> {
-		return this.store.run("Move section", (tx) => {
+		return this.store.run(MOVE_SECTION_LABEL, (tx) => {
 			if (!order.includes(id)) throw new DomainError("InvalidValue", "The section is not in the order.");
 			if (new Set(order).size !== order.length) throw new DomainError("InvalidValue", "The order lists a section twice.");
 			const sections = order.map((oid) => requireSection(tx, oid));

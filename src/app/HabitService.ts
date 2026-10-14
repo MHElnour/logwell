@@ -13,6 +13,7 @@ import {
 import type { Clock, IdGenerator } from "../domain/ports";
 import { compareSortKeys, keyAfter } from "../domain/sortKey";
 import { requireColor, requireIconName } from "../domain/tasks";
+import { normalizedText } from "../domain/text";
 import { isValidLocalDate, todayIn } from "../domain/time";
 import type { Checkin, Habit, HabitGoal, HabitSchedule, ID, LocalDate } from "../domain/types";
 import { GOAL_TYPES, TIMES_OF_DAY, WEEKDAYS } from "../domain/types";
@@ -54,7 +55,7 @@ function normalize(input: HabitInput): HabitInput {
 	else if (s.kind === "daily" || s.kind === "weekly") schedule = { kind: s.kind };
 	else invalidValue("That schedule is not available.");
 	return {
-		name: input.name.normalize("NFC").trim(),
+		name: normalizedText(input.name),
 		icon: input.icon?.trim() || null,
 		color: input.color,
 		timeOfDay: input.timeOfDay,

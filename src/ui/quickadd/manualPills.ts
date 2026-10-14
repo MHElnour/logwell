@@ -1,9 +1,9 @@
 import { tagLabel } from "../../domain/tags";
-import { INBOX_NAME, type Priority } from "../../domain/types";
+import { INBOX_NAME, type Priority, priorityLabel } from "../../domain/types";
 import { formatDateSpec, formatDuration, specFromInputs } from "../format";
 import { ICON } from "../icons";
 import { repeatLine } from "../repeat";
-import { priorityLabel } from "./chipLabels";
+
 import type { QuickAddModel } from "./QuickAddModel";
 
 // Pills for the values set by hand (the date popover, the more menu, the modal's fields).

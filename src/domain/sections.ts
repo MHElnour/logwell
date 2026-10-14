@@ -1,12 +1,13 @@
 import { DomainError } from "./errors";
 import { compareSortKeys } from "./sortKey";
 import { categoryNameKey } from "./tasks";
+import { normalizedText } from "./text";
 import type { ID, Section } from "./types";
 
 // Section names: unique per list, compared case-insensitively by the same key as list names.
 
 export function requireSectionName(raw: string): string {
-	const name = raw.normalize("NFC").trim();
+	const name = normalizedText(raw);
 	if (name.length === 0) throw new DomainError("InvalidValue", "A section needs a name.");
 	return name;
 }

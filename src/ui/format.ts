@@ -1,6 +1,6 @@
-import { DateTime } from "luxon";
+
 import { dateTone as dayTone } from "../app/views";
-import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, utcDay } from "../domain/time";
+import { NAME_LOCALE, dateSpecDate, dateSpecDisplayLocal, daysBetween, instantInZone, utcDay, wallClockOf, wallDateOf } from "../domain/time";
 import type { DateSpec, LocalDate, Priority, Task, WeekStart } from "../domain/types";
 import { plural } from "../domain/text";
 
@@ -20,11 +20,16 @@ export function formatDate(date: LocalDate, today: LocalDate): string {
 export function formatDateSpec(spec: DateSpec, zone: string, today: LocalDate): string {
 	const date = formatDate(dateSpecDate(spec, zone), today);
 	const local = dateSpecDisplayLocal(spec, zone);
-	return local === null ? date : `${date} ${local.slice(11)}`;
+	return local === null ? date : `${date} ${wallClockOf(local)}`;
 }
 
 /** What an Undo that cannot be done says. */
 export const NOTHING_TO_UNDO = "Nothing to undo.";
+
+/** What the Undo command and Cmd/Ctrl+Z say: "Undone: Move task", or `NOTHING_TO_UNDO` when nothing was undone (null). */
+export function undoneText(label: string | null): string {
+	return label === null ? NOTHING_TO_UNDO : `Undone: ${label}`;
+}
 
 export function formatDuration(min: number): string {
 	const h = Math.floor(min / 60);
@@ -34,7 +39,7 @@ export function formatDuration(min: number): string {
 }
 
 export function formatInstant(iso: string, zone: string): string {
-	const dt = DateTime.fromISO(iso, { zone: "UTC", locale: NAME_LOCALE }).setZone(zone);
+	const dt = instantInZone(iso, zone).setLocale(NAME_LOCALE);
 	return dt.isValid ? dt.toFormat("MMM d, yyyy, HH:mm") : iso;
 }
 
@@ -53,7 +58,7 @@ export function specInputs(spec: DateSpec | null, zone: string): { date: string;
 	if (spec === null) return { date: "", time: "" };
 	if (spec.kind === "date") return { date: spec.date, time: "" };
 	const local = dateSpecDisplayLocal(spec, zone) ?? spec.local;
-	return { date: local.slice(0, 10), time: local.slice(11, 16) };
+	return { date: wallDateOf(local), time: wallClockOf(local) };
 }
 
 /** Builds a spec from input values. A time makes it a timed value in the display zone. */
@@ -76,8 +81,7 @@ export function weekdayInitials(weekStart: WeekStart): string[] {
 	return WEEKDAY_INITIALS[weekStart];
 }
 
-/** "high" becomes "High". */
-export const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
 
 // -- Priority and row dates ----------------------------------------------------
 
@@ -105,7 +109,7 @@ export function dateTone(spec: DateSpec | null, zone: string, today: LocalDate):
 /** A row's date: only the time when it is today and timed. */
 export function rowDateText(spec: DateSpec, zone: string, today: LocalDate): string {
 	const local = dateSpecDisplayLocal(spec, zone);
-	if (local !== null && dateSpecDate(spec, zone) === today) return local.slice(11);
+	if (local !== null && dateSpecDate(spec, zone) === today) return wallClockOf(local);
 	return formatDateSpec(spec, zone, today);
 }
 
@@ -125,7 +129,7 @@ export function detailsDateText(
 	if (spec === null) return ["No date", ...extras].join(" · ");
 	const local = dateSpecDisplayLocal(spec, zone);
 	const date = formatDate(dateSpecDate(spec, zone), today);
-	const when = local === null ? date : `${date}, ${local.slice(11)}`;
+	const when = local === null ? date : `${date}, ${wallClockOf(local)}`;
 	return [when, ...extras].join(" · ");
 }
 

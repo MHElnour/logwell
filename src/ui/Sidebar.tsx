@@ -19,7 +19,7 @@ import {
 import { TAG_COLORS, type Category, INBOX_ID, INBOX_NAME, type Tag, type TagColor, paletteColor } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, IconButton, SrOnly, hueClass } from "./common";
-import { capitalize } from "./format";
+import { capitalize } from "../domain/text";
 import { useUniqueId } from "./hooks";
 import type { MenuSpec, UiHost } from "./host";
 import { ICON, categoryIcon } from "./icons";
