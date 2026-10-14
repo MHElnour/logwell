@@ -1,10 +1,10 @@
-import { DateTime } from "luxon";
+
 import { type DayStatus, type HabitIndex, type Progress, describeGoal, describeSchedule, progressOn, versionAt } from "../../domain/habits";
-import { plural } from "../../domain/text";
-import { addDays, clockTimeOf, utcDay } from "../../domain/time";
+import { capitalize, clamp, plural } from "../../domain/text";
+import { addDays, clockTimeOf, instantInZone, utcDay } from "../../domain/time";
 import type { Checkin, Habit, HabitVersion, LocalDate, TimeOfDay } from "../../domain/types";
 import { ICON } from "../icons";
-import { capitalize, formatDuration } from "../format";
+import { formatDuration } from "../format";
 
 // Display text and small derived values of the Habits page, the Today block and the Today column.
 // Pure: no clock, no host.
@@ -100,7 +100,7 @@ export function progressText(habit: Habit, index: HabitIndex, date: LocalDate, p
 /** Share of the bar to fill (0..1) for count and quantity rows; null for done-or-not. */
 export function barShare(habit: Habit, index: HabitIndex, date: LocalDate, p: Progress | null = progressOn(habit, index, date)): number | null {
 	if (p === null || p.period.version.goal.type === "binary") return null;
-	return Math.max(0, Math.min(1, p.target === 0 ? 0 : p.value / p.target));
+	return clamp(p.target === 0 ? 0 : p.value / p.target, 0, 1);
 }
 
 /** "Not scheduled today", "Not scheduled Saturday". */
@@ -116,7 +116,12 @@ function pageDateText(date: LocalDate): string {
 
 /** The sub line: "Sunday, Oct 4 · 2 of 5 done today" (a past day: "Saturday, Oct 3 · 3 of 5 done"). */
 export function subText(date: LocalDate, today: LocalDate, met: number, scheduled: number): string {
-	return `${pageDateText(date)} · ${met} of ${scheduled} done${date === today ? " today" : ""}`;
+	return `${pageDateText(date)} · ${metText(met, scheduled)}${date === today ? " today" : ""}`;
+}
+
+/** How many of the day's scheduled habits are met: "2 of 3 done" (the page header and the Today block). */
+export function metText(met: number, scheduled: number): string {
+	return `${met} of ${scheduled} done`;
 }
 
 export interface StripDay {
@@ -220,7 +225,7 @@ export function hasAmount(habit: Habit, c: Checkin, today: LocalDate): boolean {
 
 /** The log entry's small text: the time it was made, or "added later" when it was made on another day than it is for. */
 export function checkinWhen(c: Checkin, zone: string): string {
-	const made = DateTime.fromISO(c.createdAt, { zone: "UTC" }).setZone(zone);
+	const made = instantInZone(c.createdAt, zone);
 	if (!made.isValid) return "";
 	return made.toISODate() === c.date ? clockTimeOf(made) : "added later";
 }

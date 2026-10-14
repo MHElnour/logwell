@@ -1,12 +1,14 @@
 import { useMemo, useRef } from "preact/hooks";
 import { FOCUS_RANGES } from "../../app/settings";
 import type { ActiveTimer, FocusSetConfig } from "../../domain/focus";
+import { clamp } from "../../domain/text";
 import type { DbData } from "../../persistence/schema";
 import { Icon } from "../common";
 import { useUniqueId } from "../hooks";
 import type { UiHost } from "../host";
-import { focusedText, gapSec, roundsText, summaryText } from "./format";
-import { PHASE_LABEL } from "./Ring";
+import { PHASE_LABEL, focusedText, gapSec, roundsText, summaryText } from "./format";
+import { formatDuration } from "../format";
+
 
 // The stage around the ring: the "Focus on" pill, the buttons, the set settings or the set line,
 // the set-done summary and the recovery banner.
@@ -33,7 +35,7 @@ export const toConfig = (m: SetMinutes): FocusSetConfig => ({
 	longBreakSec: m.longBreakMin * 60,
 });
 
-const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(n)));
+
 
 interface Field {
 	key: keyof SetMinutes;
@@ -69,7 +71,7 @@ function Stepper(props: { field: Field; value: number; onCommit: (n: number) => 
 	const latest = useRef(value);
 	latest.current = value;
 	const bump = (dir: 1 | -1) => {
-		const next = clamp(latest.current + dir * stepFor(latest.current, dir, field.coarse), field.min, field.max);
+		const next = clamp(Math.round(latest.current + dir * stepFor(latest.current, dir, field.coarse)), field.min, field.max);
 		if (next === latest.current) return;
 		latest.current = next;
 		props.onCommit(next);
@@ -113,7 +115,7 @@ export function SetSettings(props: { minutes: SetMinutes; onChange: (patch: Part
 /** The one-line summary that replaces the panel while a set runs. */
 export function SetLine(props: { minutes: SetMinutes }) {
 	const m = props.minutes;
-	return <div class="cp-focus-setline">{`${roundsText(m.rounds)} · ${m.focusMin} min focus · ${m.breakMin} min break`}</div>;
+	return <div class="cp-focus-setline">{`${roundsText(m.rounds)} · ${formatDuration(m.focusMin)} focus · ${formatDuration(m.breakMin)} break`}</div>;
 }
 
 /** "Focus on:" a task or none, drawn as a pill above the ring. During a focus the change goes through the host's Split or Reassign prompt. */

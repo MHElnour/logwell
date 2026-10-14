@@ -1,12 +1,12 @@
 import { type ActiveTimer, type FocusPhase, type FocusSetConfig, remainingSec } from "../../domain/focus";
+import { clamp } from "../../domain/text";
 import type { Instant } from "../../domain/types";
 import { Icon } from "../common";
 import type { UiHost } from "../host";
-import { clockText, roundsText, summaryText } from "./format";
+import { PHASE_LABEL, clockText, roundText, roundsText, summaryText } from "./format";
 
 // The ring timer: time left, the phase, "Round n of N" and the round bars.
 
-export const PHASE_LABEL: Record<FocusPhase, string> = { focus: "Focus", "short-break": "Short break", "long-break": "Long break" };
 
 const RADIUS = 140;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -17,7 +17,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  */
 export function announcement(timer: ActiveTimer | null, summary: { rounds: number; focusedSec: number } | null): string {
 	if (timer === null) return summary === null ? "" : `Set done. ${summaryText(summary.rounds, summary.focusedSec)}.`;
-	const parts = [`${PHASE_LABEL[timer.phase]}, round ${timer.round} of ${timer.config.rounds}`];
+	const parts = [`${PHASE_LABEL[timer.phase]}, ${roundText(timer.round, timer.config.rounds).toLowerCase()}`];
 	if (timer.needsRecovery) parts.push("interrupted, choose what to do");
 	else if (timer.state === "paused") parts.push("paused");
 	return parts.join(", ");
@@ -35,7 +35,7 @@ export function Ring(props: {
 	const finishedSet = timer === null && summary !== null;
 	const planned = timer === null ? idle.focusSec : timer.plannedSec;
 	const left = timer === null ? idle.focusSec : remainingSec(timer, now);
-	const elapsed = finishedSet ? 1 : planned > 0 ? Math.min(1, Math.max(0, 1 - left / planned)) : 0;
+	const elapsed = finishedSet ? 1 : planned > 0 ? clamp(1 - left / planned, 0, 1) : 0;
 	const rounds = timer !== null ? timer.config.rounds : finishedSet ? summary.rounds : idle.rounds;
 	// Rounds finished: all before the current focus round, or the current one once its break began.
 	const finished = finishedSet ? rounds : timer === null ? 0 : timer.phase === "focus" ? timer.round - 1 : timer.round;
@@ -43,7 +43,7 @@ export function Ring(props: {
 	const tone = phase === "focus" && !finishedSet ? "is-focus" : "is-break";
 	const paused = timer?.state === "paused";
 	const name = finishedSet ? "Set done" : timer === null ? "Ready" : paused ? "Paused" : PHASE_LABEL[phase];
-	const round = timer !== null ? `Round ${timer.round} of ${rounds}` : finishedSet ? "" : roundsText(rounds);
+	const round = timer !== null ? roundText(timer.round, rounds) : finishedSet ? "" : roundsText(rounds);
 	return (
 		<div class={`cp-focus-ring-wrap ${tone}${paused ? " is-paused" : ""}${finishedSet ? " is-done" : ""}`}>
 			<div class="cp-focus-ring">

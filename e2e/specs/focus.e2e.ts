@@ -203,7 +203,7 @@ describe("Focus", function () {
 		await expect(focus.$(".cp-focus-round")).toHaveText("Round 1 of 1");
 		// The settings give way to a static summary line while the set runs.
 		await expect(focus.$(".cp-focus-settings")).not.toExist();
-		await expect(focus.$(".cp-focus-setline")).toHaveText("1 round · 1 min focus · 5 min break");
+		await expect(focus.$(".cp-focus-setline")).toHaveText("1 round · 1m focus · 5m break");
 
 		await advanceClock(61);
 

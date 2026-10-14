@@ -22,7 +22,7 @@ export function groupPatch(task: Task, drop: GroupDrop, ctx: QueryContext, sched
 		case "date":
 			return columnPatch(
 				task,
-				{ id: drop.date === ctx.today ? "today" : drop.date, title: "", date: drop.date, acceptsDrop: true, cards: [], completed: [] },
+				{ id: drop.date === ctx.today ? "today" : drop.date, title: null, date: drop.date, acceptsDrop: true, cards: [], completed: [] },
 				ctx,
 				schedule,
 			);

@@ -29,14 +29,14 @@ import {
 	upcomingGroups,
 	upcomingRange,
 } from "../domain/queries";
-import { type BoardColumn, dayTitle, toCards } from "../domain/board";
+import { type BoardColumn, toCards } from "../domain/board";
 import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
 import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
 import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
 import { compareTasksBySortKey, isDated, isOpen, isUnscheduled, listsInSidebarOrder } from "../domain/tasks";
-import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, type Priority, type Task } from "../domain/types";
+import { type Category, type Habit, type ID, INBOX_ID, INBOX_NAME, type LocalDate, PRIORITIES, type Priority, priorityLabel, type Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import type { NotePort } from "./ports";
 import type { TaskIndex } from "./taskIndex";
@@ -276,12 +276,7 @@ function bucketize<K>(entries: ListEntry[], keyOf: (t: Task) => K): Map<K, ListE
 	return buckets;
 }
 
-const PRIORITY_GROUPS: { priority: Priority; label: string }[] = [
-	{ priority: 1, label: "High" },
-	{ priority: 2, label: "Medium" },
-	{ priority: 3, label: "Low" },
-	{ priority: 0, label: "None" },
-];
+
 
 /** Rows of `view` where `keepTask` decides which completed tasks show among the open ones, grouped as `groupBy` says. */
 function viewGroups(
@@ -377,12 +372,12 @@ function viewGroups(
 		}
 		case "priority": {
 			const buckets = bucketize(rows(), (t) => t.priority);
-			return PRIORITY_GROUPS.filter((g) => buckets.has(g.priority)).map((g) => ({
-				key: `priority:${g.priority}`,
+			return PRIORITIES.filter((p) => buckets.has(p)).map((p) => ({
+				key: `priority:${p}`,
 				date: null,
-				label: g.label,
-				drop: { kind: "priority" as const, priority: g.priority },
-				entries: ordered(buckets.get(g.priority)!),
+				label: priorityLabel(p),
+				drop: { kind: "priority" as const, priority: p },
+				entries: ordered(buckets.get(p)!),
 			}));
 		}
 		case "tag": {
@@ -487,7 +482,7 @@ export function buildBoard(
 			for (let d = start; d <= end; d = addDays(d, 1)) {
 				columns.push({
 					id: d,
-					title: dayTitle(d, ctx),
+					title: null,
 					tone: dateTone(d, ctx.today),
 					date: d,
 					acceptsDrop: true,
@@ -615,6 +610,13 @@ export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilt
 /** The calendar's Unscheduled drawer: the open tasks through the view menu with no schedule and no repeat rule (`isUnscheduled`), unsorted. */
 export function unscheduledTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex): Task[] {
 	return menuTasks(state, ctx, filter, { within: "open", index }).filter(isUnscheduled);
+}
+
+/** The Unscheduled drawer's rows: `unscheduledTasks` in the lists' sort order. Read only while the drawer is open. */
+export function unscheduledRows(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex): ListEntry[] {
+	return unscheduledTasks(state, ctx, filter, index)
+		.sort(compareTasksBySortKey)
+		.map((t) => entryOf(t, state.tasks, ctx));
 }
 
 export interface SearchResults {

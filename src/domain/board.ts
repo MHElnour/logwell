@@ -1,5 +1,4 @@
-import type { GroupTone, ListEntry, QueryContext } from "./queries";
-import { addDays, utcDay } from "./time";
+import type { GroupTone, ListEntry } from "./queries";
 import type { ID, LocalDate } from "./types";
 
 // Board columns: the types and pure helpers. `buildBoard` is in app/views.ts, because
@@ -14,8 +13,8 @@ export interface BoardCard {
 export interface BoardColumn {
 	/** "overdue" | "today" | a LocalDate | "none" (no section). */
 	id: string;
-	/** "Overdue", "Today", "Sunday, Tomorrow", "Monday, Oct 5", "No section". */
-	title: string;
+	/** "Overdue", "Today", "No section", a section's name; null for an Upcoming day, which the view names by its date. */
+	title: string | null;
 	tone?: GroupTone;
 	/** The day a drop schedules; null = no date change. */
 	date: LocalDate | null;
@@ -29,11 +28,7 @@ export interface BoardColumn {
 	completed: ListEntry[];
 }
 
-/** Day title: "Sunday, Tomorrow", then "Monday, Oct 5". */
-export function dayTitle(date: LocalDate, ctx: QueryContext): string {
-	const dt = utcDay(date);
-	return date === addDays(ctx.today, 1) ? `${dt.toFormat("cccc")}, Tomorrow` : dt.toFormat("cccc, LLL d");
-}
+
 
 /**
  * Nests a subtask in its parent's card when the parent is in the same column; any other

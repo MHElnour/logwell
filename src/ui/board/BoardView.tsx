@@ -1,16 +1,17 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import { DST_WARNING_TEXT, type TaskPatch } from "../../app/TaskService";
+import { MOVE_SECTION_LABEL } from "../../app/SectionService";
+import { DST_WARNING_TEXT, EDIT_TASK_LABEL, MOVE_TASK_LABEL, type TaskPatch } from "../../app/TaskService";
 import type { BoardCard as BoardCardData, BoardColumn } from "../../domain/board";
 import { moveToDate, moveSameMoment } from "../../domain/calendar";
-import type { ListEntry, QueryContext } from "../../domain/queries";
+import { hasPastScheduleAndDeadline, type ListEntry, type QueryContext } from "../../domain/queries";
 import type { SubtaskCount } from "../../domain/tasks";
-import { dateSpecDate } from "../../domain/time";
 import type { DateSpec, ID, LocalDate, Task } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
 import { writeTaskResult } from "../actions";
 import { type Reanchored, notifyReanchored } from "../repeatActions";
 import { CompletedGroup } from "../CompletedGroup";
+import { formatDate } from "../format";
 import { AddSectionField } from "../AddSectionField";
 import { Icon, IconButton } from "../common";
 import { useStableCallback, useSubtaskCounts, useUniqueId } from "../hooks";
@@ -49,15 +50,17 @@ export function columnPatch(task: Task, to: BoardColumn, ctx: QueryContext, sche
 	if (to.sectionId !== undefined) return task.sectionId === to.sectionId ? {} : { sectionId: to.sectionId };
 	if (to.date === null) return {};
 	const patch = datePatch(task, to.date, ctx.zone, schedule);
-	const { scheduled, deadline } = task;
-	if (to.id === "today" && scheduled !== null && deadline !== null) {
-		const past = (spec: DateSpec) => dateSpecDate(spec, ctx.zone) < ctx.today;
-		if (past(scheduled) && past(deadline)) {
-			const next = moveToDate(deadline, to.date, ctx.zone);
-			if (!moveSameMoment(deadline, next, ctx.zone)) patch.deadline = next;
-		}
+	const { deadline } = task;
+	if (to.id === "today" && deadline !== null && hasPastScheduleAndDeadline(task, ctx)) {
+		const next = moveToDate(deadline, to.date, ctx.zone);
+		if (!moveSameMoment(deadline, next, ctx.zone)) patch.deadline = next;
 	}
 	return patch;
+}
+
+/** The heading of a column: its own title, else (an Upcoming day) its date as rows show dates ("Tomorrow", "Mon, Oct 5"). */
+export function columnTitle(column: BoardColumn, today: LocalDate): string {
+	return column.title ?? (column.date === null ? "" : formatDate(column.date, today));
 }
 
 /** A card's height before one was measured: a task line and a meta line. */
@@ -148,7 +151,7 @@ export function BoardView(props: {
 		id: ID,
 		order: ID[],
 		to: BoardColumn | null,
-	): Promise<{ label: "Move task" | "Edit task"; reanchored: Reanchored | null } | null> => {
+	): Promise<{ label: typeof MOVE_TASK_LABEL | typeof EDIT_TASK_LABEL; reanchored: Reanchored | null } | null> => {
 		const task = host.app.store.state.tasks.get(id);
 		if (task === undefined) return null;
 		// A series moves by its current occurrence (it has no `scheduled`), keeping the time.
@@ -158,7 +161,7 @@ export function BoardView(props: {
 			try {
 				const { changed, warnings, reanchored } = await host.app.tasks.place(id, order, patch);
 				for (const w of warnings) host.notify(DST_WARNING_TEXT[w]);
-				return changed !== false ? { label: "Move task", reanchored: reanchored ?? null } : null;
+				return changed !== false ? { label: MOVE_TASK_LABEL, reanchored: reanchored ?? null } : null;
 			} catch (err) {
 				host.error(err);
 				return null;
@@ -166,7 +169,7 @@ export function BoardView(props: {
 		}
 		if (Object.keys(patch).length === 0) return null;
 		const r = await writeTaskResult(host, task, patch);
-		return r.outcome === "changed" ? { label: "Edit task", reanchored: r.reanchored } : null;
+		return r.outcome === "changed" ? { label: EDIT_TASK_LABEL, reanchored: r.reanchored } : null;
 	};
 
 	const drop = (d: BoardDrop) => {
@@ -177,7 +180,7 @@ export function BoardView(props: {
 			if (done === null) return;
 			// A series' date change re-anchors it: that notice replaces the move notice.
 			if (done.reanchored !== null) notifyReanchored(host, { title }, done.reanchored, done.label, mark);
-			else host.notifyUndo(moved ? `Moved "${title}" to ${d.to.title}.` : `Moved "${title}".`, done.label, mark);
+			else host.notifyUndo(moved ? `Moved "${title}" to ${columnTitle(d.to, ctx.today)}.` : `Moved "${title}".`, done.label, mark);
 		});
 	};
 
@@ -198,7 +201,7 @@ export function BoardView(props: {
 			void host.app.sections
 				.place(id, order)
 				.then(({ changed }) => {
-					if (changed) host.notifyUndo(`Moved section "${title}".`, "Move section", mark);
+					if (changed) host.notifyUndo(`Moved section "${title}".`, MOVE_SECTION_LABEL, mark);
 				})
 				.catch((err) => host.error(err));
 		},
@@ -259,7 +262,7 @@ export function BoardView(props: {
 		// A subtask always stays in its parent's section.
 		if (to.sectionId !== undefined && (host.app.store.state.tasks.get(id)?.parentId ?? null) !== null) return false;
 		const targetSiblings = to.cards.filter((c) => c.entry.task.id !== id && c.entry.task.parentId === (host.app.store.state.tasks.get(id)?.parentId ?? null)).map((c) => c.entry.task.id);
-		moveFromKeyboard(id, to.id, to, [...targetSiblings, id], (title) => `Moved "${title}" to ${to.title}`);
+		moveFromKeyboard(id, to.id, to, [...targetSiblings, id], (title) => `Moved "${title}" to ${columnTitle(to, ctx.today)}`);
 		return true;
 	};
 
@@ -411,14 +414,14 @@ function Column(props: Parameters<typeof BoardView>[0] & {
 		>
 			<div class="cp-board-col-head">
 				<h3 class="cp-board-col-title" id={titleId}>
-					{column.title}
+					{columnTitle(column, props.ctx.today)}
 				</h3>
 				<span class="cp-board-col-count">{cardCount}</span>
 				{column.acceptsDrop && (
 					<IconButton
 						host={host}
 						icon="plus"
-						label={`Add task to ${column.title}`}
+						label={`Add task to ${columnTitle(column, props.ctx.today)}`}
 						cls="cp-board-add"
 						disabled={props.readOnly}
 						onClick={() =>
