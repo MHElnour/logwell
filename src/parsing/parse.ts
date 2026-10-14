@@ -257,7 +257,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 		return end;
 	};
 	const repeatTokens = findRecurrence(reading.text, takenInReading)
-		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), keep: t.keep === undefined ? undefined : toInputSpan(t.keep), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
+		.map((t) => ({ ...t, read: t.span, span: toInputSpan(t.span), end: t.end === null ? null : { ...t.end, span: toInputSpan(t.end.span) } }))
 		.filter((t) => {
 			if (t.silent) take(t.span);
 			return !t.silent;
@@ -276,7 +276,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 					{ label: label(built.other), rule: built.other },
 				],
 			});
-		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule, ...(built.durationMin === undefined ? {} : { durationMin: built.durationMin }), ...(t.keep === undefined ? {} : { keep: t.keep }) });
+		} else repeat = draft(input, "recurrence", t.span, "applied", { rule: built.rule });
 		drafts.push(repeat);
 		const end = t.end === null ? null : endDraftOf(t.end);
 		if (t.bare) bare.set(repeat, end);
@@ -380,7 +380,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			// `ending`, `starting` … lead a date only next to a repeat; otherwise they stay title words. `until <date>`
 			// without a repeat is a deadline (decision 8).
 			if (c.repeatOnly) drafts.push(dateDraft(input, "scheduled", { start: c.textStart, end: c.span.end }, c.outcome));
-			else drafts.push(dateDraft(input, c.kind === "end" ? "deadline" : c.kind, c.span, c.outcome, c.durationMin));
+			else drafts.push(dateDraft(input, c.kind === "end" ? "deadline" : c.kind, c.span, c.outcome));
 		} else if (typed && !built && (c.kind === "end" || c.lead?.kind === "schedule" || c.lead?.kind === "end")) {
 			// A start or end part of a repeat Quick Add cannot build applies nothing.
 			drafts.push(draft(input, c.kind === "end" ? "repeatEnd" : "scheduled", c.span, "unsupported", { notice: NOTICE.recurrence }));
@@ -397,7 +397,7 @@ export function parseUnguarded(input: string, ctx: ParseContext): ParseResult {
 			// A time after an end word (`until 5pm`: an end must be a date) and a date after a weekly form's `on` are
 			// visible offers, never applied as typed.
 			drafts.push(offerDraft(input, c));
-		} else drafts.push(dateDraft(input, c.kind, c.span, c.outcome, c.durationMin));
+		} else drafts.push(dateDraft(input, c.kind, c.span, c.outcome));
 	}
 
 	drafts.sort((a, b) => a.chip.span.start - b.chip.span.start);
@@ -449,10 +449,9 @@ function offerDraft(input: string, c: DateCandidate): Draft {
 	return d;
 }
 
-function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome, durationMin?: number): Draft {
-	const minutes: Partial<Chip> = durationMin === undefined ? {} : { durationMin };
-	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives, ...minutes });
-	const extra: Partial<Chip> = { date: outcome.date, ...minutes };
+function dateDraft(input: string, kind: "scheduled" | "deadline", span: Span, outcome: DateOutcome): Draft {
+	if (outcome.status === "choice") return draft(input, kind, span, "choice", { alternatives: outcome.alternatives });
+	const extra: Partial<Chip> = { date: outcome.date };
 	if (outcome.warning) extra.warning = outcome.warning;
 	if (outcome.status === "suggestion") extra.notice = NOTICE.useAsDate;
 	return draft(input, kind, span, outcome.status, extra);
@@ -541,11 +540,8 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 	const n = input.length;
 	const applied = chips.filter((c) => c.status === "applied");
 	const gone = new Uint8Array(n);
-	// A chip's `keep` text stays, as text the user kept does.
-	const keeps = applied.flatMap((c) => (c.keep === undefined ? [] : [c.keep]));
 	for (const c of applied) gone.fill(1, c.span.start, c.span.end);
-	for (const k of keeps) gone.fill(0, k.start, k.end);
-	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end) || keeps.some((l) => l.start <= i && i < l.end);
+	const kept = (i: number): boolean => literal.some((l) => l.start <= i && i < l.end);
 	const space = (i: number): boolean => i < 0 || i >= n || isSpaceChar(input.charAt(i));
 	// The first and the last word character of the title.
 	let first = -1;
@@ -632,15 +628,12 @@ function titleOf(input: string, chips: readonly Chip[], literal: readonly Span[]
 function finish(input: string, chips: Chip[], open: readonly string[], literal: readonly Span[], escapes: readonly number[]): ParseResult {
 	const fields: ParsedFields = { tagKeys: [], newTags: [] };
 	let appliedCount = 0;
-	// A time range's duration (`3-4pm`, `every monday at 5pm-6pm`); a typed `for` duration wins.
-	let rangeMinutes: number | undefined;
 	for (const c of chips) {
 		if (c.status !== "applied") continue;
 		appliedCount++;
 		switch (c.kind) {
 			case "scheduled":
 				if (c.date) fields.scheduled = c.date;
-				if (c.durationMin !== undefined) rangeMinutes = c.durationMin;
 				break;
 			case "deadline":
 				if (c.date) fields.deadline = c.date;
@@ -670,14 +663,12 @@ function finish(input: string, chips: Chip[], open: readonly string[], literal: 
 				break;
 			case "recurrence":
 				if (c.rule !== undefined) fields.recurrence = c.rule;
-				if (c.durationMin !== undefined) rangeMinutes = c.durationMin;
 				break;
 			case "repeatEnd":
 				if (c.end !== undefined) fields.recurrenceEnd = c.end;
 				break;
 		}
 	}
-	if (fields.plannedDurationMin === undefined && rangeMinutes !== undefined) fields.plannedDurationMin = rangeMinutes;
 	const collapsed = titleOf(input, chips, literal, escapes);
 	return {
 		input,

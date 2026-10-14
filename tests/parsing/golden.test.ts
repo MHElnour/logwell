@@ -162,8 +162,7 @@ const CASES: Golden[] = [
 	{ in: "Call Oct 5 at 3pm", title: "Call", s: "2026-10-05T15:00", chips: ["applied|scheduled|Oct 5 at 3pm"] },
 	{ in: "Call Oct 5 7:15pm", title: "Call", s: "2026-10-05T19:15", chips: ["applied|scheduled|Oct 5 7:15pm"] },
 	{ in: "Call Oct 5 at 3", title: "Call Oct 5 at 3", chips: ["choice|scheduled|Oct 5 at 3|a=03:00=2026-10-05T03:00/15:00=2026-10-05T15:00"] },
-	// #69: a time range is its start time and a duration.
-	{ in: "Call from 3pm to 5pm", title: "Call", s: "2026-10-01T15:00", dur: 120, chips: ["applied|scheduled|from 3pm to 5pm"] },
+	{ in: "Call from 3pm to 5pm", title: "Call from 3pm to 5pm", chips: [`suggestion|scheduled|from 3pm to 5pm|d=2026-10-01T15:00|n=${U}`] },
 
 	// --- deadlines (ny) ---
 	{ in: "Report by Friday", title: "Report", d: "2026-10-02", chips: ["applied|deadline|by Friday"] },

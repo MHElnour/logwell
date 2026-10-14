@@ -73,8 +73,6 @@ function titleKeepsTheRest(input: string, r: ParseResult): boolean {
 	const n = input.length;
 	const removed = new Uint8Array(n);
 	for (const c of applied(r)) removed.fill(1, c.span.start, c.span.end);
-	// Text a chip keeps inside its span (a repeat's backwards time range keeps its start) is not removed.
-	for (const c of applied(r)) if (c.keep !== undefined) removed.fill(0, c.keep.start, c.keep.end);
 	const gone = (j: number): boolean => j >= 0 && j < n && removed[j] === 1;
 	const blank = (j: number): boolean => j < 0 || j >= n || isSpace(input.charAt(j));
 	// Whether an applied span is reachable from `i` over whitespace, marks and removed text.
@@ -256,9 +254,7 @@ describe("parser properties", () => {
 				const last = (kind: string) => a.filter((c) => c.kind === kind).at(-1);
 				expect(r.fields.scheduled).toEqual(last("scheduled")?.date);
 				expect(r.fields.deadline).toEqual(last("deadline")?.date);
-				// A typed `for` duration wins over a time range's (`3-4pm`, on its date or repeat chip).
-				const ranged = a.filter((c) => (c.kind === "scheduled" || c.kind === "recurrence") && c.durationMin !== undefined).at(-1);
-				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin ?? ranged?.durationMin);
+				expect(r.fields.plannedDurationMin).toBe(last("duration")?.durationMin);
 				expect(r.fields.categoryId).toBe(last("category")?.categoryId);
 				expect(r.fields.sectionId).toBe(last("category")?.sectionId);
 				expect(r.fields.notePath).toBe(last("note")?.notePath);

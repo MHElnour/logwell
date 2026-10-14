@@ -623,6 +623,10 @@ describe("4b. Date ranges", () => {
 		{ in: "Meeting today until 5pm", text: "today until 5pm", value: "2026-10-07" },
 		{ in: "Meeting in 3 days until noon", text: "in 3 days until noon", value: "2026-10-10" },
 		{ in: "Meeting Oct 12 until noon", text: "Oct 12 until noon", value: "2026-10-12" },
+		{ in: "Meeting Friday 3pm-5pm", text: "Friday 3pm-5pm", value: "2026-10-09T15:00" },
+		{ in: "Meeting Friday 3-5pm", text: "Friday 3-5pm", value: "2026-10-09T15:00" },
+		{ in: "Meeting Friday from 3pm to 5pm", text: "Friday from 3pm to 5pm", value: "2026-10-09T15:00" },
+		{ in: "Meeting Saturday 10am-2pm", text: "Saturday 10am-2pm", value: "2026-10-10T10:00" },
 	])("$in suggests its start as typed alone", (row) => {
 		inZones((zone) => {
 			const r = parseAt(row.in, zone);
@@ -910,12 +914,9 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Gym every monday @4:30pm", title: "Gym", rec: "weekly:MO@16:30" },
 			{ in: "Gym every day @9am starting tomorrow", title: "Gym", rec: "daily@09:00", s: "2026-10-08" },
 			{ in: "Gym every day @9am", title: "Gym", rec: "daily", tags: ["9am"], vault: { tags: [{ key: "9am", displayName: "9am" }] }, brief: ["recurrence|applied|every day", "tag|applied|@9am"] },
-			// a range after @ reads as after `at`: the start time and a duration
-			{ in: "Call @4pm-5pm", title: "Call", s: "2026-10-07T16:00", dur: 60, nt: [], brief: ["scheduled|applied|@4pm-5pm"] },
-			{ in: "Call @4pm to 5pm", title: "Call", s: "2026-10-07T16:00", dur: 60, nt: [], brief: ["scheduled|applied|@4pm to 5pm"] },
-			{ in: "Call @4pm \u2013 5pm", title: "Call", s: "2026-10-07T16:00", dur: 60, nt: [] },
-			{ in: "Call @9am-5pm", title: "Call", s: "2026-10-08T09:00", dur: 480, nt: [] },
-			{ in: "Call @4:30pm-5pm", title: "Call", s: "2026-10-07T16:30", dur: 30, nt: [] },
+			// a time range after @ reads as after `at`: only a suggestion, never a tag
+			{ in: "Call @4pm-5pm", title: "Call @4pm-5pm", dur: null, nt: [], brief: ["scheduled|suggestion|@4pm-5pm"] },
+			{ in: "Call @4pm to 5pm", title: "Call @4pm to 5pm", dur: null, nt: [], brief: ["scheduled|suggestion|@4pm to 5pm"] },
 			// a tag of that exact name still wins
 			{ in: "Call @4pm-5pm", title: "Call", dur: null, tags: ["4pm-5pm"], vault: { tags: [{ key: "4pm-5pm", displayName: "4pm-5pm" }] }, brief: ["tag|applied|@4pm-5pm"] },
 			{ in: "Call @4pm to 5pm", title: "Call to", s: "2026-10-07T17:00", dur: null, tags: ["4pm"], vault: { tags: [{ key: "4pm", displayName: "4pm" }] }, brief: ["tag|applied|@4pm", "scheduled|applied|5pm"] },
@@ -930,47 +931,15 @@ describe("7. Everyday phrasings", () => {
 			{ in: "Call at 2460", title: "Call at 2460", brief: [] },
 			{ in: "Call at 0975", title: "Call at 0975", brief: [] },
 			{ in: "Call 0900", title: "Call 0900", brief: [] },
-			// read exactly as `at` the same time: after a date, after a repeat, before a start, in a range
+			// read exactly as `at` the same time: after a date, after a repeat, before a start, in a time range (a suggestion)
 			{ in: "Standup tomorrow at 0900", title: "Standup", s: "2026-10-08T09:00", brief: ["scheduled|applied|tomorrow at 0900"] },
 			{ in: "Lunch at 1230 tomorrow", title: "Lunch", s: "2026-10-08T12:30" },
 			{ in: "Call at 1200", title: "Call", s: "2026-10-07T12:00" },
 			{ in: "Call at 0000", title: "Call", s: "2026-10-08T00:00" },
 			{ in: "Gym every day at 0900", title: "Gym", rec: "daily@09:00", brief: ["recurrence|applied|every day at 0900"] },
 			{ in: "Gym every day at 0900 starting tomorrow", title: "Gym", rec: "daily@09:00", s: "2026-10-08" },
-			{ in: "Shift at 0900-5pm", title: "Shift", s: "2026-10-08T09:00", dur: 480, brief: ["scheduled|applied|at 0900-5pm"] },
-			{ in: "Meeting at 0900-1000", title: "Meeting", s: "2026-10-08T09:00", dur: 60, brief: ["scheduled|applied|at 0900-1000"] },
-			{ in: "Shift at 0900 to 1700", title: "Shift", s: "2026-10-08T09:00", dur: 480 },
-		])("#69: $in", (row) => checkRow(row));
-	});
-
-	describe("time ranges: the start time and a duration from start to end", () => {
-		it.each<Row>([
-			{ in: "Meeting 3-4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60, brief: ["scheduled|applied|3-4pm"] },
-			{ in: "Meeting 3pm-4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60 },
-			{ in: "Meeting 3–4pm", title: "Meeting", s: "2026-10-07T15:00", dur: 60 },
-			{ in: "Meeting 10am-11am", title: "Meeting", s: "2026-10-07T10:00", dur: 60 },
-			{ in: "Call from 3pm to 5pm", title: "Call", s: "2026-10-07T15:00", dur: 120 },
-			{ in: "Meeting 2-3pm tomorrow", title: "Meeting", s: "2026-10-08T14:00", dur: 60 },
-			{ in: "Meeting Friday 3pm-5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120, brief: ["scheduled|applied|Friday 3pm-5pm"] },
-			{ in: "Meeting Friday 3-5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120 },
-			{ in: "Meeting Friday from 3pm to 5pm", title: "Meeting", s: "2026-10-09T15:00", dur: 120 },
-			{ in: "Meeting Saturday 10am-2pm", title: "Meeting", s: "2026-10-10T10:00", dur: 240 },
-			// a typed `for` wins
-			{ in: "Meeting 3-4pm for 45m", title: "Meeting", s: "2026-10-07T15:00", dur: 45 },
-			// an end not after the start: the end time alone, the rest stays text
-			{ in: "Meeting 4-3pm", title: "Meeting 4-", s: "2026-10-07T15:00", dur: null, brief: ["scheduled|applied|3pm"] },
-			{ in: "Work 9-5pm", title: "Work 9-", s: "2026-10-07T17:00", dur: null },
-			{ in: "Lunch 11-1pm", title: "Lunch 11-", s: "2026-10-07T13:00", dur: null },
-			{ in: "Shift 10pm-2am", title: "Shift 10pm-", s: "2026-10-08T02:00", dur: null },
-			// after a repeat: the repeat's time and a duration, no date of its own
-			{ in: "Gym every monday at 1730-1830", title: "Gym", rec: "weekly:MO@17:30", dur: 60, brief: ["recurrence|applied|every monday at 1730-1830"] },
-			{ in: "Gym every day at 0900-1000", title: "Gym", rec: "daily@09:00", dur: 60 },
-			{ in: "Gym every day at 9am-10am", title: "Gym", rec: "daily@09:00", dur: 60 },
-			{ in: "Gym daily at 9am-10am", title: "Gym", rec: "daily@09:00", dur: 60 },
-			{ in: "Gym every day at 3-4pm", title: "Gym", rec: "daily@15:00", dur: 60 },
-			// … and an end not after the start: the repeat at the end time alone, the start stays text
-			{ in: "Gym every day at 10am-9am", title: "Gym 10am-", rec: "daily@09:00", dur: null, brief: ["recurrence|applied|every day at 10am-9am"] },
-			{ in: "Gym every monday at 1830-1730", title: "Gym 1830-", rec: "weekly:MO@17:30", dur: null },
+			{ in: "Meeting at 0900-1000", title: "Meeting at 0900-1000", dur: null, brief: ["scheduled|suggestion|at 0900-1000"] },
+			{ in: "Shift at 0900 to 1700", title: "Shift at 0900 to 1700", dur: null, brief: ["scheduled|suggestion|at 0900 to 1700"] },
 		])("#69: $in", (row) => checkRow(row));
 	});
 

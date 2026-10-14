@@ -29,8 +29,6 @@ const THIS_WORD_RE = /\bthis\b/iu;
 // No lookbehind (iOS): the character before is matched and ignored.
 const LEADING_ZERO_TIME_RE = /(?:^|[^\d:.])0[1-9]:[0-5]\d(?!\d)/u;
 const PAST_WORD_RE = /^(?:last|past|previous)\b/iu;
-// What joins the two times of a time range: "-", an en dash or "to" ("3-4pm", "from 3pm to 5pm").
-const TIME_RANGE_JOIN_RE = /\s*(?:\bto\b|[-\u2013])\s*/giu;
 
 export type DateOutcome =
 	| { status: "applied" | "suggestion"; date: DateSpec; warning?: WallTimeWarning }
@@ -56,8 +54,6 @@ export interface DateCandidate {
 	/** How the date moves past a start it falls before as a repeat's end (`rollEnd`); null when it keeps its reading. */
 	rolls: RollKind | null;
 	outcome: DateOutcome;
-	/** A time range's minutes from its start to its end (`3-4pm`): the date is its start time. */
-	durationMin?: number;
 	/**
 	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
 	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
@@ -342,7 +338,7 @@ function componentsIn(c: chrono.ParsedComponents, zone: "utc"): DateTime {
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
  * `fixed`: the day to use instead of chrono's, a certain one (a range's end moved past its start).
  */
-function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate, timeRange = false): { date: LocalDate; dayCertain: boolean; hourCertain: boolean; outcome: DateOutcome } | null {
+function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { date: LocalDate; dayCertain: boolean; hourCertain: boolean; outcome: DateOutcome } | null {
 	const { env, today, nowLocal, todayWeekday } = clock;
 	const start = r.start;
 	const dayKnown = fixed !== undefined || start.isCertain("day");
@@ -384,9 +380,8 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate, tim
 				: { kind: "date", date: d };
 
 	let outcome: DateOutcome | null = null;
-	// A time range (`timeRange`, "3-4pm") is read by its start, whose half of the day follows the end's.
-	const lowConfidence = (r.end != null && !timeRange) || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
-	const meridiemKnown = start.isCertain("meridiem") || (timeRange && r.end?.isCertain("meridiem") === true) || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
+	const lowConfidence = r.end != null || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
+	const meridiemKnown = start.isCertain("meridiem") || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
 	if (lowConfidence) {
 		const res = resolveDateSpec(mkValue(date));
 		if (!res) return null;
@@ -543,35 +538,6 @@ function startAlone(r: chrono.ParsedResult, masked: string, parser: chrono.Chron
 	return chronoDay.isValid && aloneDay.isValid && isoDate(chronoDay) === isoDate(aloneDay) ? null : last;
 }
 
-/**
- * A range of two times on one day joined by "-", an en dash or "to" ("3-4pm", "10am-11am", "from 3pm to 5pm", "2-3pm
- * tomorrow"): the minutes from its start to its end; when the end is not after the start ("4-3pm"), the end read alone,
- * placed where it is in the text. Null for any other reading, a date range or `until` included.
- */
-function timeRangeOf(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock): { minutes: number } | { end: chrono.ParsedResult } | null {
-	const end = r.end;
-	if (end == null || !r.start.isCertain("hour") || !end.isCertain("hour")) return null;
-	if (dayCertainOf(end) || end.isCertain("month")) {
-		const startDay = componentsIn(r.start, "utc");
-		const endDay = componentsIn(end, "utc");
-		if (!startDay.isValid || !endDay.isValid || isoDate(startDay) !== isoDate(endDay)) return null;
-	}
-	const text = r.text.trimEnd();
-	for (const m of text.matchAll(TIME_RANGE_JOIN_RE)) {
-		const at = m.index + m[0].length;
-		const right = text.slice(at);
-		if (m.index === 0 || right === "") continue;
-		const found = parser.parse(right, clock.ref, optionOf(clock));
-		const alone = found.length === 1 ? found[0] : undefined;
-		if (alone === undefined || alone.index !== 0 || alone.text.trimEnd() !== right || alone.end != null) continue;
-		if (alone.start.get("hour") !== end.get("hour") || alone.start.get("minute") !== end.get("minute")) continue;
-		const minutes = (end.get("hour") ?? 0) * 60 + (end.get("minute") ?? 0) - ((r.start.get("hour") ?? 0) * 60 + (r.start.get("minute") ?? 0));
-		if (minutes > 0) return { minutes };
-		return { end: Object.assign(alone, { index: r.index + at }) };
-	}
-	return null;
-}
-
 export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const zoneNow = zoneNowOf(env.now, env.zone);
 	const parser = DATE_READERS[env.locale];
@@ -582,19 +548,15 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 	const results = parser.parse(masked, ref, optionOf(clock));
 
 	const out: DateCandidate[] = [];
-	for (const result of results) {
+	for (const r of results) {
 		// A span that reaches into a mask, one introduced by "for" ("for 2 days" is not a date), or a duration without
 		// `for` ("Gym 2h").
-		if (result.text.includes(MASK_CHAR) || /^for\s/iu.test(result.text) || bareDuration(result.text) === "planned") continue;
-		// A time range is its start time and a duration, or its end time alone when the end is not after the start.
-		const range = timeRangeOf(result, parser, clock);
-		const r = range !== null && "end" in range ? range.end : result;
-		const timeRange = range !== null && "minutes" in range;
+		if (r.text.includes(MASK_CHAR) || /^for\s/iu.test(r.text) || bareDuration(r.text) === "planned") continue;
 		// A range with a side that is only a time: its start as typed alone, still only a suggestion (a choice keeps chrono's reading).
-		const alone = range === null ? startAlone(r, masked, parser, clock) : null;
+		const alone = startAlone(r, masked, parser, clock);
 		const aloneRead = alone === null ? null : readResult(alone, clock);
 		const fromAlone = alone !== null && !alone.text.includes(MASK_CHAR) && aloneRead !== null && aloneRead.outcome.status !== "choice" ? { head: alone, read: aloneRead } : null;
-		const read = fromAlone?.read ?? readResult(r, clock, undefined, timeRange);
+		const read = fromAlone?.read ?? readResult(r, clock);
 		if (read === null) continue;
 		const { dayCertain, hourCertain } = read;
 		const outcome = fromAlone === null ? read.outcome : asSuggestion(read.outcome);
@@ -631,7 +593,6 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,
 			outcome,
-			...(timeRange ? { durationMin: range.minutes } : {}),
 		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start

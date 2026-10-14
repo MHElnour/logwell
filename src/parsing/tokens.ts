@@ -4,7 +4,6 @@ import { findDurations } from "./duration";
 import type { Span } from "./types";
 import {
 	CLOCK_PATTERN,
-	readClockRange,
 	DAY_NUMBER_PATTERN,
 	LIST_SEP_PATTERN,
 	MONTH_PATTERN,
@@ -194,8 +193,6 @@ interface RepeatToken {
 	end: RepeatCount | null;
 	/** "every year on …": the span ends with an "on" that leads into the start date, which must follow. */
 	onDate: boolean;
-	/** Text inside the span that stays in the title: a backwards time range's start (`every day at 10am-9am` keeps `10am-`). */
-	keep?: Span;
 }
 
 /**
@@ -251,7 +248,7 @@ const DAY_ABBR = `(?!${RANGE_START})${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}`;
 const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
 // Joined by plain spaces, `sat` and `sun` continue a list only when nothing but more weekdays, a time and punctuation
 // follows ("every mon wed sat", not "every monday sun cream"); joined by a comma, "and" or "&", they always do.
-const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN}(?:${RANGE_TO_PATTERN}${CLOCK_PATTERN})?)?[\\s\\p{P}]*$)`;
+const LIST_ENDS_HERE = `(?=(?:${SEP}${WEEKDAY_PATTERN})*(?:\\s+at\\s+${CLOCK_PATTERN})?[\\s\\p{P}]*$)`;
 const WEEKDAY_LIST = `(?:${WEEKDAY_RANGE}|${DAY})(?:${LIST_SEP_PATTERN}${DAY}|\\s+${DAY_FULL}|\\s+${DAY_ABBR}${LIST_ENDS_HERE})*`;
 const OF_MONTH = "\\s+of\\s+(?:the|each|every)\\s+month";
 // "on the 15th", "on day 15", "on 15", "on the last day": the day of a monthly repeat; a bare number before a month
@@ -280,25 +277,7 @@ const EVERY_RE = new RegExp(
 	"iyu",
 );
 // A time typed right after the form ("every monday at 9", "daily at 7") belongs to the repeat.
-const EVERY_TIME_RE = new RegExp(`\\s+at\\s+(${CLOCK_PATTERN})${NOT_WORD_AFTER}`, "iyu");
-// The end of a time range after that time ("every monday at 5pm-6pm").
-const TIME_END_RE = new RegExp(`${RANGE_TO_PATTERN}(${CLOCK_PATTERN})${NOT_WORD_AFTER}`, "iyu");
-
-/**
- * The time typed at `at` right after a form, with the end of its range: its length, and for a range whose end is not
- * after its start, the start and the join, which stay title text (`keep`: the repeat is at the end time alone, as a
- * date's range is). A range gives the repeat its start time and the task a duration (`readClockRange`).
- */
-function repeatTime(s: string, at: number): { length: number; keep?: Span } {
-	const time = sticky(EVERY_TIME_RE, s, at);
-	if (time === null) return { length: 0 };
-	const range = sticky(TIME_END_RE, s, at + time[0].length);
-	const read = range === null ? null : readClockRange(time[1]!, range[1]!);
-	if (range === null || read === null) return { length: time[0].length };
-	const length = time[0].length + range[0].length;
-	if (read.minutes > 0) return { length };
-	return { length, keep: { start: at + time[0].length - time[1]!.length, end: at + length - range[1]!.length } };
-}
+const EVERY_TIME_RE = new RegExp(`\\s+at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // The same time as one word of a run of repeat words, where a list word may have taken the space before it.
 const RUN_TIME_RE = new RegExp(`\\s*at\\s+${CLOCK_PATTERN}${NOT_WORD_AFTER}`, "iyu");
 // `every <month> [<day>]` is a yearly repeat Quick Add does not build (write `every year on May 5`): the one phrase that
@@ -381,8 +360,6 @@ interface RepeatPhrase {
 	silent: boolean;
 	/** "every year on …": the span ends with the "on" that leads into the start date. */
 	onDate: boolean;
-	/** Text inside the span that stays in the title (`repeatTime`). */
-	keep?: Span;
 }
 
 /**
@@ -406,13 +383,13 @@ function repeatPhraseAt(s: string, start: number, word: string): RepeatPhrase | 
 	}
 	let end = start + form[0].length;
 	if (ON_DATE_TAIL_RE.test(form[0])) return phrase(end, true, true);
-	const time = repeatTime(s, end);
-	end += time.length;
+	const time = sticky(EVERY_TIME_RE, s, end);
+	if (time !== null) end += time[0].length;
 	const join = sticky(JOIN_RE, s, end);
 	const joined = join === null ? end : end + join[0].length;
 	const more = join === null ? end : repeatWordsEnd(s, joined);
 	const compound = more > joined && !NUMBERS_ONLY_RE.test(s.slice(joined, more));
-	return compound ? phrase(more, false) : { ...phrase(end, true), ...(time.keep === undefined ? {} : { keep: time.keep }) };
+	return compound ? phrase(more, false) : phrase(end, true);
 }
 
 /**
@@ -445,10 +422,10 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		for (let i = start; i < end; i++) if (covered[i] === 1) return false;
 		return true;
 	};
-	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate" | "keep">): number => {
+	const push = (span: Span, bare: boolean, phrase: Pick<RepeatPhrase, "supported" | "silent" | "onDate">): number => {
 		const found = phrase.onDate || phrase.silent ? null : repeatCountAt(s, span.end);
 		const end = found !== null && !taken(found.span.start, found.span.end) ? found : null;
-		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate, ...(phrase.keep === undefined ? {} : { keep: phrase.keep }) });
+		out.push({ span, bare, supported: phrase.supported, silent: phrase.silent, end, onDate: phrase.onDate });
 		covered.fill(1, span.start, span.end);
 		if (end !== null) covered.fill(1, end.span.start, end.span.end);
 		return end === null ? span.end : end.span.end;
@@ -457,13 +434,13 @@ export function findRecurrence(s: string, taken: Taken): RepeatToken[] {
 		let end = found.index + found[0].length;
 		if (!wordBoundaryBefore(s, found.index)) return;
 		const onDate = ON_DATE_TAIL_RE.test(found[0]);
-		const time = onDate ? { length: 0 } : repeatTime(s, end);
-		end += time.length;
+		const time = onDate ? null : sticky(EVERY_TIME_RE, s, end);
+		if (time !== null) end += time[0].length;
 		if (!free(found.index, end)) return;
 		// "on mondays", "on weekends", "on the last friday of the month": the "on" goes with the repeat; not "on daily".
 		const on = bare && !/s$/iu.test(found[0]) ? -1 : wordBefore(s, found.index, "on");
 		const start = on === -1 ? found.index : on;
-		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate, ...(time.keep === undefined ? {} : { keep: time.keep }) });
+		push({ start: free(start, end) ? start : found.index, end }, bare, { supported: true, silent: false, onDate });
 	};
 
 	// The `every` phrases first, so "every 2nd and 4th tuesday of every month" is one unsupported phrase; the "every" of

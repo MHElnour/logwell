@@ -48,13 +48,10 @@ export interface Chip {
 	date?: DateSpec;
 	alternatives?: ChipAlternative[];
 	warning?: WallTimeWarning;
-	/** A duration chip's minutes, or a time range's on its date or repeat chip (`3-4pm`, `every day at 9am-10am`); a typed `for` duration wins over it. */
 	durationMin?: number;
 	/** 1 high, 2 medium, 3 low (a chip never carries 0). */
 	priority?: 1 | 2 | 3;
 	categoryId?: string;
-	/** Text inside the span that stays in the title: a repeat's backwards time range keeps its start (`every day at 10am-9am` keeps `10am-`). */
-	keep?: Span;
 	/** The section of the list a `#list/section` names. */
 	sectionId?: string;
 	tagKey?: string;

@@ -284,8 +284,8 @@ export function dayNumber(text: string): number | null {
 /** A clock time: "9", "9:30pm", "5 p.m.", "17:00", "noon", "midnight". */
 export const CLOCK_PATTERN = "(?:\\d{1,2}(?::\\d{2})?\\s*(?:[ap]\\.?m\\.?)?|noon|midnight)";
 
-// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon", and the end of a
-// range written onto it ("4pm-5pm", which a tag name could also be).
+// A clock time `@` reads instead of a tag name: an hour with am or pm ("4pm", "4:30pm") or "noon", with the end of a
+// range written onto it ("4pm-5pm", which a tag name could also be: it reads as `at 4pm-5pm` does).
 const AT_CLOCK = "(?:\\d{1,2}(?::\\d{2})?[ap]m|noon)";
 const AT_CLOCK_RE = new RegExp(`(${AT_CLOCK})(?:-(${AT_CLOCK}))?(?![\\p{L}\\p{N}_])`, "iuy");
 
@@ -385,22 +385,6 @@ export function readingOf(s: string, free: (start: number, end: number) => boole
 
 /** The units of a planned duration: "h", "hrs", "hours", "m", "mins", "minutes". */
 export const DURATION_UNIT_PATTERN = "(?:hours?|hrs?|h|minutes?|mins?|m)";
-
-/**
- * A time range of two clock times on one day ("5pm-6pm", "17:30-18:30", "3-4pm": a start without am or pm takes the
- * end's): its start and end as "HH:mm" and the minutes between, zero or less when the end is not after the start. Null
- * unless both read as clock times and both halves of the day are certain.
- */
-export function readClockRange(start: string, end: string): { time: string; end: string; minutes: number } | null {
-	const to = readClock(end);
-	if (to === null || to.ambiguous) return null;
-	const half = /([ap])\.?m\.?$/iu.exec(end.trim());
-	let from = readClock(start);
-	if (from?.ambiguous === true && half !== null) from = readClock(`${start.trim()}${half[1]!}m`);
-	if (from === null || from.ambiguous) return null;
-	const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
-	return { time: from.time, end: to.time, minutes: minutesOf(to.time) - minutesOf(from.time) };
-}
 
 /** A clock time as "HH:mm", and whether its hour could be either half of the day (1 to 12 without am or pm). */
 export function readClock(text: string): { time: string; ambiguous: boolean } | null {
