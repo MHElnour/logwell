@@ -25,8 +25,10 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 - Press × on a chip to keep its words in the title as plain text.
 - When you type the same kind of value twice, the later one wins. The earlier chip says "Replaced by a later value". Times are the exception: the first time wins, and a later one stays in the title, as in `Call at 4pm and at 5pm`.
 - Vague words, such as "next month", "this evening", "in may" or "sun", show as a suggestion such as "Use as date?". It applies only when you click it or press Enter on it.
-- A range, such as `Friday until midnight` or `Oct 12 to Oct 20`, is also a suggestion. Its date is the start as you would get it typed alone: `Friday until midnight` typed on a Wednesday suggests the coming Friday.
+- A range of two dates sets both dates of the task: the first is its date and the second its deadline. `Trip Oct 20 to Oct 25`, `Oct 20-25`, `from Oct 20 until Oct 25` and `Monday until Friday` all work, and a time after the range is the start's: `Trip Oct 20 to Oct 25 at 9am` starts at 09:00. When the start has two readings, as in `Trip Oct 20 to Oct 25 at 5`, the task is not saved until you choose. In a repeat, the range is the repeat's first and last date instead.
+- A range that ends in a time, such as `Friday until midnight`, or whose end comes before its start, such as `Oct 25 to Oct 20` or `Oct 30 to Oct 2`, is a suggestion. Its date is the start as you would get it typed alone: `Friday until midnight` typed on a Wednesday suggests the coming Friday. A time range, such as `3-4pm`, is a suggestion too.
 - Some text has two readings, and the chip lets you choose. `at 5` asks for 05:00 or 17:00. `friday` typed on a Friday asks for Today or Next week. In a repeat, such as `every day at 7`, the task is not saved until you choose: Enter opens the choice, and choosing saves.
+- A weekday with a day that falls on another weekday, such as `Friday 15th` when the 15th is a Thursday, says "The 15th is a Thursday" and asks for that day or the nearest Friday that is not already past. With a time such as `at 7`, each day comes at 07:00 or 19:00. The task is not saved until you choose, unless a later date replaces it.
 - If nothing is left of the title, Logwell keeps the full text as the title.
 - Text like `#42` or `@5` stays in the title unless a list or tag with that name exists.
 - To keep words as plain text, put them in double quotes: `Read "Friday night lights"` reads no date and keeps the quotes in the title. A backslash keeps the word or token after it as text, with any phrase that word starts, and is removed: `Buy \today paper` becomes "Buy today paper", `Pay \by friday` stays "Pay by friday" with no deadline, and `\#Work` stays "#Work".
@@ -37,11 +39,18 @@ Each word Logwell recognizes is highlighted, shown as a chip under the input and
 | You want | You type | Notes |
 | --- | --- | --- |
 | A date | `today`, `tomorrow`, `in 3 days`, `next week`, `this weekend`, `the day after tomorrow` | `next week` is seven days from today. |
-| | `friday`, `next fri`, `this monday`, `on friday` | A weekday means its next date. |
+| | `friday`, `next fri`, `this monday`, `on friday`, `scheduled for monday` | A weekday means its next date. `next weekday` is the next Monday to Friday. |
+| | `Friday 16th`, `Friday the 16th`, `Fri 16` | The weekday and the day together: the next 16th. A number with no `th` counts as the day only at the end, before punctuation or before a time: `Read Friday 2 chapters` keeps "2 chapters" in the title. |
+| | `on the 20th` | The next 20th, this month or next. A day alone needs `on`: `the 20th` stays in the title. |
+| | `this morning`, `this afternoon` | Today, with no time unless you type one: `this morning at 9` is today at 09:00. |
 | | `Oct 5`, `5 Oct 2026`, `2026-10-05`, `10/5` | Without a year, the next such date: today's date is today, and `Feb 29` is the next leap day. A two-digit number after a comma is not a year: `Party May 5, 20 guests` is May 5 with "20 guests" in the title. The **Date order** setting decides what `10/5` means; with Day/month order, `from 12 Oct` is a date, and `Oct 15` is 15 October as in Month/day order. `a day` and `a week` alone, as in `3 times a day`, are not dates. |
 | A date and time | `at 7pm`, `19:00`, `at noon`, `at 0900`, `@4pm`, `tomorrow at 7pm`, `in 2 hours` | A time without a date means the next such time. Four digits after `at` are a 24-hour time, also in a repeat: `every day at 0900`. `@4pm`, `@4:30pm` and `@noon` work like `at`, as in `tomorrow @4pm`, unless you have a tag with that name. |
 | | `tonight`, `tonight at 9` | Today at the **Evening time** setting (20:00 unless you change it), or at the time you type. |
 | A deadline | `by friday`, `by Oct 9`, `by 5pm`, `until tomorrow` | `by` right before a date makes it a deadline, as does `until` before a date when the task does not repeat (`Wait until tomorrow`). |
+| | `due friday`, `due by friday`, `due on friday`, `deadline friday`, `deadline: friday`, `before friday` | These words work exactly like `by`, and leave the title: `Report due friday` is "Report". Away from a date they stay text, as in `Due diligence tomorrow`. |
+| | `within 3 days`, `within a week`, `within 2 weeks` | A deadline that many days or weeks from today. |
+| | `EOD`, `end of day`, `end of week`, `end of month`, `end of year`, `at the end of month` | Today, this week's Friday (the next Friday on a weekend), the month's last day, or December 31. A date right after it is the deadline instead: `EOD Friday` is due Friday. |
+| A date and a deadline | `Report Monday due Friday`, `Tax form, deadline Friday 16th, scheduled for Monday 12th` | Each date goes to its own field. Two deadlines: the later one wins. |
 | A planned duration | `for 45m`, `for 1h30m`, `for 90 min`, `for 1.5 hours`, `for half an hour` | From 1 minute to 24 hours. A longer value shows an error chip. Without `for`, as in `Gym 2h`, it stays in the title. |
 | A list | `#Home`, `#Work` | The exact name wins. Otherwise capitals, spaces, `-` and `_` do not matter. If that finds several lists, the name counts as unknown. |
 | A list and section | `#Work/Admin` | The Admin section of Work, matched like list names. It wins over the section of the view you add from. A section the list does not have stops the save. |

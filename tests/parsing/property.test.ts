@@ -263,16 +263,27 @@ describe("parser properties", () => {
 				expect(new Set(r.fields.tagKeys).size).toBe(r.fields.tagKeys.length);
 				expect(new Set(r.fields.newTags).size).toBe(r.fields.newTags.length);
 				// The fragments type no repeat end and no yearly start: what blocks is an unresolved list and, unless a repeat is
-				// picked by hand, a typed repeat whose hour is a choice.
+				// picked by hand, a typed repeat whose hour is a choice; and a date that is a choice to make (a weekday with a day
+				// that is another weekday's, a range's start), unless set by hand or a later date of its kind applies.
 				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || (c.kind === "category" && c.status === "invalid") || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
-				expect(r.blocking).toEqual(r.chips.filter(blocks).map((c) => c.id));
+				const laterApplied = (c: (typeof r.chips)[number]): boolean => a.some((d) => d.kind === c.kind && d.span.start > c.span.start);
+				const dateChoice = (c: (typeof r.chips)[number]): boolean => (c.kind === "scheduled" || c.kind === "deadline") && c.status === "choice";
+				const dateChoices = new Set(r.chips.filter(dateChoice).map((c) => c.id));
+				expect(r.blocking.filter((id) => !dateChoices.has(id))).toEqual(r.chips.filter(blocks).map((c) => c.id));
+				for (const c of r.chips) {
+					if (!dateChoice(c)) continue;
+					const blocking = r.blocking.includes(c.id);
+					if (blocking) expect(manual.includes(c.kind as ParsedField) || laterApplied(c)).toBe(false);
+					if (c.notice !== undefined && !manual.includes(c.kind as ParsedField) && !laterApplied(c)) expect(blocking).toBe(true);
+				}
 				// Per field at most one applied chip.
 				for (const k of ["scheduled", "deadline", "duration", "category", "note", "priority", "recurrence"]) {
 					expect(a.filter((c) => c.kind === k).length).toBeLessThanOrEqual(1);
 				}
 				// Only applied chips may carry values into the fields; suggestions and choices never do.
 				for (const c of r.chips) {
-					if (c.status === "choice") expect(c.alternatives).toHaveLength(2);
+					// Two, or a day and an hour to choose (`Fri 15 at 7`: two days, each at 07:00 or 19:00).
+					if (c.status === "choice") expect(c.alternatives?.length === 2 || (dateChoice(c) && c.alternatives?.length === 4)).toBe(true);
 					if (c.status === "superseded") expect(c.notice).toBe("Replaced by a later value");
 				}
 			}),

@@ -1,9 +1,10 @@
 import * as chrono from "chrono-node";
 import { DateTime } from "luxon";
 import type { Component } from "chrono-node";
-import { addDays, dateOf, dateSpecDate, dayNum, isValidDateSpec, isValidLocalDate, pad2, resolveWallTime, wallTimeOf, type WallTimeWarning } from "../domain/time";
-import type { DateSpec, LocalDate } from "../domain/types";
-import { DAY_PART_PATTERN, DURATION_UNIT_PATTERN, isSpaceChar, MASK_CHAR, RANGE_JOIN_PATTERN, wordBoundaryBefore } from "./text";
+import { monthDayText, ordinal, weekdayOf } from "../domain/recurrence";
+import { addDays, dateOf, dateSpecDate, dayNum, dayNumOf, isoWeekdayOf, isValidDateSpec, isValidLocalDate, monthLength, pad2, resolveWallTime, shiftMonth, wallTimeOf, yearMonthOf, type WallTimeWarning } from "../domain/time";
+import { WEEKDAY_LONG, WEEKDAY_SHORT, WEEKDAYS, type DateSpec, type LocalDate } from "../domain/types";
+import { DAY_NUMBER_PATTERN, DAY_PART_PATTERN, DURATION_UNIT_PATTERN, dayNumber, isSpaceChar, MASK_CHAR, MONTH_PATTERN, RANGE_JOIN_PATTERN, WEEKDAY_PATTERN, weekdayWord, wordBoundaryBefore } from "./text";
 import type { DateLocale, Span } from "./types";
 
 // Date and time recognition. chrono finds the spans and reports
@@ -22,7 +23,9 @@ const BARE_DURATION_RE = new RegExp(`^(at\\s+)?\\d+(?:\\.\\d+)?\\s*(?:(${DURATIO
 const VAGUE_UNIT_RE = /^(?:the\s+|a\s+)?(?:day|week|month|year)$/iu;
 // A day-part word anywhere in a date: the text's own day parts plus the three dates only (noon, midnight, tonight).
 const DATE_DAY_PART_RE = new RegExp(`\\b(?:noon|midnight|tonight|${DAY_PART_PATTERN})\\b`, "iu");
-const SHIFT_WORD_RE = /\b(?:next|last|past|previous|coming)\b/iu;
+const SHIFT_WORD_LIST = ["next", "last", "past", "previous", "coming"] as const;
+const SHIFT_WORDS = `(?:${SHIFT_WORD_LIST.join("|")})`;
+const SHIFT_WORD_RE = new RegExp(`\\b${SHIFT_WORDS}\\b`, "iu");
 // "this friday" also names its week: a range's end with it, or with a shift word, is never moved a week.
 const THIS_WORD_RE = /\bthis\b/iu;
 // "0H:MM" with a leading-zero two-digit hour (01-09) is written 24-hour style and is certain.
@@ -32,7 +35,8 @@ const PAST_WORD_RE = /^(?:last|past|previous)\b/iu;
 
 export type DateOutcome =
 	| { status: "applied" | "suggestion"; date: DateSpec; warning?: WallTimeWarning }
-	| { status: "choice"; alternatives: { label: string; value: DateSpec }[] };
+	/** `notice`: a weekday that is not the day's (`Friday 15th`); such a choice blocks saving until one is chosen. */
+	| { status: "choice"; alternatives: { label: string; value: DateSpec }[]; notice?: string };
 
 /** An applied date offered as a suggestion instead, with its warning; any other outcome as it is. */
 function asSuggestion(o: DateOutcome): DateOutcome {
@@ -57,9 +61,10 @@ export interface DateCandidate {
 	/** A certain hour: "alone" for one time with no day of its own ("at 5pm"), "dated" for any other; absent without one. */
 	time?: "alone" | "dated";
 	/**
-	 * A date range (`Oct 12 to Dec 1`) read as a repeat's start (kind "scheduled") and end (kind "end"), when the input
-	 * types a repeat (`DateEnv.repeatRange`) and both sides name a day. `led`: a start word (`starting`, `from` …) leads
-	 * it. The parser uses it only next to a typed repeat it keeps: start and end words count only after a repeat.
+	 * A date range (`Oct 12 to Dec 1`) read as two dates, when both sides name a day. When the input types a repeat
+	 * (`DateEnv.repeatRange`) they are its start (kind "scheduled") and end (kind "end"), and `led` says a start word
+	 * (`starting`, `from` …) leads it: the parser uses it only next to a typed repeat it keeps, as start and end words
+	 * count only after a repeat. Without one they are the task's schedule and deadline (end kind "deadline").
 	 */
 	range?: {
 		led: boolean;
@@ -81,13 +86,19 @@ interface Lead {
 }
 
 /**
- * The lead words before a date (`by` for a deadline, `at` joining a time, and a repeat's start and end words), lower
- * case, single spaces.
+ * The lead words before a date (`by` and the other deadline words, `at` joining a time, `scheduled for` and `scheduled
+ * on`, read as a bare date is, and a repeat's start and end words), lower case, single spaces.
  * The span widens over the lead word; "time" joins only a date whose hour is certain. Without a repeat, `until`
  * makes a deadline (the parser turns the "end" into one) and the words marked `repeatOnly` lead nothing.
  */
 const LEADS: readonly Lead[] = [
 	{ words: "by", kind: "deadline" },
+	{ words: "due", kind: "deadline" },
+	{ words: "due by", kind: "deadline" },
+	{ words: "due on", kind: "deadline" },
+	{ words: "deadline", kind: "deadline" },
+	{ words: "deadline:", kind: "deadline" },
+	{ words: "before", kind: "deadline" },
 	{ words: "at", kind: "time" },
 	{ words: "until", kind: "end" },
 	{ words: "till", kind: "end", repeatOnly: true },
@@ -100,6 +111,8 @@ const LEADS: readonly Lead[] = [
 	{ words: "beginning", kind: "schedule", repeatOnly: true },
 	{ words: "from", kind: "schedule", repeatOnly: true },
 	{ words: "on", kind: "schedule", repeatOnly: true },
+	{ words: "scheduled for", kind: "schedule" },
+	{ words: "scheduled on", kind: "schedule" },
 ];
 
 /** The lead words that make two bare weekdays a start and an end (`starting Monday to Friday`); `from` and `on` do not. */
@@ -130,6 +143,18 @@ function monthDayOnOrAfter(monthDay: string, from: LocalDate): LocalDate | null 
 	for (let year = firstYear; year <= firstYear + 8; year++) {
 		const date = `${String(year).padStart(4, "0")}-${monthDay}`;
 		if (isValidLocalDate(date) && date >= from) return date;
+	}
+	return null;
+}
+
+/** The first date on or after `from` whose day of the month is `day` (1 to 31): this month's, else a later month's. */
+function dayOnOrAfter(day: number, from: LocalDate): LocalDate | null {
+	const month = yearMonthOf(from);
+	for (let k = 0; k <= 2; k++) {
+		const { year, month: m } = shiftMonth(month, k);
+		if (day > monthLength(year, m)) continue;
+		const date = dateOf(dayNumOf(year, m, day));
+		if (date >= from) return date;
 	}
 	return null;
 }
@@ -171,9 +196,15 @@ const shortYear: chrono.Refiner = {
 	},
 };
 
-/** The options the date readers get: chrono's, plus today's date on the parse clock, for `impliedYear`. */
+/** The options the date readers get: chrono's, plus today's date on the parse clock, for `impliedYear` and `OWN_PARSERS`. */
 interface ReaderOption extends chrono.ParsingOption {
 	today: LocalDate;
+}
+
+/** Today on the parse clock (`ReaderOption.today`); called with chrono's plain options (tests), chrono's own reference day. */
+function readerToday(context: chrono.ParsingContext): LocalDate {
+	const ref = context.createParsingComponents();
+	return (context.option as Partial<ReaderOption>).today ?? `${String(ref.get("year") ?? 0).padStart(4, "0")}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
 }
 
 /**
@@ -187,9 +218,7 @@ interface ReaderOption extends chrono.ParsingOption {
  */
 const impliedYear: chrono.Refiner = {
 	refine(context, results) {
-		// Called with chrono's plain options (tests), today is chrono's own reference day.
-		const ref = context.createParsingComponents();
-		const today = (context.option as Partial<ReaderOption>).today ?? `${String(ref.get("year") ?? 0).padStart(4, "0")}-${pad2(ref.get("month") ?? 0)}-${pad2(ref.get("day") ?? 0)}`;
+		const today = readerToday(context);
 		for (const r of results) {
 			for (const c of r.end == null ? [r.start] : [r.start, r.end]) {
 				if (!c.isCertain("month") || !c.isCertain("day") || c.isCertain("year")) continue;
@@ -206,17 +235,160 @@ const timeOnly = (r: chrono.ParsedResult): boolean => r.end == null && r.start.i
 
 /**
  * Of two readings over the same text, a date wins over a bare time, whatever their lengths: en-GB reads "from 12 Oct"
- * as the time "from 12" and the date "12 Oct", and chrono's own overlap removal would keep the longer time. Runs first.
+ * as the time "from 12" and the date "12 Oct", and chrono's own overlap removal would keep the longer time. Runs first,
+ * once over the results.
  */
 const dateOverTime: chrono.Refiner = {
 	refine(_context, results) {
-		return results.filter((r, i) => !(timeOnly(r) && results.some((o, j) => j !== i && dayCertainOf(o.start) && o.index < r.index + r.text.length && r.index < o.index + o.text.length)));
+		// chrono hands the results in order: a date before a time overlaps it when it ends after the time starts (the
+		// furthest end of the dates so far), one after it when it starts before the time ends.
+		const kept: chrono.ParsingResult[] = [];
+		let datesEnd = -1;
+		for (let i = 0; i < results.length; i++) {
+			const r = results[i]!;
+			const end = r.index + r.text.length;
+			let over = false;
+			if (timeOnly(r)) {
+				over = datesEnd > r.index;
+				for (let j = i + 1; !over && j < results.length && results[j]!.index < end; j++) over = dayCertainOf(results[j]!.start);
+			}
+			if (!over) kept.push(r);
+			if (dayCertainOf(r.start)) datesEnd = Math.max(datesEnd, end);
+		}
+		return kept;
 	},
 };
 
+/** For each index of `text`, how many opening brackets before it are still open (a stray closing one counts none). */
+function openBrackets(text: string): Int32Array {
+	const open = new Int32Array(text.length + 1);
+	for (let i = 0, depth = 0; i < text.length; i++) {
+		const ch = text.charAt(i);
+		if (ch === "(" || ch === "（") depth++;
+		else if ((ch === ")" || ch === "）") && depth > 0) depth--;
+		open[i + 1] = depth;
+	}
+	return open;
+}
+
 /**
- * chrono's casual English and en-GB readers with `dateOverTime` first, `shortYear` and `impliedYear` right before the
- * filter of impossible dates (the one refiner with a `strictMode` field). en-GB reads a month
+ * chrono's weekday reader takes a closing bracket after the weekday (`(by Friday)`): a date ends before one it did not
+ * open when a bracket before the date is still open; a closing bracket with none open (`Friday) and stuff`) stays its.
+ */
+const closingBracket: chrono.Refiner = {
+	refine(context, results) {
+		let open: Int32Array | null = null;
+		for (const r of results) {
+			const m = /\s*[)）]$/u.exec(r.text);
+			if (m === null || /[(（]/u.test(r.text)) continue;
+			open ??= openBrackets(context.text);
+			if ((open[r.index] ?? 0) > 0) r.text = r.text.slice(0, m.index);
+		}
+		return results;
+	},
+};
+
+// The readers' own parsers, ahead of chrono's: of two readings of the same text and length the first is kept. Each reads
+// a day on the parse clock (`readerToday`), certain, with its month and year implied.
+
+/** A word boundary before a pattern, as group 1: no lookbehind (iOS), so the character is matched and left out. */
+const BOUNDARY = "(^|[^\\p{L}\\p{N}_])";
+const WORD_END = "(?![\\p{L}\\p{N}_])";
+/** A month after the day (`Friday 15th October`, `on the 20th of May`) is chrono's date, not a day alone. */
+const NO_MONTH_AFTER = `(?!\\s+(?:of\\s+)?${MONTH_PATTERN}${WORD_END})`;
+/** What a bare day number after a weekday (`Fri 16`) comes before: nothing, a token, punctuation that starts no time, or a time. */
+const BARE_DAY_END = `(?=\\s*(?:$|${MASK_CHAR}|[.,;:!?)\\]](?!\\d))|\\s+(?:at\\s|noon${WORD_END}|midnight${WORD_END}|\\d{1,2}(?::\\d{2})?\\s*[ap]\\.?m${WORD_END}|\\d{1,2}:\\d{2}))`;
+const WEEKDAY_DAY_RE = new RegExp(`${BOUNDARY}(${WEEKDAY_PATTERN})\\s+((?:the\\s+)?${DAY_NUMBER_PATTERN}|\\d{1,2}${BARE_DAY_END})${WORD_END}${NO_MONTH_AFTER}`, "iu");
+const ON_THE_DAY_RE = new RegExp(`${BOUNDARY}(on\\s+(the\\s+${DAY_NUMBER_PATTERN}))${WORD_END}${NO_MONTH_AFTER}`, "iu");
+/** The end of a period, with `the` or `at the` before it (`Pay rent at the end of month`). */
+const END_OF_PERIOD = "(?:eod|(?:(?:at\\s+)?the\\s+)?end\\s+of\\s+(?:day|week|month|year))";
+const END_OF_PERIOD_RE = new RegExp(`${BOUNDARY}(${END_OF_PERIOD})${WORD_END}`, "iu");
+const NEXT_WEEKDAY_RE = new RegExp(`${BOUNDARY}(next\\s+weekday)${WORD_END}`, "iu");
+const THIS_DAY_PART_RE = new RegExp(`${BOUNDARY}(this\\s+(morning|afternoon))${WORD_END}`, "iu");
+/** A weekday after `this`, `next` … is chrono's (`next Friday 16th` stays `next Friday`): the word right before `index`. */
+const shiftedBefore = (s: string, index: number): boolean => ["this", ...SHIFT_WORD_LIST].some((w) => wordBefore(s, index, w) !== -1);
+/** A date's own text that makes a deadline: chrono's `by …` and `within` days or weeks (`within 3 days`), or the end of a period. */
+const OWN_DEADLINE_RE = new RegExp(`^(?:by\\s|within\\s+\\S+\\s+(?:days?|weeks?)${WORD_END}|${END_OF_PERIOD}${WORD_END})`, "iu");
+/** A date's whole text that is the end of a period: a date right after it is the deadline instead (`EOD Friday`). */
+const END_OF_PERIOD_TEXT_RE = new RegExp(`^${END_OF_PERIOD}$`, "iu");
+
+/**
+ * An own parser's result: the match without its boundary (group 1), on `date` with the day certain (and the `known`
+ * components), its month and year implied; with `vague`, nothing certain.
+ */
+function ownResult(context: chrono.ParsingContext, m: RegExpMatchArray, date: LocalDate, known: Partial<Record<Component, number>> = {}, vague = false): chrono.ParsingResult {
+	const skip = (m[1] ?? "").length;
+	const c = context.createParsingComponents(vague ? undefined : { day: Number(date.slice(8, 10)), ...known });
+	if (vague) for (const [k, v] of Object.entries(known) as [Component, number][]) c.imply(k, v);
+	c.imply("day", Number(date.slice(8, 10)));
+	c.imply("month", Number(date.slice(5, 7)));
+	c.imply("year", Number(date.slice(0, 4)));
+	return context.createParsingResult((m.index ?? 0) + skip, m[0].slice(skip), c);
+}
+
+const ownParser = (re: RegExp, extract: (context: chrono.ParsingContext, m: RegExpMatchArray, today: LocalDate) => chrono.ParsingResult | null): chrono.Parser => ({
+	pattern: () => re,
+	extract: (context, m) => extract(context, m, readerToday(context)),
+});
+
+/** chrono's numbering of a weekday: 0 = Sunday. */
+const chronoWeekday = (date: LocalDate): number => isoWeekdayOf(date) % 7;
+
+const OWN_PARSERS: readonly chrono.Parser[] = [
+	// `Friday 16th`, `Fri the 16th`, `Fri 16`: that weekday and the first such day on or after today; whether they agree
+	// is `readResult`'s. A day number no month has (`Monday 32nd`) is that weekday with nothing certain, only offered.
+	ownParser(WEEKDAY_DAY_RE, (context, m, today) => {
+		const word = m[2] ?? "";
+		const weekday = weekdayWord(word);
+		if (weekday === undefined || /days$/iu.test(word) || shiftedBefore(context.text, (m.index ?? 0) + (m[1] ?? "").length)) return null;
+		const typed = (WEEKDAYS.indexOf(weekday) + 1) % 7;
+		const dayText = m[3] ?? "";
+		const day = dayNumber(dayText);
+		if (day === null) return /\d$/u.test(dayText) ? null : ownResult(context, m, addDays(today, (typed - chronoWeekday(today) + 7) % 7), { weekday: typed }, true);
+		const date = dayOnOrAfter(day, today);
+		return date === null ? null : ownResult(context, m, date, { weekday: typed });
+	}),
+	// `on the 20th`: the first 20th on or after today. The date's text holds its `on`, as en-GB's `on 1 Dec` does
+	// (`OWN_LEAD_RE`): a day alone needs it.
+	ownParser(ON_THE_DAY_RE, (context, m, today) => {
+		const day = dayNumber(m[3] ?? "");
+		const date = day === null ? null : dayOnOrAfter(day, today);
+		return date === null ? null : ownResult(context, m, date);
+	}),
+	// The end of a period (a deadline, `OWN_DEADLINE_RE`): today, this week's Friday (the next one on a weekend), the
+	// month's last day, December 31.
+	ownParser(END_OF_PERIOD_RE, (context, m, today) => {
+		const unit = (m[2] ?? "").toLowerCase();
+		const { year, month } = yearMonthOf(today);
+		const date = unit.endsWith("week")
+			? addDays(today, (5 - isoWeekdayOf(today) + 7) % 7)
+			: unit.endsWith("month")
+				? dateOf(dayNumOf(year, month, monthLength(year, month)))
+				: unit.endsWith("year")
+					? dateOf(dayNumOf(year, 12, 31))
+					: today;
+		return ownResult(context, m, date);
+	}),
+	// `next weekday`: the next Monday to Friday after today.
+	ownParser(NEXT_WEEKDAY_RE, (context, m, today) => {
+		let date = addDays(today, 1);
+		while (isoWeekdayOf(date) > 5) date = addDays(date, 1);
+		return ownResult(context, m, date);
+	}),
+	// `this morning`, `this afternoon`: today, with the half of the day a time after it takes (chrono's merge reads the tag).
+	ownParser(THIS_DAY_PART_RE, (context, m, today) => {
+		const part = (m[3] ?? "").toLowerCase();
+		const r = ownResult(context, m, today);
+		r.start.imply("meridiem", part === "morning" ? 0 : 1);
+		r.start.addTag(`casualReference/${part}`);
+		return r;
+	}),
+];
+
+/**
+ * chrono's casual English and en-GB readers with `OWN_PARSERS` ahead of chrono's parsers, and the refiners
+ * `dateOverTime` first, `shortYear` and `impliedYear` right before the filter of impossible dates (the one refiner with
+ * a `strictMode` field) and `closingBracket` last. en-GB reads a month
  * name before a two-digit day as that day ("Oct 15", "Feb 29"), as English does: its month-name-first reader is replaced
  * by a copy that does not skip a day that looks like a year (the one parser with a `shouldSkipYearLikeDate` field).
  * chrono's date range merge stays as it is. Clones: chrono's shared instances stay as they are.
@@ -226,6 +398,8 @@ function buildChrono(base: chrono.Chrono): chrono.Chrono {
 	const filter = reader.refiners.findIndex((r) => Object.hasOwn(r, "strictMode"));
 	reader.refiners.splice(filter === -1 ? reader.refiners.length : filter, 0, shortYear, impliedYear);
 	reader.refiners.unshift(dateOverTime);
+	reader.refiners.push(closingBracket);
+	reader.parsers.unshift(...OWN_PARSERS);
 	reader.parsers = reader.parsers.map((p) => (Object.hasOwn(p, "shouldSkipYearLikeDate") ? Object.assign(Object.create(Object.getPrototypeOf(p) as object) as chrono.Parser, p, { shouldSkipYearLikeDate: false }) : p));
 	return reader;
 }
@@ -336,6 +510,9 @@ function componentsIn(c: chrono.ParsedComponents, zone: "utc"): DateTime {
 	return DateTime.fromObject({ year: c.get("year") ?? 0, month: c.get("month") ?? 0, day: c.get("day") ?? 0, hour: c.get("hour") ?? 0, minute: c.get("minute") ?? 0 }, { zone });
 }
 
+/** Whether a reading's hour is the half of the day it says: am or pm, a day-part word, or a leading zero ("09:30"). */
+const meridiemKnownOf = (r: chrono.ParsedResult): boolean => r.start.isCertain("meridiem") || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
+
 /**
  * One chrono result as a value: its date (on the parse clock) and what Quick Add makes of it. Null when unusable.
  * `fixed`: the day to use instead of chrono's, a certain one (a range's end moved past its start).
@@ -382,26 +559,44 @@ function readResult(r: chrono.ParsedResult, clock: Clock, fixed?: LocalDate): { 
 				: { kind: "date", date: d };
 
 	let outcome: DateOutcome | null = null;
+	// "at 5": an hour with no half of the day is 05:00 or 17:00 (hour 12 lists noon before midnight, the preselected 12:00).
+	const halves = hourCertain && hour >= 1 && hour <= 12 && !meridiemKnownOf(r) ? (hour === 12 ? [12, 0] : [hour, hour + 12]) : null;
+	const hourLabel = (h: number): string => `${pad2(h)}:${pad2(minute)}`;
 	const lowConfidence = r.end != null || isWeakText(r.text) || (!dayCertain && !hourCertain) || looksBack;
-	const meridiemKnown = start.isCertain("meridiem") || DATE_DAY_PART_RE.test(r.text) || LEADING_ZERO_TIME_RE.test(r.text);
+	// A weekday typed with a day number (`Friday 15th`, OWN_PARSERS): its day and weekday are certain, its month is not.
+	const typedWeekday = fixed === undefined && weekday !== null && start.isCertain("weekday") && start.isCertain("day") && !start.isCertain("month") ? weekday : null;
 	if (lowConfidence) {
 		const res = resolveDateSpec(mkValue(date));
 		if (!res) return null;
 		outcome = res.warning
 			? { status: "suggestion", date: res.value, warning: res.warning }
 			: { status: "suggestion", date: res.value };
-	} else if (hourCertain && hour >= 1 && hour <= 12 && !meridiemKnown) {
-		// "at 5": 05:00 or 17:00. Without a certain day, each alternative is the next such time.
+	} else if (typedWeekday !== null && typedWeekday !== chronoWeekday(date)) {
+		// The day is another weekday: the user chooses that day or the nearest such weekday (at most 3 days away; when that
+		// is before today, the one after it), and an hour with no half of the day stays a choice on each.
+		const closest = addDays(date, ((typedWeekday - chronoWeekday(date) + 10) % 7) - 3);
+		const nearest = closest < today ? addDays(closest, 7) : closest;
+		const alternatives: { label: string; value: DateSpec }[] = [];
+		for (const d of [date, nearest]) {
+			const day = `${WEEKDAY_SHORT[weekdayOf(d)]}, ${monthDayText(d)}`;
+			for (const h of halves ?? [null]) {
+				const res = resolveDateSpec(h === null ? mkValue(d) : mkTime(d, h));
+				if (!res) return null;
+				alternatives.push({ label: h === null ? day : `${day}, ${hourLabel(h)}`, value: res.value });
+			}
+		}
+		outcome = { status: "choice", alternatives, notice: `The ${ordinal(Number(date.slice(8, 10)))} is a ${WEEKDAY_LONG[weekdayOf(date)]}` };
+	} else if (halves !== null) {
+		// Without a certain day, each alternative is the next such time.
 		const alt = (h: number): { label: string; value: DateSpec } => {
 			let d = date;
 			if (!dayCertain) {
 				d = today;
-				if (`${d}T${pad2(h)}:${pad2(minute)}` <= nowLocal) d = addDays(today, 1);
+				if (`${d}T${hourLabel(h)}` <= nowLocal) d = addDays(today, 1);
 			}
-			return { label: `${pad2(h)}:${pad2(minute)}`, value: mkTime(d, h) };
+			return { label: hourLabel(h), value: mkTime(d, h) };
 		};
-		// Hour 12 lists noon before midnight, so the preselected option is 12:00.
-		outcome = { status: "choice", alternatives: hour === 12 ? [alt(12), alt(0)] : [alt(hour), alt(hour + 12)] };
+		outcome = { status: "choice", alternatives: halves.map(alt) };
 	} else if (
 		!hourCertain &&
 		start.isCertain("weekday") &&
@@ -451,6 +646,30 @@ const OWN_LEAD_RE = /^(?:on|from)\s+/iu;
 /** The words chrono's range merge joins two dates with, each a possible split point. */
 const RANGE_JOIN_RE = new RegExp(RANGE_JOIN_PATTERN, "giu");
 
+const TIME_COMPONENTS: ReadonlySet<Component> = new Set(["hour", "minute", "second", "millisecond", "meridiem"]);
+
+/** A copy of a reading with its own fields replaced; chrono's objects stay as they are. */
+const readingWith = <T extends object>(base: T, fields: Partial<T>): T => Object.assign(Object.create(base) as T, fields);
+
+/** A reading whose time components are `certain` and `get`'s, the rest its own. */
+function withTime(r: chrono.ParsedResult, certain: (k: Component) => boolean, get: (k: Component) => number | null): chrono.ParsedResult {
+	const own = r.start;
+	const start = readingWith(own, {
+		isCertain: (k: Component) => (TIME_COMPONENTS.has(k) ? certain(k) : own.isCertain(k)),
+		get: (k: Component) => (TIME_COMPONENTS.has(k) ? get(k) : own.get(k)),
+	});
+	return readingWith(r, { start });
+}
+
+/** A range's start with the time typed after its end (`Oct 20 to Oct 25 at 9am`), and the end with no time. */
+function timeToStart(first: chrono.ParsedResult, to: chrono.ParsedResult): [chrono.ParsedResult, chrono.ParsedResult] {
+	const meridiem = meridiemKnownOf(to);
+	return [
+		withTime(first, (k) => (k === "meridiem" ? meridiem : to.start.isCertain(k)), (k) => to.start.get(k)),
+		withTime(to, () => false, () => null),
+	];
+}
+
 interface RangeSplit {
 	start: { text: string; outcome: DateOutcome };
 	joinAt: number;
@@ -466,8 +685,14 @@ interface RangeSplit {
  * that is a choice (`Wednesday` said on a Wednesday) gets an end for each of its alternatives. Null unless both sides
  * name a day and the text splits at a join word into two whole dates; two bare weekdays (`Mon-Fri`: days of the week)
  * only with a start word (`startWord`: `starting`, `beginning`).
+ * For a task (`task`: no typed repeat; the end is a deadline) two bare weekdays pair unless a dash joins them, a month
+ * written once (`Oct 20-25`) gives the end its month, a start with a time of its own is no split, a time after the end
+ * is the start's (`Oct 20 to Oct 25 at 9am`), and only a weekday end moves: a month and day end with no typed year is
+ * in the start's year, the next one only for an earlier month (`Dec 28 to Jan 3`), and one before the start or on no
+ * date in that year (`Oct 30 to Oct 2`, `Feb 28-29` in 2027) is never guessed (null), nor is an end before any of a
+ * choice start's alternatives.
  */
-function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock, startWord: boolean): RangeSplit | null {
+function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock, startWord: boolean, task: boolean): RangeSplit | null {
 	if (r.end == null || !dayCertainOf(r.start) || !dayCertainOf(r.end)) return null;
 	const whole = (text: string): chrono.ParsedResult | null => {
 		const found = parser.parse(text, clock.ref, optionOf(clock));
@@ -480,24 +705,43 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock,
 		const at = m.index + m[0].length;
 		const right = text.slice(at);
 		if (left === "" || right === "") continue;
+		const dash = /^[-–]$/u.test(m[0].trim());
 		const first = whole(left);
-		const to = first === null ? null : whole(right);
+		let to = first === null ? null : whole(right);
+		const dashDay = task && to === null && first?.start.isCertain("month") === true && dash && m[0].length === 1 && /^\d{1,2}$/u.test(right);
+		if (dashDay) {
+			// The day after the dash, in the start's month, as chrono's range read it; its text is the range's, as a bare
+			// number alone is a weak date.
+			to = readingWith(r, { index: r.index + at, start: r.end, end: undefined });
+		}
 		if (first === null || to === null) continue;
-		if (!startWord && weekdayOnly(first.start) && weekdayOnly(to.start)) return null;
-		const start = readResult(first, clock);
-		const end = readResult(to, clock);
+		if ((task ? dash : !startWord) && weekdayOnly(first.start) && weekdayOnly(to.start)) return null;
+		// A task's range from a date and time (`Oct 8 3pm - Oct 9 4pm`) stays one suggestion.
+		if (task && first.start.isCertain("hour")) return null;
+		const [startRead, endRead] = task && to.start.isCertain("hour") ? timeToStart(first, to) : [first, to];
+		const start = readResult(startRead, clock);
+		const end = readResult(endRead, clock);
 		if (start === null || end === null) return null;
-		const by = rollKindOf(to.start, to.text);
+		const rolls = rollKindOf(to.start, to.text);
+		// A task's month and day end, as typed against the start (`placed`).
+		const monthDay = task && (rolls === "year" || dashDay);
+		const by = task && rolls === "year" ? null : rolls;
+		const placed = (from: LocalDate): LocalDate | null => {
+			const md = end.date.slice(5);
+			const date = `${String(Number(from.slice(0, 4)) + (md.slice(0, 2) < from.slice(5, 7) ? 1 : 0)).padStart(4, "0")}-${md}`;
+			return isValidLocalDate(date) && date >= from ? date : null;
+		};
 		// A start with its own year: a month and day end counts from the start, not from today.
 		const fromStart = by === "year" && hasTypedYear(first.start);
 		// The end for one start date (`end.outcome` itself when it stays); null when it cannot move.
 		const endFrom = (from: LocalDate): DateOutcome | null => {
-			if (by === null) return end.outcome;
-			const moved = fromStart ? monthDayOnOrAfter(end.date.slice(5), from) : rollEnd(end.date, from, by);
+			if (by === null && !monthDay) return task && end.date < from ? null : end.outcome;
+			// A task's month and day end (`monthDay`) is the one end with no roll kind left.
+			const moved = by === null ? placed(from) : fromStart ? monthDayOnOrAfter(end.date.slice(5), from) : rollEnd(end.date, from, by);
 			if (moved === null) return null;
 			// The moved end is that day: a weekday is never the "today or next week" choice of a weekday said today. An end
 			// more than a year past the start (`Feb 20 to Feb 29` said in 2027) is a suggestion, not applied.
-			const outcome = moved === end.date ? end.outcome : (readResult(to, clock, moved)?.outcome ?? null);
+			const outcome = moved === end.date ? end.outcome : (readResult(endRead, clock, moved)?.outcome ?? null);
 			if (outcome === null || outcome.status !== "applied" || !rollsPastYear(from, moved)) return outcome;
 			return asSuggestion(outcome);
 		};
@@ -505,9 +749,10 @@ function splitRange(r: chrono.ParsedResult, parser: chrono.Chrono, clock: Clock,
 		const froms = o.status === "choice" ? o.alternatives.map((a) => dateSpecDate(a.value, clock.env.zone)) : [start.date];
 		const ends: DateOutcome[] = [];
 		for (const from of froms) {
-			// A month and day end moves a year for a later choice only when it moved for the first; otherwise it keeps
-			// its reading, as with a start edited by hand (an end before the start is invalid).
-			const e = ends.length === 0 || by === "week" || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
+			// A repeat's month and day end moves a year for a later choice only when it moved for the first; otherwise it
+			// keeps its reading, as with a start edited by hand (an end before the start is invalid). A task's end is
+			// checked against every alternative.
+			const e = task || ends.length === 0 || by === "week" || ends[0] !== end.outcome ? endFrom(from) : end.outcome;
 			if (e === null) return null;
 			ends.push(e);
 		}
@@ -578,11 +823,20 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 		const lead = found !== null && (found.kind === "time" ? hourCertain : found.kind === "end" ? dayCertain : true) ? found : null;
 		const timeEnd = lead === null && found?.kind === "end";
 		const widened = lead ?? (timeEnd ? found : null);
-		if (widened !== null) {
+		// The end of a period right before a date with its day (`EOD Friday`, `end of month Oct 20`): that date is the
+		// deadline, one date over both (with the period's own lead word, `by end of week Friday`). Before another end of a
+		// period it stays its own date.
+		const prev = out.at(-1);
+		const period = widened === null && dayCertain && !END_OF_PERIOD_TEXT_RE.test(head.text.trimEnd()) && prev !== undefined && prev.range === undefined && END_OF_PERIOD_TEXT_RE.test(masked.slice(prev.textStart, prev.span.end)) && /^\s+$/u.test(masked.slice(prev.span.end, head.index)) ? prev : null;
+		if (period !== null) {
+			out.pop();
+			spanStart = period.span.start;
+			kind = "deadline";
+		} else if (widened !== null) {
 			spanStart = Math.min(widened.start, head.index);
 			repeatOnly = timeEnd || (widened.repeatOnly && widened.start < head.index);
 			if (lead?.kind === "deadline" || lead?.kind === "end") kind = lead.kind;
-		} else if (/^by\s/iu.test(masked.slice(spanStart, spanStart + 3))) {
+		} else if (OWN_DEADLINE_RE.test(head.text)) {
 			kind = "deadline";
 		}
 		// chrono's text can end in spaces ("April 15, " before "for 3 times"); the span stops at the date.
@@ -592,21 +846,24 @@ export function findDates(masked: string, env: DateEnv): DateCandidate[] {
 			span: { start: spanStart, end: r.index + r.text.trimEnd().length },
 			textStart: head.index,
 			repeatOnly,
-			lead: widened === null ? null : { words: widened.words, kind: widened.kind },
+			lead: period !== null ? period.lead : widened === null ? null : { words: widened.words, kind: widened.kind },
 			rolls,
 			outcome,
 			...(hourCertain ? { time: timeOnly(r) ? ("alone" as const) : ("dated" as const) } : {}),
 		};
 
 		// Under a typed repeat, a range led by a start word (`starting`, `from` …) or by none may be the repeat's start
-		// and end; the parser decides by where the repeat is.
-		const split = env.repeatRange === true && (lead === null || lead.kind === "schedule") ? splitRange(r, parser, clock, lead !== null && PAIRS_WEEKDAYS.has(lead.words)) : null;
+		// and end; the parser decides by where the repeat is. Without one, a range led by none, `from`, or a word read as
+		// a bare date is (`scheduled for`) is the task's schedule and deadline.
+		const task = env.repeatRange !== true;
+		const pairs = period === null && (lead === null || (lead.kind === "schedule" && (!task || lead.words === "from" || !lead.repeatOnly)));
+		const split = pairs ? splitRange(r, parser, clock, !task && lead !== null && PAIRS_WEEKDAYS.has(lead.words), task) : null;
 		if (split !== null) {
 			candidate.range = {
 				led: lead !== null,
-				start: { kind: "scheduled", span: { start: spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: true, lead: candidate.lead, rolls, outcome: split.start.outcome },
+				start: { kind: "scheduled", span: { start: spanStart, end: r.index + split.start.text.length }, textStart: r.index, repeatOnly: !task, lead: candidate.lead, rolls, outcome: split.start.outcome },
 				// The end already moved past the start.
-				end: { kind: "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: true, lead: null, rolls: null, outcome: split.end.outcome },
+				end: { kind: task ? "deadline" : "end", span: { start: r.index + split.joinAt, end: r.index + split.end.at + split.end.text.length }, textStart: r.index + split.end.at, repeatOnly: !task, lead: null, rolls: null, outcome: split.end.outcome },
 				...(split.endByChoice !== undefined ? { endByChoice: split.endByChoice } : {}),
 			};
 		}
