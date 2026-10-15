@@ -84,6 +84,19 @@ scheduled: this week
 ```
 ````
 
+Every line narrows the list, and `tag`, `priority` and `quadrant` take several values separated by commas.
+
+| Filter | Values | Example |
+| --- | --- | --- |
+| `list` | A list name, or `Inbox` | `list: Home` |
+| `section` | A section of that list (needs a `list` line) | `section: Planning` |
+| `tag` | A tag, including its nested tags | `tag: home, work` |
+| `due` | `today`, `overdue`, `this week`, `next 7 days`, a date `DD-MM-YYYY` or a range `… to …` (the deadline) | `due: overdue` |
+| `scheduled` | The same values, for the planned date | `scheduled: 20-10-2026 to 25-10-2026` |
+| `priority` | `high`, `medium`, `low` or `none` | `priority: high, medium` |
+| `quadrant` | `1` to `4`, or `urgent and important`, `important not urgent`, `urgent not important`, `neither` | `quadrant: 1` |
+| `linked` | `this note`: tasks whose description note holds the block | `linked: this note` |
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-light.png" alt="A task block showing a live list of tasks inside a note">
