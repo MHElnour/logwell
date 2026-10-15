@@ -6,7 +6,10 @@ It is for people who plan their days in Obsidian and want their tasks next to th
 
 Logwell runs on Obsidian for desktop.
 
-![Logwell showing the Today view with lists, tags and a task's details](docs/images/promo/logwell-1.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png">
+  <img src="docs/images/today-light.png" alt="The Today view with lists, nested tags and overdue and timed tasks">
+</picture>
 
 ## Features
 
@@ -22,23 +25,60 @@ Logwell runs on Obsidian for desktop.
 - A [task block](docs/dashboard-block.md) that shows a live list of tasks inside any note.
 - Optional [TickTick sync](docs/ticktick-sync.md), off until you turn it on. See [Privacy](docs/privacy.md).
 
-<p>
-  <img src="docs/images/promo/logwell-2.png" alt="Quick Add turning a sentence into a date, a list, a tag, a priority and a duration" width="49%">
-  <img src="docs/images/promo/logwell-4.png" alt="The week view of the calendar with timed tasks and an all-day row" width="49%">
-</p>
-<p>
-  <img src="docs/images/promo/logwell-6.png" alt="The focus timer with the focus record beside it" width="49%">
-  <img src="docs/images/promo/logwell-7.png" alt="Six points on how Logwell fits Obsidian: notes stay notes, one readable file, undo, nested tags, commands for everything and your theme" width="49%">
-</p>
+<table>
+  <tr>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/quick-add-dark.png">
+  <img src="docs/images/quick-add-light.png" alt="Quick Add reading a date, a list, a tag, a priority and a duration from one line">
+</picture>
+    </td>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/calendar-week-dark.png">
+  <img src="docs/images/calendar-week-light.png" alt="The week view of the calendar with timed tasks and an all-day row">
+</picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/matrix-dark.png">
+  <img src="docs/images/matrix-light.png" alt="The Eisenhower matrix with tasks in four quadrants">
+</picture>
+    </td>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/focus-dark.png">
+  <img src="docs/images/focus-light.png" alt="The focus timer with the record of past rounds">
+</picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/habits-dark.png">
+  <img src="docs/images/habits-light.png" alt="Habits with check-ins and streaks">
+</picture>
+    </td>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/block-dashboard-dark.png">
+  <img src="docs/images/block-dashboard-light.png" alt="A task block showing a live list of tasks inside a note">
+</picture>
+    </td>
+  </tr>
+</table>
 
 ## Install
 
-Logwell is not in the community plugin directory. Install it by hand:
+Logwell is in Obsidian's community plugin directory.
 
-1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/MHElnour/checkpoint/releases).
-2. Put them in `<your vault>/.obsidian/plugins/logwell/`. Create the folder if it does not exist.
-3. In Obsidian, open Settings, then Community plugins. Turn on community plugins if they are off, reload the list and turn on Logwell.
-4. Choose **Create database** in the notice that appears.
+1. In Obsidian, open Settings, then Community plugins. Turn on community plugins if they are off.
+2. Choose **Browse**, search for **Logwell** and choose **Install**, then **Enable**.
+3. Choose **Create database** in the notice that appears.
+
+You can also open [Logwell in the plugin directory](https://obsidian.md/plugins?id=logwell) and install it from there.
 
 [Getting started](docs/getting-started.md) walks you through these steps and your first task.
 
