@@ -7,64 +7,64 @@ It is for people who plan their days in Obsidian and want their tasks next to th
 Logwell runs on Obsidian for desktop.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png">
-  <img src="docs/images/today-light.png" alt="The Today view with lists, nested tags and overdue and timed tasks">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/today-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/today-light.png" alt="The Today view with lists, nested tags and overdue and timed tasks">
 </picture>
 
 ## Features
 
-- [Tasks](docs/tasks.md) with dates, times, deadlines, durations, priorities, subtasks and a linked description note.
-- [Quick Add](docs/quick-add.md) reads a line such as `Pay rent friday #Home @errands !1` as you type.
-- [Lists, sections and tags](docs/lists-and-tags.md), with nested tags and a [board](docs/board.md) of columns.
-- [Views](docs/views.md): Today, Upcoming, Inbox, Completed and Trash, with sorting, grouping and search.
-- [Repeating tasks](docs/repeating-tasks.md) that stay one task and keep their history.
-- A [calendar](docs/calendar.md) with week and month views, where you drag tasks to reschedule them.
-- An [Eisenhower matrix](docs/matrix.md) that sorts tasks by urgency and importance.
-- [Focus](docs/focus.md): timed rounds with breaks, and a [record](docs/focus-record.md) of every round.
-- [Habits](docs/habits.md) with check-ins, streaks, goals and [reminders](docs/habit-reminders.md).
-- A [task block](docs/dashboard-block.md) that shows a live list of tasks inside any note.
-- Optional [TickTick sync](docs/ticktick-sync.md), off until you turn it on. See [Privacy](docs/privacy.md).
+- [Tasks](https://github.com/MHElnour/logwell/blob/main/docs/tasks.md) with dates, times, deadlines, durations, priorities, subtasks and a linked description note.
+- [Quick Add](https://github.com/MHElnour/logwell/blob/main/docs/quick-add.md) reads a line such as `Pay rent friday #Home @errands !1` as you type.
+- [Lists, sections and tags](https://github.com/MHElnour/logwell/blob/main/docs/lists-and-tags.md), with nested tags and a [board](https://github.com/MHElnour/logwell/blob/main/docs/board.md) of columns.
+- [Views](https://github.com/MHElnour/logwell/blob/main/docs/views.md): Today, Upcoming, Inbox, Completed and Trash, with sorting, grouping and search.
+- [Repeating tasks](https://github.com/MHElnour/logwell/blob/main/docs/repeating-tasks.md) that stay one task and keep their history.
+- A [calendar](https://github.com/MHElnour/logwell/blob/main/docs/calendar.md) with week and month views, where you drag tasks to reschedule them.
+- An [Eisenhower matrix](https://github.com/MHElnour/logwell/blob/main/docs/matrix.md) that sorts tasks by urgency and importance.
+- [Focus](https://github.com/MHElnour/logwell/blob/main/docs/focus.md): timed rounds with breaks, and a [record](https://github.com/MHElnour/logwell/blob/main/docs/focus-record.md) of every round.
+- [Habits](https://github.com/MHElnour/logwell/blob/main/docs/habits.md) with check-ins, streaks, goals and [reminders](https://github.com/MHElnour/logwell/blob/main/docs/habit-reminders.md).
+- A [task block](https://github.com/MHElnour/logwell/blob/main/docs/dashboard-block.md) that shows a live list of tasks inside any note.
+- Optional [TickTick sync](https://github.com/MHElnour/logwell/blob/main/docs/ticktick-sync.md), off until you turn it on. See [Privacy](https://github.com/MHElnour/logwell/blob/main/docs/privacy.md).
 
 <table>
   <tr>
     <td width="50%">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/quick-add-dark.png">
-  <img src="docs/images/quick-add-light.png" alt="Quick Add reading a date, a list, a tag, a priority and a duration from one line">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/quick-add-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/quick-add-light.png" alt="Quick Add reading a date, a list, a tag, a priority and a duration from one line">
 </picture>
     </td>
     <td width="50%">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/calendar-week-dark.png">
-  <img src="docs/images/calendar-week-light.png" alt="The week view of the calendar with timed tasks and an all-day row">
-</picture>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/matrix-dark.png">
-  <img src="docs/images/matrix-light.png" alt="The Eisenhower matrix with tasks in four quadrants">
-</picture>
-    </td>
-    <td width="50%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/focus-dark.png">
-  <img src="docs/images/focus-light.png" alt="The focus timer with the record of past rounds">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/calendar-week-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/calendar-week-light.png" alt="The week view of the calendar with timed tasks and an all-day row">
 </picture>
     </td>
   </tr>
   <tr>
     <td width="50%">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/habits-dark.png">
-  <img src="docs/images/habits-light.png" alt="Habits with check-ins and streaks">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/matrix-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/matrix-light.png" alt="The Eisenhower matrix with tasks in four quadrants">
 </picture>
     </td>
     <td width="50%">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/block-dashboard-dark.png">
-  <img src="docs/images/block-dashboard-light.png" alt="A task block showing a live list of tasks inside a note">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/focus-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/focus-light.png" alt="The focus timer with the record of past rounds">
+</picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/habits-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/habits-light.png" alt="Habits with check-ins and streaks">
+</picture>
+    </td>
+    <td width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-dark.png">
+  <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-light.png" alt="A task block showing a live list of tasks inside a note">
 </picture>
     </td>
   </tr>
@@ -80,17 +80,17 @@ Logwell is in Obsidian's community plugin directory.
 
 You can also open [Logwell in the plugin directory](https://obsidian.md/plugins?id=logwell) and install it from there.
 
-[Getting started](docs/getting-started.md) walks you through these steps and your first task.
+[Getting started](https://github.com/MHElnour/logwell/blob/main/docs/getting-started.md) walks you through these steps and your first task.
 
 ## Your data
 
-Your tasks stay in your vault, in one plain text file that works with Git and file-sync tools. Logwell keeps backups and never copies your notes into it. See [Your data](docs/your-data.md).
+Your tasks stay in your vault, in one plain text file that works with Git and file-sync tools. Logwell keeps backups and never copies your notes into it. See [Your data](https://github.com/MHElnour/logwell/blob/main/docs/your-data.md).
 
 ## Documentation
 
-- [Documentation](docs/README.md): every page, from first steps to reference.
-- [Release notes](docs/releases/README.md): what changed in each release.
+- [Documentation](https://github.com/MHElnour/logwell/blob/main/docs/README.md): every page, from first steps to reference.
+- [Release notes](https://github.com/MHElnour/logwell/blob/main/docs/releases/README.md): what changed in each release.
 
 ## License
 
-Logwell is released under the [MIT License](LICENSE).
+Logwell is released under the [MIT License](https://github.com/MHElnour/logwell/blob/main/LICENSE).
