@@ -4,12 +4,11 @@ This page takes you from install to your first task in about a minute. Logwell r
 
 ## Install and turn on Logwell
 
-Logwell is not in the community plugin directory, so you install it by hand from a GitHub release.
+Logwell is in Obsidian's community plugin directory.
 
-1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/MHElnour/checkpoint/releases).
-2. In your vault, create the folder `.obsidian/plugins/logwell/` if it does not exist. The `.obsidian` folder is hidden, so turn on hidden files in your file manager.
-3. Copy the three files into that folder.
-4. In Obsidian, open Settings, then Community plugins. Turn on community plugins if they are off, reload the list and turn on Logwell.
+1. In Obsidian, open Settings, then Community plugins. Turn on community plugins if they are off.
+2. Choose **Browse**, search for **Logwell** and choose **Install**.
+3. Choose **Enable**, or turn on Logwell in the list of installed plugins.
 
 ## Create your database
 
