@@ -25,50 +25,82 @@ Logwell runs on Obsidian for desktop.
 - A [task block](https://github.com/MHElnour/logwell/blob/main/docs/dashboard-block.md) that shows a live list of tasks inside any note.
 - Optional [TickTick sync](https://github.com/MHElnour/logwell/blob/main/docs/ticktick-sync.md), off until you turn it on. See [Privacy](https://github.com/MHElnour/logwell/blob/main/docs/privacy.md).
 
-<table>
-  <tr>
-    <td width="50%">
+## A closer look
+
+### [Quick Add](https://github.com/MHElnour/logwell/blob/main/docs/quick-add.md)
+
+Type a task as one sentence; Logwell reads the date, time, list, tags, priority and duration as you type.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/quick-add-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/quick-add-light.png" alt="Quick Add reading a date, a list, a tag, a priority and a duration from one line">
 </picture>
-    </td>
-    <td width="50%">
+
+### [Calendar](https://github.com/MHElnour/logwell/blob/main/docs/calendar.md)
+
+See your week or month at a glance and drag tasks to another day or time to reschedule them.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/calendar-week-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/calendar-week-light.png" alt="The week view of the calendar with timed tasks and an all-day row">
 </picture>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
+
+### [Eisenhower matrix](https://github.com/MHElnour/logwell/blob/main/docs/matrix.md)
+
+Sort tasks into four quadrants by urgency and importance, and decide what to do first.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/matrix-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/matrix-light.png" alt="The Eisenhower matrix with tasks in four quadrants">
 </picture>
-    </td>
-    <td width="50%">
+
+### [Focus](https://github.com/MHElnour/logwell/blob/main/docs/focus.md)
+
+Work in timed rounds with breaks, tied to a task, and keep a record of every round.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/focus-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/focus-light.png" alt="The focus timer with the record of past rounds">
 </picture>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
+
+### [Habits](https://github.com/MHElnour/logwell/blob/main/docs/habits.md)
+
+Check in on daily or weekly habits and follow your streaks, goals and history.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/habits-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/habits-light.png" alt="Habits with check-ins and streaks">
 </picture>
-    </td>
-    <td width="50%">
+
+### [Task block](https://github.com/MHElnour/logwell/blob/main/docs/dashboard-block.md)
+
+Put a live list of tasks inside any note with a `logwell` code block, one filter per line:
+
+````markdown
+```logwell
+list: Work
+section: Planning
+scheduled: this week
+```
+````
+
+Every line narrows the list, and `tag`, `priority` and `quadrant` take several values separated by commas.
+
+| Filter | Values | Example |
+| --- | --- | --- |
+| `list` | A list name, or `Inbox` | `list: Home` |
+| `section` | A section of that list (needs a `list` line) | `section: Planning` |
+| `tag` | A tag, including its nested tags | `tag: home, work` |
+| `due` | `today`, `overdue`, `this week`, `next 7 days`, a date `DD-MM-YYYY` or a range `… to …` (the deadline) | `due: overdue` |
+| `scheduled` | The same values, for the planned date | `scheduled: 20-10-2026 to 25-10-2026` |
+| `priority` | `high`, `medium`, `low` or `none` | `priority: high, medium` |
+| `quadrant` | `1` to `4`, or `urgent and important`, `important not urgent`, `urgent not important`, `neither` | `quadrant: 1` |
+| `linked` | `this note`: tasks whose description note holds the block | `linked: this note` |
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-dark.png">
   <img src="https://raw.githubusercontent.com/MHElnour/logwell/main/docs/images/block-dashboard-light.png" alt="A task block showing a live list of tasks inside a note">
 </picture>
-    </td>
-  </tr>
-</table>
 
 ## Install
 
