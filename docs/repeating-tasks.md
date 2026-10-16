@@ -51,8 +51,8 @@ Set the first and last date in the same line, after the repeat and its time, in 
 | You type | It does |
 | --- | --- |
 | `starting Oct 12`, `from Oct 12`, `beginning Oct 12`, `on Oct 15` (not after a weekly form, where `on` names the days: `every week on Oct 12` only offers the date with "Use as date?"; write `every week starting Oct 12`) | Starts on that date |
-| `every day Oct 12`, `every day, Oct 12`, `every month Oct 15` | Starts on that date: a date right after the repeat, or after a comma, is read on its own |
-| `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ending on Dec 1`, `ends on Dec 1` | Ends on that date, the last occurrence included |
+| `every day Oct 12`, `every day, Oct 12`, `every month Oct 15`, `every mon, wed - Oct 12` | Starts on that date: a date right after the repeat, or after a comma or a dash, is read on its own, and the repeat keeps all its weekdays |
+| `until Dec 1`, `till Dec 1`, `ending Dec 1`, `ending on Dec 1`, `ends on Dec 1`, `to Dec 1`, `through Dec 1` | Ends on that date, the last occurrence included |
 | `for 5 times` | Ends after 5 times |
 | `for 2 weeks`, `for 3 mondays`, `for 6 months` | Ends that many weeks, Mondays or months after the first date: the date you type, pick or the view gives, else today |
 | `from Oct 12 until Dec 1`, `from Oct 12 to Dec 1`, `starting Oct 12 to Dec 1`, `starting Oct 12 ending Dec 1`, `Oct 12 to Dec 1` right after the repeat | Starts on Oct 12 and ends on Dec 1 |

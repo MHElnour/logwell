@@ -105,6 +105,9 @@ const LEADS: readonly Lead[] = [
 	{ words: "ending on", kind: "end", repeatOnly: true },
 	{ words: "ending", kind: "end", repeatOnly: true },
 	{ words: "ends on", kind: "end", repeatOnly: true },
+	// "every mon, wed to Oct 26": after a repeat, as in a range ("from Oct 12 to Dec 1"), these lead its end.
+	{ words: "to", kind: "end", repeatOnly: true },
+	{ words: "through", kind: "end", repeatOnly: true },
 	{ words: "starting on", kind: "schedule", repeatOnly: true },
 	{ words: "starting", kind: "schedule", repeatOnly: true },
 	{ words: "starts on", kind: "schedule", repeatOnly: true },

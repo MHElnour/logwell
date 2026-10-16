@@ -444,11 +444,11 @@ describe("4. End", () => {
 		{ in: "Daily standup for 2 weeks", manual: ["recurrence"], title: "Daily standup for 2 weeks", brief: [] },
 	])("#12: $in", (row) => checkRow(row));
 
-	it("#12: until, till, ending, ending on, ends on", () => {
+	it("#12: until, till, ending, ending on, ends on, to, through", () => {
 		inZones((zone) => {
 			for (const locale of LOCALES) {
 				const dec1 = spelt(locale, "Dec", 1);
-				for (const lead of ["until", "till", "ending", "ending on", "ends on"]) {
+				for (const lead of ["until", "till", "ending", "ending on", "ends on", "to", "through"]) {
 					check({ in: `Pills every day ${lead} ${dec1}`, title: "Pills", rec: "daily", end: "2026-12-01" }, zone, locale);
 				}
 			}
@@ -484,6 +484,22 @@ describe("4. End", () => {
 			check({ in: "Gym every day starting Oct 12 at 7am", title: "Gym", rec: "daily", s: "2026-10-12T07:00" }, zone);
 		});
 	});
+
+	// A weekday list keeps every day before a dash or `to`: the date after it is read on its own, a dash leading the
+	// start as a plain date right after the repeat does, and `to` or `through` leading the end as `until` does.
+	it.each<Row>([
+		{ in: "Gym every mon, wed - 2026-10-05", title: "Gym", rec: "weekly:MO,WE", s: "2026-10-05" },
+		{ in: "Gym every mon, wed - Oct 26", title: "Gym", rec: "weekly:MO,WE", s: "2026-10-26" },
+		{ in: "Gym every mon, wed – Oct 26", title: "Gym", rec: "weekly:MO,WE", s: "2026-10-26" },
+		{ in: "Gym every week on mon, wed - Oct 26", title: "Gym", rec: "weekly:MO,WE", s: "2026-10-26" },
+		{ in: "Gym every other mon, wed - Oct 26", title: "Gym", rec: "weekly/2:MO,WE", s: "2026-10-26" },
+		{ in: "Gym every wed - Oct 21", title: "Gym", rec: "weekly:WE", s: "2026-10-21" },
+		{ in: "Gym every mon, wed to Oct 26", title: "Gym", rec: "weekly:MO,WE", end: "2026-10-26" },
+		{ in: "Gym every mon, wed through Oct 26", title: "Gym", rec: "weekly:MO,WE", end: "2026-10-26" },
+		{ in: "Gym every wed to Oct 21", title: "Gym", rec: "weekly:WE", end: "2026-10-21" },
+		// Without a repeat, `to` leads nothing.
+		{ in: "Walk to Oct 26 meeting", title: "Walk to meeting", s: "2026-10-26" },
+	])("#212: $in", (row) => checkRow(row));
 
 	it("#12: an end must be a date: `until <time>` after a repeat is a visible suggestion, never applied", () => {
 		inZones((zone) => {

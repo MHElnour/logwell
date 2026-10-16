@@ -262,10 +262,11 @@ describe("parser properties", () => {
 				expect(r.fields.recurrence).toBe(last("recurrence")?.rule);
 				expect(new Set(r.fields.tagKeys).size).toBe(r.fields.tagKeys.length);
 				expect(new Set(r.fields.newTags).size).toBe(r.fields.newTags.length);
-				// The fragments type no repeat end and no yearly start: what blocks is an unresolved list and, unless a repeat is
-				// picked by hand, a typed repeat whose hour is a choice; and a date that is a choice to make (a weekday with a day
-				// that is another weekday's, a range's start), unless set by hand or a later date of its kind applies.
-				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || (c.kind === "category" && c.status === "invalid") || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
+				// What blocks is an unresolved list, a refused repeat end (one that leaves the repeat no date: a dash or `to`
+				// joins a date to a repeat) and, unless a repeat is picked by hand, a typed repeat whose hour is a choice; and a
+				// date that is a choice to make (a weekday with a day that is another weekday's, a range's start), unless set by
+				// hand or a later date of its kind applies.
+				const blocks = (c: (typeof r.chips)[number]): boolean => c.status === "unresolved" || ((c.kind === "category" || c.kind === "repeatEnd") && c.status === "invalid") || (c.kind === "recurrence" && c.status === "choice" && !manual.includes("recurrence"));
 				const laterApplied = (c: (typeof r.chips)[number]): boolean => a.some((d) => d.kind === c.kind && d.span.start > c.span.start);
 				const dateChoice = (c: (typeof r.chips)[number]): boolean => (c.kind === "scheduled" || c.kind === "deadline") && c.status === "choice";
 				const dateChoices = new Set(r.chips.filter(dateChoice).map((c) => c.id));
