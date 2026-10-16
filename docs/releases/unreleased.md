@@ -23,8 +23,4 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#212) Fixed Quick Add dropping a weekday from a repeat when a dash or `to` and a date followed it: `every mon, wed - Oct 26` now repeats on Monday and Wednesday starting Oct 26, and `every mon, wed to Oct 26` repeats until Oct 26.
-
-- (#210) Fixed "Also linked from" in the task details running outside its box: the other tasks now show one per line, and a long title ends in "…" with the full title on hover.
-
 ## Security

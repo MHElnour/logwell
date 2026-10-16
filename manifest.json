@@ -1,7 +1,7 @@
 {
 	"id": "logwell",
 	"name": "Logwell",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"minAppVersion": "1.13.0",
 	"description": "Tasks with natural-language Quick Add, lists, sections, tags, repeats, habits, a calendar, a board, an Eisenhower matrix and a focus timer.",
 	"author": "MHElnour",
