@@ -23,4 +23,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#210) Fixed "Also linked from" in the task details running outside its box: the other tasks now show one per line, and a long title ends in "…" with the full title on hover.
+
 ## Security
