@@ -1,5 +1,8 @@
 # Logwell
 
+> [!NOTE]
+> AI was used throughout the development of Logwell, for the code, the tests and the documentation. Logwell is not entirely my own creation.
+
 Logwell is a task manager for Obsidian. It brings tasks, a calendar, an Eisenhower matrix, a focus timer and habits into one tab, and keeps all of it in one database file in your vault.
 
 It is for people who plan their days in Obsidian and want their tasks next to their notes, without turning every task into a note. You type a task as a sentence, and Logwell finds the date, list, tags and priority in it. Most changes can be undone.
