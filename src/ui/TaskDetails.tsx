@@ -539,15 +539,16 @@ function DescriptionArea({ host, task, onSelect }: { host: UiHost; task: Task; o
 			<NotePreview host={host} path={note.path} />
 			{also.length > 0 && (
 				<div class="cp-also-linked">
-					Also linked from:{" "}
-					{also.map((t, i) => (
-						<span key={t.id}>
-							{i > 0 && ", "}
-							<button type="button" class="cp-link-button" onClick={() => onSelect(t.id)}>
-								{t.title}
-							</button>
-						</span>
-					))}
+					<span class="cp-also-linked-label">Also linked from</span>
+					<ul>
+						{also.map((t) => (
+							<li key={t.id}>
+								<button type="button" class="cp-link-button" title={t.title} onClick={() => onSelect(t.id)}>
+									{t.title}
+								</button>
+							</li>
+						))}
+					</ul>
 				</div>
 			)}
 			<div class="cp-description-actions">

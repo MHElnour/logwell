@@ -1257,6 +1257,24 @@ body.is-mobile .checkpoint-view .cp-app {
 	font-size: var(--font-ui-smaller);
 }
 
+.checkpoint-view .cp-also-linked ul {
+	margin: var(--size-2-1) 0 0;
+	padding-inline-start: var(--size-4-5);
+}
+
+.checkpoint-view .cp-also-linked li {
+	min-width: 0;
+}
+
+.checkpoint-view .cp-also-linked .cp-link-button {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	text-align: start;
+}
+
 .checkpoint-view .cp-details-info {
 	display: grid;
 	grid-template-columns: auto 1fr;

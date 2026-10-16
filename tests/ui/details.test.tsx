@@ -114,6 +114,27 @@ describe("details pane", () => {
 			expect(root.querySelector(".cp-tasks .cp-description.is-missing")).not.toBeNull();
 		});
 
+		it("#210: note card lists the other linked tasks one per line, with the full title on hover", async () => {
+			const { h, root } = await mountApp();
+			h.notes.files.set("Notes/Plan.md", "body");
+			const long = "Module 1, Network Automation with RESTCONF, from 27%, then the post-assessment";
+			const { task } = await h.app.tasks.create({ title: "Noted" });
+			const { task: other } = await h.app.tasks.create({ title: long });
+			await h.app.tasks.create({ title: "Short one" }).then(({ task: t }) => h.app.tasks.linkNote(t.id, "Notes/Plan.md"));
+			await h.app.tasks.linkNote(task.id, "Notes/Plan.md");
+			await h.app.tasks.linkNote(other.id, "Notes/Plan.md");
+			await openTask(root, "Noted");
+			const also = root.querySelector<HTMLElement>(".cp-tasks .cp-details .cp-also-linked")!;
+			expect(also.querySelector(".cp-also-linked-label")?.textContent).toBe("Also linked from");
+			const items = [...also.querySelectorAll("ul > li")];
+			expect(items.map((li) => li.textContent).sort()).toEqual([long, "Short one"].sort());
+			const button = items.map((li) => li.querySelector<HTMLButtonElement>("button.cp-link-button")!).find((b) => b.textContent === long)!;
+			expect(button.title).toBe(long);
+			button.click();
+			await settle();
+			expect(root.querySelector<HTMLTextAreaElement>(".cp-tasks .cp-details .cp-details-title")?.value).toBe(long);
+		});
+
 		it("note card: only the .md extension is hidden from the name", async () => {
 			const { h, root } = await mountApp();
 			h.notes.files.set("Files/report.pdf", "body");
