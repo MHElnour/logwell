@@ -243,12 +243,13 @@ const RANGE_START =
 	`${RANGE_TO_PATTERN}(?:${WEEKDAY_PATTERN}|${MONTH_PATTERN}|\\d)`;
 const DATE_START_RE = new RegExp(DATE_START, "iyu");
 const RANGE_START_RE = new RegExp(RANGE_START, "iyu");
-// One day of a repeat's weekday list: a weekday that does not start a range (`every day Mon-Fri` is every day).
-const DAY = `(?!${RANGE_START})${WEEKDAY_PATTERN}${NOT_WORD_AFTER}`;
 // A range of weekdays opens a list ("every mon-fri", "every week on tue-thu"): every weekday from the first to the last.
 const WEEKDAY_RANGE = `${WEEKDAY_PATTERN}${RANGE_TO_PATTERN}${WEEKDAY_PATTERN}${NOT_WORD_AFTER}`;
-const DAY_FULL = `(?!${RANGE_START})${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}`;
-const DAY_ABBR = `(?!${RANGE_START})${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}`;
+// One day of a repeat's weekday list: a weekday that does not start a range of weekdays (`every day Mon-Fri` is every
+// day). A weekday before a dash and a date stays in the list: in "every mon, wed - Oct 5" the date is read on its own.
+const DAY = `(?!${WEEKDAY_RANGE})${WEEKDAY_PATTERN}${NOT_WORD_AFTER}`;
+const DAY_FULL = `(?!${WEEKDAY_RANGE})${WEEKDAY_FULL_PATTERN}${NOT_WORD_AFTER}`;
+const DAY_ABBR = `(?!${WEEKDAY_RANGE})${WEEKEND_ABBR_PATTERN}${NOT_WORD_AFTER}`;
 const SEP = `(?:${LIST_SEP_PATTERN}|\\s+)`;
 // A repeat's time: `at` and a clock time ("at 9", "at 5:30pm").
 const AT_TIME = `at\\s+${CLOCK_PATTERN}`;
