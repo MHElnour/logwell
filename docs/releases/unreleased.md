@@ -23,6 +23,4 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#72) Fixed Undo removing a new list or section that a task or section synced from TickTick had moved into since: the Undo is now refused with "a task now uses this list" (or section), as it already was for tags.
-
 ## Security
