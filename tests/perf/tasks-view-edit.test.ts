@@ -163,6 +163,18 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 		expect(kept.undoMs, report).toBeLessThan(plain.undoMs * KEPT_RATIO + NOISE_MS);
 	}, 300_000);
 
+	it("#72: the Undo of a new list checks that no task uses it in one pass over the tasks", async () => {
+		// Undo refuses to remove a list, section or tag that a task holds since the write: one read of each task (and of
+		// the trash), only when the undone write removes such a record.
+		const { h } = await bigHarness(false);
+		await h.app.categories.create("Errands");
+		const { result: undoMs, passes } = await countBigPasses(() => elapsedAsync(() => h.app.store.undo()));
+		const checks = passes.filter((p) => p.includes("src/persistence/schema.ts"));
+		perfLog(`issue-72: Undo of a new list at ${TASKS} tasks: ${undoMs.toFixed(1)} ms, passes: ${tally(passes)}`);
+		expect(checks, tally(passes)).toHaveLength(1);
+		expect(undoMs, tally(passes)).toBeLessThan(100);
+	});
+
 	it("reads Today from the index after a task is completed and saved, without building it again", async () => {
 		const { h } = await bigHarness();
 		const index = h.app.tasks.lists;
