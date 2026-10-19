@@ -228,17 +228,33 @@ export function recordId(collection: CollectionName, record: unknown): string {
 	return COLLECTION_SPECS[collection].idOf(record as Record<string, unknown>);
 }
 
+/** Whether a task, live or in a trash entry, matches `pred`. */
+export function someTask(data: Pick<DbCollections, "tasks" | "trash">, pred: (task: Task) => boolean): boolean {
+	for (const t of data.tasks.values()) if (pred(t)) return true;
+	for (const e of data.trash.values()) if (e.tasks.some(pred)) return true;
+	return false;
+}
+
 /**
  * Why removing these records of `c` would leave a reference to them behind in `data`, or null. A tag key is held by
- * live tasks, by the tasks of trash entries, and as the parent of the tag records under it. Undo checks it on the
- * state after a revert, before committing.
+ * live tasks, by the tasks of trash entries, and as the parent of the tag records under it; a list by live tasks and
+ * by its sections; a section by live tasks. A trashed task holds no list or section: restoring it sends it to Inbox
+ * or No section. A sync link is no reference here: the next sync drops a list link whose list is gone. Undo checks it
+ * on the state after a revert, before committing.
  */
 export function referenceProblem(data: DbCollections, c: CollectionName, removed: ReadonlySet<string>): string | null {
 	switch (c) {
+		case "categories": {
+			for (const t of data.tasks.values()) if (removed.has(t.categoryId)) return "a task now uses this list.";
+			for (const s of data.sections.values()) if (removed.has(s.categoryId)) return "a section now sits in this list.";
+			return null;
+		}
+		case "sections": {
+			for (const t of data.tasks.values()) if (t.sectionId !== null && removed.has(t.sectionId)) return "a task now uses this section.";
+			return null;
+		}
 		case "tags": {
-			const holds = (task: Task) => task.tagKeys.some((k) => removed.has(k));
-			for (const t of data.tasks.values()) if (holds(t)) return "a task now uses this tag.";
-			for (const e of data.trash.values()) if (e.tasks.some(holds)) return "a task now uses this tag.";
+			if (someTask(data, (t) => t.tagKeys.some((k) => removed.has(k)))) return "a task now uses this tag.";
 			// Every displayed tag is a record, its parent too: a tag may not be left under a removed parent.
 			for (const key of data.tags.keys()) if (tagPrefixes(key).some((p) => p !== key && removed.has(p))) return "a tag now sits under this tag.";
 			return null;

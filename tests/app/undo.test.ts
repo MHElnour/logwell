@@ -5,6 +5,7 @@ import { type Change, Tx } from "../../src/app/tx";
 import { makeTask } from "../persistence/fixtures";
 import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService";
 import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
+import { INBOX_ID, syncLinkId } from "../../src/domain/types";
 
 // A refusal while read-only keeps the undo entry; a conflict drops it, since the
 // record can never match again, and the next undo takes the one before it.
@@ -386,5 +387,97 @@ describe("after a pull that nests a tag", () => {
 			expect(store.state).toBe(state);
 			expect([...store.state.tags.keys()].sort()).toEqual(["home", "home/calls", "home/errands"]);
 		});
+	});
+});
+
+describe("after a pull that uses the list or section", () => {
+	// An Undo never leaves a task in a list or section that is gone, nor a section in a removed list. A task or section a
+	// TickTick pull brings in is not an undo step: the Undo of the list or section it landed in is refused, nothing
+	// changes, and the next Undo takes the entry below. A list link the sync wrote is no reason to refuse: the next sync
+	// drops a link whose list is gone.
+
+	async function pull(s: SyncHarness): Promise<void> {
+		s.tick();
+		const r = await s.sync.sync();
+		if (!r.ok) throw new Error("sync failed");
+	}
+
+	/** A new list "Errands" linked to its own project, its "Create list" on top of the undo history. */
+	async function newList(s: SyncHarness): Promise<{ listId: string; projectId: string }> {
+		const linked = await linkedList(s, "Errands");
+		expect(s.h.app.store.undoLabel).toBe("Create list");
+		return linked;
+	}
+
+	/** A new section "Planning" in the linked list "Work", its "Create section" on top of the undo history. */
+	async function newSection(s: SyncHarness & { listId: string }): Promise<string> {
+		const section = await s.h.app.sections.create(s.listId, "Planning");
+		expect(s.h.app.store.undoLabel).toBe("Create section");
+		return section.id;
+	}
+
+	it.each([
+		{
+			name: "a pulled task in the new list refuses its Create list",
+			label: "Create list",
+			problem: "a task now uses this list.",
+			arrange: async (s: SyncHarness & { listId: string; projectId: string }) => {
+				const { listId, projectId } = await newList(s);
+				s.tt.add(projectId, { title: "Buy stamps" });
+				await pull(s);
+				expect(s.task("Buy stamps").categoryId).toBe(listId);
+			},
+		},
+		{
+			name: "a pulled section in the new list refuses its Create list",
+			label: "Create list",
+			problem: "a section now sits in this list.",
+			arrange: async (s: SyncHarness & { listId: string; projectId: string }) => {
+				const { listId, projectId } = await newList(s);
+				s.tt.addColumn(projectId, "Later");
+				await pull(s);
+				expect(s.h.app.sections.inList(listId).map((x) => x.name)).toEqual(["Later"]);
+			},
+		},
+		{
+			name: "a pulled task in the new section refuses its Create section",
+			label: "Create section",
+			problem: "a task now uses this section.",
+			arrange: async (s: SyncHarness & { listId: string; projectId: string }) => {
+				const sectionId = await newSection(s);
+				const column = s.tt.addColumn(s.projectId, "Planning");
+				s.tt.add(s.projectId, { title: "Draft the plan", columnId: column.id });
+				await pull(s);
+				expect(s.task("Draft the plan").sectionId).toBe(sectionId);
+			},
+		},
+	])("#72: $name; nothing changes and the entry below is next", async ({ label, problem, arrange }) => {
+		const s = await setup();
+		const store = s.h.app.store;
+		const below = store.undoLabel;
+		await arrange(s);
+		const state = store.state;
+		await expect(store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: `Cannot undo "${label}": ${problem}` });
+		expect(store.state).toBe(state);
+		expect(store.undoLabel).toBe(below);
+	});
+
+	it("#72: a task the pull moved to the Trash does not refuse the Create list; restored, it goes to Inbox", async () => {
+		const s = await setup();
+		const { listId } = await newList(s);
+		await s.h.app.store.run("Outside", (tx) => tx.put("trash", { batchId: "b-out", deletedAt: tx.now, tasks: [makeTask("t-trash", { categoryId: listId })] }), { undoable: false });
+		expect(await s.h.app.store.undo()).toBe("Create list");
+		expect(s.h.app.store.state.categories.has(listId)).toBe(false);
+		await s.h.app.tasks.restore("b-out");
+		expect(s.h.app.store.state.tasks.get("t-trash")?.categoryId).toBe(INBOX_ID);
+	});
+
+	it("#72: with nothing pulled into it, a synced list's Create list is undone and the next sync drops its link", async () => {
+		const s = await setup();
+		const { listId } = await newList(s);
+		expect(await s.h.app.store.undo()).toBe("Create list");
+		expect(s.h.app.store.state.categories.has(listId)).toBe(false);
+		await pull(s);
+		expect(s.h.app.store.state.syncLinks.has(syncLinkId("list", listId))).toBe(false);
 	});
 });

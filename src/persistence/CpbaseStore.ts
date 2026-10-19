@@ -1,6 +1,5 @@
 import { DomainError } from "../domain/errors";
 import { type Clock, type IdGenerator, nowInstant } from "../domain/ports";
-import type { Task } from "../domain/types";
 import { BackupStore, SNAPSHOT_INTERVAL_MS, type BackupInfo, type SnapshotKind } from "./backups";
 import type { DbFile, FileWriteResult } from "./gateway";
 import { type JournalEntry, type JournalOp, replayJournal } from "./journal";
@@ -15,6 +14,7 @@ import {
 	createEmptyDb,
 	isSafeId,
 	PLACEHOLDER_DB_ID,
+	someTask,
 } from "./schema";
 import { type ParseFailure, RecordLineCache, parseDbText, readHeader, revisionOf, serializeDb } from "./serializer";
 import { CollectionError, validateDb } from "./validate";
@@ -785,15 +785,10 @@ export class CpbaseStore {
 	 */
 	private holdsDataNewerThan(version: number): boolean {
 		const data = this.data;
-		const all = (pred: (t: Task) => boolean): boolean => {
-			for (const t of data.tasks.values()) if (pred(t)) return true;
-			for (const e of data.trash.values()) for (const t of e.tasks) if (pred(t)) return true;
-			return false;
-		};
-		if (version < 3 && (data.sections.size > 0 || all((t) => t.sectionId !== null))) return true;
-		if (version < 4 && (data.occurrenceRecords.size > 0 || all((t) => t.recurrence !== null))) return true;
+		if (version < 3 && (data.sections.size > 0 || someTask(data, (t) => t.sectionId !== null))) return true;
+		if (version < 4 && (data.occurrenceRecords.size > 0 || someTask(data, (t) => t.recurrence !== null))) return true;
 		if (version < 5 && data.syncLinks.size > 0) return true;
-		if (version < 6 && all((t) => t.recurrence !== null && t.recurrence.versions.some((v) => v.rule.freq === "yearly"))) return true;
+		if (version < 6 && someTask(data, (t) => t.recurrence !== null && t.recurrence.versions.some((v) => v.rule.freq === "yearly"))) return true;
 		return false;
 	}
 
