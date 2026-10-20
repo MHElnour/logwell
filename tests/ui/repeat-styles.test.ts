@@ -16,6 +16,17 @@ describe("the repeat stylesheet section", () => {
 		expect(section).toMatch(/:focus-visible,?[^{}]*\{[^}]*outline:\s*2px solid var\(--cp-accent\)/);
 	});
 
+	it("#218: a calendar entry's title sits beside its repeat icon, leaving the icon and the gap its room", () => {
+		// The body wraps (a tall block puts the time on the next line): a title as wide as the body would drop below the
+		// icon, out of a one-line short block.
+		const icon = /\.cp-cal-repeat svg\s*\{[^}]*width:\s*(\d+)px/.exec(bare);
+		const rule = /\.cp-cal-repeat \+ \.cp-cal-entry-text\s*\{([^}]*)\}/.exec(bare);
+		expect(rule, "title after the repeat icon").not.toBeNull();
+		const room = /max-width:\s*calc\(100% - (\d+)px\)/.exec(rule![1]!);
+		// The icon, plus the body's 6 px gap.
+		expect(Number(room?.[1])).toBe(Number(icon?.[1]) + 6);
+	});
+
 	it("styles every part of the picker, the chip and the calendar states of the mockup", () => {
 		for (const cls of [
 			".cp-repeat-opts",
