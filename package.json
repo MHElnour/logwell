@@ -1,6 +1,6 @@
 {
   "name": "logwell",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Tasks with natural-language Quick Add, lists, sections, tags, repeats, habits, a calendar, a board, an Eisenhower matrix and a focus timer.",
   "private": true,
   "type": "module",
