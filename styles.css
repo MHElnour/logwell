@@ -7587,4 +7587,10 @@ body.is-mobile .checkpoint-view .cp-app {
 	height: 11px;
 }
 
+/* The entry body wraps (a tall block puts the time on the next line): a title as wide as the body would drop below
+   the icon, out of a one-line short block. It leaves the icon and the body's 6 px gap their room, and ellipsizes. */
+.checkpoint-view .cp-cal-repeat + .cp-cal-entry-text {
+	max-width: calc(100% - 17px);
+}
+
 /* == end M7 recurrence == */
