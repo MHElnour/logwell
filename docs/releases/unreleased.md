@@ -23,6 +23,4 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
-- (#218) Fixed the calendar week view hiding the title of a repeating task: the title now sits next to the repeat icon and ends in "…" when it is too long, as in the month view.
-
 ## Security
