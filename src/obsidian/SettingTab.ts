@@ -36,8 +36,6 @@ export class CheckpointSettingTab extends PluginSettingTab {
 	}
 
 	override getSettingDefinitions(): SettingDefinitionItem[] {
-		// Read each time the tab shows: the Git sync row appears once the vault is known to need it.
-		void this.gitSync.check();
 		return [
 			{
 				type: "group",

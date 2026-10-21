@@ -111,4 +111,15 @@ describe("#224: a copy of a file with Git merge markers", () => {
 			["merge-copy", ""],
 		]);
 	});
+
+	it("lists a merge copy whose name has no header values, and a conflict copy whose revision only starts like the label", async () => {
+		const { fs, backups } = setup();
+		fs.files.set("root/conflicts/20261001T080000000Z-merge-markers.cpbase", "<<<<<<< HEAD\n");
+		fs.files.set("root/conflicts/20261001T080001000Z-merge-markers-2.cpbase", "x");
+		const conflicts = await backups.listConflicts();
+		expect(conflicts.map((c) => [c.stamp, c.kind])).toEqual([
+			["20261001T080001000Z", "conflict"],
+			["20261001T080000000Z", "merge-copy"],
+		]);
+	});
 });

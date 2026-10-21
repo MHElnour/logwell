@@ -118,12 +118,6 @@ function splitName(path: string): { base: string; meta: { revision: string; writ
 	return { base, meta: { revision, writtenAt } };
 }
 
-/** True for a conflict copy written under `MERGE_COPY_LABEL` (the label follows the stamp, then the header values). */
-function isMergeCopyName(path: string, stamp: string): boolean {
-	const rest = fileNameOf(path).slice(stamp.length + 1);
-	return rest === `${MERGE_COPY_LABEL}${EXT}` || rest.startsWith(`${MERGE_COPY_LABEL}~`);
-}
-
 function parseSnapshotName(path: string): { kind: SnapshotKind; stamp: string } | null {
 	const split = splitName(path);
 	if (split === null) return null;
@@ -272,7 +266,9 @@ export class BackupStore {
 		for (const path of await this.fs.list(this.conflictDir)) {
 			if (!path.endsWith(EXT)) continue;
 			const stamp = fileNameOf(path).split("-")[0] ?? "";
-			result.push({ path, kind: isMergeCopyName(path, stamp) ? "merge-copy" : "conflict", ...(await this.headerOf(path)), stamp });
+			// The name is "<stamp>-<label>" before the header values (splitName's base).
+			const kind = splitName(path)?.base === `${stamp}-${MERGE_COPY_LABEL}` ? "merge-copy" : "conflict";
+			result.push({ path, kind, ...(await this.headerOf(path)), stamp });
 		}
 		return result.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
 	}

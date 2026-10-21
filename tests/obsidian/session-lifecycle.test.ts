@@ -723,14 +723,15 @@ describe("conflict copies and 'Open conflict view'", () => {
 			return { plugin, notice: notices.actions.at(-1)! };
 		}
 
-		it("a merge-marker file: says Git merged it, that Restore backup keeps this computer's version, and where the Git setting is", async () => {
+		it("a merge-marker file: says Git merged it, to add the Git setting once (Git carries it to the other computer), then that Restore backup keeps this computer's version; settings come before Restore backup", async () => {
 			const { notice } = await readOnlyNotice("merge-markers", "snapshots/hourly.cpbase");
-			expect(notice.labels).toEqual(["Restore backup", "Open settings"]);
+			expect(notice.labels).toEqual(["Open settings", "Restore backup"]);
 			expect(notice.timeout).toBe(0);
 			expect(notice.message).toContain("Git merged this database from two computers");
-			expect(notice.message).toContain("Restore backup keeps this computer's version");
-			expect(notice.message).toContain("Keep mine or Keep theirs");
-			expect(notice.message).toContain("Settings > Logwell > Database > Git sync");
+			expect(notice.message).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull.");
+			expect(notice.message).toContain("Restore backup then keeps this computer's version; the merged file stays in Conflicts.");
+			expect(notice.message).toContain("at the repository root");
+			expect(notice.message).toContain("*.cpbase merge=binary -text");
 			expect(notice.message).not.toContain("damaged");
 		});
 
@@ -738,6 +739,8 @@ describe("conflict copies and 'Open conflict view'", () => {
 			const { plugin, notice } = await readOnlyNotice("merge-markers", null);
 			expect(notice.labels).toEqual(["Open settings"]);
 			expect(notice.message).not.toContain("Restore backup");
+			expect(notice.message).toContain("Git carries it to the other computer");
+			expect(notice.message).toContain("No valid backup was found");
 			const open = vi.spyOn(plugin, "openSettings").mockImplementation(() => undefined);
 			notice.run("Open settings");
 			expect(open).toHaveBeenCalledTimes(1);

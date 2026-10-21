@@ -336,8 +336,9 @@ export class DbSession {
 				if (e.state.reason === "damaged" && e.state.failure === "merge-markers") {
 					// The conflict view lists this copy with Dismiss only, so the notice offers what helps.
 					const canRestore = e.state.recoveredFrom !== null;
+					// Settings first: the setting is what stops Git from merging the file again.
 					const actions: NoticeAction[] = [{ label: "Open settings", run: () => this.plugin.openSettings() }];
-					if (canRestore) actions.unshift({ label: "Restore backup", run: () => this.restoreRecovered() });
+					if (canRestore) actions.push({ label: "Restore backup", run: () => this.restoreRecovered() });
 					actionNotice(mergeCopyAdvice(canRestore), actions, 0);
 				} else if (e.state.reason === "damaged") {
 					const actions = [

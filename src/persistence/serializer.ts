@@ -6,7 +6,6 @@ import {
 	type CollectionName,
 	type DbData,
 	type DbMeta,
-	DB_EXTENSION,
 	DB_FORMAT,
 	HEADER_KEYS,
 	compactRecord,
@@ -121,25 +120,6 @@ export function parseDbText(text: string): RawParse {
 		return { ok: false, reason: "not-a-database", detail: "The file is not a Logwell database." };
 	}
 	return { ok: true, raw: obj };
-}
-
-/** The `.gitattributes` line that stops Git from merging a database file line by line. */
-export const GIT_ATTRIBUTES_LINE = `*.${DB_EXTENSION} merge=binary -text`;
-
-/** True when a `.gitattributes` text holds the database line (any line equal to it once trimmed). */
-export function hasGitAttributesLine(text: string): boolean {
-	return text.split(/\r?\n/).some((line) => line.trim() === GIT_ATTRIBUTES_LINE);
-}
-
-/**
- * The `.gitattributes` text with the database line added at the end, after a line break if the text does not end in
- * one, in the text's own line ending. The text is returned as it is when it holds the line. No other line changes.
- */
-export function withGitAttributesLine(text: string): string {
-	if (hasGitAttributesLine(text)) return text;
-	const eol = text.includes("\r\n") ? "\r\n" : "\n";
-	const lead = text === "" || text.endsWith("\n") ? "" : eol;
-	return `${text}${lead}${GIT_ATTRIBUTES_LINE}${eol}`;
 }
 
 export interface HeaderInfo {

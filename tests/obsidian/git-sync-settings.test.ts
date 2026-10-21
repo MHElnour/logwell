@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CheckpointSettingTab } from "../../src/obsidian/SettingTab";
-import { addGitAttributesLine, gitSyncNeeded, gitSyncRow, type GitSyncFiles } from "../../src/obsidian/gitSync";
+import { GIT_ATTRIBUTES_LINE, addGitAttributesLine, gitAttributesAddition, gitSyncNeeded, gitSyncRow, hasGitAttributesLine, type GitSyncFiles } from "../../src/obsidian/gitSync";
 
 // The "Git sync" row of the settings tab: shown only in a vault that Git tracks and whose .gitattributes lacks the
 // database line. The row is data (a definition with a render callback), driven here with a fake Setting.
@@ -9,25 +9,21 @@ const LINE = "*.cpbase merge=binary -text";
 
 /** The vault root as the adapter sees it: dotfiles that the vault index does not list, by path. */
 class FakeRoot implements GitSyncFiles {
-	writes: string[] = [];
+	appends: string[] = [];
+	reads = 0;
 	constructor(readonly files = new Map<string, string>()) {}
 	exists(path: string) {
 		return Promise.resolve(this.files.has(path));
 	}
 	read(path: string) {
+		this.reads++;
 		const text = this.files.get(path);
 		return text === undefined ? Promise.reject(new Error(`missing ${path}`)) : Promise.resolve(text);
 	}
-	write(path: string, data: string) {
-		this.writes.push(path);
-		this.files.set(path, data);
+	append(path: string, data: string) {
+		this.appends.push(path);
+		this.files.set(path, (this.files.get(path) ?? "") + data);
 		return Promise.resolve();
-	}
-	process(path: string, fn: (data: string) => string) {
-		this.writes.push(path);
-		const next = fn(this.files.get(path) ?? "");
-		this.files.set(path, next);
-		return Promise.resolve(next);
 	}
 }
 
@@ -48,7 +44,7 @@ class FakeSetting {
 
 type Row = { name: string; desc: string; visible: () => boolean; render: (s: never, g: never) => void };
 
-function setup(root: FakeRoot) {
+function setup(root: GitSyncFiles) {
 	const notices: string[] = [];
 	const errors: unknown[] = [];
 	const refresh = vi.fn();
@@ -63,6 +59,39 @@ function setup(root: FakeRoot) {
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
+
+describe("#224: the .gitattributes line", () => {
+	it("is the line that keeps Git from merging the database line by line", () => {
+		expect(GIT_ATTRIBUTES_LINE).toBe(LINE);
+	});
+
+	it.each([
+		["the exact line", `${LINE}\n`, true],
+		["the line without a final newline", LINE, true],
+		["the line with spaces around it", `  ${LINE}\t\n`, true],
+		["the line among other lines, with CRLF", `*.md text\r\n${LINE}\r\n*.png binary\r\n`, true],
+		["no file content", "", false],
+		["other lines only", "*.md text\n", false],
+		["the line commented out", `# ${LINE}\n`, false],
+		["a different rule for cpbase", "*.cpbase merge=union\n", false],
+		["the line with a trailing word", `${LINE} diff\n`, false],
+	])("recognizes %s", (_name, content, expected) => {
+		expect(hasGitAttributesLine(content)).toBe(expected);
+	});
+
+	it.each([
+		["a missing file", "", `${LINE}\n`],
+		["a file that ends in a newline", "*.md text\n", `${LINE}\n`],
+		["a file without a final newline", "*.md text", `\n${LINE}\n`],
+		["a file with CRLF line ends and no final one", "*.md text\r\n*.png binary", `\r\n${LINE}\r\n`],
+		["a file with CRLF line ends and a final one", "*.md text\r\n", `${LINE}\r\n`],
+		["other lines, odd spacing and blank lines", "# keep\n\n*.md   text \n\n", `${LINE}\n`],
+		["a file that holds the line already", `*.md text\n  ${LINE}\n`, ""],
+	])("adds to %s only the line, after a line break when needed", (_name, before, addition) => {
+		expect(gitAttributesAddition(before)).toBe(addition);
+		expect(hasGitAttributesLine(before + addition)).toBe(true);
+	});
+});
 
 describe("#224: when the Git sync row is shown", () => {
 	it.each([
@@ -97,6 +126,35 @@ describe("#224: when the Git sync row is shown", () => {
 		expect((broken.item as unknown as Row).visible()).toBe(false);
 		expect(errors).toEqual([]);
 	});
+
+	it("is checked again each time the tab shows, not only once: a git init or a pulled .gitattributes changes the row", async () => {
+		const root = rootWith({});
+		const t = setup(root);
+		expect(t.shown()).toBe(false);
+		await settle();
+
+		// `git init` after the first display; the next display runs its own check.
+		root.files.set(".git", "");
+		expect(t.shown()).toBe(false);
+		await settle();
+		expect(t.refresh).toHaveBeenCalledTimes(1);
+		expect(t.shown()).toBe(true);
+		await settle();
+
+		// A pull brings the line in.
+		root.files.set(".gitattributes", `${LINE}\n`);
+		expect(t.shown()).toBe(true);
+		await settle();
+		expect(t.shown()).toBe(false);
+		expect(t.refresh).toHaveBeenCalledTimes(2);
+	});
+
+	it("shares a check that is running instead of reading the files again", async () => {
+		const root = rootWith({ ".git": "", ".gitattributes": "*.md text\n" });
+		const t = setup(root);
+		await Promise.all([t.git.check(), t.git.check(), t.git.check()]);
+		expect(root.reads).toBe(1);
+	});
 });
 
 describe("#224: the Add to .gitattributes button", () => {
@@ -111,16 +169,16 @@ describe("#224: the Add to .gitattributes button", () => {
 		["creates the file when it is missing", undefined, `${LINE}\n`],
 		["adds a newline first when the file does not end in one", "*.md text", `*.md text\n${LINE}\n`],
 		["keeps every other line byte for byte", "# keep\n\n*.md   text \n", `# keep\n\n*.md   text \n${LINE}\n`],
+		["keeps the file's CRLF line ends", "*.md text\r\n", `*.md text\r\n${LINE}\r\n`],
 	])("%s, shows the notice once, and the row goes away", async (_name, before, after) => {
 		const root = rootWith(before === undefined ? { ".git": "" } : { ".git": "", ".gitattributes": before });
 		const t = setup(root);
 		await t.git.check();
 		expect(t.shown()).toBe(true);
-		const s = t.render();
-		s.button.click();
+		t.render().button.click();
 		await settle();
 		expect(root.files.get(".gitattributes")).toBe(after);
-		expect(root.writes).toEqual([".gitattributes"]);
+		expect(root.appends).toEqual([".gitattributes"]);
 		expect(t.notices).toEqual(["Added to .gitattributes."]);
 		expect(t.shown()).toBe(false);
 		expect(t.refresh).toHaveBeenCalledTimes(2);
@@ -136,12 +194,12 @@ describe("#224: the Add to .gitattributes button", () => {
 		await settle();
 		s.button.click();
 		await settle();
-		expect(root.writes).toEqual([".gitattributes"]);
+		expect(root.appends).toEqual([".gitattributes"]);
 		expect(root.files.get(".gitattributes")).toBe(`${LINE}\n`);
 		expect(t.notices).toEqual(["Added to .gitattributes."]);
 	});
 
-	it("does not add the line twice when the file got it between the check and the click", async () => {
+	it("writes nothing and says so when a pull brought the line in between the check and the click", async () => {
 		const root = rootWith({ ".git": "", ".gitattributes": "*.md text\n" });
 		const t = setup(root);
 		await t.git.check();
@@ -149,12 +207,35 @@ describe("#224: the Add to .gitattributes button", () => {
 		t.render().button.click();
 		await settle();
 		expect(root.files.get(".gitattributes")).toBe(`*.md text\n${LINE}\n`);
+		expect(root.appends).toEqual([]);
+		expect(t.notices).toEqual(["Git sync is already set up."]);
+		expect(t.shown()).toBe(false);
+	});
+
+	it("never replaces a .gitattributes that a pull brought in after the file was seen missing", async () => {
+		const root = rootWith({ ".git": "" });
+		const t = setup(root);
+		await t.git.check();
+		const pulled = "*.md text\n*.png binary\n";
+		const exists = root.exists.bind(root);
+		let first = true;
+		root.exists = (path: string) => {
+			if (path === ".gitattributes" && first) {
+				first = false;
+				root.files.set(".gitattributes", pulled);
+				return Promise.resolve(false);
+			}
+			return exists(path);
+		};
+		t.render().button.click();
+		await settle();
+		expect(root.files.get(".gitattributes")).toBe(`${pulled}${LINE}\n`);
 	});
 
 	it("a write that fails is shown, nothing is announced, and the row stays for another try", async () => {
 		const root = rootWith({ ".git": "" });
 		const failure = new Error("read-only folder");
-		root.write = () => Promise.reject(failure);
+		root.append = () => Promise.reject(failure);
 		const t = setup(root);
 		await t.git.check();
 		const s = t.render();
@@ -166,20 +247,39 @@ describe("#224: the Add to .gitattributes button", () => {
 		expect(s.button.disabled).toBe(false);
 	});
 
-	it("a check that finished after the button was used does not bring the row back", async () => {
-		const root = rootWith({ ".git": "" });
+	it("a check that was still reading when the button was used does not bring the row back", async () => {
+		const root = rootWith({ ".git": "", ".gitattributes": "*.md text\n" });
 		const t = setup(root);
 		await t.git.check();
+		// The next check reads the old text and resolves only after the line was added.
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((r) => (release = r));
+		const read = root.read.bind(root);
+		let held = true;
+		root.read = async (path: string) => {
+			const old = await read(path);
+			if (held) {
+				held = false;
+				await gate;
+			}
+			return old;
+		};
 		const slow = t.git.check();
+		await settle();
 		t.render().button.click();
+		await settle();
+		expect(t.shown()).toBe(false);
+		release();
 		await slow;
 		await settle();
 		expect(t.shown()).toBe(false);
+		expect(root.files.get(".gitattributes")).toBe(`*.md text\n${LINE}\n`);
 	});
 
-	it("addGitAttributesLine on an existing file goes through the adapter's atomic process", async () => {
+	it("addGitAttributesLine tells whether the file changed", async () => {
 		const root = rootWith({ ".gitattributes": "*.md text\n" });
-		await addGitAttributesLine(root);
+		expect(await addGitAttributesLine(root)).toBe(true);
+		expect(await addGitAttributesLine(root)).toBe(false);
 		expect(root.files.get(".gitattributes")).toBe(`*.md text\n${LINE}\n`);
 	});
 });

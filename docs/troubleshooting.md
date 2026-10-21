@@ -32,10 +32,12 @@ A change that was not saved yet when the file became damaged is kept as a confli
 
 The banner says "Git merged this database from two computers, so the file has merge markers and is read-only." Git merged the database file line by line when two computers had both saved a change, and left lines that start with `<<<<<<<`, `=======` and `>>>>>>>` in it.
 
-Logwell keeps a copy of that file and lists it on the Data page under **Conflicts** as "Version-control merge copy", with **Dismiss** only. It shows its newest valid backup in the meantime.
+Logwell keeps a copy of that file and lists it on the Data page under **Conflicts** as "Version-control merge copy", with **Dismiss** only. It shows its newest valid backup in the meantime. To recover:
 
-- **Restore backup** writes the backup shown into the database file. That keeps this computer's version. After the file reaches your other computer, Logwell there offers **Keep mine** and **Keep theirs**. See [Your data](your-data.md#git).
-- **Open settings** in the notice opens Logwell's settings. **Add to .gitattributes** on the **Git sync** row stops Git from merging the database again. If the row is not there, your vault has no `.git` folder or the line is already present.
+1. Add the **Git sync** setting: **Open settings** in the notice leads to **Settings > Logwell > Database**, where **Add to .gitattributes** adds the line `*.cpbase merge=binary -text`. Git carries the line to your other computer with the next pull. If the **Git sync** row is not there, your vault is inside a larger repository (or already has the line): add the line to the `.gitattributes` file at the repository root. See [Your data](your-data.md#git).
+2. Choose **Restore backup**. It writes the backup shown into the database file and keeps this computer's version. The merged file stays listed under **Conflicts** until you dismiss it. After the file reaches your other computer, Logwell there offers **Keep mine** and **Keep theirs**.
+
+The line works for merges made after it reached a computer. If your other computer pulls the line in the same pull as a conflicting change to the database, that pull still merges the file once, and the other computer may show this notice once more. The next pull does not.
 
 There is no merge: each computer keeps one whole version. Changes that only the other computer made stay in that computer's own backups.
 

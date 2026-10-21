@@ -38,10 +38,11 @@ export const MERGE_COPY_NAME = "Version-control merge copy";
  * `canRestore`: a valid backup is loaded, so Restore backup is offered.
  */
 export function mergeCopyAdvice(canRestore: boolean): string {
-	const setting = "To stop Git from merging the database line by line, use Settings > Logwell > Database > Git sync.";
+	const head = "Git merged this database from two computers, so the file has merge markers and is read-only.";
+	const elsewhere = "If the row is missing, add the line *.cpbase merge=binary -text to .gitattributes at the repository root.";
 	return canRestore
-		? `Git merged this database from two computers, so the file has merge markers and is read-only. Restore backup keeps this computer's version; the other computer is then offered Keep mine or Keep theirs. ${setting}`
-		: `Git merged this database from two computers, so the file has merge markers and is read-only. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${setting}`;
+		? `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull. Restore backup then keeps this computer's version; the merged file stays in Conflicts. ${elsewhere}`
+		: `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${elsewhere}`;
 }
 
 export function formatDuration(min: number): string {

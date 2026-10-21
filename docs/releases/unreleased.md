@@ -30,6 +30,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 - (#215) Undo no longer leaves a subtask without its parent after a TickTick sync added the subtask.
 - (#215) A tag that sits under a tag missing from the database now gets that tag back when the database opens, so it can be renamed and recolored.
-- (#224) A database that Git merged from two computers now says so, in the notice, the banner and the Data page. It explains that Restore backup keeps this computer's version and where the Git setting is, instead of leading to an empty conflict view.
+- (#224) A database that Git merged from two computers now says so, in the notice, the banner and the Data page. It explains how to recover (add the Git sync setting, then Restore backup), instead of leading to an empty conflict view.
 
 ## Security

@@ -63,9 +63,9 @@ describe("#224: a file with Git merge markers", () => {
 		await openData(m);
 		const text = banner(m).textContent ?? "";
 		expect(text).toContain("Git merged this database from two computers");
-		expect(text).toContain("Restore backup keeps this computer's version");
-		expect(text).toContain("Keep mine or Keep theirs");
-		expect(text).toContain("Settings > Logwell > Database > Git sync");
+		expect(text).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer");
+		expect(text).toContain("Restore backup then keeps this computer's version; the merged file stays in Conflicts.");
+		expect(text).toContain("at the repository root");
 		expect(labels(banner(m))).toEqual(["Restore backup"]);
 	});
 
@@ -78,7 +78,8 @@ describe("#224: a file with Git merge markers", () => {
 		expect(item.textContent).toContain("Version-control merge copy");
 		expect(item.textContent).not.toContain("Damaged file copy");
 		expect(labels(item)).toEqual(["Dismiss"]);
-		expect(section.textContent).toContain("Restore backup keeps this computer's version");
+		expect(section.textContent).toContain("Git carries it to the other computer");
+		expect(section.textContent).toContain("Restore backup then keeps this computer's version");
 	});
 
 	it("a cut-off file keeps the damaged-file banner, conflict view button and copy name", async () => {

@@ -204,6 +204,17 @@ describe("CpbaseStore: fault injection", () => {
 		expect((await whileOpen.store.listConflicts()).map((c) => c.kind)).toEqual(["merge-copy"]);
 	});
 
+	it("#224: Restore backup keeps the merge copy listed under Conflicts, so the merged file stays available", async () => {
+		const base = emptyDbText();
+		const h = harness();
+		await h.store.open();
+		h.fs.files.set(DB_PATH, `<<<<<<< HEAD\n${base}=======\n${base}>>>>>>> branch\n`);
+		await h.store.handleExternalChange();
+		await h.store.restoreRecovered();
+		expect(h.store.readOnlyState).toBeNull();
+		expect((await h.store.listConflicts()).map((c) => c.kind)).toEqual(["merge-copy"]);
+	});
+
 	it("#224: the copy kept of a cut-off file stays a plain conflict copy", async () => {
 		const h = harness(emptyDbText().slice(0, 30));
 		h.local.knownDbId = "db-1";

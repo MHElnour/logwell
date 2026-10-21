@@ -65,11 +65,13 @@ Git merges text files line by line, and the database keeps one record per line. 
 *.cpbase merge=binary -text
 ```
 
-Add the line yourself, or open **Settings > Logwell > Database** and choose **Add to .gitattributes** on the **Git sync** row. The row shows only in a vault that has a `.git` folder and no such line yet. The button adds this one line, creates the file if it is missing and changes no other line. Commit the change to `.gitattributes` and pull it on your other computers.
+Add the line once, on one computer: add it yourself, or open **Settings > Logwell > Database** and choose **Add to .gitattributes** on the **Git sync** row. The row shows only in a vault that has a `.git` folder and no such line yet; the button adds this one line, creates the file if it is missing and changes no other line. If your vault is inside a larger repository, the vault has no `.git` folder and the row is not there: add the line to the `.gitattributes` file at the repository root instead. Commit the change. Git carries the line to your other computers with their next pull.
+
+The line applies to merges made after it reached a computer. If the other computer had saved changes to the database before it pulled the line, that one pull can still leave merge markers in the file, and Logwell there shows a version-control merge copy once; the next pull does not.
 
 With the line in place:
 
-- Pull before you edit on the other computer, and let the pull finish, so each computer starts from the latest database.
+- Pull before you edit on the other computer, and let the pull finish, so each computer starts from the latest database. This also brings the line to a computer that did not have it yet.
 - If both computers saved since their last pull, Git keeps the whole database of the computer that pulls and may list the file as conflicted. Your Git plugin may show it that way: commit as usual.
 - The other computer then receives that whole file. Logwell there sees that its own changes are missing and offers **Keep mine** and **Keep theirs**, as described above.
 
