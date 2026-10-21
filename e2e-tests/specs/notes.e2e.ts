@@ -89,13 +89,16 @@ describe("Tasks and description notes", function () {
 			await tasks.linkNote(taskId, "Projects/Plan.md");
 			await tasks.update(taskId, { title: "Renamed task" });
 		}, id);
+		// vault.rename sends the same rename events as a move in the file explorer. fileManager.renameFile
+		// would also update links, and moving Projects/ changes how [[Roadmap]] in Projects/Roadmap.md is
+		// written (two Roadmap.md files), so it waits on Obsidian's "Update links" dialog that no test answers.
 		await browser.executeObsidian(async ({ app }) => {
 			const file = app.vault.getFileByPath("Projects/Plan.md");
 			if (file === null) throw new Error("missing note");
-			await app.fileManager.renameFile(file, "Projects/Plan v2.md");
+			await app.vault.rename(file, "Projects/Plan v2.md");
 			const folder = app.vault.getFolderByPath("Projects");
 			if (folder === null) throw new Error("missing folder");
-			await app.fileManager.renameFile(folder, "Work");
+			await app.vault.rename(folder, "Work");
 		});
 		await browser.waitUntil(
 			async () => ((await getTask(id))?.descriptionNote as { path?: string } | null)?.path === "Work/Plan v2.md",
