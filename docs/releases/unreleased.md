@@ -19,6 +19,8 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
+- (#222) Added a status filter to the task block: status: completed shows completed tasks, with every other filter narrowing them as usual.
+
 ## Changed
 
 ## Fixed

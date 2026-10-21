@@ -412,6 +412,98 @@ describe("completing from the block", () => {
 	});
 });
 
+describe("#222: a completed block", () => {
+	const checkbox = (m: Mount, title: string) =>
+		rows(m)
+			.find((r) => r.querySelector(".cp-task-title")!.textContent.trim().startsWith(title))!
+			.querySelector<HTMLInputElement>("input.cp-task-checkbox");
+	const wait = async () => {
+		await new Promise((r) => setTimeout(r, 650));
+		await settle();
+	};
+
+	it("draws completed tasks and done occurrences as completed rows, with the occurrence's date and the count", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		const water = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
+		await m.h.app.tasks.create({ title: "Still open" });
+		await m.h.app.tasks.complete(a.id);
+		await m.h.app.recurrence.complete(water.id);
+		await m.draw("status: completed");
+		expect(titles(m)).toEqual(["A", "Water \u00b7 Today"]);
+		expect(rows(m).every((r) => r.classList.contains("is-completed"))).toBe(true);
+		expect(rows(m)[1]!.dataset.occurrence).toBe(today);
+		expect(m.root.querySelector(".cp-block-count")!.textContent).toBe("2 tasks");
+	});
+
+	it("unticking a completed row reopens it with no notice and the block's own handler is not used", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		await m.h.app.tasks.complete(a.id);
+		await m.draw("status: completed");
+		await click(checkbox(m, "A"));
+		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("open");
+		expect(m.host.undos).toEqual([]);
+		expect(m.complete).not.toHaveBeenCalled();
+	});
+
+	it("a reopened row stays for the hold, as an open row, then leaves the block", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		const b = (await m.h.app.tasks.create({ title: "B" })).task;
+		await m.h.app.tasks.complete(a.id);
+		await m.h.app.tasks.complete(b.id);
+		await m.draw("status: completed");
+		await m.h.app.tasks.reopen(a.id);
+		await m.draw("status: completed");
+		expect(titles(m).sort()).toEqual(["A", "B"]);
+		expect(rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim() === "A")!.classList.contains("is-completed")).toBe(false);
+		await wait();
+		expect(titles(m)).toEqual(["B"]);
+	});
+
+	it("unticking a done occurrence row reopens that occurrence, and the row leaves after the hold", async () => {
+		const m = await mount();
+		const water = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
+		await m.h.app.recurrence.complete(water.id);
+		await m.draw("status: completed");
+		expect(m.h.app.store.state.occurrenceRecords.size).toBe(1);
+		await click(checkbox(m, "Water"));
+		expect(m.h.app.store.state.occurrenceRecords.size).toBe(0);
+		expect(m.complete).not.toHaveBeenCalled();
+		await m.draw("status: completed");
+		expect(titles(m)).toEqual(["Water \u00b7 Today"]);
+		await wait();
+		expect(m.root.querySelector(".cp-block-msg")!.textContent).toBe("No tasks found.");
+	});
+
+	it("a row completed again while it is held is shown again and not dropped", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		await m.h.app.tasks.complete(a.id);
+		await m.draw("status: completed");
+		await m.h.app.tasks.reopen(a.id);
+		await m.draw("status: completed");
+		await m.h.app.tasks.complete(a.id);
+		await m.draw("status: completed");
+		await wait();
+		expect(titles(m)).toEqual(["A"]);
+	});
+
+	it("an open block still holds a row completed a moment ago", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		const b = (await m.h.app.tasks.create({ title: "B" })).task;
+		await m.h.app.tasks.complete(b.id);
+		await m.draw("status: open");
+		await m.h.app.tasks.complete(a.id);
+		await m.draw("status: open");
+		expect(titles(m)).toEqual(["A"]);
+		await wait();
+		expect(m.root.querySelector(".cp-block-msg")!.textContent).toBe("No tasks found.");
+	});
+});
+
 // -- long results ----------------------------------------------------------------------------------
 
 const ROW = 52;

@@ -1182,6 +1182,90 @@ describe("the block processor", () => {
 			expect(renders() - draws).toBe(1);
 		});
 	});
+
+	describe("#222: a block with status: completed", () => {
+		const daily = { rule: { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } as never;
+		const todayAt = (s: Setup) => ({ kind: "date" as const, date: s.h.app.queryContext().today });
+		const opens = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".cp-task-row")].map((r) => r.dataset.occurrence ?? null);
+
+		it("draws completed tasks and a done occurrence, and redraws when a task is completed", async () => {
+			const s = await setup();
+			const a = (await s.h.app.tasks.create({ title: "A" })).task;
+			await s.h.app.tasks.create({ title: "B" });
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			await s.h.app.tasks.complete(a.id);
+			await s.h.app.recurrence.complete(water.id);
+			const { el } = s.block("status: completed");
+			expect(new Set(titles(el))).toEqual(new Set(["A", "Water \u00b7 Today"]));
+			expect(opens(el).filter((d) => d !== null)).toHaveLength(1);
+			expect([...el.querySelectorAll(".cp-block-chip")].map((c) => c.textContent)).toEqual(["status: completed"]);
+			vi.useFakeTimers();
+			const b = [...s.h.app.store.state.tasks.values()].find((t) => t.title === "B")!;
+			await s.h.app.tasks.complete(b.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(new Set(titles(el))).toEqual(new Set(["A", "B", "Water \u00b7 Today"]));
+			expect(el.querySelector(".cp-block-count")!.textContent).toBe("3 tasks");
+		});
+
+		it("redraws when an occurrence record changes", async () => {
+			const s = await setup();
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			const { el } = s.block("status: completed");
+			expect(titles(el)).toEqual([]);
+			vi.useFakeTimers();
+			await s.h.app.recurrence.complete(water.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["Water \u00b7 Today"]);
+			expect(opens(el)).toEqual([todayAt(s).date]);
+			const date = opens(el)[0]!;
+			await s.h.app.recurrence.reopen(water.id, date);
+			// The row stays for the hold, then leaves.
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			await vi.advanceTimersByTimeAsync(600);
+			expect(titles(el)).toEqual([]);
+			expect(text(el)).toBe("No tasks found.");
+		});
+
+		it("a task edit that no completed row can show does not run the query again", async () => {
+			const s = await setup();
+			const a = (await s.h.app.tasks.create({ title: "A", priority: 1 })).task;
+			await s.h.app.tasks.complete(a.id);
+			const open = (await s.h.app.tasks.create({ title: "Open" })).task;
+			const { el } = s.block("status: completed\npriority: high");
+			expect(titles(el)).toEqual(["A"]);
+			vi.useFakeTimers();
+			const before = runs();
+			await s.h.app.tasks.update(open.id, { title: "Open, edited" });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(runs()).toBe(before);
+		});
+
+		it("a repeating task whose edit makes its done occurrences match enters the block", async () => {
+			const s = await setup();
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			await s.h.app.recurrence.complete(water.id);
+			const { el } = s.block("status: completed\npriority: high");
+			expect(titles(el)).toEqual([]);
+			vi.useFakeTimers();
+			await s.h.app.tasks.update(water.id, { priority: 1 });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["Water \u00b7 Today"]);
+		});
+
+		it("Open in Logwell opens the Completed view", async () => {
+			const s = await setup();
+			const { el } = s.block("status: completed");
+			el.querySelector<HTMLButtonElement>('button[aria-label="Open in Logwell"]')!.click();
+			expect(s.openView).toHaveBeenCalledWith({ kind: "completed" });
+		});
+
+		it("an unknown status value is an error and runs no query", async () => {
+			const s = await setup();
+			const { el } = s.block("status: done");
+			expect(text(el)).toBe("Unknown status value “done”. Use open or completed.");
+			expect(runs()).toBe(0);
+		});
+	});
 });
 
 describe("subtask counts", () => {

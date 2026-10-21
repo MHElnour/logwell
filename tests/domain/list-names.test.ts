@@ -74,6 +74,7 @@ describe("task block list filter", () => {
 		categories: new Map([INBOX, ...lists].map((c) => [c.id, c])),
 		sections: new Map(),
 		tags: new Map(),
+		occurrenceRecords: new Map(),
 	});
 	const ctx = { today: "2026-10-14", zone: "Europe/Berlin", upcomingDays: 7, weekStart: "MO" as const };
 	const run = (source: string, lists: Category[]) => runBlockQuery(parseBlockQuery(source).filters, state(lists), ctx, "Plan.md");

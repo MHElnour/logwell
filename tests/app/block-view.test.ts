@@ -85,6 +85,28 @@ describe("the views a block opens", () => {
 		});
 	});
 
+	it.each([
+		["alone", "status: completed"],
+		["before a list", "status: completed\nlist: Work"],
+		["before a tag", "tag: Calls\nstatus: completed"],
+		["before a date", "status: completed\ndue: today"],
+		["with filters no view shows", "status: completed\npriority: high"],
+		["with a list that does not exist", "status: completed\nlist: Wrok"],
+	])("#222: a completed block opens the Completed view, %s", async (_name, source) => {
+		const r = await view(source, async (h) => {
+			await h.app.categories.create("Work");
+			await h.app.tags.create("Calls");
+		});
+		expect(r.view).toEqual({ kind: "completed" });
+	});
+
+	it("#222: status: open opens the same view as no status line", async () => {
+		let id = "";
+		const r = await view("status: open\nlist: Work", async (h) => void (id = (await h.app.categories.create("Work")).id));
+		expect(r.view).toEqual({ kind: "category", id });
+		expect((await view("status: open")).view).toBeNull();
+	});
+
 	describe("taskListView", () => {
 		it("shows a task in its list, or in the Inbox", async () => {
 			const h = await appHarness();

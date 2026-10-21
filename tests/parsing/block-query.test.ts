@@ -62,8 +62,8 @@ describe("block query parser: errors in the lines", () => {
 	});
 
 	it("an unknown key keeps the other lines", () => {
-		const r = parseBlockQuery("list: Work\nstatus: done\ndue: today");
-		expect(r.errors).toEqual(["Unknown filter “status”."]);
+		const r = parseBlockQuery("list: Work\nstate: done\ndue: today");
+		expect(r.errors).toEqual(["Unknown filter “state”."]);
 		expect(r.filters).toEqual({ list: "Work", due: "today" });
 	});
 
@@ -433,5 +433,44 @@ describe("block query parser: specific dates", () => {
 		const { filters } = parseBlockQuery(source);
 		expect(describeBlockFilters(filters)).toEqual(chips);
 		expect(parseBlockQuery(chips.join("\n"))).toEqual({ filters, errors: [] });
+	});
+});
+
+describe("block query parser: status", () => {
+	it.each([
+		["open", "status: open", "open"],
+		["completed", "status: completed", "completed"],
+		["any casing", "STATUS:  Completed ", "completed"],
+		["padded and spaced", "  status :   OPEN", "open"],
+	])("#222: %s reads as a status", (_name, source, status) => {
+		expect(parseBlockQuery(source)).toEqual({ filters: { status }, errors: [] });
+	});
+
+	it.each([
+		["an unknown word", "status: done", "Unknown status value “done”. Use open or completed."],
+		["a comma list", "status: open, completed", "Unknown status value “open, completed”. Use open or completed."],
+		["all", "status: all", "Unknown status value “all”. Use open or completed."],
+	])("#222: %s is an error and leaves the status out", (_name, source, message) => {
+		expect(parseBlockQuery(source)).toEqual({ filters: {}, errors: [message] });
+	});
+
+	it("#222: an empty value and a second status line are reported like the other keys", () => {
+		expect(parseBlockQuery("status:").errors).toEqual(["The “status” filter needs a value."]);
+		expect(parseBlockQuery("status: open\nSTATUS: completed")).toEqual({
+			filters: { status: "open" },
+			errors: ["Duplicate filter “status”."],
+		});
+	});
+
+	it("#222: status combines with the other filters and a block without it leaves it undefined", () => {
+		expect(parseBlockQuery("status: completed\nlist: Work\ndue: today").filters).toEqual({ status: "completed", list: "Work", due: "today" });
+		expect("status" in parseBlockQuery("list: Work").filters).toBe(false);
+	});
+
+	it("#222: the chip reads status first and re-parses to the same filters", () => {
+		const { filters } = parseBlockQuery("list: Work\nstatus: COMPLETED\npriority: high");
+		expect(describeBlockFilters(filters)).toEqual(["status: completed", "list: Work", "priority: high"]);
+		expect(parseBlockQuery(describeBlockFilters(filters).join("\n"))).toEqual({ filters, errors: [] });
+		expect(describeBlockFilters(parseBlockQuery("status: open").filters)).toEqual(["status: open"]);
 	});
 });

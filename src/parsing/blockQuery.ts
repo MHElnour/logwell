@@ -2,7 +2,7 @@ import { normalizeTagKey } from "../domain/tags";
 import { collapseWhitespace } from "../domain/text";
 import { isValidLocalDate } from "../domain/time";
 import { PRIORITY_NAME, type LocalDate, type Priority } from "../domain/types";
-import type { Quadrant } from "../domain/queries";
+import type { Quadrant, StatusFilter } from "../domain/queries";
 
 // The source text of a `logwell` code block. One filter per line, `key: value`. Pure: it only
 // reads the text. Names (list, section, tag) are not resolved here; the domain matcher does that.
@@ -16,8 +16,13 @@ export interface BlockDateRange {
 /** The values `due:` and `scheduled:` accept: a word, or a typed date or range (`DD-MM-YYYY`). */
 export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days" | BlockDateRange;
 
+/** The tasks a block lists: open ones (the default) or completed ones. The app's status filter without "all". */
+export type BlockStatus = Exclude<StatusFilter, "all">;
+
 /** The filters a block holds. A key that is absent (or had an error) leaves its field undefined. */
 export interface BlockFilters {
+	/** `status:`; undefined lists open tasks, as `open` does. */
+	status?: BlockStatus;
 	/** A list name as typed (trimmed). */
 	list?: string;
 	/** A section name as typed; only set together with `list`. */
@@ -42,7 +47,7 @@ export interface BlockParse {
 	errors: string[];
 }
 
-const KEYS = ["list", "section", "tag", "due", "scheduled", "priority", "quadrant", "linked"] as const;
+const KEYS = ["status", "list", "section", "tag", "due", "scheduled", "priority", "quadrant", "linked"] as const;
 type Key = (typeof KEYS)[number];
 
 const DATE_VALUES: Readonly<Record<string, BlockDate>> = {
@@ -51,6 +56,8 @@ const DATE_VALUES: Readonly<Record<string, BlockDate>> = {
 	"this week": "this-week",
 	"next 7 days": "next-7-days",
 };
+
+const STATUS_VALUES: Readonly<Record<string, BlockStatus>> = { open: "open", completed: "completed" };
 
 const PRIORITY_VALUES: Readonly<Record<string, Priority>> = { high: 1, medium: 2, low: 3, none: 0 };
 
@@ -176,6 +183,12 @@ export function parseBlockQuery(source: string): BlockParse {
 			continue;
 		}
 		switch (key) {
+			case "status": {
+				const word = keyword(value);
+				if (own(STATUS_VALUES, word)) filters.status = STATUS_VALUES[word];
+				else errors.push(`Unknown status value “${value}”. Use open or completed.`);
+				break;
+			}
 			case "list":
 				filters.list = value;
 				break;
@@ -246,6 +259,7 @@ const QUADRANT_TEXT: Readonly<Record<Quadrant, string>> = {
  */
 export function describeBlockFilters(filters: BlockFilters): string[] {
 	const chips: string[] = [];
+	if (filters.status !== undefined) chips.push(`status: ${filters.status}`);
 	if (filters.list !== undefined) chips.push(`list: ${filters.list}`);
 	if (filters.section !== undefined) chips.push(`section: ${filters.section}`);
 	if (filters.tags !== undefined) chips.push(`tag: ${filters.tags.join(", ")}`);

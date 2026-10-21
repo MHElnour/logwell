@@ -8,6 +8,7 @@ import {
 	type ViewScope,
 	arrangeHierarchy,
 	categoryEntries,
+	collectDoneOccurrences,
 	completedEntries,
 	entryOf,
 	filterTasks,
@@ -31,7 +32,6 @@ import {
 } from "../domain/queries";
 import { type BoardColumn, toCards } from "../domain/board";
 import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
-import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
 import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
@@ -247,13 +247,11 @@ function openGroups(
  * rows. The series task itself stays open, so the task filters (status included) cannot find them.
  */
 function doneOccurrences(state: DbData, ctx: QueryContext, filter: TaskFilter, text: string): DoneOccurrence[] {
-	const out: DoneOccurrence[] = [];
-	for (const [taskId, records] of indexOccurrenceRecords(state.occurrenceRecords)) {
-		const task = state.tasks.get(taskId);
-		if (task === undefined || task.recurrence === null || !matchesText(task.title, text)) continue;
-		for (const record of records) if (record.status === "done" && matchesOccurrence(task, record, filter, ctx)) out.push({ task, record });
-	}
-	return out;
+	return collectDoneOccurrences(
+		state,
+		(task) => matchesText(task.title, text),
+		(task, record) => matchesOccurrence(task, record, filter, ctx),
+	);
 }
 
 /**

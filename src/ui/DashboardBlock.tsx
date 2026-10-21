@@ -6,6 +6,7 @@ import type { ID } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { type IconHost, IconButton } from "./common";
 import type { UiHost } from "./host";
+import { entryKey } from "./format";
 import { ICON } from "./icons";
 import { TaskList } from "./TaskList";
 import type { BlockRowOps } from "./TaskRow";
@@ -101,15 +102,17 @@ function Message(props: { tone: "error" | "info"; lines: string[] }) {
 }
 
 /**
- * The rows the block shows: the matcher's, plus the rows that were completed a moment ago, held where they were so
- * the check animation plays (the app's lists do the same). They leave when the hold ends.
+ * The rows the block shows: the matcher's, plus the rows whose status changed a moment ago (completed in an open
+ * block, reopened in a completed one), held where they were so the check animation plays (the app's lists do the
+ * same). They leave when the hold ends.
  */
 function withHeld(entries: ListEntry[], last: readonly ListEntry[], held: ReadonlySet<ID>, tasks: DbData["tasks"]): ListEntry[] {
 	if (held.size === 0) return entries;
-	const present = new Set(entries.map((e) => e.task.id));
+	const present = new Set(entries.map(entryKey));
 	const out = entries.slice();
 	last.forEach((entry, i) => {
-		if (entry.occurrence !== null || !held.has(entry.task.id) || present.has(entry.task.id)) return;
+		const key = entryKey(entry);
+		if (!held.has(key) || present.has(key)) return;
 		const task = tasks.get(entry.task.id) ?? entry.task;
 		out.splice(Math.min(i, out.length), 0, task === entry.task ? entry : { ...entry, task });
 	});
@@ -117,7 +120,7 @@ function withHeld(entries: ListEntry[], last: readonly ListEntry[], held: Readon
 }
 
 function TasksBody(props: BlockTasksBody) {
-	const held = useLingeringShown(props.entries, props.state.tasks, props.win);
+	const held = useLingeringShown(props.entries, props.state.tasks, props.win, undefined, props.state.occurrenceRecords);
 	const shown = useRef<ListEntry[]>([]);
 	const entries = withHeld(props.entries, shown.current, held, props.state.tasks);
 	shown.current = entries;

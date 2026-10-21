@@ -11,6 +11,7 @@ import { Plugin } from "../app/obsidian-stub";
 import { makeTask } from "../persistence/fixtures";
 import { U1Host } from "../ui/app-helpers";
 import { countBigPasses, elapsed, elapsedAsync, perfLog, tally } from "./measure";
+import { occurrenceRecordId } from "../../src/domain/recurrence";
 import { addDays } from "../../src/domain/time";
 import { taskId } from "./view-edit-fixture";
 
@@ -167,6 +168,54 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		expect(passes, tally(passes)).toHaveLength(1);
 		expect(r.kind).toBe("ok");
 		if (r.kind === "ok") expect(r.entries.length).toBeGreaterThan(0);
+	}, 120_000);
+
+	// #222: a completed block lists completed tasks and done occurrences; it is still one pass over the tasks per draw.
+	it.each([
+		["no other filter", "status: completed"],
+		["a priority, a schedule day and a deadline range", "status: completed\npriority: high, none\nscheduled: this week\ndue: this week"],
+	])("#222: a completed block with %s queries 50,000 tasks in one pass", async (_name, source) => {
+		const h = await appHarness();
+		const data = h.store.data;
+		const tasks = new Map(data.tasks);
+		const ops: JournalOp[] = [];
+		const ctx = h.app.queryContext();
+		const day = (n: number) => ({ kind: "date" as const, date: addDays(ctx.today, n) });
+		const records = new Map(data.occurrenceRecords);
+		for (let i = 0; i < TASKS; i++) {
+			const series = i % 500 === 0;
+			const t: Task = makeTask(taskId(i + 1), {
+				title: `Task ${i}`,
+				status: !series && i % 4 === 0 ? "completed" : "open",
+				completedAt: !series && i % 4 === 0 ? `2026-09-${String((i % 28) + 1).padStart(2, "0")}T09:00:00.000Z` : null,
+				priority: i % 9 === 0 ? 1 : 0,
+				scheduled: i % 3 === 0 ? day((i % 21) - 10) : null,
+				deadline: i % 5 === 0 ? day((i % 17) - 8) : null,
+				recurrence: series ? { anchor: addDays(ctx.today, -20), versions: [{ effectiveFrom: addDays(ctx.today, -20), rule: { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } }], end: { kind: "never" }, endedAt: null } : null,
+				sortKey: `V${i.toString(36).padStart(5, "0")}`,
+			});
+			tasks.set(t.id, t);
+			ops.push({ c: "tasks", id: t.id, v: t });
+			if (series) {
+				for (let d = -20; d < -10; d++) {
+					const record = { taskId: t.id, occurrenceDate: addDays(ctx.today, d), status: "done" as const, resolvedAt: "2026-10-01T09:00:00.000Z", auto: false, completedOn: addDays(ctx.today, d) };
+					records.set(occurrenceRecordId(t.id, record.occurrenceDate), record);
+					ops.push({ c: "occurrenceRecords", id: occurrenceRecordId(t.id, record.occurrenceDate), v: record });
+				}
+			}
+		}
+		h.store.commit({ ...data, tasks, occurrenceRecords: records }, ops);
+		const actual = (await vi.importActual<typeof import("../../src/domain/blockQuery")>("../../src/domain/blockQuery")).runBlockQuery;
+		const filters = parseBlockQuery(source).filters;
+		const ms = elapsed(() => actual(filters, h.store.data, ctx, "Note.md"));
+		perfLog(`completed task block (${_name}) over ${TASKS} tasks: ${ms.toFixed(1)} ms`);
+		const { result: r, passes } = await countBigPasses(() => actual(filters, h.store.data, ctx, "Note.md"));
+		expect(passes, tally(passes)).toHaveLength(1);
+		expect(r.kind).toBe("ok");
+		if (r.kind === "ok") {
+			expect(r.entries.length).toBeGreaterThan(0);
+			expect(r.entries.every((e) => e.occurrence !== null || e.task.status === "completed")).toBe(true);
+		}
 	}, 120_000);
 
 	// A typed date or range is read once per block, not once per task: the query stays one pass.
