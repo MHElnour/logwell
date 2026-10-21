@@ -118,8 +118,8 @@ export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, ac
  * A row of a done occurrence is never held: reopening it has its own notice and the row leaves at
  * once. A task whose row is drawn now is released at once, with its timer, so the held set never holds a task that
  * `entries` lists. The held set holds task IDs. The look is made once per new `entries` array (the block draws a new
- * one after each query), while rendering, so the held row is already in place in the pass that changed it. A task
- * shown again is released at once. Timers run on `win`, the window of the block's element, since a block may sit in a pop-out window.
+ * one after each query), while rendering, so the held row is already in place in the pass that changed it. Timers run
+ * on `win`, the window of the block's element, since a block may sit in a pop-out window.
  */
 export function useLingeringShown(entries: readonly ListEntry[], tasks: ReadonlyMap<ID, Task>, win: Window = window, ms = LINGER_MS): ReadonlySet<ID> {
 	const { held, timers, release, hold } = useHolds(win, ms);
