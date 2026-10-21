@@ -4,7 +4,7 @@ import { isDomainError } from "../../src/domain/errors";
 import { basenameOf, fileNameOf, joinPath, noteDisplayName, noteLinkPath, noteNameCandidate, rewriteNotePath, sanitizeNoteName } from "../../src/domain/notes";
 import { compareSortKeys, keyAfter, keyBetween, rekeyOrder } from "../../src/domain/sortKey";
 import { isValidTagKey, normalizeTagKey, requireTagKey, tagDisplayName } from "../../src/domain/tags";
-import { assertCanBecomeSubtask, assertUniqueCategoryName, requireTitle } from "../../src/domain/tasks";
+import { assertCanBecomeSubtask, assertUniqueCategoryName, canBeParentOf, isSectionOf, requireTitle } from "../../src/domain/tasks";
 import type { Category, Task } from "../../src/domain/types";
 import { noteInsertName } from "../../src/obsidian/tokenChoice";
 
@@ -91,6 +91,25 @@ describe("rules", () => {
 			expect(() => assertCanBecomeSubtask(parent, other, [parent, child, other])).toThrow(
 				"Only one subtask level is supported",
 			);
+		});
+
+		it.each([
+			{ name: "a top-level task, for another task", parent: task("p"), taskId: "t", can: true },
+			{ name: "a top-level task, for a task not created yet", parent: task("p"), taskId: undefined, can: true },
+			{ name: "a subtask", parent: task("c", "p"), taskId: "t", can: false },
+			{ name: "a subtask, for a task not created yet", parent: task("c", "p"), taskId: undefined, can: false },
+			{ name: "the task itself", parent: task("t"), taskId: "t", can: false },
+			{ name: "no task", parent: undefined, taskId: "t", can: false },
+		])("#215: a parent may be $name: $can", ({ parent, taskId, can }) => {
+			expect(canBeParentOf(parent, taskId)).toBe(can);
+		});
+
+		it.each([
+			{ name: "a section of the task's list", section: { categoryId: "work" }, can: true },
+			{ name: "a section of another list", section: { categoryId: "home" }, can: false },
+			{ name: "no section", section: undefined, can: false },
+		])("#215: a task in the list work may be in $name: $can", ({ section, can }) => {
+			expect(isSectionOf(section, "work")).toBe(can);
 		});
 
 		it("allows a plain task under a top-level task", () => {

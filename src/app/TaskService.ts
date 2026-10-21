@@ -274,9 +274,7 @@ export class TaskService {
 		let sectionId: ID | null = input.sectionId ?? null;
 		if (parentId !== null) {
 			const parent = requireTask(tx, parentId);
-			if (parent.parentId !== null) {
-				throw new DomainError("SubtaskDepth", "Only one subtask level is supported.");
-			}
+			if (!canBeParentOf(parent)) throw new DomainError("SubtaskDepth", "Only one subtask level is supported.");
 			// A subtask always shares its parent's category.
 			categoryId = parent.categoryId;
 			// And its section.
@@ -638,7 +636,7 @@ export class TaskService {
 				if (tx.get("tasks", t.id) !== undefined) next = { ...next, id: this.ids() };
 				if (next.parentId !== null && !restoredIds.has(next.parentId)) {
 					const parent = tx.get("tasks", next.parentId);
-					if (parent !== undefined && canBeParentOf(parent, next.id)) next = { ...next, categoryId: parent.categoryId, sectionId: parent.sectionId };
+					if (canBeParentOf(parent, next.id)) next = { ...next, categoryId: parent.categoryId, sectionId: parent.sectionId };
 					else next = { ...next, parentId: null };
 				}
 				if (tx.get("categories", next.categoryId) === undefined) next = { ...next, categoryId: INBOX_ID };

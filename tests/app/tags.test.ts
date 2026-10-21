@@ -218,9 +218,9 @@ describe("Edit tag", () => {
 		it("a deeper tag keeps its parent; its children move by prefix", async () => {
 			const h = await seeded();
 			await h.app.store.run("Seed", (tx) => {
-				tx.put("tags", { key: "a/b/c", displayName: "A/B/C", color: null, createdAt: JAN, modifiedAt: JAN });
+				tx.put("tags", makeTag("a/b/c", { displayName: "A/B/C", createdAt: JAN, modifiedAt: JAN }));
 				tx.put("tags", makeTag("a/b", { displayName: "A/B", createdAt: JAN, modifiedAt: JAN }));
-				tx.put("tags", { key: "a", displayName: "A", color: null, createdAt: JAN, modifiedAt: JAN });
+				tx.put("tags", makeTag("a", { displayName: "A", createdAt: JAN, modifiedAt: JAN }));
 			});
 			const { task: t } = await h.app.tasks.create({ title: "Deep", tagKeys: ["a/b/c"] });
 			expect((await h.app.tags.edit("a/b/c", { name: "C", parentKey: "a/b", color: "green" })).key).toBe("a/b/c");

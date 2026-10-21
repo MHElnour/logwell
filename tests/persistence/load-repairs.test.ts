@@ -6,7 +6,8 @@ import { applyOps } from "../../src/persistence/journal";
 import { createEmptyDb, CURRENT_SCHEMA_VERSION, type DbData } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
 import { type Checkin, type Habit, INBOX_ID, type OccurrenceRecord, type Section, type Tag, type Task, type TrashEntry } from "../../src/domain/types";
-import { readRecord } from "../../src/persistence/validate";
+import { LINK_REPAIR_ORDER, readRecord } from "../../src/persistence/validate";
+import { REFERENCES } from "../../src/persistence/references";
 import { done, repeating, rule, series } from "../domain/recurrence-fixtures";
 import { TAG_LENGTH_MESSAGE } from "../../src/domain/tags";
 import { appHarness } from "../app/harness";
@@ -463,6 +464,13 @@ describe("links a file left broken", () => {
 			want: null,
 		},
 		{
+			name: "#215: a subtask with an empty title under a task that does not exist is named by its new title",
+			file: { tasks: [makeTask("t", { title: "   ", parentId: "gone" })] },
+			issues: ['A task with an empty title was renamed to "Untitled task".', 'Subtask "Untitled task" lost its parent and is now a top-level task.'],
+			repaired: (d) => d.tasks.get("t")?.parentId,
+			want: null,
+		},
+		{
 			name: "a task's tag that does not exist is recreated",
 			file: { tasks: [makeTask("t", { tagKeys: ["errands"] })] },
 			issues: ['Tag "errands" was missing and has been recreated.'],
@@ -502,6 +510,15 @@ describe("links a file left broken", () => {
 		expect(r.issues).toEqual(issues);
 		expect(repaired(r.data)).toEqual(want);
 		expect(loadWithIssues(serializeDb(r.data), NOW).issues).toEqual([]);
+	});
+
+	it("#215: repairs every link the table gives a load action, each a plain field of a collection it visits", () => {
+		const repaired = REFERENCES.filter((r) => r.load !== "keep");
+		expect(repaired.length).toBeGreaterThan(0);
+		for (const r of repaired) {
+			expect(LINK_REPAIR_ORDER, `${r.from}.${r.field}`).toContain(r.from);
+			expect(r.field, `${r.from}.${r.field}`).toMatch(/^[A-Za-z]+$/);
+		}
 	});
 
 	describe("#215: editing what the file left broken", () => {

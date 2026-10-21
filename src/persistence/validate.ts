@@ -866,16 +866,7 @@ export function repairReferences(cols: MutableCollections, now: string, issues: 
 		if (id !== INBOX_ID && c.isInbox) cols.categories.set(id, { ...c, isInbox: false });
 	}
 
-	repairLinks(cols, now, issues);
-
-	// Duplicate section names in a list are harmless (the services refuse new ones); noted, never changed.
-	const seenKeys = new Set<string>();
-	for (const section of cols.sections.values()) {
-		const dupKey = `${section.categoryId}\u0000${section.nameKey}`;
-		if (seenKeys.has(dupKey)) notes.push(`Section "${section.name}" has the same name as another section in its list.`);
-		seenKeys.add(dupKey);
-	}
-
+	// Before the links, which read no title or completion, so their issues name a task by its repaired title.
 	for (const [id, t] of cols.tasks) {
 		let task = t;
 		if (task.title.trim().length === 0) {
@@ -885,6 +876,16 @@ export function repairReferences(cols: MutableCollections, now: string, issues: 
 		if (task.status === "completed" && task.completedAt === null) task = { ...task, completedAt: task.modifiedAt };
 		if (task.status === "open" && task.completedAt !== null) task = { ...task, completedAt: null };
 		if (task !== t) cols.tasks.set(id, task);
+	}
+
+	repairLinks(cols, now, issues);
+
+	// Duplicate section names in a list are harmless (the services refuse new ones); noted, never changed.
+	const seenKeys = new Set<string>();
+	for (const section of cols.sections.values()) {
+		const dupKey = `${section.categoryId}\u0000${section.nameKey}`;
+		if (seenKeys.has(dupKey)) notes.push(`Section "${section.name}" has the same name as another section in its list.`);
+		seenKeys.add(dupKey);
 	}
 
 	// Not a link: a subtask shares its parent's list and section (its parent exists and is top-level by now).
@@ -910,7 +911,7 @@ export function repairReferences(cols: MutableCollections, now: string, issues: 
  * The collections the link repair visits, in order: a target before the records that point at it (a section's list
  * before the tasks in the section), and the tags recreated for tasks before the tags above them.
  */
-const LINK_REPAIR_ORDER = ["sections", "tasks", "tags"] as const;
+export const LINK_REPAIR_ORDER = ["sections", "tasks", "tags"] as const;
 
 /**
  * Repairs each record that points at a record that is missing, or that its link does not accept, as the link's row in
