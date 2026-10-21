@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeTagKey } from "../../src/domain/tags";
 import { TagInput } from "../../src/ui/TagInput";
 import { type AppHarness, appHarness } from "../app/harness";
+import { makeTag } from "../persistence/fixtures";
 import { mountNode, q, settle, typeInto } from "./app-helpers";
 
 /** The tag field on a real app (`seed` runs on the harness first), recording what it reports. */
@@ -109,7 +110,7 @@ describe("tag depth", () => {
 			await m.h.app.store.run("Seed", (tx) => {
 				// The deeper tag and the tags above it: every tag's parent is a record.
 				for (const [key, displayName] of [["a", "A"], ["a/b", "A/B"], ["a/b/c", "A/B/C"]]) {
-					tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
+					tx.put("tags", makeTag(key!, { displayName: displayName! }));
 				}
 			});
 			await typeTag(m.root, "A/B/C");

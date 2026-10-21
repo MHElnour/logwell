@@ -70,6 +70,15 @@ describe("the reference check at commit", () => {
 			]);
 		});
 
+		it("#215: refuses, as enforce does, when nothing listens for the reports", async () => {
+			const { store } = await withList();
+			store.referenceMode = "report";
+			store.onReferenceProblem = undefined;
+			const state = store.state;
+			await expectDomainError(store.run("Create task", (tx) => tx.put("tasks", ORPHAN)), "ReferenceConflict", "Cannot create task: a task is in a list that does not exist.");
+			expect(store.state).toBe(state);
+		});
+
 		it("reports nothing for a command that leaves every link whole", async () => {
 			const { h, store, listId } = await withList();
 			store.referenceMode = "report";

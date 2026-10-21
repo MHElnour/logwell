@@ -301,7 +301,9 @@ export function generateDb(dimension: string, count: number, opts: GenOptions): 
 		if (i < TAG_BANK.length) addTag(TAG_BANK[i] as string, i);
 		else {
 			const n = String(i + 1).padStart(4, "0");
-			addTag(i % 3 === 0 ? `topic-${n}` : `area-${i % 8}/topic-${n}`, i);
+			const area = `area-${i % 8}`;
+			// Every tag's parent is a tag: an area's first slot makes the area itself.
+			addTag(i % 3 === 0 ? `topic-${n}` : tags.has(area) ? `${area}/topic-${n}` : area, i);
 		}
 	}
 	const usableTags = [...tags.keys()];

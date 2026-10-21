@@ -3,7 +3,7 @@ import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService"
 import { resolveTagName, TAG_DEPTH_MESSAGE, TAG_FLAT_PARENT_MESSAGE, TAG_REPEAT_MESSAGE, tagLabel, tagNamesOf } from "../../src/domain/tags";
 import { type Tag, type Task } from "../../src/domain/types";
 import { type AppHarness, appHarness } from "./harness";
-import { makeTask } from "../persistence/fixtures";
+import { makeTag, makeTask } from "../persistence/fixtures";
 import { buildList, sidebarCounts, viewPreset, viewTitle } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 
@@ -219,7 +219,7 @@ describe("Edit tag", () => {
 			const h = await seeded();
 			await h.app.store.run("Seed", (tx) => {
 				tx.put("tags", { key: "a/b/c", displayName: "A/B/C", color: null, createdAt: JAN, modifiedAt: JAN });
-				tx.put("tags", { key: "a/b", displayName: "A/B", color: null, createdAt: JAN, modifiedAt: JAN });
+				tx.put("tags", makeTag("a/b", { displayName: "A/B", createdAt: JAN, modifiedAt: JAN }));
 				tx.put("tags", { key: "a", displayName: "A", color: null, createdAt: JAN, modifiedAt: JAN });
 			});
 			const { task: t } = await h.app.tasks.create({ title: "Deep", tagKeys: ["a/b/c"] });

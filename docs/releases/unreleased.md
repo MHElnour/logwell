@@ -28,5 +28,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 ## Fixed
 
 - (#215) Undo no longer leaves a subtask without its parent after a TickTick sync added the subtask.
+- (#215) A tag that sits under a tag missing from the database now gets that tag back when the database opens, so it can be renamed and recolored.
 
 ## Security

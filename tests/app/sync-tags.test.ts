@@ -4,6 +4,7 @@ import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/syncModel";
 import { tagNamesOf } from "../../src/domain/tags";
 import { isSyncedTag } from "../../src/domain/ticktick/tags";
 import { syncLinkId } from "../../src/domain/types";
+import { makeTag } from "../persistence/fixtures";
 import { linkedList, pushes, quiet, type SyncHarness, syncHarness } from "./sync-harness";
 
 describe("tags both ways", () => {
@@ -106,7 +107,7 @@ describe("tags both ways", () => {
 		it("a later duplicate tag is not pushed, is reported as not synced, and causes no repeated push", async () => {
 			const s = await setup();
 			await s.h.app.store.run("Seed", (tx) => {
-				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
+				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", makeTag(key!, { displayName: displayName! }));
 				tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
 				tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
 				tx.put("tags", { key: "plain", displayName: "Plain", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
@@ -326,7 +327,7 @@ describe("tags both ways", () => {
 		it("a pulled tag change keeps the Logwell task's duplicate tags", async () => {
 			const s = await setup();
 			await s.h.app.store.run("Seed", (tx) => {
-				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
+				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", makeTag(key!, { displayName: displayName! }));
 				tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
 				tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
 			});

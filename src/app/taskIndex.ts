@@ -3,7 +3,7 @@ import { isUnderTag, tagPrefixes } from "../domain/tags";
 import { type SubtaskCount, compareTasksBySortKey, isDated, isOpen, subtaskCounts } from "../domain/tasks";
 import { type ID, INBOX_ID, type Task, syncLinkId } from "../domain/types";
 import { type TaskFilter, statusAccepts } from "../domain/queries";
-import type { ReferenceRule } from "../persistence/references";
+import type { ReferenceRule, TaskRefField } from "../persistence/references";
 import type { DbData } from "../persistence/schema";
 import type { AppStore } from "./store";
 import type { Change, Tx } from "./tx";
@@ -62,7 +62,7 @@ interface Parts {
 const NO_IDS: ReadonlySet<ID> = new Set();
 
 /** The part that lists the tasks by each value of a task field a link (`REFERENCES`) points with. */
-const HOLDERS: Partial<Record<string, "byList" | "bySection" | "byParent" | "byTag">> = { categoryId: "byList", sectionId: "bySection", parentId: "byParent", tagKeys: "byTag" };
+const HOLDERS: Record<TaskRefField, "byList" | "bySection" | "byParent" | "byTag"> = { categoryId: "byList", sectionId: "bySection", parentId: "byParent", tagKeys: "byTag" };
 
 /**
  * The largest share of all tasks a view menu's candidates may hold (`filterCandidates`). Reading ids from a set and
@@ -140,7 +140,10 @@ function remove(p: Parts, t: Task, next: Task | undefined): void {
 	p.size--;
 }
 
-/** One more (`delta` 1) or one fewer (-1) subtask of `t.parentId`, done when `t` is completed. */
+/**
+ * One more (`delta` 1) or one fewer (-1) subtask of `t.parentId`, done when `t` is completed. The total is the
+ * parent's subtasks in `byParent`, which the change already moved.
+ */
 function countSubtask(p: Parts, t: Task, delta: 1 | -1): void {
 	if (t.parentId === null) return;
 	if (p.subtasksShared) {
@@ -148,7 +151,7 @@ function countSubtask(p: Parts, t: Task, delta: 1 | -1): void {
 		p.subtasksShared = false;
 	}
 	const c = p.subtasks.get(t.parentId);
-	const total = (c?.total ?? 0) + delta;
+	const total = p.byParent.get(t.parentId)?.size ?? 0;
 	const done = (c?.done ?? 0) + (t.status === "completed" ? delta : 0);
 	// A parent left without subtasks leaves the map, as in a count of all tasks.
 	if (total === 0) p.subtasks.delete(t.parentId);
@@ -467,7 +470,7 @@ export class TaskIndex {
 
 	/** How many subtasks (open and completed) a task has in the store's current tasks. Hands out no map. */
 	subtaskTotal(parentId: ID): number {
-		return this.index().subtasks.get(parentId)?.total ?? 0;
+		return this.index().byParent.get(parentId)?.size ?? 0;
 	}
 
 	/**

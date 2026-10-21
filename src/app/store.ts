@@ -94,9 +94,11 @@ export class AppStore {
 	reverse: ReverseLookup | undefined = undefined;
 	/**
 	 * What a command whose result would leave a broken link does (`referenceProblems`): `enforce` refuses it
-	 * (ReferenceConflict) and commits nothing; `report` commits it and calls `onReferenceProblem`. Undo always refuses.
+	 * (ReferenceConflict) and commits nothing; `report` commits it and calls `onReferenceProblem`, and refuses it as
+	 * `enforce` does while nothing is set there, so a problem is never saved unseen. Undo always refuses.
 	 */
 	referenceMode: "report" | "enforce" = "report";
+	/** Where `report` sends the problems of a command it saves (the plugin shows them); unset, `report` refuses. */
 	onReferenceProblem: ((label: string, problems: readonly ReferenceProblem[]) => void) | undefined = undefined;
 
 	constructor(
@@ -169,8 +171,9 @@ export class AppStore {
 			if (ops.length > 0) {
 				const problems = referenceProblems(data, changes, this.reverse);
 				if (problems.length > 0) {
-					if (this.referenceMode === "enforce") throw new DomainError("ReferenceConflict", `Cannot ${label.toLowerCase()}: ${problems[0]!.message}`);
-					this.onReferenceProblem?.(label, problems);
+					const report = this.referenceMode === "report" ? this.onReferenceProblem : undefined;
+					if (report === undefined) throw new DomainError("ReferenceConflict", `Cannot ${label.toLowerCase()}: ${problems[0]!.message}`);
+					report(label, problems);
 				}
 				this.host.commit(data, ops);
 				if (options.undoable !== false) {
