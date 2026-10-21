@@ -40,7 +40,7 @@ Related notices:
 
 ## A notice says some records were repaired or need your attention
 
-"Some database records were repaired: …" means Logwell fixed records it could not use as they were, such as a task in a list that no longer exists. It takes a **Before repair** snapshot first and saves the repaired file once.
+"Some database records were repaired: …" means Logwell fixed records it could not use as they were, such as a task in a list that no longer exists, or a tag under a tag that is missing (the missing tag is recreated). It takes a **Before repair** snapshot first and saves the repaired file once.
 
 "Some database records need your attention: …" names something Logwell leaves as it is, such as two sections with the same name in one list. Nothing is written for it; the notice shows each time the database opens until you rename or delete one of them.
 

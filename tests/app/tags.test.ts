@@ -3,7 +3,7 @@ import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService"
 import { resolveTagName, TAG_DEPTH_MESSAGE, TAG_FLAT_PARENT_MESSAGE, TAG_REPEAT_MESSAGE, tagLabel, tagNamesOf } from "../../src/domain/tags";
 import { type Tag, type Task } from "../../src/domain/types";
 import { type AppHarness, appHarness } from "./harness";
-import { makeTask } from "../persistence/fixtures";
+import { makeTag, makeTask } from "../persistence/fixtures";
 import { buildList, sidebarCounts, viewPreset, viewTitle } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
 
@@ -218,8 +218,9 @@ describe("Edit tag", () => {
 		it("a deeper tag keeps its parent; its children move by prefix", async () => {
 			const h = await seeded();
 			await h.app.store.run("Seed", (tx) => {
-				tx.put("tags", { key: "a/b/c", displayName: "A/B/C", color: null, createdAt: JAN, modifiedAt: JAN });
-				tx.put("tags", { key: "a", displayName: "A", color: null, createdAt: JAN, modifiedAt: JAN });
+				tx.put("tags", makeTag("a/b/c", { displayName: "A/B/C", createdAt: JAN, modifiedAt: JAN }));
+				tx.put("tags", makeTag("a/b", { displayName: "A/B", createdAt: JAN, modifiedAt: JAN }));
+				tx.put("tags", makeTag("a", { displayName: "A", createdAt: JAN, modifiedAt: JAN }));
 			});
 			const { task: t } = await h.app.tasks.create({ title: "Deep", tagKeys: ["a/b/c"] });
 			expect((await h.app.tags.edit("a/b/c", { name: "C", parentKey: "a/b", color: "green" })).key).toBe("a/b/c");
@@ -249,9 +250,13 @@ describe("tag depth", () => {
 		modifiedAt: "2026-10-01T10:00:00Z",
 	} as const;
 
+	/** A deeper tag and the tags above it: every tag's parent is a record. */
 	async function withDeepTag() {
 		const h = await appHarness();
-		await h.app.store.run("Seed", (tx) => tx.put("tags", { ...DEEP }));
+		await h.app.store.run("Seed", (tx) => {
+			for (const [key, displayName] of [["a", "A"], ["a/b", "A/B"]] as const) tx.put("tags", { ...DEEP, key, displayName });
+			tx.put("tags", { ...DEEP });
+		});
 		return h;
 	}
 
@@ -272,9 +277,10 @@ describe("tag depth", () => {
 
 		it("returns an existing deeper tag unchanged", async () => {
 			const h = await withDeepTag();
+			const tags = h.app.store.state.tags;
 			const tag = await h.app.tags.create("A/B/C");
 			expect(tag.displayName).toBe("A/B/C");
-			expect(h.app.tags.list()).toHaveLength(1);
+			expect(h.app.store.state.tags).toBe(tags);
 		});
 	});
 
@@ -368,6 +374,8 @@ describe("unique tag names", () => {
 		it("load and keep working", async () => {
 			const h = await appHarness();
 			await h.app.store.run("Seed", (tx) => {
+				tx.put("tags", seed("home", "Home"));
+				tx.put("tags", seed("work", "Work"));
 				tx.put("tags", seed("home/calls", "Home/Calls"));
 				tx.put("tags", seed("work/calls", "Work/Calls", "2026-10-02T10:00:00Z"));
 			});
@@ -613,7 +621,7 @@ describe("deleting a parent tag", () => {
 			expect(h.app.store.undoLabel).toBe(label);
 			// Two children of one parent that would land on one key (deeper keys from an older file) are refused too.
 			await h.app.store.run("Seed", (tx) => {
-				for (const [key, displayName] of [["work", "Work"], ["work/desk", "Work/Desk"], ["work/old/desk", "Work/Old/Desk"]]) {
+				for (const [key, displayName] of [["work", "Work"], ["work/desk", "Work/Desk"], ["work/old", "Work/Old"], ["work/old/desk", "Work/Old/Desk"]]) {
 					tx.put("tags", { key: key!, displayName: displayName!, color: null, createdAt: JAN, modifiedAt: JAN });
 				}
 			});

@@ -1,5 +1,4 @@
 import type { Category, Checkin, FocusSession, Habit, Instant, OccurrenceRecord, OpaqueRecord, Section, SyncLink, Tag, Task, TrashEntry } from "../domain/types";
-import { tagPrefixes } from "../domain/tags";
 import { INBOX_ID, INBOX_NAME, isRecord, syncLinkId } from "../domain/types";
 
 // The `.cpbase` data model. One JSON document with a header
@@ -233,35 +232,6 @@ export function someTask(data: Pick<DbCollections, "tasks" | "trash">, pred: (ta
 	for (const t of data.tasks.values()) if (pred(t)) return true;
 	for (const e of data.trash.values()) if (e.tasks.some(pred)) return true;
 	return false;
-}
-
-/**
- * Why removing these records of `c` would leave a reference to them behind in `data`, or null. A tag key is held by
- * live tasks, by the tasks of trash entries, and as the parent of the tag records under it; a list by live tasks and
- * by its sections; a section by live tasks. A trashed task holds no list or section: restoring it sends it to Inbox
- * or No section. A sync link is no reference here: the next sync drops a list link whose list is gone. Undo checks it
- * on the state after a revert, before committing.
- */
-export function referenceProblem(data: DbCollections, c: CollectionName, removed: ReadonlySet<string>): string | null {
-	switch (c) {
-		case "categories": {
-			for (const t of data.tasks.values()) if (removed.has(t.categoryId)) return "a task now uses this list.";
-			for (const s of data.sections.values()) if (removed.has(s.categoryId)) return "a section now sits in this list.";
-			return null;
-		}
-		case "sections": {
-			for (const t of data.tasks.values()) if (t.sectionId !== null && removed.has(t.sectionId)) return "a task now uses this section.";
-			return null;
-		}
-		case "tags": {
-			if (someTask(data, (t) => t.tagKeys.some((k) => removed.has(k)))) return "a task now uses this tag.";
-			// Every displayed tag is a record, its parent too: a tag may not be left under a removed parent.
-			for (const key of data.tags.keys()) if (tagPrefixes(key).some((p) => p !== key && removed.has(p))) return "a tag now sits under this tag.";
-			return null;
-		}
-		default:
-			return null;
-	}
 }
 
 /** A `[]` or `{}` default matches any empty list or object. */

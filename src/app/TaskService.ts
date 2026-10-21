@@ -2,7 +2,7 @@ import { DomainError } from "../domain/errors";
 import type { IdGenerator } from "../domain/ports";
 import { keyAfter, keyBetween, rekeyOrder } from "../domain/sortKey";
 import { basenameOf, sanitizeNoteName } from "../domain/notes";
-import { assertCanBecomeSubtask, compareTasksBySortKey, isActiveSeries, isOpen, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
+import { assertCanBecomeSubtask, canBeParentOf, compareTasksBySortKey, isActiveSeries, isOpen, isSectionOf, requireDuration, requireTitle, subtasksOf } from "../domain/tasks";
 import { currentOccurrence, isSeriesEnded, occurrenceRecordId, restartedSeries, ruleAt, startRecurrence } from "../domain/recurrence";
 import { type WallTimeWarning, dateSpecDate, instantFromNow, isValidDateSpec, resolveWallTime, todayIn, wallClockOf, wallDateOf } from "../domain/time";
 import {
@@ -143,7 +143,7 @@ function requireCategory(tx: Tx, id: ID): void {
 function requireSectionIn(tx: Tx, sectionId: ID, categoryId: ID): void {
 	const section = tx.get("sections", sectionId);
 	if (section === undefined) throw new DomainError("NotFound", "The section no longer exists.");
-	if (section.categoryId !== categoryId) throw new DomainError("InvalidValue", "That section belongs to another list.");
+	if (!isSectionOf(section, categoryId)) throw new DomainError("InvalidValue", "That section belongs to another list.");
 }
 
 const NO_DEADLINE = "A repeating task has no deadline.";
@@ -274,9 +274,7 @@ export class TaskService {
 		let sectionId: ID | null = input.sectionId ?? null;
 		if (parentId !== null) {
 			const parent = requireTask(tx, parentId);
-			if (parent.parentId !== null) {
-				throw new DomainError("SubtaskDepth", "Only one subtask level is supported.");
-			}
+			if (!canBeParentOf(parent)) throw new DomainError("SubtaskDepth", "Only one subtask level is supported.");
 			// A subtask always shares its parent's category.
 			categoryId = parent.categoryId;
 			// And its section.
@@ -638,12 +636,12 @@ export class TaskService {
 				if (tx.get("tasks", t.id) !== undefined) next = { ...next, id: this.ids() };
 				if (next.parentId !== null && !restoredIds.has(next.parentId)) {
 					const parent = tx.get("tasks", next.parentId);
-					if (parent === undefined || parent.parentId !== null) next = { ...next, parentId: null };
-					else next = { ...next, categoryId: parent.categoryId, sectionId: parent.sectionId };
+					if (canBeParentOf(parent, next.id)) next = { ...next, categoryId: parent.categoryId, sectionId: parent.sectionId };
+					else next = { ...next, parentId: null };
 				}
 				if (tx.get("categories", next.categoryId) === undefined) next = { ...next, categoryId: INBOX_ID };
 				// A section deleted since, or not in the list the task returns to, becomes No section.
-				if (next.sectionId !== null && tx.get("sections", next.sectionId)?.categoryId !== next.categoryId) {
+				if (next.sectionId !== null && !isSectionOf(tx.get("sections", next.sectionId), next.categoryId)) {
 					next = { ...next, sectionId: null };
 				}
 				// A tag deleted since (or never known here) is dropped, never recreated.

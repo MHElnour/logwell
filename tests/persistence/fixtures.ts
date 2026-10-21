@@ -1,4 +1,5 @@
-import type { DateSpec, Task } from "../../src/domain/types";
+import { categoryNameKey } from "../../src/domain/tasks";
+import type { DateSpec, ID, Section, Tag, Task } from "../../src/domain/types";
 import { BackupStore, dbBackupRoot } from "../../src/persistence/backups";
 import { CpbaseStore, type StoreDeps, type StoreEvent, loadText } from "../../src/persistence/CpbaseStore";
 import type { DbFile } from "../../src/persistence/gateway";
@@ -35,6 +36,17 @@ export function makeTask(id: string, patch: Partial<Task> = {}): Task {
 		modifiedAt: "2026-10-01T09:00:00.000Z",
 		...patch,
 	};
+}
+
+/** A tag record; the display name is the key unless `patch` names one. */
+export function makeTag(key: string, patch: Partial<Tag> = {}): Tag {
+	return { key, displayName: key, color: null, createdAt: "2026-10-01T09:00:00.000Z", modifiedAt: "2026-10-01T09:00:00.000Z", ...patch };
+}
+
+/** A section of the list `categoryId`, named after its id unless `patch` names it; its name key matches its name. */
+export function makeSection(id: ID, categoryId: ID, patch: Partial<Section> = {}): Section {
+	const name = patch.name ?? id;
+	return { id, categoryId, name, nameKey: categoryNameKey(name), sortKey: "V", createdAt: "2026-10-01T09:00:00.000Z", modifiedAt: "2026-10-01T09:00:00.000Z", ...patch };
 }
 
 export function emptyDbText(dbId = "db-1", revision = "r-000000000000"): string {

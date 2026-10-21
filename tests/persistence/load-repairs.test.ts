@@ -3,14 +3,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadText } from "../../src/persistence/CpbaseStore";
 import { applyOps } from "../../src/persistence/journal";
-import { createEmptyDb, CURRENT_SCHEMA_VERSION } from "../../src/persistence/schema";
+import { createEmptyDb, CURRENT_SCHEMA_VERSION, type DbData } from "../../src/persistence/schema";
 import { serializeDb } from "../../src/persistence/serializer";
-import type { Checkin, Habit, OccurrenceRecord, Task } from "../../src/domain/types";
-import { readRecord } from "../../src/persistence/validate";
+import { type Checkin, type Habit, INBOX_ID, type OccurrenceRecord, type Section, type Tag, type Task, type TrashEntry } from "../../src/domain/types";
+import { LINK_REPAIR_ORDER, readRecord } from "../../src/persistence/validate";
+import { REFERENCES } from "../../src/persistence/references";
 import { done, repeating, rule, series } from "../domain/recurrence-fixtures";
 import { TAG_LENGTH_MESSAGE } from "../../src/domain/tags";
 import { appHarness } from "../app/harness";
-import { load, makeTask } from "./fixtures";
+import { load, loadWithIssues, makeSection, makeTag, makeTask } from "./fixtures";
 
 describe("sections", () => {
 	// Repairs on load for sections and Task.sectionId. Each one records an issue.
@@ -391,5 +392,157 @@ describe("timed dates written with other digits", () => {
 	it("#100: a date that is still not a real time once read as 0 to 9 fails the load as before", () => {
 		const r = loadText(fileWith("٢٠٢٦-١٣-٠١T١٧:٠٠", PERSIAN), NOW);
 		expect(r.kind).not.toBe("ok");
+	});
+});
+
+describe("links a file left broken", () => {
+	// The load repair reads the table of links: each record that points at a record that is missing (or one the link
+	// does not accept) is repaired as the table says, with one issue each, and the repaired file loads clean. A trashed
+	// task keeps its links as they are: restoring it decides.
+
+	const NOW = "2026-10-02T10:00:00.000Z";
+
+	/** A file with Inbox, the list "work" and these records. */
+	function fileWith(records: { tasks?: Task[]; sections?: Section[]; tags?: Tag[]; trash?: TrashEntry[] }): string {
+		const data = createEmptyDb({ dbId: "db-1", revision: "r-000000000000", deviceId: "d-other", now: "2026-10-01T08:00:00.000Z" });
+		const categories = new Map(data.categories);
+		categories.set("work", { ...data.categories.get(INBOX_ID)!, id: "work", name: "Work", nameKey: "work", isInbox: false });
+		const byId = <K, V>(list: V[] | undefined, id: (v: V) => K) => new Map((list ?? []).map((v) => [id(v), v]));
+		return serializeDb({
+			...data,
+			categories,
+			tasks: byId(records.tasks, (t) => t.id),
+			sections: byId(records.sections, (s) => s.id),
+			tags: byId(records.tags, (t) => t.key),
+			trash: byId(records.trash, (e) => e.batchId),
+		});
+	}
+
+	const trashed = (task: Task): TrashEntry => ({ batchId: "b1", deletedAt: NOW, tasks: [task] });
+
+	it.each<{ name: string; file: Parameters<typeof fileWith>[0]; issues: string[]; repaired: (d: DbData) => unknown; want: unknown }>([
+		{
+			name: "a task in a list that does not exist goes to Inbox",
+			file: { tasks: [makeTask("t", { categoryId: "gone" })] },
+			issues: ['Task "Task t" pointed to a missing list and was moved to Inbox.'],
+			repaired: (d) => d.tasks.get("t")?.categoryId,
+			want: INBOX_ID,
+		},
+		{
+			name: "a task in a section that does not exist goes to No section",
+			file: { tasks: [makeTask("t", { sectionId: "gone" })] },
+			issues: ['Task "Task t" pointed to a missing section and was moved to No section.'],
+			repaired: (d) => d.tasks.get("t")?.sectionId,
+			want: null,
+		},
+		{
+			name: "a task in a section of another list goes to No section",
+			file: { sections: [makeSection("s-work", "work")], tasks: [makeTask("t", { sectionId: "s-work" })] },
+			issues: ['Task "Task t" was in a section of another list and was moved to No section.'],
+			repaired: (d) => d.tasks.get("t")?.sectionId,
+			want: null,
+		},
+		{
+			name: "a section in a list that does not exist is removed",
+			file: { sections: [makeSection("s-gone", "gone", { name: "Week 1" })] },
+			issues: ['Section "Week 1" pointed to a missing list and was removed.'],
+			repaired: (d) => d.sections.has("s-gone"),
+			want: false,
+		},
+		{
+			name: "a subtask under a task that does not exist becomes top-level",
+			file: { tasks: [makeTask("t", { parentId: "gone" })] },
+			issues: ['Subtask "Task t" lost its parent and is now a top-level task.'],
+			repaired: (d) => d.tasks.get("t")?.parentId,
+			want: null,
+		},
+		{
+			name: "a subtask under a subtask becomes top-level",
+			file: { tasks: [makeTask("p"), makeTask("c", { parentId: "p" }), makeTask("t", { parentId: "c" })] },
+			issues: ['Subtask "Task t" lost its parent and is now a top-level task.'],
+			repaired: (d) => d.tasks.get("t")?.parentId,
+			want: null,
+		},
+		{
+			name: "#215: a subtask with an empty title under a task that does not exist is named by its new title",
+			file: { tasks: [makeTask("t", { title: "   ", parentId: "gone" })] },
+			issues: ['A task with an empty title was renamed to "Untitled task".', 'Subtask "Untitled task" lost its parent and is now a top-level task.'],
+			repaired: (d) => d.tasks.get("t")?.parentId,
+			want: null,
+		},
+		{
+			name: "a task's tag that does not exist is recreated",
+			file: { tasks: [makeTask("t", { tagKeys: ["errands"] })] },
+			issues: ['Tag "errands" was missing and has been recreated.'],
+			repaired: (d) => d.tags.get("errands")?.key,
+			want: "errands",
+		},
+		{
+			name: "#215: the tag above a tag, missing, is recreated",
+			file: { tags: [makeTag("home/calls", { displayName: "Home/Calls" })] },
+			issues: ['Tag "home" was missing and has been recreated.'],
+			repaired: (d) => [...d.tags.keys()].sort(),
+			want: ["home", "home/calls"],
+		},
+		{
+			name: "#215: a task's tag that does not exist is recreated with the tags above it",
+			file: { tasks: [makeTask("t", { tagKeys: ["a/b"] })] },
+			issues: ['Tag "a/b" was missing and has been recreated.', 'Tag "a" was missing and has been recreated.'],
+			repaired: (d) => [...d.tags.keys()].sort(),
+			want: ["a", "a/b"],
+		},
+		{
+			name: "a trashed task keeps a tag that does not exist (restoring it drops the tag)",
+			file: { trash: [trashed(makeTask("t", { tagKeys: ["ghost"] }))] },
+			issues: [],
+			repaired: (d) => [d.trash.get("b1")?.tasks[0]?.tagKeys, d.tags.has("ghost")],
+			want: [["ghost"], false],
+		},
+		{
+			name: "a trashed task keeps a list, a section and a parent that do not exist",
+			file: { trash: [trashed(makeTask("t", { categoryId: "gone", sectionId: "gone", parentId: "gone" }))] },
+			issues: [],
+			repaired: (d) => d.trash.get("b1")?.tasks[0],
+			want: expect.objectContaining({ categoryId: "gone", sectionId: "gone", parentId: "gone" }),
+		},
+	])("$name, and the repaired file loads clean", ({ file, issues, repaired, want }) => {
+		const r = loadWithIssues(fileWith(file), NOW);
+		expect(r.issues).toEqual(issues);
+		expect(repaired(r.data)).toEqual(want);
+		expect(loadWithIssues(serializeDb(r.data), NOW).issues).toEqual([]);
+	});
+
+	it("#215: repairs every link the table gives a load action, each a plain field of a collection it visits", () => {
+		const repaired = REFERENCES.filter((r) => r.load !== "keep");
+		expect(repaired.length).toBeGreaterThan(0);
+		for (const r of repaired) {
+			expect(LINK_REPAIR_ORDER, `${r.from}.${r.field}`).toContain(r.from);
+			expect(r.field, `${r.from}.${r.field}`).toMatch(/^[A-Za-z]+$/);
+		}
+	});
+
+	describe("#215: editing what the file left broken", () => {
+		// A file whose task holds the tag a/b with no tag records (the load recreates a/b and a), and whose trashed task
+		// holds x and ghost, a tag the file lacks (kept as it is). Each edit below saves and its Undo works.
+		const file = () =>
+			fileWith({
+				tasks: [makeTask("t1", { tagKeys: ["a/b", "x"] })],
+				tags: [makeTag("x")],
+				trash: [trashed(makeTask("t2", { tagKeys: ["x", "ghost"] }))],
+			});
+
+		it.each<{ name: string; edit: (h: Awaited<ReturnType<typeof appHarness>>) => Promise<unknown>; label: string }>([
+			{ name: "recolor the tag the load recreated under a recreated parent", edit: (h) => h.app.tags.setColor("a/b", "red"), label: "Edit tag" },
+			{ name: "rename that tag, keeping its parent", edit: (h) => h.app.tags.edit("a/b", { name: "Bee", parentKey: "a", color: null }), label: "Edit tag" },
+			{ name: "rename a tag a trashed task holds beside a tag the file lacks", edit: (h) => h.app.tags.edit("x", { name: "Y", parentKey: null, color: null }), label: "Edit tag" },
+		])("$name", async ({ edit, label }) => {
+			const h = await appHarness({ initial: file() });
+			const before = h.app.store.state;
+			await edit(h);
+			expect(h.app.store.state).not.toBe(before);
+			expect(await h.app.store.undo()).toBe(label);
+			expect(h.app.store.state.tags).toEqual(before.tags);
+			expect(h.app.store.state.trash).toEqual(before.trash);
+		});
 	});
 });

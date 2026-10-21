@@ -14,6 +14,7 @@ import { compareTasksBySortKey, type SubtaskCount, subtaskCounts } from "../../s
 import { addDays } from "../../src/domain/time";
 import { type DateSpec, type ID, INBOX_ID, type Task } from "../../src/domain/types";
 import type { JournalOp } from "../../src/persistence/journal";
+import { REFERENCES } from "../../src/persistence/references";
 import { collectionsOf, type DbData } from "../../src/persistence/schema";
 import { type AppHarness, appHarness } from "./harness";
 import { seededRandom, seededState } from "./task-index-seed";
@@ -383,8 +384,9 @@ describe("the task index", () => {
 			try {
 				await command();
 			} catch (err) {
-				// A command the services refuse (a task with subtasks made a subtask, an undo of a changed record), or nothing to act on.
-				if (!(err instanceof DomainError) && !(err instanceof Skip)) throw err;
+				// A command the services refuse (a task with subtasks made a subtask, an undo of a changed record), or nothing to
+				// act on. A broken link the store's check refuses is a fault of the service that wrote it, never an expected refusal.
+				if ((!(err instanceof DomainError) || err.code === "ReferenceConflict") && !(err instanceof Skip)) throw err;
 			}
 			if (app.store.state !== state || app.queryContext().today !== today) run.ran.set(name, (run.ran.get(name) ?? 0) + 1);
 			run.steps = step;
@@ -465,7 +467,7 @@ describe("the task index", () => {
 		}, 300_000);
 
 		/** The index's change handling, given every task change with `field` as it was before (the index sees the old value). */
-		const keepOld = (field: "scheduled" | "sortKey" | "parentId") => (index: TaskIndex) => {
+		const keepOld = (field: "scheduled" | "sortKey" | "parentId" | "sectionId") => (index: TaskIndex) => {
 			const target = index as unknown as { onChanged: (changes: readonly Change[] | undefined, base: DbData | undefined) => void };
 			const original = target.onChanged.bind(index);
 			const stale = (ch: Change): Change => {
@@ -523,6 +525,8 @@ describe("the task index", () => {
 				},
 			},
 			{ name: "subtask counts that miss a change of parent", tamper: keepOld("parentId"), caught: ["index: subtasks", "subtask counts"] },
+			// #215: the tasks of a section, which the reference check reads to find the tasks a removed section holds.
+			{ name: "a section's tasks that miss a change of section", tamper: keepOld("sectionId"), caught: ["index: bySection"] },
 		];
 
 		it.runIf(TAMPER).each(TAMPERS)("catches $name", async ({ name, tamper, caught, unchecked, rows }) => {
@@ -696,6 +700,40 @@ describe("the task index", () => {
 			await h.app.tasks.create({ title: "Buy milk" });
 			expect(titles()).toContain("Water the plants today");
 			expect(index.verify(h.app.store.state)).toEqual([]);
+		});
+	});
+
+	describe("#215: the tasks that point at a record", () => {
+		// The store's reference check asks the index which tasks hold a list, section, parent or tag a command removes. The
+		// index answers only while it describes the store's tasks, and never builds itself to answer: without an answer
+		// the check reads the tasks.
+		const rule = (field: string) => REFERENCES.find((r) => r.from === "tasks" && r.field === field)!;
+
+		it("answers by list, section, parent and tag while it is built, and nothing while it is not", async () => {
+			const h = await appHarness();
+			const app = h.app;
+			const index = app.tasks.lists;
+			const list = await app.categories.create("Work");
+			const section = await app.sections.create(list.id, "Planning");
+			const { task: parent } = await app.tasks.create({ title: "Call the bank", categoryId: list.id, sectionId: section.id, newTags: ["Home"] });
+			const { task: sub } = await app.tasks.create({ title: "Find the account number", parentId: parent.id });
+			const reverse = app.store.reverse!;
+			const answers = () =>
+				[rule("categoryId"), rule("sectionId"), rule("parentId"), rule("tagKeys")].map((r, i) => {
+					const ids = reverse(r, [list.id, section.id, parent.id, "home"][i]!);
+					return ids === undefined ? undefined : [...ids].sort();
+				});
+			app.store.notifyReloaded();
+			const rebuilds = index.rebuilds;
+			expect(answers()).toEqual([undefined, undefined, undefined, undefined]);
+			expect(index.rebuilds).toBe(rebuilds);
+			index.openCount(list.id);
+			expect(answers()).toEqual([[parent.id, sub.id].sort(), [parent.id, sub.id].sort(), [sub.id], [parent.id]]);
+			// Kept through a change: the subtask leaves its parent.
+			await app.tasks.setParent(sub.id, null);
+			expect(answers()[2]).toEqual([]);
+			expect(index.verify(app.store.state)).toEqual([]);
+			expect(reverse(REFERENCES.find((r) => r.from === "sections")!, list.id)).toBeUndefined();
 		});
 	});
 

@@ -3,7 +3,7 @@ import { createElement, render } from "preact";
 import { describe, expect, it } from "vitest";
 import { type TaskView, buildList, sidebarCounts } from "../../src/app/views";
 import { emptyFilter } from "../../src/domain/queries";
-import type { ID } from "../../src/domain/types";
+import { type ID, INBOX_ID } from "../../src/domain/types";
 import { TasksSection, initialTasksState } from "../../src/ui/TasksSection";
 import { U1Host } from "../ui/app-helpers";
 import { fakeLayout } from "../ui/virtual-layout";
@@ -163,15 +163,16 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 		expect(kept.undoMs, report).toBeLessThan(plain.undoMs * KEPT_RATIO + NOISE_MS);
 	}, 300_000);
 
-	it("#72: the Undo of a new list checks that no task uses it in one pass over the tasks", async () => {
-		// Undo refuses to remove a list, section or tag that a task holds since the write: one read of each task (and of
-		// the trash), only when the undone write removes such a record.
+	it("#72: the Undo of a new list checks that no task uses it through the task index, with no pass over the tasks", async () => {
+		// Undo refuses to remove a list, section or tag that a task holds since the write. The tasks that hold the removed
+		// list come from the task index (#215), built here by a read as the sidebar does on open.
 		const { h } = await bigHarness(false);
 		await h.app.categories.create("Errands");
+		h.app.tasks.lists.openCount(INBOX_ID);
 		const { result: undoMs, passes } = await countBigPasses(() => elapsedAsync(() => h.app.store.undo()));
-		const checks = passes.filter((p) => p.includes("src/persistence/schema.ts"));
-		perfLog(`issue-72: Undo of a new list at ${TASKS} tasks: ${undoMs.toFixed(1)} ms, passes: ${tally(passes)}`);
-		expect(checks, tally(passes)).toHaveLength(1);
+		const checks = passes.filter((p) => p.includes("src/persistence/references.ts") || p.includes("src/persistence/schema.ts"));
+		perfLog(`issue-72: Undo of a new list at ${TASKS} tasks: ${undoMs.toFixed(1)} ms, passes: ${tally(passes) || "none"}`);
+		expect(checks, tally(passes)).toEqual([]);
 		expect(undoMs, tally(passes)).toBeLessThan(100);
 	});
 

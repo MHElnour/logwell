@@ -3,7 +3,8 @@ import { type Clock, nowInstant } from "../domain/ports";
 import type { BackupInfo, SnapshotKind } from "../persistence/backups";
 import type { ReadOnlyState } from "../persistence/CpbaseStore";
 import type { JournalOp } from "../persistence/journal";
-import { type CollectionName, type DbCollections, type DbData, referenceProblem, storableDbId } from "../persistence/schema";
+import { type ReferenceProblem, type ReverseLookup, referenceProblems } from "../persistence/references";
+import { type DbCollections, type DbData, storableDbId } from "../persistence/schema";
 import { CommandQueue, EventBus } from "./events";
 import { type Change, Tx } from "./tx";
 
@@ -86,6 +87,19 @@ export class AppStore {
 	/** The changes of the newest change events, oldest first; `changes` undefined for a reload or a replacement. */
 	private readonly feed: (readonly Change[] | undefined)[] = [];
 	private feedVersion = 0;
+	/**
+	 * Which records point at a record, from an index of the current state (the task index sets it); the reference check
+	 * reads the collection where it has no answer.
+	 */
+	reverse: ReverseLookup | undefined = undefined;
+	/**
+	 * What a command whose result would leave a broken link does (`referenceProblems`): `enforce` refuses it
+	 * (ReferenceConflict) and commits nothing; `report` commits it and calls `onReferenceProblem`, and refuses it as
+	 * `enforce` does while nothing is set there, so a problem is never saved unseen. Undo always refuses.
+	 */
+	referenceMode: "report" | "enforce" = "report";
+	/** Where `report` sends the problems of a command it saves (the plugin shows them); unset, `report` refuses. */
+	onReferenceProblem: ((label: string, problems: readonly ReferenceProblem[]) => void) | undefined = undefined;
 
 	constructor(
 		readonly host: StateHost,
@@ -155,6 +169,12 @@ export class AppStore {
 			const result = fn(tx);
 			const { data, ops, changes } = tx.finish();
 			if (ops.length > 0) {
+				const problems = referenceProblems(data, changes, this.reverse);
+				if (problems.length > 0) {
+					const report = this.referenceMode === "report" ? this.onReferenceProblem : undefined;
+					if (report === undefined) throw new DomainError("ReferenceConflict", `Cannot ${label.toLowerCase()}: ${problems[0]!.message}`);
+					report(label, problems);
+				}
 				this.host.commit(data, ops);
 				if (options.undoable !== false) {
 					const id = ++this.lastUndoId;
@@ -233,24 +253,17 @@ export class AppStore {
 				throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": the item changed since.`);
 			}
 		}
-		// The records this undo removes, by collection.
-		const removed = new Map<CollectionName, Set<string>>();
 		for (const ch of entry.changes) {
-			if (ch.before === undefined) {
-				tx.remove(ch.c, ch.id);
-				let ids = removed.get(ch.c);
-				if (ids === undefined) removed.set(ch.c, (ids = new Set()));
-				ids.add(ch.id);
-			} else tx.put(ch.c, ch.before as never);
+			if (ch.before === undefined) tx.remove(ch.c, ch.id);
+			else tx.put(ch.c, ch.before as never);
 		}
 		const { data, ops, changes } = tx.finish();
-		// A write that is not an undo step (a TickTick pull) may have started using a record this undo removes. Checked on
-		// the reverted state, so the entry's own records (removed with it, or restored) never count. Nothing is committed,
-		// and the entry stays dropped.
-		for (const [c, ids] of removed) {
-			const problem = referenceProblem(data, c, ids);
-			if (problem !== null) throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": ${problem}`);
-		}
+		// A write that is not an undo step (a TickTick pull) may have started using a record this undo removes, or removed
+		// one a record it restores points at. Checked on the reverted state, so the entry's own records (removed with it,
+		// or restored) never count. Always refused, whatever `referenceMode`: nothing is committed, and the entry stays
+		// dropped.
+		const problem = referenceProblems(data, changes, this.reverse)[0];
+		if (problem !== undefined) throw new DomainError("UndoConflict", `Cannot undo "${entry.label}": ${problem.message}`);
 		this.host.commit(data, ops);
 		this.emitChanged({ label: `Undo ${entry.label}`, changes, base: tx.base });
 		return entry.label;

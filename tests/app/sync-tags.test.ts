@@ -4,6 +4,7 @@ import { TICKTICK_TAGS_UNREAD_WARNING } from "../../src/app/syncModel";
 import { tagNamesOf } from "../../src/domain/tags";
 import { isSyncedTag } from "../../src/domain/ticktick/tags";
 import { syncLinkId } from "../../src/domain/types";
+import { makeTag } from "../persistence/fixtures";
 import { linkedList, pushes, quiet, type SyncHarness, syncHarness } from "./sync-harness";
 
 describe("tags both ways", () => {
@@ -106,9 +107,10 @@ describe("tags both ways", () => {
 		it("a later duplicate tag is not pushed, is reported as not synced, and causes no repeated push", async () => {
 			const s = await setup();
 			await s.h.app.store.run("Seed", (tx) => {
-				tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
-				tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
-				tx.put("tags", { key: "plain", displayName: "Plain", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
+				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", makeTag(key!, { displayName: displayName! }));
+				tx.put("tags", makeTag("home/calls", { displayName: "Home/Calls", createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" }));
+				tx.put("tags", makeTag("work/calls", { displayName: "Work/Calls", createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" }));
+				tx.put("tags", makeTag("plain", { displayName: "Plain", createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" }));
 			});
 			await s.h.app.tasks.create({ title: "Ring the office", categoryId: s.listId, tagKeys: ["work/calls", "plain"] });
 			await s.sync.sync();
@@ -325,8 +327,9 @@ describe("tags both ways", () => {
 		it("a pulled tag change keeps the Logwell task's duplicate tags", async () => {
 			const s = await setup();
 			await s.h.app.store.run("Seed", (tx) => {
-				tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" });
-				tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" });
+				for (const [key, displayName] of [["home", "Home"], ["work", "Work"]]) tx.put("tags", makeTag(key!, { displayName: displayName! }));
+				tx.put("tags", makeTag("home/calls", { displayName: "Home/Calls", createdAt: "2026-10-01T10:00:00Z", modifiedAt: "2026-10-01T10:00:00Z" }));
+				tx.put("tags", makeTag("work/calls", { displayName: "Work/Calls", createdAt: "2026-10-02T10:00:00Z", modifiedAt: "2026-10-02T10:00:00Z" }));
 			});
 			const { task } = await s.h.app.tasks.create({ title: "Ring", categoryId: s.listId, tagKeys: ["work/calls"] });
 			await s.sync.sync();
@@ -423,10 +426,10 @@ describe("after a tag rename", () => {
 			const s = await syncHarness();
 			const { listId } = await linkedList(s);
 			await s.h.app.store.run("Seed", (tx) => {
-				tx.put("tags", { key: "home", displayName: "Home", color: null, createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" });
-				tx.put("tags", { key: "home/calls", displayName: "Home/Calls", color: null, createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" });
-				tx.put("tags", { key: "work", displayName: "Work", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
-				tx.put("tags", { key: "work/calls", displayName: "Work/Calls", color: null, createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" });
+				tx.put("tags", makeTag("home", { displayName: "Home", createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" }));
+				tx.put("tags", makeTag("home/calls", { displayName: "Home/Calls", createdAt: "2026-01-01T00:00:00Z", modifiedAt: "2026-01-01T00:00:00Z" }));
+				tx.put("tags", makeTag("work", { displayName: "Work", createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" }));
+				tx.put("tags", makeTag("work/calls", { displayName: "Work/Calls", createdAt: "2026-02-01T00:00:00Z", modifiedAt: "2026-02-01T00:00:00Z" }));
 			});
 			await s.h.app.tasks.create({ title: "Ring mum", categoryId: listId, tagKeys: ["home/calls"] });
 			await s.h.app.tasks.create({ title: "Ring the office", categoryId: listId, tagKeys: ["work/calls"] });

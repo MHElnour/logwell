@@ -3,6 +3,7 @@ import { isUnderTag, tagPrefixes } from "../domain/tags";
 import { type SubtaskCount, compareTasksBySortKey, isDated, isOpen, subtaskCounts } from "../domain/tasks";
 import { type ID, INBOX_ID, type Task, syncLinkId } from "../domain/types";
 import { type TaskFilter, statusAccepts } from "../domain/queries";
+import type { ReferenceRule, TaskRefField } from "../persistence/references";
 import type { DbData } from "../persistence/schema";
 import type { AppStore } from "./store";
 import type { Change, Tx } from "./tx";
@@ -30,6 +31,10 @@ interface Parts {
 	dated: Set<ID>;
 	/** Task ids per exact tag key, any status. */
 	byTag: Map<string, Set<ID>>;
+	/** Subtask ids per parent, any status. */
+	byParent: Map<ID, Set<ID>>;
+	/** Task ids per section, any status. */
+	bySection: Map<ID, Set<ID>>;
 	/** Tasks that are not open. */
 	completed: Set<ID>;
 	/** Open tasks. */
@@ -56,6 +61,9 @@ interface Parts {
 
 const NO_IDS: ReadonlySet<ID> = new Set();
 
+/** The part that lists the tasks by each value of a task field a link (`REFERENCES`) points with. */
+const HOLDERS: Record<TaskRefField, "byList" | "bySection" | "byParent" | "byTag"> = { categoryId: "byList", sectionId: "bySection", parentId: "byParent", tagKeys: "byTag" };
+
 /**
  * The largest share of all tasks a view menu's candidates may hold (`filterCandidates`). Reading ids from a set and
  * each task by id costs more per task than reading the task map: at 50,000 tasks, 45,000 open tasks read through the
@@ -64,7 +72,7 @@ const NO_IDS: ReadonlySet<ID> = new Set();
 const CANDIDATES_MAX_SHARE = 0.5;
 
 function emptyParts(): Parts {
-	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), completed: new Set(), openTasks: new Set(), tagOpen: new Map(), size: 0, subtasks: new Map(), subtasksShared: false, order: new Map() };
+	return { byList: new Map(), open: new Map(), dated: new Set(), byTag: new Map(), byParent: new Map(), bySection: new Map(), completed: new Set(), openTasks: new Set(), tagOpen: new Map(), size: 0, subtasks: new Map(), subtasksShared: false, order: new Map() };
 }
 
 function addId<K>(map: Map<K, Set<ID>>, key: K, id: ID): void {
@@ -99,6 +107,8 @@ function tagCountKeys(task: Task): Set<string> {
 function add(p: Parts, t: Task): void {
 	addId(p.byList, t.categoryId, t.id);
 	for (const k of t.tagKeys) addId(p.byTag, k, t.id);
+	if (t.parentId !== null) addId(p.byParent, t.parentId, t.id);
+	if (t.sectionId !== null) addId(p.bySection, t.sectionId, t.id);
 	if (isDated(t)) p.dated.add(t.id);
 	if (isOpen(t)) {
 		p.openTasks.add(t.id);
@@ -117,6 +127,8 @@ function add(p: Parts, t: Task): void {
 function remove(p: Parts, t: Task, next: Task | undefined): void {
 	if (next?.categoryId !== t.categoryId) deleteId(p.byList, t.categoryId, t.id);
 	for (const k of t.tagKeys) if (next?.tagKeys.includes(k) !== true) deleteId(p.byTag, k, t.id);
+	if (t.parentId !== null && next?.parentId !== t.parentId) deleteId(p.byParent, t.parentId, t.id);
+	if (t.sectionId !== null && next?.sectionId !== t.sectionId) deleteId(p.bySection, t.sectionId, t.id);
 	if (isDated(t) && (next === undefined || !isDated(next))) p.dated.delete(t.id);
 	if (isOpen(t)) {
 		if (next === undefined || !isOpen(next)) p.openTasks.delete(t.id);
@@ -128,7 +140,10 @@ function remove(p: Parts, t: Task, next: Task | undefined): void {
 	p.size--;
 }
 
-/** One more (`delta` 1) or one fewer (-1) subtask of `t.parentId`, done when `t` is completed. */
+/**
+ * One more (`delta` 1) or one fewer (-1) subtask of `t.parentId`, done when `t` is completed. The total is the
+ * parent's subtasks in `byParent`, which the change already moved.
+ */
 function countSubtask(p: Parts, t: Task, delta: 1 | -1): void {
 	if (t.parentId === null) return;
 	if (p.subtasksShared) {
@@ -136,7 +151,7 @@ function countSubtask(p: Parts, t: Task, delta: 1 | -1): void {
 		p.subtasksShared = false;
 	}
 	const c = p.subtasks.get(t.parentId);
-	const total = (c?.total ?? 0) + delta;
+	const total = p.byParent.get(t.parentId)?.size ?? 0;
 	const done = (c?.done ?? 0) + (t.status === "completed" ? delta : 0);
 	// A parent left without subtasks leaves the map, as in a count of all tasks.
 	if (total === 0) p.subtasks.delete(t.parentId);
@@ -254,6 +269,18 @@ export class TaskIndex {
 
 	constructor(private readonly store: AppStore) {
 		store.bus.on("changed", (e) => this.onChanged(e.changes, e.base));
+		store.reverse = (rule, target) => this.holders(rule, target);
+	}
+
+	/**
+	 * The tasks that hold `target` in the field of `rule`, for the store's reference check, which runs before a command
+	 * commits: the index then describes the state the command started from. Undefined when it does not describe the
+	 * store's tasks (it never builds itself for the check) or has no part for the field.
+	 */
+	private holders(rule: ReferenceRule, target: string): ReadonlySet<ID> | undefined {
+		const part = rule.from === "tasks" ? HOLDERS[rule.field] : undefined;
+		if (part === undefined || this.built !== this.store.state.tasks) return undefined;
+		return this.parts[part].get(target) ?? NO_IDS;
 	}
 
 	private onChanged(changes: readonly Change[] | undefined, base: DbData | undefined): void {
@@ -443,7 +470,7 @@ export class TaskIndex {
 
 	/** How many subtasks (open and completed) a task has in the store's current tasks. Hands out no map. */
 	subtaskTotal(parentId: ID): number {
-		return this.index().subtasks.get(parentId)?.total ?? 0;
+		return this.index().byParent.get(parentId)?.size ?? 0;
 	}
 
 	/**
@@ -484,6 +511,8 @@ export class TaskIndex {
 			if (want.length === 0) out.push(`order ${listId}: kept for an empty list`);
 			if (want.map((t) => t.id).join() !== o.map((t) => t.id).join()) out.push(`order ${listId}: ids differ from a fresh sort`);
 		}
+		setMaps("byParent", p.byParent, fresh.byParent);
+		setMaps("bySection", p.bySection, fresh.bySection);
 		if (p.size !== fresh.size) out.push(`size: ${p.size} ≠ ${fresh.size}`);
 		return out;
 	}

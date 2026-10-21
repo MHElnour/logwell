@@ -142,6 +142,8 @@ export async function appHarness(options: AppHarnessOptions = {}): Promise<AppHa
 	if (options.now !== undefined) h.clock.set(options.now);
 	const notes = new FakeNotes();
 	const app = new CheckpointApp(h.store, h.clock, sequentialIds("a"), { ...SETTINGS }, notes, options.renames);
+	// Every test refuses a command that would leave a broken link between records (in Obsidian it is reported).
+	app.store.referenceMode = "enforce";
 	return { ...h, app, notes };
 }
 
@@ -155,6 +157,7 @@ export async function reopen(h: AppHarness, renames: RenameQueuePort): Promise<A
 	const store = h.newStore();
 	await store.open();
 	const app = new CheckpointApp(store, h.clock, sequentialIds("b"), h.app.settings, h.notes, renames);
+	app.store.referenceMode = "enforce";
 	await app.noteRenames.resumeRenames();
 	return { ...h, store, app };
 }

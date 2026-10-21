@@ -1,7 +1,7 @@
 import { DomainError } from "../domain/errors";
 import { keyBetween } from "../domain/sortKey";
 import { childTagPath, normalizeTagKey, tagDisplayPath, TagNames, tagNamesOf, tagPath } from "../domain/tags";
-import { requireTitle } from "../domain/tasks";
+import { isSectionOf, requireTitle } from "../domain/tasks";
 import { normalizedText } from "../domain/text";
 import { instantOf } from "../domain/time";
 import { dateFromTt, fieldHashes, priorityFromTt, pulledDatePatch, statusFromTt, syncDateOf, type SyncFields, tagsHash } from "../domain/ticktick/mapping";
@@ -245,7 +245,7 @@ export function taskInputFromTt(tx: Tx, tt: TtTask, zone: string, tags: PullTags
 		title,
 		categoryId,
 		parentId,
-		sectionId: sectionId !== null && tx.get("sections", sectionId)?.categoryId === categoryId ? sectionId : null,
+		sectionId: sectionId !== null && isSectionOf(tx.get("sections", sectionId), categoryId) ? sectionId : null,
 		priority: priorityFromTt(tt.priority),
 		scheduled: dates.scheduled ?? null,
 		deadline: dates.deadline ?? null,

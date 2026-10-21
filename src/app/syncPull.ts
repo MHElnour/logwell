@@ -1,5 +1,5 @@
 import { isDomainError } from "../domain/errors";
-import { categoryNameKey, subtasksOf } from "../domain/tasks";
+import { canBeParentOf, categoryNameKey, subtasksOf } from "../domain/tasks";
 import { dateFromTt, isSyncable, priorityFromTt, pulledDatePatch, statusFromTt } from "../domain/ticktick/mapping";
 import { isSyncedTag } from "../domain/ticktick/tags";
 import type { TtTag, TtTask } from "../domain/ticktick/types";
@@ -151,7 +151,7 @@ export class PullApplier {
 			}
 			let parentId = parentOf(tt) ?? null;
 			const parent = parentId === null ? undefined : tx.get("tasks", parentId);
-			if (parent === undefined || parent.parentId !== null || parent.recurrence !== null) parentId = null;
+			if (!canBeParentOf(parent) || parent.recurrence !== null) parentId = null;
 			const sectionId = parentId === null ? (sectionOf(tt) ?? null) : null;
 			const categoryId = parentId === null ? pull.listId : parent!.categoryId;
 			const { task } = this.tasks.createIn(

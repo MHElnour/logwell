@@ -65,6 +65,7 @@ import {
 	isSafeId,
 	recordId,
 } from "./schema";
+import { REFERENCES } from "./references";
 
 // Load-time validation (each collection has its own validator and
 // a damaged collection is reported by name). Structural errors throw;
@@ -865,71 +866,79 @@ export function repairReferences(cols: MutableCollections, now: string, issues: 
 		if (id !== INBOX_ID && c.isInbox) cols.categories.set(id, { ...c, isInbox: false });
 	}
 
-	// A section lives in exactly one existing list.
-	const seenKeys = new Set<string>();
-	for (const [id, section] of cols.sections) {
-		if (!cols.categories.has(section.categoryId)) {
-			cols.sections.delete(id);
-			issues.push(`Section "${section.name}" pointed to a missing list and was removed.`);
-			continue;
-		}
-		// Duplicate names in a list are harmless (the services refuse new ones); noted, never changed.
-		const dupKey = `${section.categoryId}\u0000${section.nameKey}`;
-		if (seenKeys.has(dupKey)) notes.push(`Section "${section.name}" has the same name as another section in its list.`);
-		seenKeys.add(dupKey);
-	}
-
+	// Before the links, which read no title or completion, so their issues name a task by its repaired title.
 	for (const [id, t] of cols.tasks) {
 		let task = t;
-		if (!cols.categories.has(task.categoryId)) {
-			issues.push(`Task "${task.title}" pointed to a missing list and was moved to Inbox.`);
-			task = { ...task, categoryId: INBOX_ID };
-		}
-		if (task.sectionId !== null) {
-			const section = cols.sections.get(task.sectionId);
-			if (section === undefined) {
-				issues.push(`Task "${task.title}" pointed to a missing section and was moved to No section.`);
-				task = { ...task, sectionId: null };
-			} else if (section.categoryId !== task.categoryId) {
-				issues.push(`Task "${task.title}" was in a section of another list and was moved to No section.`);
-				task = { ...task, sectionId: null };
-			}
-		}
 		if (task.title.trim().length === 0) {
 			issues.push(`A task with an empty title was renamed to "Untitled task".`);
 			task = { ...task, title: "Untitled task" };
 		}
 		if (task.status === "completed" && task.completedAt === null) task = { ...task, completedAt: task.modifiedAt };
 		if (task.status === "open" && task.completedAt !== null) task = { ...task, completedAt: null };
-		for (const key of task.tagKeys) {
-			if (!cols.tags.has(key)) {
-				cols.tags.set(key, { key, displayName: key, color: null, createdAt: now, modifiedAt: now });
-				issues.push(`Tag "${key}" was missing and has been recreated.`);
-			}
-		}
 		if (task !== t) cols.tasks.set(id, task);
 	}
 
-	// One level, and a subtask shares its parent's category.
+	repairLinks(cols, now, issues);
+
+	// Duplicate section names in a list are harmless (the services refuse new ones); noted, never changed.
+	const seenKeys = new Set<string>();
+	for (const section of cols.sections.values()) {
+		const dupKey = `${section.categoryId}\u0000${section.nameKey}`;
+		if (seenKeys.has(dupKey)) notes.push(`Section "${section.name}" has the same name as another section in its list.`);
+		seenKeys.add(dupKey);
+	}
+
+	// Not a link: a subtask shares its parent's list and section (its parent exists and is top-level by now).
 	for (const [id, t] of cols.tasks) {
 		if (t.parentId === null) continue;
 		const parent = cols.tasks.get(t.parentId);
-		if (parent === undefined || parent.parentId !== null || parent.id === id) {
-			issues.push(`Subtask "${t.title}" lost its parent and is now a top-level task.`);
-			cols.tasks.set(id, { ...t, parentId: null });
-		} else {
-			let sub = t;
-			if (parent.categoryId !== sub.categoryId) {
-				sub = { ...sub, categoryId: parent.categoryId };
-				issues.push(`Subtask "${t.title}" was moved to its parent's list.`);
-			}
-			// A subtask shares its parent's section.
-			if (parent.sectionId !== sub.sectionId) {
-				sub = { ...sub, sectionId: parent.sectionId };
-				issues.push(`Subtask "${t.title}" was moved to its parent's section.`);
-			}
-			if (sub !== t) cols.tasks.set(id, sub);
+		if (parent === undefined) continue;
+		let sub = t;
+		if (parent.categoryId !== sub.categoryId) {
+			sub = { ...sub, categoryId: parent.categoryId };
+			issues.push(`Subtask "${t.title}" was moved to its parent's list.`);
 		}
+		if (parent.sectionId !== sub.sectionId) {
+			sub = { ...sub, sectionId: parent.sectionId };
+			issues.push(`Subtask "${t.title}" was moved to its parent's section.`);
+		}
+		if (sub !== t) cols.tasks.set(id, sub);
 	}
 	// Sync links are not repaired. An orphaned link is kept silently (see readSyncLink).
+}
+
+/**
+ * The collections the link repair visits, in order: a target before the records that point at it (a section's list
+ * before the tasks in the section), and the tags recreated for tasks before the tags above them.
+ */
+export const LINK_REPAIR_ORDER = ["sections", "tasks", "tags"] as const;
+
+/**
+ * Repairs each record that points at a record that is missing, or that its link does not accept, as the link's row in
+ * `REFERENCES` says (`load`), with the row's issue. Links the table keeps (`load` "keep") are left as they are. A
+ * record dropped takes no further repair.
+ */
+function repairLinks(cols: MutableCollections, now: string, issues: string[]): void {
+	for (const from of LINK_REPAIR_ORDER) {
+		const rules = REFERENCES.flatMap((r) => (r.from === from && r.load !== "keep" ? [r] : []));
+		const records = cols[from] as Map<string, unknown>;
+		for (const [id, original] of records) {
+			let record: unknown = original;
+			for (const rule of rules) {
+				const targets = cols[rule.to] as ReadonlyMap<string, unknown>;
+				for (const ref of rule.refsOf(record)) {
+					const target = targets.get(ref);
+					if (target !== undefined && (rule.accepts === undefined || rule.accepts(record, target))) continue;
+					issues.push(rule.loadIssue(record, ref, target === undefined));
+					if (rule.load === "drop") record = undefined;
+					else if (rule.load === "recreateTag") cols.tags.set(ref, { key: ref, displayName: ref, color: null, createdAt: now, modifiedAt: now });
+					else record = { ...(record as object), [rule.field]: rule.load === "inbox" ? INBOX_ID : null };
+					if (record === undefined) break;
+				}
+				if (record === undefined) break;
+			}
+			if (record === undefined) records.delete(id);
+			else if (record !== original) records.set(id, record);
+		}
+	}
 }

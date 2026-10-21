@@ -4,7 +4,7 @@ import type { AppStore } from "../../src/app/store";
 import { type Change, Tx } from "../../src/app/tx";
 import { makeTask } from "../persistence/fixtures";
 import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService";
-import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
+import { linkedList, oneSyncedTask, type SyncHarness, syncHarness, syncTwice } from "./sync-harness";
 import { INBOX_ID, syncLinkId } from "../../src/domain/types";
 
 // A refusal while read-only keeps the undo entry; a conflict drops it, since the
@@ -479,5 +479,53 @@ describe("after a pull that uses the list or section", () => {
 		expect(s.h.app.store.state.categories.has(listId)).toBe(false);
 		await pull(s);
 		expect(s.h.app.store.state.syncLinks.has(syncLinkId("list", listId))).toBe(false);
+	});
+});
+
+describe("after a pull that adds a subtask", () => {
+	// An Undo never leaves a subtask under a task that is gone. A subtask a TickTick pull adds is not an undo step: the
+	// Undo of its parent's Create task is refused, nothing changes, and the next Undo takes the entry below.
+
+	it("#215: a pulled subtask refuses its parent's Create task; nothing changes and the entry below is next", async () => {
+		const s = await oneSyncedTask("Call the bank");
+		const store = s.h.app.store;
+		expect(store.undoLabel).toBe("Create task");
+		s.tt.add(s.projectId, { title: "Find the account number", parentId: s.ttId });
+		s.tick();
+		const r = await s.sync.sync();
+		if (!r.ok) throw new Error("sync failed");
+		expect(s.task("Find the account number").parentId).toBe(s.id);
+		const state = store.state;
+		await expect(store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: 'Cannot undo "Create task": a task now has this task as its parent.' });
+		expect(store.state).toBe(state);
+		expect(store.undoLabel).toBe("Create list");
+	});
+});
+
+describe("after a pull that moves a parent to the Trash", () => {
+	// An Undo never brings back a subtask under a task that is gone. A TickTick pull is not an undo step: when it moves the
+	// parent of a deleted subtask to the Trash, the Undo of that delete is refused, nothing changes, and the next Undo
+	// takes the entry below. The subtask stays in the Trash, and restoring it from there makes it a top-level task.
+
+	it("#215: a parent the pull moved to the Trash refuses its deleted subtask's Undo; restored from the Trash, the subtask is top-level", async () => {
+		const s = await oneSyncedTask("Call the bank");
+		const store = s.h.app.store;
+		// A second synced task in the list, so the pull moves the parent to the Trash without asking.
+		await s.h.app.tasks.create({ title: "Pay the rent", categoryId: s.listId });
+		await s.sync.sync();
+		s.tick();
+		const { task: sub } = await s.h.app.tasks.create({ title: "Find the account number", parentId: s.id });
+		const entry = await s.h.app.tasks.delete(sub.id);
+		expect(store.undoLabel).toBe("Delete task");
+		s.tt.remove(s.ttId);
+		const r = await syncTwice(s);
+		if (!r.ok) throw new Error("sync failed");
+		expect(store.state.tasks.has(s.id)).toBe(false);
+		const state = store.state;
+		await expect(store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: `Cannot undo "Delete task": a task's parent is gone or is not a top-level task.` });
+		expect(store.state).toBe(state);
+		expect(store.undoLabel).toBe("Create task");
+		await s.h.app.tasks.restore(entry.batchId);
+		expect(store.state.tasks.get(sub.id)?.parentId).toBeNull();
 	});
 });

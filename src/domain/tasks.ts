@@ -1,7 +1,7 @@
 import { DomainError } from "./errors";
 import { compareSortKeys } from "./sortKey";
 import { normalizedText } from "./text";
-import { type Category, type ID, INBOX_ID, type Recurrence, TAG_COLORS, type Task } from "./types";
+import { type Category, type ID, INBOX_ID, type Recurrence, type Section, TAG_COLORS, type Task } from "./types";
 
 // Pure task and category rules.
 
@@ -181,16 +181,27 @@ export function compareTasksBySortKey(a: Task, b: Task): number {
 	return compareSortKeys(a.id, b.id);
 }
 
+/** Whether a task in the list `categoryId` may be in `section`: the section exists and is in that list. */
+export function isSectionOf(section: Pick<Section, "categoryId"> | undefined, categoryId: ID): boolean {
+	return section !== undefined && section.categoryId === categoryId;
+}
+
+/**
+ * Whether `parent` may be the parent of the task `taskId`: it exists, is a top-level task, and is not that task. No
+ * `taskId`: a task not created yet, which no task is.
+ */
+export function canBeParentOf<P extends Pick<Task, "id" | "parentId">>(parent: P | undefined, taskId?: ID): parent is P {
+	return parent !== undefined && parent.parentId === null && parent.id !== taskId;
+}
+
 /**
  * One subtask level. A subtask cannot have subtasks, and a task
  * that has subtasks cannot become a subtask.
  */
 export function assertCanBecomeSubtask(task: Task, parent: Task, tasks: Iterable<Task>): void {
-	if (task.id === parent.id) {
-		throw new DomainError("SubtaskDepth", "A task cannot be its own subtask.");
-	}
-	if (parent.parentId !== null) {
-		throw new DomainError("SubtaskDepth", "Only one subtask level is supported.");
+	const own = task.id === parent.id;
+	if (!canBeParentOf(parent, task.id)) {
+		throw new DomainError("SubtaskDepth", own ? "A task cannot be its own subtask." : "Only one subtask level is supported.");
 	}
 	for (const t of tasks) {
 		if (t.parentId === task.id) {
