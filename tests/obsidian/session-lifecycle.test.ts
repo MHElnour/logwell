@@ -715,6 +715,44 @@ describe("conflict copies and 'Open conflict view'", () => {
 		expect(openApp).toHaveBeenCalledWith("data");
 	});
 
+	describe("#224: the read-only notice", () => {
+		async function readOnlyNotice(failure: string, recoveredFrom: string | null) {
+			const fake = setup();
+			const plugin = await loadPlugin(fake, A);
+			emit(plugin.session, { type: "read-only", state: { reason: "damaged", failure, detail: "x", recoveredFrom } });
+			return { plugin, notice: notices.actions.at(-1)! };
+		}
+
+		it("a merge-marker file: says Git merged it, that Restore backup keeps this computer's version, and where the Git setting is", async () => {
+			const { notice } = await readOnlyNotice("merge-markers", "snapshots/hourly.cpbase");
+			expect(notice.labels).toEqual(["Restore backup", "Open settings"]);
+			expect(notice.timeout).toBe(0);
+			expect(notice.message).toContain("Git merged this database from two computers");
+			expect(notice.message).toContain("Restore backup keeps this computer's version");
+			expect(notice.message).toContain("Keep mine or Keep theirs");
+			expect(notice.message).toContain("Settings > Logwell > Database > Git sync");
+			expect(notice.message).not.toContain("damaged");
+		});
+
+		it("a merge-marker file with no backup offers only the settings, and Open settings opens them", async () => {
+			const { plugin, notice } = await readOnlyNotice("merge-markers", null);
+			expect(notice.labels).toEqual(["Open settings"]);
+			expect(notice.message).not.toContain("Restore backup");
+			const open = vi.spyOn(plugin, "openSettings").mockImplementation(() => undefined);
+			notice.run("Open settings");
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			["a cut-off file with a backup", "parse", "snapshots/hourly.cpbase", ["Restore backup", "Open conflict view"]],
+			["a cut-off file without a backup", "parse", null, ["Open conflict view"]],
+		])("%s keeps the damaged-file notice", async (_name, failure, recoveredFrom, labels) => {
+			const { notice } = await readOnlyNotice(failure, recoveredFrom);
+			expect(notice.labels).toEqual(labels);
+			expect(notice.message).toBe("Database file is damaged or has a merge conflict. It is read-only; nothing is written until you choose.");
+		});
+	});
+
 	it("#118: a change listener that throws: the write still succeeds, the other listeners run, the error is shown, and an outside change still offers Keep mine", async () => {
 		const fake = setup();
 		const plugin = await loadPlugin(fake, A);

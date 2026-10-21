@@ -1,6 +1,6 @@
 import { DomainError } from "../domain/errors";
 import { type Clock, type IdGenerator, nowInstant } from "../domain/ports";
-import { BackupStore, SNAPSHOT_INTERVAL_MS, type BackupInfo, type SnapshotKind } from "./backups";
+import { BackupStore, MERGE_COPY_LABEL, SNAPSHOT_INTERVAL_MS, type BackupInfo, type SnapshotKind } from "./backups";
 import type { DbFile, FileWriteResult } from "./gateway";
 import { type JournalEntry, type JournalOp, replayJournal } from "./journal";
 import { type Migration, MIGRATIONS, planMigration, runMigrations } from "./migrations";
@@ -47,6 +47,11 @@ const RECOVERED_IN_MEMORY = "in-memory";
 
 /** Why database text could not be loaded. */
 type LoadFailure = ParseFailure | "invalid" | "unsupported";
+
+/** The label a copy of an unreadable file is kept under: Git merge markers get their own, so the copy can be named for what it is. */
+function damagedCopyLabel(failure: LoadFailure): string {
+	return failure === "merge-markers" ? MERGE_COPY_LABEL : "damaged";
+}
 
 export type ReadOnlyState =
 	| {
@@ -351,7 +356,7 @@ export class CpbaseStore {
 		let recoveredFrom: string | null = null;
 		if (dbId !== null) {
 			this.attachBackups(dbId);
-			await this.requireBackups().writeConflict(text, "damaged");
+			await this.requireBackups().writeConflict(text, damagedCopyLabel(failure));
 			const recovered = await this.recoverLatest();
 			if (recovered !== null) {
 				this.replaceData(recovered.data);
@@ -709,7 +714,7 @@ export class CpbaseStore {
 				this.setReadOnly({ reason: "newer-schema", version: result.version });
 				this.emit({ type: "loaded", cause: "external" });
 			} else {
-				await this.requireBackups().writeConflict(text, "damaged");
+				await this.requireBackups().writeConflict(text, damagedCopyLabel(result.failure));
 				// Damage while open: the state that was open is the newest
 				// valid one, so it is what "Restore backup" writes (pending edits included).
 				const recoveredFrom = damaged !== null ? damaged.recoveredFrom : RECOVERED_IN_MEMORY;

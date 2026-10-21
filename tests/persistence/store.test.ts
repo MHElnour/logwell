@@ -189,6 +189,28 @@ describe("CpbaseStore: fault injection", () => {
 		expect(ro?.reason === "damaged" && ro.failure).toBe("merge-markers");
 	});
 
+	it("#224: the copy kept of a marker file is a merge copy, on open and when the markers arrive while open", async () => {
+		const base = emptyDbText();
+		const merged = `<<<<<<< HEAD\n${base}=======\n${base}>>>>>>> branch\n`;
+		const onOpen = harness(merged);
+		onOpen.local.knownDbId = "db-1";
+		await onOpen.store.open();
+		expect((await onOpen.store.listConflicts()).map((c) => c.kind)).toEqual(["merge-copy"]);
+
+		const whileOpen = harness();
+		await whileOpen.store.open();
+		whileOpen.fs.files.set(DB_PATH, merged);
+		await whileOpen.store.handleExternalChange();
+		expect((await whileOpen.store.listConflicts()).map((c) => c.kind)).toEqual(["merge-copy"]);
+	});
+
+	it("#224: the copy kept of a cut-off file stays a plain conflict copy", async () => {
+		const h = harness(emptyDbText().slice(0, 30));
+		h.local.knownDbId = "db-1";
+		await h.store.open();
+		expect((await h.store.listConflicts()).map((c) => c.kind)).toEqual(["conflict"]);
+	});
+
 	it("a crash between the journal append and the file write leaves the old file valid", async () => {
 		const h = harness();
 		await h.store.open();

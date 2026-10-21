@@ -47,7 +47,8 @@ Snapshots are a safety net on one device. Use **Export backup** for a file you c
 The database is one file, so any tool that syncs your vault syncs it. Use one device at a time, and let the sync finish before you switch devices.
 
 - **Obsidian Sync.** `.cpbase` is not one of the file types it syncs by default. Turn on "Sync all other types". Logwell reminds you once, when you create your first database.
-- **Other sync and version-control tools.** No change is needed.
+- **Other file-sync tools.** No change is needed.
+- **Git.** See [Git](#git) below: one line in `.gitattributes` is needed.
 
 When the file changes from outside, Logwell loads the new version, also when the change arrives while the database is still opening. Logwell tells versions apart by the revision on the file's first line, which every save writes anew. An edit that leaves the first line as it is, such as changing a task's line by hand, is not seen as a change, and the next save overwrites it. Edit tasks in Logwell, not in the file. If this device has unsaved changes at that moment, Logwell loads the other version and keeps yours as a conflict copy. A notice offers **Keep mine** and **Keep theirs**:
 
@@ -55,6 +56,24 @@ When the file changes from outside, Logwell loads the new version, also when the
 - **Keep theirs** keeps the current version and moves your copy to a "resolved" folder.
 
 The same buttons are on the Data page under **Conflicts**. A copy whose header cannot be read shows only **Dismiss**. Copies are never deleted. There is no merge: you keep one version.
+
+### Git
+
+Git merges text files line by line, and the database keeps one record per line. When two computers both saved a change, Git can merge the file and leave merge markers in it, so Logwell cannot read it. One line in the `.gitattributes` file at the top of your vault stops that: Git then keeps one whole file and never merges the database.
+
+```
+*.cpbase merge=binary -text
+```
+
+Add the line yourself, or open **Settings > Logwell > Database** and choose **Add to .gitattributes** on the **Git sync** row. The row shows only in a vault that has a `.git` folder and no such line yet. The button adds this one line, creates the file if it is missing and changes no other line. Commit the change to `.gitattributes` and pull it on your other computers.
+
+With the line in place:
+
+- Pull before you edit on the other computer, and let the pull finish, so each computer starts from the latest database.
+- If both computers saved since their last pull, Git keeps the whole database of the computer that pulls and may list the file as conflicted. Your Git plugin may show it that way: commit as usual.
+- The other computer then receives that whole file. Logwell there sees that its own changes are missing and offers **Keep mine** and **Keep theirs**, as described above.
+
+A database that Git already merged with markers opens read-only. See [Troubleshooting](troubleshooting.md#version-control-merge-copy).
 
 If you rename or move the active database file inside Obsidian, Logwell follows it. For other notices, such as a damaged file or a copy made by a sync tool, see [Troubleshooting](troubleshooting.md#a-conflict-copy-appeared-after-sync).
 

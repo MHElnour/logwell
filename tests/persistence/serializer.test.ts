@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_SCHEMA_VERSION, type DbData, createEmptyDb } from "../../src/persistence/schema";
-import { RecordLineCache, parseDbText, readHeader, serializeDb, serializeRecord } from "../../src/persistence/serializer";
+import { GIT_ATTRIBUTES_LINE, RecordLineCache, hasGitAttributesLine, parseDbText, readHeader, serializeDb, serializeRecord, withGitAttributesLine } from "../../src/persistence/serializer";
 import { validateDb } from "../../src/persistence/validate";
 import { makeTask } from "./fixtures";
 
@@ -80,5 +80,75 @@ describe("serializer", () => {
 		});
 		expect(parseDbText(text.slice(0, 40))).toMatchObject({ ok: false, reason: "parse" });
 		expect(parseDbText('{"hello":1}')).toMatchObject({ ok: false, reason: "not-a-database" });
+	});
+});
+
+describe("#224: Git merge markers", () => {
+	const text = serializeDb(sampleDb(["a"]));
+	const lines = text.split("\n");
+
+	it.each([
+		["a conflict on the header line only", `<<<<<<< HEAD\n${lines[0]}\n=======\n${lines[0]}\n>>>>>>> origin/main\n${lines.slice(1).join("\n")}`],
+		["a conflict inside a record hunk", [...lines.slice(0, 5), "<<<<<<< HEAD", lines[5], "=======", lines[5], ">>>>>>> theirs", ...lines.slice(6)].join("\n")],
+		["a whole file wrapped in markers", `<<<<<<< HEAD\n${text}=======\n${text}>>>>>>> branch\n`],
+		["markers with CRLF line ends", `<<<<<<< HEAD\r\n${text}=======\r\n${text}>>>>>>> branch\r\n`],
+	])("%s is a merge-marker failure", (_name, merged) => {
+		expect(parseDbText(merged)).toMatchObject({ ok: false, reason: "merge-markers" });
+	});
+
+	it.each([
+		["a task title of seven equals signs", "======="],
+		["a task title that starts with seven angle brackets", "<<<<<<< not a marker"],
+		["a title holding a line break and a marker", "line one\n=======\n>>>>>>> x"],
+	])("%s is no marker, because a marker counts only at the start of a line", (_name, title) => {
+		const db = sampleDb(["a"]);
+		const doc = serializeDb({ ...db, tasks: new Map([["a", makeTask("a", { title })]]) });
+		const parsed = parseDbText(doc);
+		expect(parsed.ok).toBe(true);
+	});
+
+	it.each([
+		["a cut-off file", text.slice(0, 40), "parse"],
+		["other JSON", '{"hello":1}', "not-a-database"],
+	])("%s stays a damaged file, not a merge copy", (_name, damaged, reason) => {
+		expect(parseDbText(damaged)).toMatchObject({ ok: false, reason });
+	});
+});
+
+describe("#224: the .gitattributes line", () => {
+	it("is the line that keeps Git from merging the database line by line", () => {
+		expect(GIT_ATTRIBUTES_LINE).toBe("*.cpbase merge=binary -text");
+	});
+
+	it.each([
+		["the exact line", `${GIT_ATTRIBUTES_LINE}\n`, true],
+		["the line without a final newline", GIT_ATTRIBUTES_LINE, true],
+		["the line with spaces around it", `  ${GIT_ATTRIBUTES_LINE}\t\n`, true],
+		["the line among other lines, with CRLF", `*.md text\r\n${GIT_ATTRIBUTES_LINE}\r\n*.png binary\r\n`, true],
+		["no file content", "", false],
+		["other lines only", "*.md text\n", false],
+		["the line commented out", `# ${GIT_ATTRIBUTES_LINE}\n`, false],
+		["a different rule for cpbase", "*.cpbase merge=union\n", false],
+		["the line with a trailing word", `${GIT_ATTRIBUTES_LINE} diff\n`, false],
+	])("recognizes %s", (_name, content, expected) => {
+		expect(hasGitAttributesLine(content)).toBe(expected);
+	});
+
+	it.each([
+		["a missing file", "", `${GIT_ATTRIBUTES_LINE}\n`],
+		["a file that ends in a newline", "*.md text\n", `*.md text\n${GIT_ATTRIBUTES_LINE}\n`],
+		["a file without a final newline", "*.md text", `*.md text\n${GIT_ATTRIBUTES_LINE}\n`],
+		["a file with CRLF line ends", "*.md text\r\n*.png binary", `*.md text\r\n*.png binary\r\n${GIT_ATTRIBUTES_LINE}\r\n`],
+		["other lines, odd spacing and blank lines, kept byte for byte", "# keep\n\n*.md   text \n\n", `# keep\n\n*.md   text \n\n${GIT_ATTRIBUTES_LINE}\n`],
+	])("appends the line to %s and changes nothing else", (_name, before, after) => {
+		const next = withGitAttributesLine(before);
+		expect(next).toBe(after);
+		expect(next.startsWith(before)).toBe(true);
+		expect(hasGitAttributesLine(next)).toBe(true);
+	});
+
+	it("leaves a text that already holds the line as it is", () => {
+		const text = `*.md text\n  ${GIT_ATTRIBUTES_LINE}\n`;
+		expect(withGitAttributesLine(text)).toBe(text);
 	});
 });

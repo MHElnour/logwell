@@ -94,3 +94,21 @@ describe("BackupStore listing", () => {
 		expect(fs.files.has("root/snapshots/daily-2026-10-01.cpbase")).toBe(true);
 	});
 });
+
+describe("#224: a copy of a file with Git merge markers", () => {
+	it("is listed as a version-control merge copy, other damaged copies stay conflict copies", async () => {
+		const { clock, backups } = setup();
+		await backups.writeConflict("<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> other\n", "merge-markers");
+		clock.advance(1000);
+		await backups.writeConflict("{ cut off", "damaged");
+		clock.advance(1000);
+		await backups.writeConflict(dbText("r-mine", "2026-10-01T09:45:00.000Z"), "r-mine");
+
+		const conflicts = await backups.listConflicts();
+		expect(conflicts.map((c) => [c.kind, c.revision])).toEqual([
+			["conflict", "r-mine"],
+			["conflict", ""],
+			["merge-copy", ""],
+		]);
+	});
+});

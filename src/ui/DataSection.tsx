@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { QueryContext } from "../domain/queries";
 import { RELOAD_LABEL, REPLACE_ALL_LABEL } from "../app/store";
 import type { BackupInfo } from "../persistence/backups";
-import { formatInstant } from "./format";
+import { MERGE_COPY_NAME, formatInstant, mergeCopyAdvice } from "./format";
 import type { UiHost } from "./host";
 import { useUniqueId } from "./hooks";
 
@@ -16,7 +16,14 @@ const KIND_LABELS: Record<BackupInfo["kind"], string> = {
 	"pre-restore": "Before restore",
 	"pre-sync": "Before first TickTick sync",
 	conflict: "Conflict copy",
+	"merge-copy": MERGE_COPY_NAME,
 };
+
+/** A conflict copy's name: a merge copy, a copy of an unreadable file, or a copy of another computer's version. */
+function conflictName(c: BackupInfo): string {
+	if (c.kind === "merge-copy") return MERGE_COPY_NAME;
+	return c.revision === "" ? "Damaged file copy" : `Conflict copy ${c.revision}`;
+}
 
 /**
  * Data section: export, import, backups and conflicts.
@@ -140,7 +147,8 @@ export function DataSection({ host, ctx, visible }: { host: UiHost; ctx: QueryCo
 
 			<section class="cp-data-section">
 				<h3>Conflicts</h3>
-				{s?.reason === "damaged" && (
+				{s?.reason === "damaged" && s.failure === "merge-markers" && <p class="cp-hint">{mergeCopyAdvice(s.recoveredFrom !== null)}</p>}
+				{s?.reason === "damaged" && s.failure !== "merge-markers" && (
 					<p class="cp-hint">
 						The database file cannot be read ({s.detail}). A copy of the damaged file is listed below.
 						{s.recoveredFrom !== null && " The app shows the newest valid backup; use “Restore backup” in the banner to write it."}
@@ -153,16 +161,16 @@ export function DataSection({ host, ctx, visible }: { host: UiHost; ctx: QueryCo
 						{conflicts.map((c) => (
 							<li key={c.path}>
 								<div>
-									<div>{c.revision === "" ? "Damaged file copy" : `Conflict copy ${c.revision}`}</div>
+									<div>{conflictName(c)}</div>
 									<div class="cp-hint">{c.writtenAt === "" ? c.stamp : formatInstant(c.writtenAt, ctx.zone)}</div>
 								</div>
-								{c.revision !== "" && (
+								{c.revision !== "" && c.kind !== "merge-copy" && (
 									<button type="button" disabled={readOnly} onClick={() => void keep(c, "mine")}>
 										Keep mine
 									</button>
 								)}
 								<button type="button" onClick={() => void keep(c, "theirs")}>
-									{c.revision === "" ? "Dismiss" : "Keep theirs"}
+									{c.revision === "" || c.kind === "merge-copy" ? "Dismiss" : "Keep theirs"}
 								</button>
 							</li>
 						))}

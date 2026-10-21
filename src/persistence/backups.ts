@@ -44,9 +44,13 @@ const DAILY_KEEP_DAYS = 14;
 const OTHER_KEEP = 5;
 export const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 
+/** The label a conflict copy of a file with Git merge markers is written under. */
+export const MERGE_COPY_LABEL = "merge-markers";
+
 export interface BackupInfo {
 	path: string;
-	kind: SnapshotKind | "conflict";
+	/** `merge-copy`: a copy of a file that Git left with merge markers. */
+	kind: SnapshotKind | "conflict" | "merge-copy";
 	/** From the file header; empty when the header is unreadable. */
 	revision: string;
 	writtenAt: string;
@@ -112,6 +116,12 @@ function splitName(path: string): { base: string; meta: { revision: string; writ
 	if (compact !== "" && m === null) return { base, meta: null };
 	const writtenAt = m === null ? "" : `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.${m[7]}Z`;
 	return { base, meta: { revision, writtenAt } };
+}
+
+/** True for a conflict copy written under `MERGE_COPY_LABEL` (the label follows the stamp, then the header values). */
+function isMergeCopyName(path: string, stamp: string): boolean {
+	const rest = fileNameOf(path).slice(stamp.length + 1);
+	return rest === `${MERGE_COPY_LABEL}${EXT}` || rest.startsWith(`${MERGE_COPY_LABEL}~`);
 }
 
 function parseSnapshotName(path: string): { kind: SnapshotKind; stamp: string } | null {
@@ -261,7 +271,8 @@ export class BackupStore {
 		const result: BackupInfo[] = [];
 		for (const path of await this.fs.list(this.conflictDir)) {
 			if (!path.endsWith(EXT)) continue;
-			result.push({ path, kind: "conflict", ...(await this.headerOf(path)), stamp: fileNameOf(path).split("-")[0] ?? "" });
+			const stamp = fileNameOf(path).split("-")[0] ?? "";
+			result.push({ path, kind: isMergeCopyName(path, stamp) ? "merge-copy" : "conflict", ...(await this.headerOf(path)), stamp });
 		}
 		return result.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
 	}

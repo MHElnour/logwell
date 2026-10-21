@@ -30,6 +30,20 @@ export function undoneText(label: string | null): string {
 	return label === null ? NOTHING_TO_UNDO : `Undone: ${label}`;
 }
 
+/** What the Data page calls a copy of a database file that Git left with merge markers. */
+export const MERGE_COPY_NAME = "Version-control merge copy";
+
+/**
+ * What the notice, the banner and the Data page say about a database file that Git merged from two computers.
+ * `canRestore`: a valid backup is loaded, so Restore backup is offered.
+ */
+export function mergeCopyAdvice(canRestore: boolean): string {
+	const setting = "To stop Git from merging the database line by line, use Settings > Logwell > Database > Git sync.";
+	return canRestore
+		? `Git merged this database from two computers, so the file has merge markers and is read-only. Restore backup keeps this computer's version; the other computer is then offered Keep mine or Keep theirs. ${setting}`
+		: `Git merged this database from two computers, so the file has merge markers and is read-only. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${setting}`;
+}
+
 export function formatDuration(min: number): string {
 	const h = Math.floor(min / 60);
 	const m = min % 60;
