@@ -70,7 +70,7 @@ The header repeats your filters as chips, a `status` line included, and shows ho
 
 Tick the checkbox to complete the task. A notice says what was completed and offers **Undo**. A task with open subtasks asks first, as it does in the app: choose **Complete all (n)** to complete them all. A repeating task completes its current occurrence.
 
-The row stays a moment so you see the check, then leaves. Tick it again in that moment to reopen the task. In a block with `status: all` the row does not leave: it moves from the open tasks to the completed ones, and unticking moves it back.
+The row stays a moment so you see the check, then leaves. Tick it again in that moment to reopen the task. In a block with `status: all` the row does not leave: it moves from the open tasks to the completed ones, and unticking moves it back, unless the block filters for overdue tasks: a completed task is never overdue, so its row stays a moment and then leaves.
 
 In a completed block, untick a row to reopen it, as in the **Completed** view:
 

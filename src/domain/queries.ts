@@ -3,7 +3,7 @@ import { addDays, dateSpecDate, dateSpecSortValue } from "./time";
 import { compareSortKeys } from "./sortKey";
 import { isUnderTag } from "./tags";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import { type DateSpec, type ID, INBOX_ID, type LocalDate, type OccurrenceRecord, type Priority, type Task, type WeekStart } from "./types";
+import { type DateSpec, type ID, INBOX_ID, type LocalDate, type OccurrenceRecord, type Priority, type Task, type TaskStatus, type WeekStart } from "./types";
 
 // List and filter queries. Pure functions
 // over task records; the app layer feeds them the current state.
@@ -48,6 +48,11 @@ export interface DateGroup {
 
 export type DateFilter = "any" | "overdue" | "today" | "next7" | "none" | "range";
 export type StatusFilter = "open" | "completed" | "all";
+
+/** Whether a status filter accepts a task, or a done occurrence (which counts as "completed"). The one status rule of the filter, the block and the Completed view. */
+export function statusAccepts(filter: StatusFilter, status: TaskStatus): boolean {
+	return filter === "all" || filter === status;
+}
 export type Quadrant = "urgent-important" | "important" | "urgent" | "neither";
 
 /** "manual" keeps each view's own order. */
@@ -459,7 +464,7 @@ function matchesFields(task: Task, f: TaskFilter): boolean {
 
 /** All fields combine with AND. Empty fields do not constrain. */
 function matchesFilter(task: Task, f: TaskFilter, ctx: QueryContext): boolean {
-	if (f.status !== "all" && task.status !== f.status) return false;
+	if (!statusAccepts(f.status, task.status)) return false;
 	if (!matchesFields(task, f)) return false;
 	return matchesTaskDate(task, f, ctx);
 }
@@ -503,7 +508,7 @@ export function matchesOccurrenceDate(task: Task, record: OccurrenceRecord, f: P
  * The date criteria test the occurrence's own day; it is never overdue.
  */
 export function matchesOccurrence(task: Task, record: OccurrenceRecord, f: TaskFilter, ctx: QueryContext): boolean {
-	if (f.status === "open" || !matchesFields(task, f)) return false;
+	if (!statusAccepts(f.status, "completed") || !matchesFields(task, f)) return false;
 	return matchesOccurrenceDate(task, record, f, ctx);
 }
 

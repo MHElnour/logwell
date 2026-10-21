@@ -1008,9 +1008,22 @@ describe("status: completed", () => {
 		expect(rowsOf(`status: all\n${extra}`)).toEqual(expected);
 	});
 
-	it("#222: status: all is the open rows of an open block followed by the rows of a completed block", () => {
-		for (const extra of ["list: Work", "tag: calls", "scheduled: 13-10-2026", "due: 12-10-2026", "priority: high"]) {
-			expect(rowsOf(`status: all\n${extra}`), extra).toEqual([...rowsOf(`status: open\n${extra}`), ...rowsOf(`status: completed\n${extra}`)]);
+	it.each([
+		["a list", "list: Work"],
+		["a tag", "tag: calls"],
+		["a schedule day", "scheduled: 13-10-2026"],
+		["a deadline day", "due: 12-10-2026"],
+		["a priority", "priority: high"],
+	])("#222: status: all is the open rows of an open block followed by the rows of a completed block, narrowed by %s", (_name, extra) => {
+		expect(rowsOf(`status: all\n${extra}`)).toEqual([...rowsOf(`status: open\n${extra}`), ...rowsOf(`status: completed\n${extra}`)]);
+	});
+
+	it("#222: a block with many completed rows lists them all (the rows are joined, not spread into a call)", () => {
+		const many = Array.from({ length: 200_000 }, (_, i) => task(`c${i}`, { status: "completed", completedAt: doneAt("2026-10-13"), sortKey: `c${i}` }));
+		for (const source of ["status: completed", "status: all"]) {
+			const r = run(source, { tasks: many });
+			if (r.kind !== "ok") throw new Error(r.message);
+			expect(r.entries).toHaveLength(many.length);
 		}
 	});
 
@@ -1039,6 +1052,9 @@ describe("status: completed", () => {
 	it("#222: an open block never lists a done occurrence or a completed task", () => {
 		expect(rowsOf("status: open")).toEqual(["open", "water"]);
 		expect(rowsOf("")).toEqual(["open", "water"]);
+		// Nothing is read for the completed part of an open block.
+		expect(compiled("status: open").doneOccurrences()).toEqual([]);
+		expect(compiled("status: open").matches(task("c", { status: "completed", completedAt: TS }))).toBe(false);
 	});
 
 	it("#222: a wrong list or tag is an error as in an open block", () => {

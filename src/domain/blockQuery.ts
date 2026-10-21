@@ -1,5 +1,5 @@
 import type { BlockFilters } from "../parsing/blockQuery";
-import { type DoneOccurrence, type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, collectDoneOccurrences, completedRows, inViewScope, matchesOccurrenceDate, matchesTaskDate, quadrantOf } from "./queries";
+import { type DoneOccurrence, type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, collectDoneOccurrences, completedRows, inViewScope, matchesOccurrenceDate, matchesTaskDate, quadrantOf, statusAccepts } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, resolveListName } from "./tasks";
 import { isUnderTag, resolveTagNames, tagNamesOf } from "./tags";
@@ -88,8 +88,7 @@ export function runBlockQuery(filters: BlockFilters, state: BlockQueryState, ctx
 	const completed: Task[] = [];
 	for (const task of state.tasks.values()) if (matcher.matches(task)) (task.status === "open" ? open : completed).push(task);
 	// The open rows as an open block lists them, then the completed rows as a completed block does (one part is empty for the other statuses).
-	const entries = arrangeHierarchy(open, state.tasks, ctx);
-	if (filters.status === "completed" || filters.status === "all") entries.push(...completedRows(completed, matcher.doneOccurrences(), state.tasks, ctx));
+	const entries = arrangeHierarchy(open, state.tasks, ctx).concat(completedRows(completed, matcher.doneOccurrences(), state.tasks, ctx));
 	return { kind: "ok", entries };
 }
 
@@ -157,7 +156,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	};
 
 	const matches = (task: Task): boolean => {
-		if ((status !== "all" && task.status !== status) || !fieldsMatch(task)) return false;
+		if (!statusAccepts(status, task.status) || !fieldsMatch(task)) return false;
 		// The app's own date rule on one date: the deadline for `due`, the effective schedule (a repeating task's current occurrence) for `scheduled`.
 		if (due !== null && !matchesTaskDate(task, due, ctx, "deadline")) return false;
 		if (scheduled !== null && !matchesTaskDate(task, scheduled, ctx, "schedule")) return false;
@@ -165,7 +164,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	};
 	// A repeating task's done occurrences are rows of a completed block unless `due` is set: an occurrence has no deadline.
 	// The task is tested once; each of its done records then only needs the `scheduled` day.
-	const listsOccurrences = status !== "open" && due === null;
+	const listsOccurrences = statusAccepts(status, "completed") && due === null;
 	const occurrenceTask = (task: Task): boolean => listsOccurrences && task.recurrence !== null && fieldsMatch(task);
 	const doneOccurrences = (): DoneOccurrence[] =>
 		listsOccurrences ? collectDoneOccurrences(state, occurrenceTask, (task, record) => scheduled === null || matchesOccurrenceDate(task, record, scheduled, ctx)) : [];

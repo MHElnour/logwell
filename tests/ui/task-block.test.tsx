@@ -94,6 +94,12 @@ async function mount(): Promise<Mount> {
 
 const rows = (m: Mount) => [...m.root.querySelectorAll<HTMLElement>(".cp-task-row")];
 const titles = (m: Mount) => rows(m).map((r) => r.querySelector(".cp-task-title")!.textContent.trim());
+const rowByTitle = (m: Mount, title: string) => rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim().startsWith(title))!;
+/** Waits past the 450 ms hold of a row that left the block. */
+const wait = async () => {
+	await new Promise((r) => setTimeout(r, 650));
+	await settle();
+};
 
 describe("messages", () => {
 	it("shows a parser or matcher error in the error style", async () => {
@@ -413,14 +419,7 @@ describe("completing from the block", () => {
 });
 
 describe("#222: a completed block", () => {
-	const checkbox = (m: Mount, title: string) =>
-		rows(m)
-			.find((r) => r.querySelector(".cp-task-title")!.textContent.trim().startsWith(title))!
-			.querySelector<HTMLInputElement>("input.cp-task-checkbox");
-	const wait = async () => {
-		await new Promise((r) => setTimeout(r, 650));
-		await settle();
-	};
+	const checkbox = (m: Mount, title: string) => rowByTitle(m, title).querySelector<HTMLInputElement>("input.cp-task-checkbox");
 
 	it("draws completed tasks and done occurrences as completed rows, with the occurrence's date and the count", async () => {
 		const m = await mount();
@@ -521,11 +520,6 @@ describe("#222: a completed block", () => {
 
 describe("#222: a block with status: all", () => {
 	const SOURCE = "status: all\nlist: Inbox";
-	const wait = async () => {
-		await new Promise((r) => setTimeout(r, 650));
-		await settle();
-	};
-	const row = (m: Mount, title: string) => rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim().startsWith(title))!;
 
 	it("draws the open rows, then the completed ones, with every row counted", async () => {
 		const m = await mount();
@@ -545,13 +539,13 @@ describe("#222: a block with status: all", () => {
 		await m.h.app.tasks.create({ title: "B" });
 		await m.draw(SOURCE);
 		expect(titles(m)).toEqual(["A", "B"]);
-		await click(row(m, "A").querySelector("input.cp-task-checkbox"));
+		await click(rowByTitle(m, "A").querySelector("input.cp-task-checkbox"));
 		expect(m.complete).toHaveBeenCalledTimes(1);
 		await m.h.app.tasks.complete(a.id);
 		await m.draw(SOURCE);
 		expect(titles(m)).toEqual(["B", "A"]);
-		expect(row(m, "A").classList.contains("is-completed")).toBe(true);
-		expect(row(m, "A").classList.contains("is-just-completed")).toBe(true);
+		expect(rowByTitle(m, "A").classList.contains("is-completed")).toBe(true);
+		expect(rowByTitle(m, "A").classList.contains("is-just-completed")).toBe(true);
 		await wait();
 		expect(titles(m)).toEqual(["B", "A"]);
 	});
@@ -562,7 +556,7 @@ describe("#222: a block with status: all", () => {
 		await m.h.app.tasks.create({ title: "B" });
 		await m.h.app.tasks.complete(a.id);
 		await m.draw(SOURCE);
-		await click(row(m, "A").querySelector("input.cp-task-checkbox"));
+		await click(rowByTitle(m, "A").querySelector("input.cp-task-checkbox"));
 		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("open");
 		expect(m.host.undos).toEqual([]);
 		await m.draw(SOURCE);
@@ -580,7 +574,7 @@ describe("#222: a block with status: all", () => {
 		await m.draw(SOURCE);
 		expect(titles(m).map((t) => t.replace(/ \u00b7.*/, ""))).toEqual(["Open", "Water", "Water"]);
 		expect(rows(m).map((r) => r.dataset.occurrence ?? null)).toEqual([null, null, today]);
-		await click(row(m, "Water \u00b7").querySelector("input.cp-task-checkbox"));
+		await click(rowByTitle(m, "Water \u00b7").querySelector("input.cp-task-checkbox"));
 		expect(m.h.app.store.state.occurrenceRecords.size).toBe(0);
 		await m.draw(SOURCE);
 		expect(rows(m).some((r) => r.dataset.occurrence !== undefined)).toBe(false);

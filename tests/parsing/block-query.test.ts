@@ -470,12 +470,10 @@ describe("block query parser: status", () => {
 		expect("status" in parseBlockQuery("list: Work").filters).toBe(false);
 	});
 
-	it("#222: the chip reads status first and re-parses to the same filters", () => {
-		for (const status of ["completed", "all", "open"]) {
-			const { filters } = parseBlockQuery(`list: Work\nstatus: ${status.toUpperCase()}\npriority: high`);
-			expect(describeBlockFilters(filters)).toEqual([`status: ${status}`, "list: Work", "priority: high"]);
-			expect(parseBlockQuery(describeBlockFilters(filters).join("\n"))).toEqual({ filters, errors: [] });
-		}
+	it.each(["completed", "all", "open"])("#222: the chip reads %s status first and re-parses to the same filters", (status) => {
+		const { filters } = parseBlockQuery(`list: Work\nstatus: ${status.toUpperCase()}\npriority: high`);
+		expect(describeBlockFilters(filters)).toEqual([`status: ${status}`, "list: Work", "priority: high"]);
+		expect(parseBlockQuery(describeBlockFilters(filters).join("\n"))).toEqual({ filters, errors: [] });
 	});
 });
 

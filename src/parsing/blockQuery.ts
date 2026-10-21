@@ -16,13 +16,10 @@ export interface BlockDateRange {
 /** The values `due:` and `scheduled:` accept: a word, or a typed date or range (`DD-MM-YYYY`). */
 export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days" | BlockDateRange;
 
-/** The tasks a block lists: open ones (the default), completed ones, or both (open first). The app's status filter. */
-export type BlockStatus = StatusFilter;
-
 /** The filters a block holds. A key that is absent (or had an error) leaves its field undefined. */
 export interface BlockFilters {
 	/** `status:`; undefined lists open tasks, as `open` does. */
-	status?: BlockStatus;
+	status?: StatusFilter;
 	/** A list name as typed (trimmed). */
 	list?: string;
 	/** A section name as typed; only set together with `list`. */
@@ -57,7 +54,7 @@ const DATE_VALUES: Readonly<Record<string, BlockDate>> = {
 	"next 7 days": "next-7-days",
 };
 
-const STATUS_VALUES: Readonly<Record<string, BlockStatus>> = { open: "open", completed: "completed", all: "all" };
+const STATUS_VALUES: Readonly<Record<string, StatusFilter>> = { open: "open", completed: "completed", all: "all" };
 
 const PRIORITY_VALUES: Readonly<Record<string, Priority>> = { high: 1, medium: 2, low: 3, none: 0 };
 

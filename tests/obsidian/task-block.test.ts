@@ -1219,9 +1219,8 @@ describe("the block processor", () => {
 			expect(opens(el)).toEqual([todayAt(s).date]);
 			const date = opens(el)[0]!;
 			await s.h.app.recurrence.reopen(water.id, date);
-			// The row stays for the hold, then leaves.
+			// A done occurrence row is never held: it leaves with the redraw.
 			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
-			await vi.advanceTimersByTimeAsync(600);
 			expect(titles(el)).toEqual([]);
 			expect(text(el)).toBe("No tasks found.");
 		});

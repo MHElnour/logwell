@@ -8,9 +8,10 @@ import type { TaskView } from "./views";
 // Which view of the app a `logwell` block opens, and where a task opened from a block row is shown.
 
 /**
- * The view that comes closest to what `filters` show: Completed for `status: completed`, else the list when there is one, else the tag (when the tags
- * come down to one), else Today (`due` or `scheduled` today or overdue) or Upcoming (a range ahead). Filters no
- * view shows (priority, quadrant, linked) or names that do not exist give null: the caller then just opens the app.
+ * The view that comes closest to what `filters` show: Completed for `status: completed`, else the list when there is
+ * one, else the tag (when the tags come down to one), else Today (`due` or `scheduled` today or overdue) or Upcoming
+ * (a range ahead). Filters no view shows (priority, quadrant, linked) or names that do not exist give null: the
+ * caller then just opens the app.
  */
 export function blockOpenView(filters: BlockFilters, state: Pick<DbData, "categories" | "tags">): TaskView | null {
 	if (filters.status === "completed") return { kind: "completed" };
