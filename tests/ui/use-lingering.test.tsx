@@ -191,6 +191,22 @@ describe("the hold in a task block", () => {
 			expect(vi.getTimerCount()).toBe(0);
 		});
 
+		it("#222: many rows that change status in one redraw of a block with both statuses hold nothing, and a row that left is still held for 450 ms", async () => {
+			const ids = Array.from({ length: 2000 }, (_, i) => `t${i}`);
+			const before = ids.map((id) => task("open", id));
+			const after = ids.map((id) => task("completed", id));
+			await draw([...before.map(entry), entry(task("open", "gone"))], [...before, task("open", "gone")]);
+			// Every task moved to the completed part and is still drawn; "gone" completed and is no longer drawn.
+			await draw(after.map(entry), [...after, task("completed", "gone")]);
+			expect([...held]).toEqual(["gone"]);
+			expect(vi.getTimerCount()).toBe(1);
+			await vi.advanceTimersByTimeAsync(LINGER_MS - 1);
+			expect(held.has("gone")).toBe(true);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(held.size).toBe(0);
+			expect(vi.getTimerCount()).toBe(0);
+		});
+
 		it("#222: does not hold a deleted task, completed or open", async () => {
 			await draw([entry(task("open", "a")), entry(task("completed", "b"))], [task("open", "a"), task("completed", "b")]);
 			await draw([], []);

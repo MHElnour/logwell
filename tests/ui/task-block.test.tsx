@@ -400,7 +400,7 @@ describe("completing from the block", () => {
 		// Nothing of the family is open: the block's own query returns no row and counts no parent.
 		await m.draw("");
 		expect(titles(m)).toContain("Parent");
-		const row = rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim() === "Parent")!;
+		const row = rowByTitle(m, "Parent");
 		expect(row.querySelector(".cp-meta-subtasks")!.textContent.replace(/\s/g, "")).toBe("1/1");
 	});
 

@@ -26,6 +26,7 @@ import {
 	priorityRank,
 	sortEntriesByDate,
 	sortEntriesByPriority,
+	statusAccepts,
 	todayEntries,
 	upcomingGroups,
 	upcomingRange,
@@ -598,7 +599,7 @@ export interface CalendarTasks {
 export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex, options: { count?: boolean } = {}): CalendarTasks {
 	const dated = menuTasks(state, ctx, filter, { within: "dated", index });
 	if (options.count === false) return { dated, unscheduledCount: undefined };
-	const open = filter.status !== "completed" && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
+	const open = statusAccepts(filter.status, "open") && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
 	const unscheduledCount = open === undefined ? unscheduledTasks(state, ctx, filter, index).length : open - dated.filter((t) => isOpen(t) && !isUnscheduled(t)).length;
 	return { dated, unscheduledCount };
 }
