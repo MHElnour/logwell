@@ -11,6 +11,8 @@ export type DomainErrorCode =
 	| "InvalidValue"
 	| "ReadOnly"
 	| "UndoConflict"
+	/** The command would leave a record pointing at one that is gone (`referenceProblems`). */
+	| "ReferenceConflict"
 	| "StalePreview"
 	/** The list is synced with TickTick and has 999 open tasks. */
 	| "SyncedListFull";

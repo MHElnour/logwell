@@ -4,7 +4,7 @@ import type { AppStore } from "../../src/app/store";
 import { type Change, Tx } from "../../src/app/tx";
 import { makeTask } from "../persistence/fixtures";
 import { CREATE_TAG_LABEL, EDIT_TAG_LABEL } from "../../src/app/CategoryService";
-import { linkedList, type SyncHarness, syncHarness } from "./sync-harness";
+import { linkedList, oneSyncedTask, type SyncHarness, syncHarness } from "./sync-harness";
 import { INBOX_ID, syncLinkId } from "../../src/domain/types";
 
 // A refusal while read-only keeps the undo entry; a conflict drops it, since the
@@ -479,5 +479,25 @@ describe("after a pull that uses the list or section", () => {
 		expect(s.h.app.store.state.categories.has(listId)).toBe(false);
 		await pull(s);
 		expect(s.h.app.store.state.syncLinks.has(syncLinkId("list", listId))).toBe(false);
+	});
+});
+
+describe("after a pull that adds a subtask", () => {
+	// An Undo never leaves a subtask under a task that is gone. A subtask a TickTick pull adds is not an undo step: the
+	// Undo of its parent's Create task is refused, nothing changes, and the next Undo takes the entry below.
+
+	it("#215: a pulled subtask refuses its parent's Create task; nothing changes and the entry below is next", async () => {
+		const s = await oneSyncedTask("Call the bank");
+		const store = s.h.app.store;
+		expect(store.undoLabel).toBe("Create task");
+		s.tt.add(s.projectId, { title: "Find the account number", parentId: s.ttId });
+		s.tick();
+		const r = await s.sync.sync();
+		if (!r.ok) throw new Error("sync failed");
+		expect(s.task("Find the account number").parentId).toBe(s.id);
+		const state = store.state;
+		await expect(store.undo()).rejects.toMatchObject({ code: "UndoConflict", message: 'Cannot undo "Create task": a task now has this task as its parent.' });
+		expect(store.state).toBe(state);
+		expect(store.undoLabel).toBe("Create list");
 	});
 });

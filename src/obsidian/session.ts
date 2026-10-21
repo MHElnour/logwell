@@ -5,7 +5,7 @@ import type { TickTickApi } from "../app/ports";
 import { SyncService } from "../app/SyncService";
 import { type SyncFailure } from "../app/syncModel";
 import { displayZone } from "../app/settings";
-import { isDomainError } from "../domain/errors";
+import { DomainError, isDomainError } from "../domain/errors";
 import { joinPath } from "../domain/notes";
 import { randomId, systemClock } from "../domain/ports";
 import { BackupStore, dbBackupRoot } from "../persistence/backups";
@@ -115,6 +115,11 @@ export class DbSession {
 		// A listener that throws is shown as an error; the change and the other listeners go on.
 		app.store.bus.onListenerError = showError;
 		app.focus.bus.onListenerError = showError;
+		// A command that leaves a record pointing at one that is gone is saved and reported (`referenceMode` "report").
+		app.store.onReferenceProblem = (label, problems) => {
+			console.warn(`Logwell: "${label}" left ${problems.length} broken link(s)`, problems.map(({ rule, id, target }) => `${rule.from}.${rule.field} ${id} -> ${target}`));
+			showError(new DomainError("ReferenceConflict", `"${label}" was saved with a broken link: ${problems[0]?.message ?? ""}`));
+		};
 		this.tickTickApi = new TickTickHttp(app.tickTickSecret);
 		this.sync = new SyncService(
 			app.store,

@@ -27,4 +27,6 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Fixed
 
+- (#215) Undo no longer leaves a subtask without its parent after a TickTick sync added the subtask.
+
 ## Security
