@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type BlockQueryState, compileBlockQuery, runBlockQuery } from "../../src/domain/blockQuery";
 import { emptyFilter, filterTasks, hasPastScheduleAndDeadline, isDayMissed, isDeadlineMissed, isScheduleMissed, type ListEntry, matchesTaskDate, quadrantOf, type QueryContext, type TaskFilter } from "../../src/domain/queries";
 import { scheduleResolver } from "../../src/domain/recurrence";
@@ -989,7 +989,7 @@ describe("status: completed", () => {
 		expect(rowsOf(`status: completed\n${source}`)).toEqual(expected);
 	});
 
-	it("#222: an occurrence is never overdue, and its day is not today unless it is", () => {
+	it("#222: scheduled reads an occurrence's own day: never overdue, today only when its day is today", () => {
 		const g: Fixture = { tasks: [water], records: [done("2026-10-13", "2026-10-13", "water"), done("2026-10-14", "2026-10-14", "water")] };
 		expect(rowsOf("status: completed\nscheduled: overdue", g)).toEqual([]);
 		expect(rowsOf("status: completed\nscheduled: today", g)).toEqual(["water@2026-10-14"]);
@@ -1005,12 +1005,30 @@ describe("status: completed", () => {
 		expect(run("status: completed\nlist: Wrok", f)).toEqual({ kind: "error", message: "No list named “Wrok”." });
 	});
 
+	it("#222: a stopped series is one task row plus a row for each of its done occurrences", () => {
+		const stopped = repeating(series("2026-10-10", rule(), { kind: "never" }, doneAt("2026-10-12")), { id: "stopped", title: "Stopped", sortKey: "s", completedAt: doneAt("2026-10-12") });
+		const g: Fixture = { tasks: [stopped], records: [done("2026-10-10", "2026-10-10", "stopped"), done("2026-10-11", "2026-10-11", "stopped")] };
+		expect(rowsOf("status: completed", g)).toEqual(["stopped", "stopped@2026-10-11", "stopped@2026-10-10"]);
+	});
+
+	it("#222: list: Inbox lists the completed tasks of the Inbox", () => {
+		const inbox = task("inbox-done", { status: "completed", completedAt: doneAt("2026-10-13") });
+		expect(rowsOf("status: completed\nlist: Inbox", { tasks: [inbox, planned, chores] })).toEqual(["inbox-done"]);
+	});
+
+	it.each([
+		["the day it falls on in the display zone", "scheduled: 12-10-2026", ["night@2026-10-11"]],
+		["not the day it is dated", "scheduled: 11-10-2026", []],
+	])("#222: a timed occurrence in another zone is matched by scheduled on %s", (_name, source, expected) => {
+		const night = repeating(series("2026-10-10", rule({ time: "23:30", tz: "America/New_York" })), { id: "night", sortKey: "n" });
+		expect(rowsOf(`status: completed\n${source}`, { tasks: [night], records: [done("2026-10-11", "2026-10-11", "night")] })).toEqual(expected);
+	});
+
 	describe("the per-task tests of a completed block", () => {
-		const m = () => {
-			const c = compiled("status: completed\nlist: Work\nscheduled: 11-10-2026");
-			return c;
-		};
-		const record = done("2026-10-11", "2026-10-11", "water");
+		const doneIds = (source: string, g: Fixture = { tasks: [water], records: [done("2026-10-10", "2026-10-10", "water"), done("2026-10-11", "2026-10-11", "water")] }) =>
+			compiled(source, stateOf(g))
+				.doneOccurrences()
+				.map((o) => o.record.occurrenceDate);
 
 		it("#222: matches tests a completed task and refuses an open one", () => {
 			const c = compiled("status: completed\npriority: high");
@@ -1018,11 +1036,37 @@ describe("status: completed", () => {
 			expect(c.matches(task("b", { priority: 1 }))).toBe(false);
 		});
 
-		it("#222: matchesOccurrence tests the task's fields and the occurrence's own day", () => {
-			expect(m().matchesOccurrence(water, record)).toBe(true);
-			expect(m().matchesOccurrence(water, done("2026-10-10", "2026-10-10", "water"))).toBe(false);
-			expect(m().matchesOccurrence({ ...water, categoryId: "home" }, record)).toBe(false);
-			expect(compiled("status: completed\ndue: 11-10-2026").matchesOccurrence(water, record)).toBe(false);
+		it.each([
+			["the task's fields and the occurrence's own day", "status: completed\nlist: Work\nscheduled: 11-10-2026", ["2026-10-11"]],
+			["the task's fields alone", "status: completed\nlist: Work", ["2026-10-10", "2026-10-11"]],
+			["a list the task is not in", "status: completed\nlist: Home", []],
+			["no occurrence when due is set", "status: completed\ndue: 11-10-2026", []],
+			["no occurrence in an open block", "list: Work", []],
+		])("#222: doneOccurrences lists %s", (_name, source, expected) => {
+			expect(doneIds(source)).toEqual(expected);
+		});
+
+		it("#222: records are not read when no occurrence can show", () => {
+			class NoRead extends Map<string, OccurrenceRecord> {
+				override values(): never {
+					throw new Error("the records must not be read");
+				}
+				override [Symbol.iterator](): never {
+					throw new Error("the records must not be read");
+				}
+			}
+			const state = { ...stateOf({ tasks: [water] }), occurrenceRecords: new NoRead() };
+			for (const source of ["status: completed\ndue: today", "list: Work"]) expect(compiled(source, state).doneOccurrences()).toEqual([]);
+		});
+
+		it("#222: the fields of a task are tested once, not once per done record", () => {
+			const g: Fixture = { tasks: [water], records: ["10", "11", "12", "13"].map((d) => done(`2026-10-${d}`, `2026-10-${d}`, "water")) };
+			const tests = vi.fn();
+			const watched = { ...water, get tagKeys() { tests(); return water.tagKeys; } };
+			const state = stateOf(g);
+			(state.tasks as Map<string, Task>).set("water", watched);
+			expect(compiled("status: completed\ntag: programming", state).doneOccurrences()).toHaveLength(4);
+			expect(tests).toHaveBeenCalledTimes(1);
 		});
 
 		it("#222: mayShow adds the repeating tasks that could have a matching occurrence, only in a completed block", () => {
@@ -1032,7 +1076,7 @@ describe("status: completed", () => {
 			expect(c.mayShow(task("o", { categoryId: "work" }))).toBe(false);
 			const o = compiled("list: Work");
 			expect(o.mayShow(water)).toBe(o.matches(water));
-			expect(o.matchesOccurrence(water, record)).toBe(false);
+			expect(compiled("status: completed\ndue: today").mayShow(water)).toBe(false);
 		});
 	});
 });

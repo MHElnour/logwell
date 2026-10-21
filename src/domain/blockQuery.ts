@@ -1,5 +1,5 @@
 import type { BlockFilters } from "../parsing/blockQuery";
-import { type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, collectDoneOccurrences, completedRows, inViewScope, matchesOccurrenceDate, matchesTaskDate, quadrantOf } from "./queries";
+import { type DoneOccurrence, type ListEntry, type QueryContext, type TaskFilter, type ViewScope, arrangeHierarchy, collectDoneOccurrences, completedRows, inViewScope, matchesOccurrenceDate, matchesTaskDate, quadrantOf } from "./queries";
 import { sectionsOfList } from "./sections";
 import { categoryNameKey, resolveListName } from "./tasks";
 import { isUnderTag, resolveTagNames, tagNamesOf } from "./tags";
@@ -62,10 +62,10 @@ export type BlockMatcher =
 			/** True for a task with the block's status (open unless `status: completed`) that every filter accepts, whatever the other tasks are. */
 			matches: (task: Task) => boolean;
 			/**
-			 * True for a done occurrence of a repeating task that a `status: completed` block lists: the task passes the
-			 * filters and the occurrence's own day passes `scheduled`; `due` never matches one. False in any other block.
+			 * The done occurrences of repeating tasks that a `status: completed` block lists: the task passes the filters and
+			 * the occurrence's own day passes `scheduled`; `due` never matches one. Empty, and no record is read, in any other block.
 			 */
-			matchesOccurrence: (task: Task, record: OccurrenceRecord) => boolean;
+			doneOccurrences: () => DoneOccurrence[];
 			/** Whether a record could be a row of the block: `matches`, or a repeating task that may have a listed done occurrence. */
 			mayShow: (task: Task) => boolean;
 	  };
@@ -87,8 +87,7 @@ export function runBlockQuery(filters: BlockFilters, state: BlockQueryState, ctx
 	const matched: Task[] = [];
 	for (const task of state.tasks.values()) if (matcher.matches(task)) matched.push(task);
 	if (filters.status === "completed") {
-		const occurrences = collectDoneOccurrences(state, () => true, matcher.matchesOccurrence);
-		return { kind: "ok", entries: completedRows(matched, occurrences, state.tasks, ctx) };
+		return { kind: "ok", entries: completedRows(matched, matcher.doneOccurrences(), state.tasks, ctx) };
 	}
 	return { kind: "ok", entries: arrangeHierarchy(matched, state.tasks, ctx) };
 }
@@ -164,9 +163,11 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 		return true;
 	};
 	// A repeating task's done occurrences are rows of a completed block unless `due` is set: an occurrence has no deadline.
+	// The task is tested once; each of its done records then only needs the `scheduled` day.
 	const listsOccurrences = status === "completed" && due === null;
-	const matchesOccurrence = (task: Task, record: OccurrenceRecord): boolean =>
-		listsOccurrences && fieldsMatch(task) && (scheduled === null || matchesOccurrenceDate(task, record, scheduled, ctx));
-	const mayShow = (task: Task): boolean => matches(task) || (listsOccurrences && task.recurrence !== null && fieldsMatch(task));
-	return { kind: "ok", matches, matchesOccurrence, mayShow };
+	const occurrenceTask = (task: Task): boolean => listsOccurrences && task.recurrence !== null && fieldsMatch(task);
+	const doneOccurrences = (): DoneOccurrence[] =>
+		listsOccurrences ? collectDoneOccurrences(state, occurrenceTask, (task, record) => scheduled === null || matchesOccurrenceDate(task, record, scheduled, ctx)) : [];
+	const mayShow = (task: Task): boolean => matches(task) || occurrenceTask(task);
+	return { kind: "ok", matches, doneOccurrences, mayShow };
 }

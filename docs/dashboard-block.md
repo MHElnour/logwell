@@ -51,7 +51,7 @@ In an embedded note, `linked: this note` means the embedded note. Renaming the n
 
 Add `status: completed` to list completed tasks instead of open ones. A block never mixes the two: without a `status` line, or with `status: open`, it shows open tasks only, as before.
 
-A completed block shows the rows of the **Completed** view in [Views](views.md): completed tasks, plus one row for each completed occurrence of a repeating task, newest first. Subtasks are not nested under their parents; each is its own row. Every other filter narrows the rows as usual. For a completed occurrence, `list`, `section`, `tag`, `priority`, `quadrant` and `linked` look at its task, `scheduled` looks at the day of that occurrence, and `due` never shows it, because a repeating task has no deadline.
+A completed block shows the rows of the **Completed** view in [Views](views.md): completed tasks, plus one row for each completed occurrence of a repeating task, newest first. Subtasks are not nested under their parents; each is its own row. Every other filter narrows the rows as usual. For a completed occurrence, `list`, `section`, `tag`, `priority`, `quadrant` and `linked` look at its task, `scheduled` looks at the day of that occurrence, and `due` never shows it, because a repeating task has no deadline. Completed tasks and completed days are never overdue, so `due: overdue` and `scheduled: overdue` show nothing in a completed block.
 
 ````
 ```logwell
@@ -72,7 +72,10 @@ Tick the checkbox to complete the task. A notice says what was completed and off
 
 The row stays a moment so you see the check, then leaves. Tick it again in that moment to reopen the task.
 
-In a completed block, untick a row to reopen the task, as in the **Completed** view: the task is open again, with no notice. For a completed occurrence of a repeating task, unticking reopens that occurrence. The row stays a moment, then leaves the block. Tick it again in that moment to complete it again.
+In a completed block, untick a row to reopen it, as in the **Completed** view:
+
+- A completed task is open again, with no notice. The row stays a moment, then leaves the block. Tick it again in that moment to complete it again.
+- A completed day of a repeating task reopens that day, and a notice ("Reopened ... for <date>") offers **Undo**. The row leaves the block at once.
 
 ## Open a task or the app
 

@@ -176,6 +176,31 @@ describe("the hold in a task block", () => {
 			expect(held.has("a")).toBe(false);
 		});
 
+		it("#222: holds a shown completed task that is open again, for exactly 450 ms", async () => {
+			await draw([entry(task("completed"))], [task("completed")]);
+			await draw([], [task("open")]);
+			expect(held.has("a")).toBe(true);
+			await vi.advanceTimersByTimeAsync(LINGER_MS);
+			expect(held.has("a")).toBe(false);
+		});
+
+		it("#222: does not hold a deleted task, completed or open", async () => {
+			await draw([entry(task("open", "a")), entry(task("completed", "b"))], [task("open", "a"), task("completed", "b")]);
+			await draw([], []);
+			expect(held.size).toBe(0);
+			expect(vi.getTimerCount()).toBe(0);
+		});
+
+		it("#222: does not hold a done occurrence row, and it does not release its task's own held row", async () => {
+			const row = { ...entry(task("completed")), occurrence: { date: "2026-10-11", status: "done" as const } };
+			await draw([row], [task("completed")]);
+			await draw([], [task("open")]);
+			expect(held.size).toBe(0);
+			await draw([entry(task("completed")), row], [task("completed")]);
+			await draw([row], [task("open")]);
+			expect(held.has("a")).toBe(true);
+		});
+
 		it("an unchanged entries list takes no new look", async () => {
 			const entries = [entry(task("open"))];
 			await draw(entries, [task("open")]);

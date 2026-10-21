@@ -1,9 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppStore } from "../app/store";
 import type { ListEntry } from "../domain/queries";
-import { occurrenceRecordId } from "../domain/recurrence";
-import type { ID, OccurrenceRecord, Task } from "../domain/types";
-import { entryKey } from "./format";
+import type { ID, Task } from "../domain/types";
 
 /** How long a just-completed row stays among the open rows: the check animation (styles.css) plus a beat. */
 export const LINGER_MS = 450;
@@ -110,43 +108,30 @@ export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, ac
 
 /**
  * `useLingering` for a dashboard block. The block shows a few rows out of possibly tens of thousands of tasks, so it
- * does not keep a status for every task: a row is held when it was in the entries drawn last time and has changed
- * status since, which takes it out of the block: a task completed now (an open block), a task open again (a
- * `status: completed` block), or a done occurrence whose record is no longer done (`records`, the occurrence records
- * of the state). The look is made once per new `entries` array (the block draws a new one after each query), while
- * rendering, so the held row is already in place in the pass that changed it. A row shown again is released at once.
- * Held rows are named by `entryKey`. Timers run on `win`, the window of the block's element, since a block may sit in
- * a pop-out window.
+ * does not keep a status for every task: a task is held when its row was in the entries drawn last time and its status
+ * has changed since, which takes it out of the block: completed now (an open block) or open again (a `status:
+ * completed` block). A row of a done occurrence is never held: reopening it has its own notice and the row leaves at
+ * once. The held set holds task IDs. The look is made once per new `entries` array (the block draws a new one after
+ * each query), while rendering, so the held row is already in place in the pass that changed it. A task shown again
+ * is released at once. Timers run on `win`, the window of the block's element, since a block may sit in a pop-out window.
  */
-export function useLingeringShown(
-	entries: readonly ListEntry[],
-	tasks: ReadonlyMap<ID, Task>,
-	win: Window = window,
-	ms = LINGER_MS,
-	records?: ReadonlyMap<string, OccurrenceRecord>,
-): ReadonlySet<ID> {
+export function useLingeringShown(entries: readonly ListEntry[], tasks: ReadonlyMap<ID, Task>, win: Window = window, ms = LINGER_MS): ReadonlySet<ID> {
 	const { held, timers, release, hold } = useHolds(win, ms);
 	const looked = useRef<readonly ListEntry[] | null>(null);
-	/** Whether a row drawn last time no longer has the status it showed; a task that is gone leaves with no hold. */
-	const changed = (entry: ListEntry): boolean => {
-		const now = tasks.get(entry.task.id);
-		if (now === undefined) return false;
-		if (entry.occurrence === null) return now.status !== entry.task.status;
-		return records !== undefined && records.get(occurrenceRecordId(entry.task.id, entry.occurrence.date))?.status !== "done";
-	};
 
 	if (looked.current !== entries) {
 		const last = looked.current;
 		looked.current = entries;
 		if (held.current.size > 0 || timers.current.size > 0) {
 			for (const entry of entries) {
-				const key = entryKey(entry);
-				if (timers.current.has(key) || held.current.has(key)) release(key, false);
+				if (entry.occurrence === null && (timers.current.has(entry.task.id) || held.current.has(entry.task.id))) release(entry.task.id, false);
 			}
 		}
 		if (last !== null) {
 			for (const entry of last) {
-				if (changed(entry)) hold(entryKey(entry));
+				// A task that is gone (deleted) leaves with no hold.
+				const now = entry.occurrence === null ? tasks.get(entry.task.id) : undefined;
+				if (now !== undefined && now.status !== entry.task.status) hold(entry.task.id);
 			}
 		}
 	}

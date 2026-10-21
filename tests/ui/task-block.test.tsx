@@ -462,7 +462,7 @@ describe("#222: a completed block", () => {
 		expect(titles(m)).toEqual(["B"]);
 	});
 
-	it("unticking a done occurrence row reopens that occurrence, and the row leaves after the hold", async () => {
+	it("unticking a done occurrence row reopens that occurrence with its own notice, and the row leaves at once", async () => {
 		const m = await mount();
 		const water = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
 		await m.h.app.recurrence.complete(water.id);
@@ -471,10 +471,25 @@ describe("#222: a completed block", () => {
 		await click(checkbox(m, "Water"));
 		expect(m.h.app.store.state.occurrenceRecords.size).toBe(0);
 		expect(m.complete).not.toHaveBeenCalled();
+		expect(m.host.undos).toHaveLength(1);
+		expect(m.host.undos[0]!.message).toContain("Reopened");
 		await m.draw("status: completed");
-		expect(titles(m)).toEqual(["Water \u00b7 Today"]);
-		await wait();
+		expect(titles(m)).toEqual([]);
 		expect(m.root.querySelector(".cp-block-msg")!.textContent).toBe("No tasks found.");
+	});
+
+	it("a done occurrence row of a stopped series leaves at once and is not held, beside the series' own completed row", async () => {
+		const m = await mount();
+		const water = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
+		await m.h.app.recurrence.complete(water.id);
+		await m.h.app.recurrence.stop(water.id);
+		await m.draw("status: completed");
+		expect(titles(m)).toHaveLength(2);
+		await m.h.app.recurrence.reopen(water.id, today);
+		await m.draw("status: completed");
+		expect(m.root.querySelectorAll("[data-occurrence]")).toHaveLength(0);
+		await wait();
+		expect(m.root.querySelectorAll("[data-occurrence]")).toHaveLength(0);
 	});
 
 	it("a row completed again while it is held is shown again and not dropped", async () => {
