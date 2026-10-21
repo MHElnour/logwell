@@ -41,8 +41,8 @@ export function mergeCopyAdvice(canRestore: boolean): string {
 	const head = "Git merged this database from two computers, so the file has merge markers and is read-only.";
 	const elsewhere = "If the row is missing, add the line *.cpbase merge=binary -text to .gitattributes at the repository root.";
 	return canRestore
-		? `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull. Restore backup then keeps this computer's version; the merged file stays in Conflicts. ${elsewhere}`
-		: `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${elsewhere}`;
+		? `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer, which can show this notice once more, only for the pull that brings the line in. Restore backup then keeps this computer's version; the merged file stays in Conflicts. ${elsewhere}`
+		: `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer, which can show this notice once more, only for the pull that brings the line in. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${elsewhere}`;
 }
 
 export function formatDuration(min: number): string {

@@ -63,7 +63,7 @@ describe("#224: a file with Git merge markers", () => {
 		await openData(m);
 		const text = banner(m).textContent ?? "";
 		expect(text).toContain("Git merged this database from two computers");
-		expect(text).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer");
+		expect(text).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer");
 		expect(text).toContain("Restore backup then keeps this computer's version; the merged file stays in Conflicts.");
 		expect(text).toContain("at the repository root");
 		expect(labels(banner(m))).toEqual(["Restore backup"]);

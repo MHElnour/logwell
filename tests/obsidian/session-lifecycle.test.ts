@@ -728,7 +728,7 @@ describe("conflict copies and 'Open conflict view'", () => {
 			expect(notice.labels).toEqual(["Open settings", "Restore backup"]);
 			expect(notice.timeout).toBe(0);
 			expect(notice.message).toContain("Git merged this database from two computers");
-			expect(notice.message).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync): Git carries it to the other computer, which may show this notice once more until its next pull.");
+			expect(notice.message).toContain("Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer, which can show this notice once more, only for the pull that brings the line in.");
 			expect(notice.message).toContain("Restore backup then keeps this computer's version; the merged file stays in Conflicts.");
 			expect(notice.message).toContain("at the repository root");
 			expect(notice.message).toContain("*.cpbase merge=binary -text");

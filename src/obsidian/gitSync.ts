@@ -37,7 +37,10 @@ export function gitAttributesAddition(text: string): string {
 export interface GitSyncFiles {
 	exists(path: string): Promise<boolean>;
 	read(path: string): Promise<string>;
-	/** Adds to the end of the file and creates it when missing; never replaces what is there. */
+	/**
+	 * Adds to the end of the file and creates it when missing; never replaces what is there. Creating a missing file is
+	 * verified on desktop only; where `append` refuses it, the error is shown and the row stays for another try.
+	 */
 	append(path: string, data: string): Promise<void>;
 }
 
