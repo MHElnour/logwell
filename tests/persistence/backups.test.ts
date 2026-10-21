@@ -94,3 +94,32 @@ describe("BackupStore listing", () => {
 		expect(fs.files.has("root/snapshots/daily-2026-10-01.cpbase")).toBe(true);
 	});
 });
+
+describe("#224: a copy of a file with Git merge markers", () => {
+	it("is listed as a version-control merge copy, other damaged copies stay conflict copies", async () => {
+		const { clock, backups } = setup();
+		await backups.writeConflict("<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> other\n", "merge-markers");
+		clock.advance(1000);
+		await backups.writeConflict("{ cut off", "damaged");
+		clock.advance(1000);
+		await backups.writeConflict(dbText("r-mine", "2026-10-01T09:45:00.000Z"), "r-mine");
+
+		const conflicts = await backups.listConflicts();
+		expect(conflicts.map((c) => [c.kind, c.revision])).toEqual([
+			["conflict", "r-mine"],
+			["conflict", ""],
+			["merge-copy", ""],
+		]);
+	});
+
+	it("lists a merge copy whose name has no header values, and a conflict copy whose revision only starts like the label", async () => {
+		const { fs, backups } = setup();
+		fs.files.set("root/conflicts/20261001T080000000Z-merge-markers.cpbase", "<<<<<<< HEAD\n");
+		fs.files.set("root/conflicts/20261001T080001000Z-merge-markers-2.cpbase", "x");
+		const conflicts = await backups.listConflicts();
+		expect(conflicts.map((c) => [c.stamp, c.kind])).toEqual([
+			["20261001T080001000Z", "conflict"],
+			["20261001T080000000Z", "merge-copy"],
+		]);
+	});
+});

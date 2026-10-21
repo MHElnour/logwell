@@ -16,6 +16,7 @@ Open Settings, then Logwell. Each change is saved and applied at once. Your sett
 | Setting | What it does | Default |
 | --- | --- | --- |
 | **Active database** | The `.cpbase` file that Quick Add, commands and the app use. Pick a file from your vault. Changing it opens that database. | None until you create one |
+| **Git sync** | Stops Git from merging the database line by line, so a conflict offers **Keep mine** or **Keep theirs**. **Add to .gitattributes** adds the line `*.cpbase merge=binary -text` to the `.gitattributes` file at the top of your vault. Shown only in a vault with a `.git` folder and no such line yet; in a vault inside a larger repository, add the line at the repository root. See [Git](your-data.md#git). | |
 | **Create database** | Creates a new `.cpbase` file in a folder you choose and makes it active. See [Create your database](getting-started.md#create-your-database). | |
 
 ### Tasks

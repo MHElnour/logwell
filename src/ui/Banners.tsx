@@ -1,4 +1,5 @@
 import type { ReadOnlyState } from "../persistence/CpbaseStore";
+import { mergeCopyAdvice } from "./format";
 
 export function Loading() {
 	return <div class="cp-empty-state">Loading the database…</div>;
@@ -32,6 +33,20 @@ export function ReadOnlyBanner(props: {
 					This database uses schema version {s.version}, which is newer than this plugin supports. Update the plugin.
 					The database is read-only and is never written.
 				</p>
+			</div>
+		);
+	}
+	if (s.failure === "merge-markers") {
+		return (
+			<div class="cp-banner cp-banner-error" role="alert">
+				<p>{mergeCopyAdvice(s.recoveredFrom !== null)}</p>
+				{s.recoveredFrom !== null && (
+					<div class="cp-banner-actions">
+						<button type="button" class="mod-cta" onClick={props.onRestore}>
+							Restore backup
+						</button>
+					</div>
+				)}
 			</div>
 		);
 	}

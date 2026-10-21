@@ -44,9 +44,13 @@ const DAILY_KEEP_DAYS = 14;
 const OTHER_KEEP = 5;
 export const SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 
+/** The label a conflict copy of a file with Git merge markers is written under. */
+export const MERGE_COPY_LABEL = "merge-markers";
+
 export interface BackupInfo {
 	path: string;
-	kind: SnapshotKind | "conflict";
+	/** `merge-copy`: a copy of a file that Git left with merge markers. */
+	kind: SnapshotKind | "conflict" | "merge-copy";
 	/** From the file header; empty when the header is unreadable. */
 	revision: string;
 	writtenAt: string;
@@ -261,7 +265,10 @@ export class BackupStore {
 		const result: BackupInfo[] = [];
 		for (const path of await this.fs.list(this.conflictDir)) {
 			if (!path.endsWith(EXT)) continue;
-			result.push({ path, kind: "conflict", ...(await this.headerOf(path)), stamp: fileNameOf(path).split("-")[0] ?? "" });
+			const stamp = fileNameOf(path).split("-")[0] ?? "";
+			// The name is "<stamp>-<label>" before the header values (splitName's base).
+			const kind = splitName(path)?.base === `${stamp}-${MERGE_COPY_LABEL}` ? "merge-copy" : "conflict";
+			result.push({ path, kind, ...(await this.headerOf(path)), stamp });
 		}
 		return result.sort((a, b) => (a.stamp < b.stamp ? 1 : -1));
 	}

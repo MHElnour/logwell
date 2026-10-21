@@ -4,7 +4,7 @@ What to do when Logwell shows a warning or does not behave as you expect. For wh
 
 ## The database opened read-only
 
-A read-only database shows a banner at the top of the app. You can look at everything, but Logwell writes nothing to the file, and **Export backup**, **Export CSV**, **Import backup** and **Restore** are unavailable. The banner names one of two causes.
+A read-only database shows a banner at the top of the app. You can look at everything, but Logwell writes nothing to the file, and **Export backup**, **Export CSV**, **Import backup** and **Restore** are unavailable. The banner names one of three causes.
 
 ### The database is newer than this plugin
 
@@ -27,6 +27,19 @@ When Logwell knows the database's id, from the file's header or from this device
 To repair the file yourself, fix it and Logwell loads it once it is valid.
 
 A change that was not saved yet when the file became damaged is kept as a conflict copy. When a valid file is back, Logwell loads it and shows the conflict notice with **Keep mine** and **Keep theirs**, so the change is never dropped without a word. If the database closes first, a notice points at the copy. The same applies when a file from a newer version of Logwell arrives while a change waits.
+
+### Version-control merge copy
+
+The banner says "Git merged this database from two computers, so the file has merge markers and is read-only." Git merged the database file line by line when two computers had both saved a change, and left lines that start with `<<<<<<<`, `=======` and `>>>>>>>` in it.
+
+Logwell keeps a copy of that file and lists it on the Data page under **Conflicts** as "Version-control merge copy", with **Dismiss** only. It shows its newest valid backup in the meantime. To recover:
+
+1. Add the **Git sync** setting: **Open settings** in the notice leads to **Settings > Logwell > Database**, where **Add to .gitattributes** adds the line `*.cpbase merge=binary -text`. Commit the change; Git carries the line to your other computer with its next pull. If the **Git sync** row is not there, your vault is inside a larger repository (or already has the line): add the line to the `.gitattributes` file at the repository root. See [Your data](your-data.md#git).
+2. Choose **Restore backup**. It writes the backup shown into the database file and keeps this computer's version. The merged file stays listed under **Conflicts** until you dismiss it. After the file reaches your other computer, Logwell there offers **Keep mine** and **Keep theirs**.
+
+The line works for merges made after it reached a computer. If your other computer pulls the line in the same pull as a conflicting change to the database, that pull still merges the file once, and the other computer can show this notice once more, only for that pull.
+
+There is no merge: each computer keeps one whole version. Changes that only the other computer made stay in that computer's own backups.
 
 ## A conflict copy appeared after sync
 

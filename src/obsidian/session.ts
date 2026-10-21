@@ -12,10 +12,11 @@ import { BackupStore, dbBackupRoot } from "../persistence/backups";
 import { CpbaseStore, type StoreEvent } from "../persistence/CpbaseStore";
 import { storableDbId } from "../persistence/schema";
 import { accentClass } from "../ui/accent";
+import { mergeCopyAdvice } from "../ui/format";
 import type CheckpointPlugin from "../main";
 import { LocalStorageActiveTimer } from "./activeTimer";
 import { AdapterGateway, LocalStorageState, VaultDbFile, VaultNotes } from "./gateways";
-import { actionNotice, plainNotice, showError } from "./notices";
+import { type NoticeAction, actionNotice, plainNotice, showError } from "./notices";
 import { undoNotice } from "./undoNotice";
 import { LocalStorageReminderState } from "./reminderState";
 import { LocalStorageRenameQueue } from "./renameQueue";
@@ -332,7 +333,14 @@ export class DbSession {
 				break;
 			case "read-only":
 				this.app.store.notifyStatus();
-				if (e.state.reason === "damaged") {
+				if (e.state.reason === "damaged" && e.state.failure === "merge-markers") {
+					// The conflict view lists this copy with Dismiss only, so the notice offers what helps.
+					const canRestore = e.state.recoveredFrom !== null;
+					// Settings first: the setting is what stops Git from merging the file again.
+					const actions: NoticeAction[] = [{ label: "Open settings", run: () => this.plugin.openSettings() }];
+					if (canRestore) actions.push({ label: "Restore backup", run: () => this.restoreRecovered() });
+					actionNotice(mergeCopyAdvice(canRestore), actions, 0);
+				} else if (e.state.reason === "damaged") {
 					const actions = [
 						{ label: "Open conflict view", run: () => this.openConflictView() },
 					];

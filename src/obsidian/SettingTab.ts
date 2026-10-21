@@ -4,11 +4,19 @@ import { deviceZone } from "../domain/ports";
 import { isValidZone } from "../domain/time";
 import type CheckpointPlugin from "../main";
 import { DB_EXTENSION } from "../persistence/schema";
+import { gitSyncRow } from "./gitSync";
 import { plainNotice, showError } from "./notices";
 import { tickTickSettingItems } from "./tickTickSettings";
 
 /** Declarative settings (minAppVersion 1.13.0). */
 export class CheckpointSettingTab extends PluginSettingTab {
+	private readonly gitSync = gitSyncRow({
+		files: () => this.app.vault.adapter,
+		notify: plainNotice,
+		error: (err) => showError(err),
+		refresh: () => this.refreshDomState(),
+	});
+
 	constructor(
 		app: App,
 		private readonly plugin: CheckpointPlugin,
@@ -43,6 +51,7 @@ export class CheckpointSettingTab extends PluginSettingTab {
 							filter: (file) => file.extension === DB_EXTENSION,
 						},
 					},
+					this.gitSync.item,
 					{
 						name: "Create database",
 						desc: "Create a new .cpbase file and make it active.",

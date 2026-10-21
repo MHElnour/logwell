@@ -82,3 +82,35 @@ describe("serializer", () => {
 		expect(parseDbText('{"hello":1}')).toMatchObject({ ok: false, reason: "not-a-database" });
 	});
 });
+
+describe("#224: Git merge markers", () => {
+	const text = serializeDb(sampleDb(["a"]));
+	const lines = text.split("\n");
+
+	it.each([
+		["a conflict on the header line only", `<<<<<<< HEAD\n${lines[0]}\n=======\n${lines[0]}\n>>>>>>> origin/main\n${lines.slice(1).join("\n")}`],
+		["a conflict inside a record hunk", [...lines.slice(0, 5), "<<<<<<< HEAD", lines[5], "=======", lines[5], ">>>>>>> theirs", ...lines.slice(6)].join("\n")],
+		["a whole file wrapped in markers", `<<<<<<< HEAD\n${text}=======\n${text}>>>>>>> branch\n`],
+		["markers with CRLF line ends", `<<<<<<< HEAD\r\n${text}=======\r\n${text}>>>>>>> branch\r\n`],
+	])("%s is a merge-marker failure", (_name, merged) => {
+		expect(parseDbText(merged)).toMatchObject({ ok: false, reason: "merge-markers" });
+	});
+
+	it.each([
+		["a task title of seven equals signs", "======="],
+		["a task title that starts with seven angle brackets", "<<<<<<< not a marker"],
+		["a title holding a line break and a marker", "line one\n=======\n>>>>>>> x"],
+	])("%s is no marker, because a marker counts only at the start of a line", (_name, title) => {
+		const db = sampleDb(["a"]);
+		const doc = serializeDb({ ...db, tasks: new Map([["a", makeTask("a", { title })]]) });
+		const parsed = parseDbText(doc);
+		expect(parsed.ok).toBe(true);
+	});
+
+	it.each([
+		["a cut-off file", text.slice(0, 40), "parse"],
+		["other JSON", '{"hello":1}', "not-a-database"],
+	])("%s stays a damaged file, not a merge copy", (_name, damaged, reason) => {
+		expect(parseDbText(damaged)).toMatchObject({ ok: false, reason });
+	});
+});

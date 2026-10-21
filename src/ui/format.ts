@@ -30,6 +30,21 @@ export function undoneText(label: string | null): string {
 	return label === null ? NOTHING_TO_UNDO : `Undone: ${label}`;
 }
 
+/** What the Data page calls a copy of a database file that Git left with merge markers. */
+export const MERGE_COPY_NAME = "Version-control merge copy";
+
+/**
+ * What the notice, the banner and the Data page say about a database file that Git merged from two computers.
+ * `canRestore`: a valid backup is loaded, so Restore backup is offered.
+ */
+export function mergeCopyAdvice(canRestore: boolean): string {
+	const head = "Git merged this database from two computers, so the file has merge markers and is read-only.";
+	const elsewhere = "If the row is missing, add the line *.cpbase merge=binary -text to .gitattributes at the repository root.";
+	return canRestore
+		? `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer, which can show this notice once more, only for the pull that brings the line in. Restore backup then keeps this computer's version; the merged file stays in Conflicts. ${elsewhere}`
+		: `${head} Add the Git sync setting (Settings > Logwell > Database > Git sync), commit it, and Git carries it to the other computer, which can show this notice once more, only for the pull that brings the line in. No valid backup was found, so nothing is written until the file is replaced by a version without markers. ${elsewhere}`;
+}
+
 export function formatDuration(min: number): string {
 	const h = Math.floor(min / 60);
 	const m = min % 60;
