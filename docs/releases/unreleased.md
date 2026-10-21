@@ -19,7 +19,11 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 
 ## Added
 
+- (#222) Added a status filter to the task block: status: completed shows completed tasks and status: all shows both, with every other filter narrowing them as usual.
+
 ## Changed
+
+- (#222) A task block now needs a list, tag, due, scheduled or linked line; without one it says so instead of listing every open task.
 
 ## Fixed
 

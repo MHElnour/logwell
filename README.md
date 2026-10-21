@@ -87,10 +87,11 @@ scheduled: this week
 ```
 ````
 
-Every line narrows the list, and `tag`, `priority` and `quadrant` take several values separated by commas.
+Every line narrows the list, and `tag`, `priority` and `quadrant` take several values separated by commas. A block needs at least one `list`, `tag`, `due`, `scheduled` or `linked` line.
 
 | Filter | Values | Example |
 | --- | --- | --- |
+| `status` | `open` (the default), `completed` or `all` | `status: completed` |
 | `list` | A list name, or `Inbox` | `list: Home` |
 | `section` | A section of that list (needs a `list` line) | `section: Planning` |
 | `tag` | A tag, including its nested tags | `tag: home, work` |

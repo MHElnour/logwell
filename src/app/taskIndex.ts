@@ -2,7 +2,7 @@ import { DomainError } from "../domain/errors";
 import { isUnderTag, tagPrefixes } from "../domain/tags";
 import { type SubtaskCount, compareTasksBySortKey, isDated, isOpen, subtaskCounts } from "../domain/tasks";
 import { type ID, INBOX_ID, type Task, syncLinkId } from "../domain/types";
-import type { TaskFilter } from "../domain/queries";
+import { type TaskFilter, statusAccepts } from "../domain/queries";
 import type { DbData } from "../persistence/schema";
 import type { AppStore } from "./store";
 import type { Change, Tx } from "./tx";
@@ -403,8 +403,9 @@ export class TaskIndex {
 		const choices: { size: number; ids: () => Iterable<ID> }[] = [];
 		const one = (ids: ReadonlySet<ID>) => choices.push({ size: ids.size, ids: () => ids });
 		if (within === "dated") one(p.dated);
-		if (within === "open" || filter.status === "open") one(p.openTasks);
-		if (filter.status === "completed") one(p.completed);
+		// A filter that refuses completed tasks lists only open ones, and one that refuses open tasks only completed ones.
+		if (within === "open" || !statusAccepts(filter.status, "completed")) one(p.openTasks);
+		if (!statusAccepts(filter.status, "open")) one(p.completed);
 		if (filter.categoryIds.length > 0) {
 			// A task is in one list: the lists' sets do not overlap.
 			const lists = [...new Set(filter.categoryIds)].map((id) => p.byList.get(id) ?? NO_IDS);

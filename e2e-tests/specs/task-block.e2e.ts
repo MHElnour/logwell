@@ -189,7 +189,7 @@ describe("The logwell dashboard block", function () {
 		async function liveBlock(name: string): Promise<{ a: string; line: number }> {
 			const a = await createTask("Press target");
 			await createTask("Another task");
-			await writeNote(name, `# Press\n\n${block("")}\n\n${AFTER}\n`);
+			await writeNote(name, `# Press\n\n${block("list: Inbox")}\n\n${AFTER}\n`);
 			await openNote(name, "live");
 			await waitForTitles(["Press target", "Another task"]);
 			const line = await cursorToLine(AFTER);
@@ -227,22 +227,24 @@ describe("The logwell dashboard block", function () {
 
 	it("shows a wrong filter, an empty result and a typo in the right messages", async function () {
 		await createTask("Anything");
-		await writeNote("Messages.md", [block("list: Wrok"), block("priority: high"), block("colour: red")].join("\n\n") + "\n");
+		await writeNote("Messages.md", [block("list: Wrok"), block("list: Inbox\npriority: high"), block("colour: red\nlist: Inbox"), block("priority: high")].join("\n\n") + "\n");
 		await openNote("Messages.md", "reading");
-		await waitForBlocks(3);
-		const [wrong, empty, typo] = await blocks();
+		await waitForBlocks(4);
+		const [wrong, empty, typo, unnarrowed] = await blocks();
 		expect(wrong!.message).toContain("No list named “Wrok”.");
 		expect(wrong!.isError).toBe(true);
 		expect(empty!.message).toBe("No tasks found.");
 		expect(empty!.isError).toBe(false);
 		expect(typo!.message).toContain("Unknown filter");
 		expect(typo!.isError).toBe(true);
+		expect(unnarrowed!.message).toBe("Add a list, tag, due, scheduled or linked line to choose which tasks to show.");
+		expect(unnarrowed!.isError).toBe(true);
 	});
 
 	it("keeps its place when text is typed next to it in Live Preview", async function () {
 		await createTask("First");
 		await createTask("Second");
-		await writeNote("Typing.md", `# Typing\n\n${block("")}\n\nA line after the block.\n`);
+		await writeNote("Typing.md", `# Typing\n\n${block("list: Inbox")}\n\nA line after the block.\n`);
 		await openNote("Typing.md", "live");
 		await waitForBlocks(1);
 		await waitForTitles(["First", "Second"]);
@@ -270,7 +272,7 @@ describe("The logwell dashboard block", function () {
 	it("a tick in the note completes the task in the app, with an Undo notice, and Undo brings it back", async function () {
 		const a = await createTask("Tick me");
 		await createTask("Leave me");
-		await writeNote("Tick.md", `${block("")}\n`);
+		await writeNote("Tick.md", `${block("list: Inbox")}\n`);
 		await openNote("Tick.md", "reading");
 		await waitForTitles(["Tick me", "Leave me"]);
 		await browser.$(`${scope()} .cp-block .cp-task-row[data-task-id="${a}"] input.cp-task-checkbox`).click();
@@ -287,7 +289,7 @@ describe("The logwell dashboard block", function () {
 	it("a task completed elsewhere (as the app's own checkbox does) leaves the block, and a new task joins it", async function () {
 		const a = await createTask("Done elsewhere");
 		await createTask("Stays");
-		await writeNote("Follow.md", `${block("")}\n`);
+		await writeNote("Follow.md", `${block("list: Inbox")}\n`);
 		await openNote("Follow.md", "reading");
 		await waitForTitles(["Done elsewhere", "Stays"]);
 		await complete(a);
@@ -299,7 +301,7 @@ describe("The logwell dashboard block", function () {
 
 	it("a block in a collapsed callout waits until the callout opens, then draws", async function () {
 		await createTask("Inside the callout");
-		await writeNote("Callout.md", `> [!note]- Tasks\n> ${block("").replace(/\n/g, "\n> ")}\n`);
+		await writeNote("Callout.md", `> [!note]- Tasks\n> ${block("list: Inbox").replace(/\n/g, "\n> ")}\n`);
 		await openNote("Callout.md", "reading");
 		await waitForBlocks(1);
 		// Collapsed: nothing drawn, and nothing counted yet.
@@ -310,7 +312,7 @@ describe("The logwell dashboard block", function () {
 
 	it("a block in an open callout draws at once", async function () {
 		await createTask("In an open callout");
-		await writeNote("OpenCallout.md", `> [!note] Tasks\n> ${block("").replace(/\n/g, "\n> ")}\n`);
+		await writeNote("OpenCallout.md", `> [!note] Tasks\n> ${block("list: Inbox").replace(/\n/g, "\n> ")}\n`);
 		await openNote("OpenCallout.md", "reading");
 		await waitForTitles(["In an open callout"]);
 	});
@@ -330,14 +332,14 @@ describe("The logwell dashboard block", function () {
 		await createTask("High one", { priority: 1 });
 		await createTask("Low one", { priority: 3 });
 		await createTask("Plain one");
-		const sources = ["", "priority: high", "priority: low", "priority: none", "priority: high, low"];
+		const sources = ["list: Inbox", "list: Inbox\npriority: high", "list: Inbox\npriority: low", "list: Inbox\npriority: none", "list: Inbox\npriority: high, low"];
 		const all = Array.from({ length: 10 }, (_, i) => sources[i % sources.length]!);
 		await writeNote("Many.md", all.map((s, i) => `Block ${i + 1}\n\n${block(s)}`).join("\n\n") + "\n");
 		await openNote("Many.md", "reading");
 		// Reading view renders the sections as they come near the viewport, and a block draws when it is on screen (a
 		// little before): several blocks are drawn, and every drawn one shows what its filters match.
 		const expected = (chips: string[], extra: number) => {
-			const source = chips.join("");
+			const source = chips.filter((c) => c !== "list: Inbox").join("");
 			const base = source === "" ? 3 : source === "priority: high, low" ? 2 : 1;
 			const gains = source === "" || source === "priority: high" || source === "priority: high, low";
 			return base + (gains ? extra : 0);

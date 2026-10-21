@@ -231,7 +231,7 @@ describe("the block processor", () => {
 		it("draws the block synchronously when it loads, with no empty frame first", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(titles(el)).toEqual(["A"]);
 			expect(el.querySelector(".cp-block")).not.toBeNull();
 		});
@@ -239,7 +239,7 @@ describe("the block processor", () => {
 		it("is a child of the render context, mounted on load and removed on unload", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(children).toHaveLength(1);
 			expect(el.querySelector(".cp-block")).not.toBeNull();
 			children[0]!.unload();
@@ -249,7 +249,7 @@ describe("the block processor", () => {
 
 		it("wraps the block in the theme classes the rows are styled by", async () => {
 			const s = await setup();
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			const root = el.querySelector(".cp-block")!;
 			expect(root.classList.contains("cp-theme")).toBe(true);
 			expect(root.classList.contains("checkpoint-view")).toBe(true);
@@ -260,8 +260,8 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "High", priority: 1 });
 			await s.h.app.tasks.create({ title: "Low", priority: 3 });
-			const a = s.block("priority: high");
-			const b = s.block("priority: low");
+			const a = s.block("list: Inbox\npriority: high");
+			const b = s.block("list: Inbox\npriority: low");
 			expect(parses()).toBe(2);
 			expect(titles(a.el)).toEqual(["High"]);
 			expect(titles(b.el)).toEqual(["Low"]);
@@ -289,7 +289,7 @@ describe("the block processor", () => {
 
 		it("says No tasks found. for valid filters with no match", async () => {
 			const s = await setup();
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			expect(text(el)).toBe("No tasks found.");
 		});
 
@@ -314,7 +314,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			s.setSession(null);
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(text(el)).toBe("Open a Logwell database to see tasks.");
 			expect(el.querySelector(".cp-block-msg")!.classList.contains("is-error")).toBe(false);
 			vi.useFakeTimers();
@@ -326,7 +326,7 @@ describe("the block processor", () => {
 		it("goes back to the message when the session closes", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(titles(el)).toEqual(["A"]);
 			vi.useFakeTimers();
 			s.setSession(null);
@@ -341,7 +341,7 @@ describe("the block processor", () => {
 			await second.app.tasks.create({ title: "New" });
 			// Watch its bus before the block can subscribe to it.
 			expect(s.storeListeners(second)).toBe(0);
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(titles(el)).toEqual(["Old"]);
 			expect(s.storeListeners(s.h)).toBe(1);
 			vi.useFakeTimers();
@@ -362,7 +362,7 @@ describe("the block processor", () => {
 	describe("refresh", () => {
 		it("coalesces a burst of changes into one redraw after about 300 ms", async () => {
 			const s = await setup();
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			vi.useFakeTimers();
 			const before = runs();
 			for (const title of ["A", "B", "C"]) await s.h.app.tasks.create({ title });
@@ -391,7 +391,7 @@ describe("the block processor", () => {
 				IntersectionObserver: PopoutObserver,
 			};
 			const globalSet = vi.spyOn(window, "setTimeout");
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(FakeObserver.instances.at(-1)).toBeInstanceOf(PopoutObserver);
 			await s.h.app.tasks.create({ title: "A" });
 			await s.h.app.tasks.create({ title: "B" });
@@ -406,7 +406,7 @@ describe("the block processor", () => {
 
 		it("skips a change that cannot alter the block: no timer, no query", async () => {
 			const s = await setup();
-			s.block("");
+			s.block("list: Inbox");
 			vi.useFakeTimers();
 			const before = runs();
 			await s.h.app.habits.create(habit);
@@ -420,7 +420,7 @@ describe("the block processor", () => {
 		it("reads the query context again on every refresh", async () => {
 			const s = await setup();
 			const spy = vi.spyOn(s.h.app, "queryContext");
-			s.block("");
+			s.block("list: Inbox");
 			const first = spy.mock.calls.length;
 			expect(first).toBeGreaterThan(0);
 			vi.useFakeTimers();
@@ -446,7 +446,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			await s.h.app.tasks.create({ title: "B" });
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			vi.useFakeTimers();
 			const before = runs();
 			const box = rows(el)[0]!.querySelector<HTMLInputElement>("input.cp-task-checkbox")!;
@@ -467,7 +467,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			shown = false;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(runs()).toBe(0);
 			expect(rows(el)).toHaveLength(0);
 			vi.useFakeTimers();
@@ -485,7 +485,7 @@ describe("the block processor", () => {
 
 		it("watches the block a little beyond the viewport, so it has its height when it scrolls into view", async () => {
 			const s = await setup();
-			s.block("");
+			s.block("list: Inbox");
 			expect(FakeObserver.instances.at(-1)!.options?.rootMargin).toBe("300px 0px");
 			expect(FakeObserver.instances.at(-1)!.observed).toHaveLength(1);
 		});
@@ -494,7 +494,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			shown = false;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			const observer = FakeObserver.instances.at(-1)!;
 			observer.fire(true);
 			expect(runs()).toBe(0);
@@ -508,7 +508,7 @@ describe("the block processor", () => {
 
 		it("a block that was drawn and then hidden catches up when shown again", async () => {
 			const s = await setup();
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			const observer = FakeObserver.instances.at(-1)!;
 			shown = false;
 			vi.useFakeTimers();
@@ -523,7 +523,7 @@ describe("the block processor", () => {
 
 		it("a block that hides while a redraw is pending waits for the observer", async () => {
 			const s = await setup();
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			const observer = FakeObserver.instances.at(-1)!;
 			vi.useFakeTimers();
 			await s.h.app.tasks.create({ title: "A" });
@@ -542,8 +542,8 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			vi.useFakeTimers();
-			const a = s.block("");
-			s.block("priority: high");
+			const a = s.block("list: Inbox");
+			s.block("list: Inbox\npriority: high");
 			expect(s.storeListeners(s.h)).toBe(1);
 			expect(s.sessionListeners()).toBe(1);
 			await s.h.app.tasks.create({ title: "B" });
@@ -564,8 +564,8 @@ describe("the block processor", () => {
 
 		it("one block unloading keeps the others subscribed, and the last one to go unsubscribes", async () => {
 			const s = await setup();
-			const a = s.block("");
-			const b = s.block("");
+			const a = s.block("list: Inbox");
+			const b = s.block("list: Inbox");
 			expect(s.storeListeners(s.h)).toBe(1);
 			children[0]!.unload();
 			expect(s.storeListeners(s.h)).toBe(1);
@@ -581,10 +581,10 @@ describe("the block processor", () => {
 
 		it("a block loaded again after the last one went subscribes again", async () => {
 			const s = await setup();
-			s.block("");
+			s.block("list: Inbox");
 			children.splice(0)[0]!.unload();
 			expect(s.storeListeners(s.h)).toBe(0);
-			const b = s.block("");
+			const b = s.block("list: Inbox");
 			expect(s.storeListeners(s.h)).toBe(1);
 			vi.useFakeTimers();
 			await s.h.app.tasks.create({ title: "A" });
@@ -597,7 +597,7 @@ describe("the block processor", () => {
 		it("a click on a row opens that task in the app", async () => {
 			const s = await setup();
 			const a = (await s.h.app.tasks.create({ title: "A" })).task;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			rows(el)[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 			expect(s.openTask).toHaveBeenCalledWith(a.id);
 		});
@@ -612,7 +612,7 @@ describe("the block processor", () => {
 
 		it("Open in Logwell with filters that match no view opens the app without one", async () => {
 			const s = await setup();
-			const { el } = s.block("priority: high");
+			const { el } = s.block("linked: this note\npriority: high");
 			el.querySelector<HTMLButtonElement>('button[aria-label="Open in Logwell"]')!.click();
 			expect(s.openView).toHaveBeenCalledWith(null);
 		});
@@ -652,9 +652,9 @@ describe("the block processor", () => {
 		it("runs one interval for all blocks, about once a minute", async () => {
 			vi.useFakeTimers();
 			const s = await setup();
-			s.block("");
-			s.block("priority: high");
-			s.block("priority: low");
+			s.block("list: Inbox");
+			s.block("list: Inbox\npriority: high");
+			s.block("list: Inbox\npriority: low");
 			expect(vi.getTimerCount()).toBe(1);
 			expect(TICK_MS).toBe(60_000);
 		});
@@ -663,7 +663,7 @@ describe("the block processor", () => {
 			vi.useFakeTimers();
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			s.block("");
+			s.block("list: Inbox");
 			const before = runs();
 			await vi.advanceTimersByTimeAsync(TICK_MS * 5);
 			expect(runs() - before).toBe(0);
@@ -673,13 +673,13 @@ describe("the block processor", () => {
 		it("drops the interval with the last block and starts it again with the next", async () => {
 			vi.useFakeTimers();
 			const s = await setup();
-			s.block("");
-			s.block("");
+			s.block("list: Inbox");
+			s.block("list: Inbox");
 			children[0]!.unload();
 			expect(vi.getTimerCount()).toBe(1);
 			children[1]!.unload();
 			expect(vi.getTimerCount()).toBe(0);
-			s.block("");
+			s.block("list: Inbox");
 			expect(vi.getTimerCount()).toBe(1);
 		});
 
@@ -697,9 +697,9 @@ describe("the block processor", () => {
 			});
 			const s = await setup();
 			currentWin = fakeWin("popout");
-			s.block("");
+			s.block("list: Inbox");
 			currentWin = fakeWin("main");
-			s.block("");
+			s.block("list: Inbox");
 			expect(intervals.map((i) => i.win)).toEqual(["popout"]);
 			// The popout window closes: its block unloads, and the other window's block still gets the tick.
 			children[0]!.unload();
@@ -713,8 +713,8 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			vi.useFakeTimers();
-			const a = s.block("");
-			const b = s.block("priority: high");
+			const a = s.block("list: Inbox");
+			const b = s.block("list: Inbox\npriority: high");
 			await s.h.app.tasks.create({ title: "B" });
 			expect(vi.getTimerCount()).toBeGreaterThan(0);
 			s.plugin.unload();
@@ -740,7 +740,7 @@ describe("the block processor", () => {
 		it("unmounts the Preact trees", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			s.block("");
+			s.block("list: Inbox");
 			drawn.trees.length = 0;
 			s.plugin.unload();
 			expect(drawn.trees.some((tree) => tree === null)).toBe(true);
@@ -748,8 +748,8 @@ describe("the block processor", () => {
 
 		it("registers the cleanup with the plugin once, not once per block", async () => {
 			const s = await setup();
-			s.block("");
-			s.block("");
+			s.block("list: Inbox");
+			s.block("list: Inbox");
 			s.plugin.unload();
 			s.plugin.unload();
 			expect(s.sessionListeners()).toBe(0);
@@ -759,7 +759,7 @@ describe("the block processor", () => {
 	describe("settings", () => {
 		it("a change of the accent redraws the block with the new accent class", async () => {
 			const s = await setup();
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(el.querySelector(".cp-block")!.classList.contains("cp-accent-theme")).toBe(true);
 			vi.useFakeTimers();
 			settings = { ...DEFAULT_SETTINGS, accent: "blue" };
@@ -773,7 +773,7 @@ describe("the block processor", () => {
 
 		it("a settings event that changes nothing the block shows draws nothing", async () => {
 			const s = await setup();
-			s.block("");
+			s.block("list: Inbox");
 			vi.useFakeTimers();
 			s.setSession(s.env.session());
 			expect(vi.getTimerCount()).toBe(0);
@@ -809,7 +809,7 @@ describe("the block processor", () => {
 			vi.mocked(matcher.runBlockQuery).mockImplementationOnce(() => {
 				throw new Error("boom");
 			});
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(text(el)).toBe("boom");
 			expect(el.querySelector(".cp-block-msg")!.classList.contains("is-error")).toBe(true);
 			vi.useFakeTimers();
@@ -824,7 +824,7 @@ describe("the block processor", () => {
 		it("with no database, a settings event does not redraw the message", async () => {
 			const s = await setup();
 			s.setSession(null);
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(text(el)).toBe("Open a Logwell database to see tasks.");
 			vi.useFakeTimers();
 			s.setSession(null);
@@ -840,7 +840,7 @@ describe("the block processor", () => {
 			await s.h.app.tasks.create({ title: "A" });
 			(window as unknown as { IntersectionObserver: unknown }).IntersectionObserver = undefined;
 			shown = false;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(titles(el)).toEqual(["A"]);
 			vi.useFakeTimers();
 			await s.h.app.tasks.create({ title: "B" });
@@ -852,7 +852,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			vi.useFakeTimers();
-			const { el } = s.block("", "Notes/Page.md", false);
+			const { el } = s.block("list: Inbox", "Notes/Page.md", false);
 			expect(el.isConnected).toBe(false);
 			expect(rows(el)).toHaveLength(0);
 			await vi.advanceTimersByTimeAsync(DETACHED_DRAW_MS + 10);
@@ -863,7 +863,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			vi.useFakeTimers();
-			const { el } = s.block("", "Notes/Page.md", false);
+			const { el } = s.block("list: Inbox", "Notes/Page.md", false);
 			document.body.appendChild(el);
 			elements.push(el);
 			shown = false;
@@ -879,7 +879,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
 			shown = false;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			expect(rows(el)).toHaveLength(0);
 		});
 	});
@@ -890,7 +890,7 @@ describe("the block processor", () => {
 		it("a new task that no filter of the block matches arms no timer and runs no query", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "High", priority: 1 });
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			const before = runs();
 			await s.h.app.tasks.create({ title: "Low", priority: 3 });
@@ -918,7 +918,7 @@ describe("the block processor", () => {
 		it("a task that enters the block (priority raised) redraws it", async () => {
 			const s = await setup();
 			const t = (await s.h.app.tasks.create({ title: "Low", priority: 3 })).task;
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			await s.h.app.tasks.update(t.id, { priority: 1 });
 			await wait();
@@ -928,7 +928,7 @@ describe("the block processor", () => {
 		it("a task that leaves the block (priority lowered) redraws it", async () => {
 			const s = await setup();
 			const t = (await s.h.app.tasks.create({ title: "High", priority: 1 })).task;
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			await s.h.app.tasks.update(t.id, { priority: 3 });
 			await wait();
@@ -949,7 +949,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			const a = (await s.h.app.tasks.create({ title: "A" })).task;
 			const b = (await s.h.app.tasks.create({ title: "B" })).task;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			vi.useFakeTimers();
 			await s.h.app.tasks.complete(a.id);
 			await s.h.app.tasks.delete(b.id);
@@ -960,7 +960,7 @@ describe("the block processor", () => {
 		it("a new subtask under a shown task redraws the block, and the parent's count follows", async () => {
 			const s = await setup();
 			const parent = (await s.h.app.tasks.create({ title: "Parent", priority: 1 })).task;
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			await s.h.app.tasks.create({ title: "Child", parentId: parent.id });
 			expect(vi.getTimerCount()).toBe(1);
@@ -972,7 +972,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			const parent = (await s.h.app.tasks.create({ title: "Old name" })).task;
 			await s.h.app.tasks.create({ title: "Child", parentId: parent.id, priority: 1 });
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			expect(rows(el)[0]!.textContent).toContain("Old name");
 			vi.useFakeTimers();
 			await s.h.app.tasks.update(parent.id, { title: "New name" });
@@ -984,8 +984,8 @@ describe("the block processor", () => {
 		it("a change to a list, a section or a tag still redraws the block", async () => {
 			const s = await setup();
 			const work = await s.h.app.categories.create("Work");
-			await s.h.app.tasks.create({ title: "A", categoryId: work.id });
-			const { el } = s.block("");
+			await s.h.app.tasks.create({ title: "A", categoryId: work.id, scheduled: { kind: "date", date: "2026-10-20" } });
+			const { el } = s.block("scheduled: 01-01-2020 to 31-12-2099");
 			expect(el.querySelector(".cp-meta-list-name")!.textContent).toBe("Work");
 			vi.useFakeTimers();
 			await s.h.app.categories.update(work.id, { name: "Job" });
@@ -996,7 +996,7 @@ describe("the block processor", () => {
 		it("a second change while a redraw is pending is not looked at again", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "High", priority: 1 });
-			s.block("priority: high");
+			s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			await s.h.app.tasks.create({ title: "High 2", priority: 1 });
 			expect(vi.getTimerCount()).toBe(1);
@@ -1007,7 +1007,7 @@ describe("the block processor", () => {
 		it("an undo of a change that did not matter does not wake the block either", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "High", priority: 1 });
-			s.block("priority: high");
+			s.block("list: Inbox\npriority: high");
 			const low = (await s.h.app.tasks.create({ title: "Low", priority: 3 })).task;
 			vi.useFakeTimers();
 			await s.h.app.tasks.update(low.id, { title: "Low 2" });
@@ -1029,7 +1029,7 @@ describe("the block processor", () => {
 		it("an external reload redraws a block whose rows changed", async () => {
 			const s = await setup();
 			const t = (await s.h.app.tasks.create({ title: "Before" })).task;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			vi.useFakeTimers();
 			await s.h.store.replaceAll(renamed(s.h, t.id, "After"), null);
 			s.h.app.store.notifyReloaded();
@@ -1040,7 +1040,7 @@ describe("the block processor", () => {
 		it("a replace-all (import or merge) redraws a block whose rows changed", async () => {
 			const s = await setup();
 			const t = (await s.h.app.tasks.create({ title: "Before" })).task;
-			const { el } = s.block("");
+			const { el } = s.block("list: Inbox");
 			vi.useFakeTimers();
 			await s.h.app.store.replaceAll(renamed(s.h, t.id, "After"), null);
 			await wait();
@@ -1050,7 +1050,7 @@ describe("the block processor", () => {
 		it("a relevant change while hidden, then an irrelevant one, still draws the new rows when shown", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A", priority: 1 });
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			const observer = FakeObserver.instances.at(-1)!;
 			shown = false;
 			vi.useFakeTimers();
@@ -1133,7 +1133,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			const parent = (await s.h.app.tasks.create({ title: "Parent", priority: 1 })).task;
 			const child = (await s.h.app.tasks.create({ title: "Child", parentId: parent.id })).task;
-			s.block("priority: high");
+			s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			const queries = runs();
 			const draws = renders();
@@ -1149,7 +1149,7 @@ describe("the block processor", () => {
 			const s = await setup();
 			const parent = (await s.h.app.tasks.create({ title: "Parent", priority: 1 })).task;
 			const child = (await s.h.app.tasks.create({ title: "Child", parentId: parent.id })).task;
-			const { el } = s.block("priority: high");
+			const { el } = s.block("list: Inbox\npriority: high");
 			vi.useFakeTimers();
 			const draws = renders();
 			await s.h.app.tasks.complete(child.id);
@@ -1161,7 +1161,7 @@ describe("the block processor", () => {
 		it("renders when the day changed, even if the rows are the same", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			s.block("");
+			s.block("list: Inbox");
 			vi.useFakeTimers();
 			const draws = renders();
 			s.h.clock.set("2026-10-02T10:00:00.000Z");
@@ -1173,13 +1173,131 @@ describe("the block processor", () => {
 		it("renders when the accent changed, even if the rows are the same", async () => {
 			const s = await setup();
 			await s.h.app.tasks.create({ title: "A" });
-			s.block("");
+			s.block("list: Inbox");
 			vi.useFakeTimers();
 			const draws = renders();
 			settings = { ...DEFAULT_SETTINGS, accent: "blue" };
 			s.setSession(s.env.session());
 			await wait();
 			expect(renders() - draws).toBe(1);
+		});
+	});
+
+	describe("#222: a block with status: completed", () => {
+		const daily = { rule: { freq: "daily", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } as never;
+		const todayAt = (s: Setup) => ({ kind: "date" as const, date: s.h.app.queryContext().today });
+		const opens = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".cp-task-row")].map((r) => r.dataset.occurrence ?? null);
+
+		it("draws completed tasks and a done occurrence, and redraws when a task is completed", async () => {
+			const s = await setup();
+			const a = (await s.h.app.tasks.create({ title: "A" })).task;
+			await s.h.app.tasks.create({ title: "B" });
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			await s.h.app.tasks.complete(a.id);
+			await s.h.app.recurrence.complete(water.id);
+			const { el } = s.block("status: completed\nlist: Inbox");
+			expect(new Set(titles(el))).toEqual(new Set(["A", "Water \u00b7 Today"]));
+			expect(opens(el).filter((d) => d !== null)).toHaveLength(1);
+			expect([...el.querySelectorAll(".cp-block-chip")].map((c) => c.textContent)).toEqual(["status: completed", "list: Inbox"]);
+			vi.useFakeTimers();
+			const b = [...s.h.app.store.state.tasks.values()].find((t) => t.title === "B")!;
+			await s.h.app.tasks.complete(b.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(new Set(titles(el))).toEqual(new Set(["A", "B", "Water \u00b7 Today"]));
+			expect(el.querySelector(".cp-block-count")!.textContent).toBe("3 tasks");
+		});
+
+		it("redraws when an occurrence record changes", async () => {
+			const s = await setup();
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			const { el } = s.block("status: completed\nlist: Inbox");
+			expect(titles(el)).toEqual([]);
+			vi.useFakeTimers();
+			await s.h.app.recurrence.complete(water.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["Water \u00b7 Today"]);
+			expect(opens(el)).toEqual([todayAt(s).date]);
+			const date = opens(el)[0]!;
+			await s.h.app.recurrence.reopen(water.id, date);
+			// A done occurrence row is never held: it leaves with the redraw.
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual([]);
+			expect(text(el)).toBe("No tasks found.");
+		});
+
+		it("a task edit that no completed row can show does not run the query again", async () => {
+			const s = await setup();
+			const a = (await s.h.app.tasks.create({ title: "A", priority: 1 })).task;
+			await s.h.app.tasks.complete(a.id);
+			const open = (await s.h.app.tasks.create({ title: "Open" })).task;
+			const { el } = s.block("status: completed\nlist: Inbox\npriority: high");
+			expect(titles(el)).toEqual(["A"]);
+			vi.useFakeTimers();
+			const before = runs();
+			await s.h.app.tasks.update(open.id, { title: "Open, edited" });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(runs()).toBe(before);
+		});
+
+		it("a repeating task whose edit makes its done occurrences match enters the block", async () => {
+			const s = await setup();
+			const water = (await s.h.app.tasks.create({ title: "Water", scheduled: todayAt(s), repeat: daily })).task;
+			await s.h.app.recurrence.complete(water.id);
+			const { el } = s.block("status: completed\nlist: Inbox\npriority: high");
+			expect(titles(el)).toEqual([]);
+			vi.useFakeTimers();
+			await s.h.app.tasks.update(water.id, { priority: 1 });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["Water \u00b7 Today"]);
+		});
+
+		it("Open in Logwell opens the Completed view", async () => {
+			const s = await setup();
+			const { el } = s.block("status: completed\nlist: Inbox");
+			el.querySelector<HTMLButtonElement>('button[aria-label="Open in Logwell"]')!.click();
+			expect(s.openView).toHaveBeenCalledWith({ kind: "completed" });
+		});
+
+		it.each([
+			["an empty block", ""],
+			["only a priority", "priority: high"],
+			["only a quadrant", "quadrant: 1"],
+			["only a status", "status: all"],
+		])("a block with %s shows the message that asks for a narrowing line and runs no query", async (_name, source) => {
+			const s = await setup();
+			await s.h.app.tasks.create({ title: "A", priority: 1 });
+			const { el } = s.block(source);
+			expect(text(el)).toBe("Add a list, tag, due, scheduled or linked line to choose which tasks to show.");
+			expect(el.querySelector(".cp-block-msg")!.classList.contains("is-error")).toBe(true);
+			expect(rows(el)).toHaveLength(0);
+			expect(runs()).toBe(0);
+			vi.useFakeTimers();
+			await s.h.app.tasks.create({ title: "B" });
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(runs()).toBe(0);
+		});
+
+		it("a block with status: all draws open and completed rows, and moves a row between the parts when it is completed", async () => {
+			const s = await setup();
+			const a = (await s.h.app.tasks.create({ title: "A" })).task;
+			await s.h.app.tasks.create({ title: "B" });
+			const { el } = s.block("status: all\nlist: Inbox");
+			expect(titles(el)).toEqual(["A", "B"]);
+			vi.useFakeTimers();
+			await s.h.app.tasks.complete(a.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["B", "A"]);
+			expect(el.querySelector(".cp-block-count")!.textContent).toBe("2 tasks");
+			await s.h.app.tasks.reopen(a.id);
+			await vi.advanceTimersByTimeAsync(REFRESH_MS + 10);
+			expect(titles(el)).toEqual(["A", "B"]);
+		});
+
+		it("an unknown status value is an error and runs no query", async () => {
+			const s = await setup();
+			const { el } = s.block("status: done\nlist: Inbox");
+			expect(text(el)).toBe("Unknown status value “done”. Use open, completed or all.");
+			expect(runs()).toBe(0);
 		});
 	});
 });
@@ -1253,7 +1371,7 @@ describe("subtask counts", () => {
 			await h.app.tasks.complete(done.id);
 			await h.app.tasks.create({ title: "Other", priority: 1 });
 			const spy = vi.spyOn(h.app.tasks.lists, "subtaskCounts");
-			const el = block("priority: high");
+			const el = block("list: Inbox\npriority: high");
 			// Once for the block's check of what changed, once by the list for its badges.
 			expect(spy).toHaveBeenCalledTimes(2);
 			expect(badge(el, "Parent")).toBe("1/2");
@@ -1264,7 +1382,7 @@ describe("subtask counts", () => {
 			const { h, block } = await setup();
 			const parent = (await h.app.tasks.create({ title: "Parent" })).task;
 			const child = (await h.app.tasks.create({ title: "Child", parentId: parent.id })).task;
-			const el = block("");
+			const el = block("list: Inbox");
 			expect(badge(el, "Parent")).toBe("0/1");
 			vi.useFakeTimers();
 			await h.app.tasks.complete(child.id);

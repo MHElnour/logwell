@@ -443,7 +443,7 @@ class DashboardBlockChild extends MarkdownRenderChild {
 				if (record === undefined) continue;
 				if (list.ids.has(record.id) || list.parents.has(record.id)) return true;
 				if (record.parentId !== null && list.ids.has(record.parentId)) return true;
-				if (matcher.matches(record)) return true;
+				if (matcher.mayShow(record)) return true;
 			}
 		}
 		return false;

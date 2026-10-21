@@ -1,9 +1,9 @@
-import { occurrenceSpec } from "./recurrence";
+import { indexOccurrenceRecords, occurrenceSpec } from "./recurrence";
 import { addDays, dateSpecDate, dateSpecSortValue } from "./time";
 import { compareSortKeys } from "./sortKey";
 import { isUnderTag } from "./tags";
 import { compareTasksBySortKey, isOpen } from "./tasks";
-import { type DateSpec, type ID, INBOX_ID, type LocalDate, type OccurrenceRecord, type Priority, type Task, type WeekStart } from "./types";
+import { type DateSpec, type ID, INBOX_ID, type LocalDate, type OccurrenceRecord, type Priority, type Task, type TaskStatus, type WeekStart } from "./types";
 
 // List and filter queries. Pure functions
 // over task records; the app layer feeds them the current state.
@@ -48,6 +48,11 @@ export interface DateGroup {
 
 export type DateFilter = "any" | "overdue" | "today" | "next7" | "none" | "range";
 export type StatusFilter = "open" | "completed" | "all";
+
+/** Whether a status filter accepts a task, or a done occurrence (which counts as "completed"). The one status rule of the filter, the block and the Completed view. */
+export function statusAccepts(filter: StatusFilter, status: TaskStatus): boolean {
+	return filter === "all" || filter === status;
+}
 export type Quadrant = "urgent-important" | "important" | "urgent" | "neither";
 
 /** "manual" keeps each view's own order. */
@@ -363,6 +368,25 @@ export function completedRows(done: readonly Task[], occurrences: readonly DoneO
 	});
 }
 
+/**
+ * The done occurrences of repeating tasks that pass the caller's tests, for Completed rows: `inTask` is asked once per
+ * task that has records, `inRecord` once per done record of a task that passed. The series task itself stays open,
+ * so a task filter (status included) cannot find them. Shared by the Completed view and a task block.
+ */
+export function collectDoneOccurrences(
+	state: { readonly tasks: ReadonlyMap<ID, Task>; readonly occurrenceRecords: ReadonlyMap<string, OccurrenceRecord> },
+	inTask: (task: Task) => boolean,
+	inRecord: (task: Task, record: OccurrenceRecord) => boolean,
+): DoneOccurrence[] {
+	const out: DoneOccurrence[] = [];
+	for (const [taskId, records] of indexOccurrenceRecords(state.occurrenceRecords)) {
+		const task = state.tasks.get(taskId);
+		if (task === undefined || task.recurrence === null || !inTask(task)) continue;
+		for (const record of records) if (record.status === "done" && inRecord(task, record)) out.push({ task, record });
+	}
+	return out;
+}
+
 /** Completed, newest first; `occurrences` are the done occurrences of repeating tasks. */
 export function completedEntries(tasks: Task[], byId: ReadonlyMap<ID, Task>, ctx: QueryContext, occurrences: readonly DoneOccurrence[] = []): ListEntry[] {
 	return completedRows(
@@ -440,7 +464,7 @@ function matchesFields(task: Task, f: TaskFilter): boolean {
 
 /** All fields combine with AND. Empty fields do not constrain. */
 function matchesFilter(task: Task, f: TaskFilter, ctx: QueryContext): boolean {
-	if (f.status !== "all" && task.status !== f.status) return false;
+	if (!statusAccepts(f.status, task.status)) return false;
 	if (!matchesFields(task, f)) return false;
 	return matchesTaskDate(task, f, ctx);
 }
@@ -471,13 +495,21 @@ export function occurrenceDay(task: Task, date: LocalDate, zone: string): LocalD
 }
 
 /**
+ * The date criterion of a filter on one done occurrence: its own day, read as a schedule day (a deadline is
+ * never one). It is never overdue. Only `date`, `from` and `to` are read. Shared with the dashboard block.
+ */
+export function matchesOccurrenceDate(task: Task, record: OccurrenceRecord, f: Pick<TaskFilter, "date" | "from" | "to">, ctx: QueryContext): boolean {
+	return f.date === "any" || matchesDate(f, ctx, occurrenceDay(task, record.occurrenceDate, ctx.zone), null, () => false);
+}
+
+/**
  * Whether a done occurrence of `task` passes the filter (text is the caller's). The status
  * criterion is about the occurrence, not the series: "open" excludes it, "all" and "completed" keep it.
  * The date criteria test the occurrence's own day; it is never overdue.
  */
 export function matchesOccurrence(task: Task, record: OccurrenceRecord, f: TaskFilter, ctx: QueryContext): boolean {
-	if (f.status === "open" || !matchesFields(task, f)) return false;
-	return f.date === "any" || matchesDate(f, ctx, occurrenceDay(task, record.occurrenceDate, ctx.zone), null, () => false);
+	if (!statusAccepts(f.status, "completed") || !matchesFields(task, f)) return false;
+	return matchesOccurrenceDate(task, record, f, ctx);
 }
 
 /** Sort rank: high (1), medium (2), low (3), then none (0). */

@@ -55,6 +55,8 @@ async function setup() {
 			title: `Task ${i}`,
 			categoryId: lists[Math.floor(i / (TASKS / LISTS))]!.id,
 			priority: i % 500 === 7 ? 1 : 0,
+			// A vault-wide block needs a narrowing line: every task has a day that `scheduled: 01-01-2000 to 31-12-2099` holds.
+			scheduled: { kind: "date", date: "2026-10-20" },
 			parentId: i % 10 === 8 ? taskId(i) : null,
 			sortKey: `V${i.toString(36).padStart(5, "0")}`,
 		});
@@ -103,7 +105,7 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 	it("a rename of a shown task makes only the command's and the query's passes, in a list block and in a vault-wide block", async () => {
 		const { h, block, cleanup } = await setup();
 		const small = block("list: List 3\npriority: high");
-		const wide = block("priority: high");
+		const wide = block("scheduled: 01-01-2000 to 31-12-2099\npriority: high");
 		expect(titles(small)).toHaveLength(10);
 		expect(titles(wide)).toHaveLength(100);
 		// The first draws built the index; from here on a redraw reads it.
@@ -161,7 +163,7 @@ describe(`#75: one redraw of a task block at ${TASKS} tasks`, () => {
 		const els: HTMLElement[] = [];
 		// Ten list blocks, of which only the one of list 3 shows the renamed task, and nine vault-wide blocks that show it too.
 		for (let k = 0; k < LISTS; k++) els.push(block(`list: List ${k}\npriority: high`));
-		for (let k = 0; k < 9; k++) els.push(block("priority: high"));
+		for (let k = 0; k < 9; k++) els.push(block("scheduled: 01-01-2000 to 31-12-2099\npriority: high"));
 		vi.useFakeTimers(FAKE);
 		const ms: number[] = [];
 		for (let run = 0; run < RUNS; run++) {

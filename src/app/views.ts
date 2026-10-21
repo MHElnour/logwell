@@ -8,6 +8,7 @@ import {
 	type ViewScope,
 	arrangeHierarchy,
 	categoryEntries,
+	collectDoneOccurrences,
 	completedEntries,
 	entryOf,
 	filterTasks,
@@ -25,13 +26,13 @@ import {
 	priorityRank,
 	sortEntriesByDate,
 	sortEntriesByPriority,
+	statusAccepts,
 	todayEntries,
 	upcomingGroups,
 	upcomingRange,
 } from "../domain/queries";
 import { type BoardColumn, toCards } from "../domain/board";
 import { type GroupBy, effectiveGroupBy } from "../domain/groupBy";
-import { indexOccurrenceRecords } from "../domain/recurrence";
 import { sectionsOfList } from "../domain/sections";
 import { tagLabel, tagPrefixes } from "../domain/tags";
 import { addDays } from "../domain/time";
@@ -247,13 +248,11 @@ function openGroups(
  * rows. The series task itself stays open, so the task filters (status included) cannot find them.
  */
 function doneOccurrences(state: DbData, ctx: QueryContext, filter: TaskFilter, text: string): DoneOccurrence[] {
-	const out: DoneOccurrence[] = [];
-	for (const [taskId, records] of indexOccurrenceRecords(state.occurrenceRecords)) {
-		const task = state.tasks.get(taskId);
-		if (task === undefined || task.recurrence === null || !matchesText(task.title, text)) continue;
-		for (const record of records) if (record.status === "done" && matchesOccurrence(task, record, filter, ctx)) out.push({ task, record });
-	}
-	return out;
+	return collectDoneOccurrences(
+		state,
+		(task) => matchesText(task.title, text),
+		(task, record) => matchesOccurrence(task, record, filter, ctx),
+	);
 }
 
 /**
@@ -600,7 +599,7 @@ export interface CalendarTasks {
 export function calendarTasks(state: DbData, ctx: QueryContext, filter: TaskFilter, index?: TaskIndex, options: { count?: boolean } = {}): CalendarTasks {
 	const dated = menuTasks(state, ctx, filter, { within: "dated", index });
 	if (options.count === false) return { dated, unscheduledCount: undefined };
-	const open = filter.status !== "completed" && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
+	const open = statusAccepts(filter.status, "open") && !isFilterActive(filter, filter.status) ? index?.openTotal(state) : undefined;
 	const unscheduledCount = open === undefined ? unscheduledTasks(state, ctx, filter, index).length : open - dated.filter((t) => isOpen(t) && !isUnscheduled(t)).length;
 	return { dated, unscheduledCount };
 }

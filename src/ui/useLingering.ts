@@ -27,12 +27,16 @@ function useHolds(win: Window, ms: number) {
 		held.current = next.size === 0 ? NONE : next;
 		if (render) setVersion((v) => v + 1);
 	};
-	/** Holds `id` for `ms`, starting a full hold again when it is held already. */
-	const hold = (id: ID) => {
-		const old = timers.current.get(id);
-		if (old !== undefined) old.win.clearTimeout(old.handle);
-		timers.current.set(id, { win, handle: win.setTimeout(() => release(id, true), ms) });
-		held.current = new Set(held.current).add(id);
+	/** Holds each of `ids` for `ms`, starting a full hold again for one that is held already. The held set is replaced once. */
+	const hold = (ids: Iterable<ID>) => {
+		const next = new Set(held.current);
+		for (const id of ids) {
+			const old = timers.current.get(id);
+			if (old !== undefined) old.win.clearTimeout(old.handle);
+			timers.current.set(id, { win, handle: win.setTimeout(() => release(id, true), ms) });
+			next.add(id);
+		}
+		held.current = next;
 	};
 
 	useLayoutEffect(
@@ -100,18 +104,22 @@ export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, ac
 		if (now?.status === "open") {
 			if (timers.current.has(id)) release(id, false);
 		} else if (now?.status === "completed" && was?.status === "open") {
-			hold(id);
+			hold([id]);
 		}
 	}
 	return held.current;
 }
 
 /**
- * `useLingering` for a dashboard block. The block shows a few open rows out of possibly tens of thousands
- * of tasks, so it does not keep a status for every task: a row is held when it was in the entries drawn last time
- * and its task is completed now. The look is made once per new `entries` array (the block draws a new one after each
- * query), while rendering, so the held row is already in place in the pass that completed it. A task shown again is
- * released at once. Timers run on `win`, the window of the block's element, since a block may sit in a pop-out window.
+ * `useLingering` for a dashboard block. The block shows a few rows out of possibly tens of thousands of tasks, so it
+ * does not keep a status for every task: a task is held when its row was in the entries drawn last time and its status
+ * has changed since, which takes it out of the block: completed now (an open block) or open again (a `status:
+ * completed` block). A block that lists both statuses keeps the task's row, in the other part, so it holds nothing.
+ * A row of a done occurrence is never held: reopening it has its own notice and the row leaves at
+ * once. A task whose row is drawn now is released at once, with its timer, so the held set never holds a task that
+ * `entries` lists. The held set holds task IDs. The look is made once per new `entries` array (the block draws a new
+ * one after each query), while rendering, so the held row is already in place in the pass that changed it. Timers run
+ * on `win`, the window of the block's element, since a block may sit in a pop-out window.
  */
 export function useLingeringShown(entries: readonly ListEntry[], tasks: ReadonlyMap<ID, Task>, win: Window = window, ms = LINGER_MS): ReadonlySet<ID> {
 	const { held, timers, release, hold } = useHolds(win, ms);
@@ -120,16 +128,26 @@ export function useLingeringShown(entries: readonly ListEntry[], tasks: Readonly
 	if (looked.current !== entries) {
 		const last = looked.current;
 		looked.current = entries;
-		if (held.current.size > 0 || timers.current.size > 0) {
-			for (const entry of entries) {
-				if (timers.current.has(entry.task.id) || held.current.has(entry.task.id)) release(entry.task.id, false);
-			}
-		}
+		// The tasks whose status changed since the last look, which are held unless a row of theirs is drawn now.
+		const changed = new Set<ID>();
 		if (last !== null) {
 			for (const entry of last) {
-				if (tasks.get(entry.task.id)?.status === "completed") hold(entry.task.id);
+				// A task that is gone (deleted) leaves with no hold.
+				const now = entry.occurrence === null ? tasks.get(entry.task.id) : undefined;
+				if (now !== undefined && now.status !== entry.task.status) changed.add(entry.task.id);
 			}
 		}
+		// A task whose row is drawn now is not held, so a block that lists both statuses, where a changed task only
+		// moves to the other part, holds nothing; one that was held before is released here, with its timer.
+		if (changed.size > 0 || held.current.size > 0 || timers.current.size > 0) {
+			for (const entry of entries) {
+				if (entry.occurrence !== null) continue;
+				const id = entry.task.id;
+				changed.delete(id);
+				if (timers.current.has(id) || held.current.has(id)) release(id, false);
+			}
+		}
+		if (changed.size > 0) hold(changed);
 	}
 	return held.current;
 }
