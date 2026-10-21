@@ -184,6 +184,13 @@ describe("the hold in a task block", () => {
 			expect(held.has("a")).toBe(false);
 		});
 
+		it("#222: does not hold a task whose row is still drawn after its status changed (a block with both statuses)", async () => {
+			await draw([entry(task("open", "a")), entry(task("completed", "b"))], [task("open", "a"), task("completed", "b")]);
+			await draw([entry(task("open", "b")), entry(task("completed", "a"))], [task("completed", "a"), task("open", "b")]);
+			expect(held.size).toBe(0);
+			expect(vi.getTimerCount()).toBe(0);
+		});
+
 		it("#222: does not hold a deleted task, completed or open", async () => {
 			await draw([entry(task("open", "a")), entry(task("completed", "b"))], [task("open", "a"), task("completed", "b")]);
 			await draw([], []);

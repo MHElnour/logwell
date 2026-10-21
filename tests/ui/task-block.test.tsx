@@ -519,6 +519,74 @@ describe("#222: a completed block", () => {
 	});
 });
 
+describe("#222: a block with status: all", () => {
+	const SOURCE = "status: all\nlist: Inbox";
+	const wait = async () => {
+		await new Promise((r) => setTimeout(r, 650));
+		await settle();
+	};
+	const row = (m: Mount, title: string) => rows(m).find((r) => r.querySelector(".cp-task-title")!.textContent.trim().startsWith(title))!;
+
+	it("draws the open rows, then the completed ones, with every row counted", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		await m.h.app.tasks.create({ title: "B" });
+		await m.h.app.tasks.complete(a.id);
+		await m.draw(SOURCE);
+		expect(titles(m)).toEqual(["B", "A"]);
+		expect(rows(m).map((r) => r.classList.contains("is-completed"))).toEqual([false, true]);
+		expect(m.root.querySelector(".cp-block-count")!.textContent).toBe("2 tasks");
+		expect([...m.root.querySelectorAll(".cp-block-chip")].map((c) => c.textContent)).toEqual(["status: all", "list: Inbox"]);
+	});
+
+	it("completing a row moves it to the completed part at once: nothing is held, and the check animation plays there", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		await m.h.app.tasks.create({ title: "B" });
+		await m.draw(SOURCE);
+		expect(titles(m)).toEqual(["A", "B"]);
+		await click(row(m, "A").querySelector("input.cp-task-checkbox"));
+		expect(m.complete).toHaveBeenCalledTimes(1);
+		await m.h.app.tasks.complete(a.id);
+		await m.draw(SOURCE);
+		expect(titles(m)).toEqual(["B", "A"]);
+		expect(row(m, "A").classList.contains("is-completed")).toBe(true);
+		expect(row(m, "A").classList.contains("is-just-completed")).toBe(true);
+		await wait();
+		expect(titles(m)).toEqual(["B", "A"]);
+	});
+
+	it("unticking a completed row reopens it with no notice and moves it back to the open part", async () => {
+		const m = await mount();
+		const a = (await m.h.app.tasks.create({ title: "A" })).task;
+		await m.h.app.tasks.create({ title: "B" });
+		await m.h.app.tasks.complete(a.id);
+		await m.draw(SOURCE);
+		await click(row(m, "A").querySelector("input.cp-task-checkbox"));
+		expect(m.h.app.store.state.tasks.get(a.id)!.status).toBe("open");
+		expect(m.host.undos).toEqual([]);
+		await m.draw(SOURCE);
+		expect(titles(m)).toEqual(["A", "B"]);
+		expect(rows(m).some((r) => r.classList.contains("is-completed"))).toBe(false);
+		await wait();
+		expect(titles(m)).toEqual(["A", "B"]);
+	});
+
+	it("a done day of a repeating task is a row of the completed part and unticking it removes the day", async () => {
+		const m = await mount();
+		await m.h.app.tasks.create({ title: "Open" });
+		const water = (await m.h.app.tasks.create({ title: "Water", scheduled: scheduledToday, repeat: { rule: rule() } })).task;
+		await m.h.app.recurrence.complete(water.id);
+		await m.draw(SOURCE);
+		expect(titles(m).map((t) => t.replace(/ \u00b7.*/, ""))).toEqual(["Open", "Water", "Water"]);
+		expect(rows(m).map((r) => r.dataset.occurrence ?? null)).toEqual([null, null, today]);
+		await click(row(m, "Water \u00b7").querySelector("input.cp-task-checkbox"));
+		expect(m.h.app.store.state.occurrenceRecords.size).toBe(0);
+		await m.draw(SOURCE);
+		expect(rows(m).some((r) => r.dataset.occurrence !== undefined)).toBe(false);
+	});
+});
+
 // -- long results ----------------------------------------------------------------------------------
 
 const ROW = 52;

@@ -170,11 +170,13 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		if (r.kind === "ok") expect(r.entries.length).toBeGreaterThan(0);
 	}, 120_000);
 
-	// #222: a completed block lists completed tasks and done occurrences; it is still one pass over the tasks per draw.
+	// #222: a completed block lists completed tasks and done occurrences, a block with both statuses the open rows first; each is still one pass over the tasks per draw.
 	it.each([
-		["no other filter", "status: completed"],
-		["a priority, a schedule day and a deadline range", "status: completed\npriority: high, none\nscheduled: this week\ndue: this week"],
-	])("#222: a completed block with %s queries 50,000 tasks in one pass", async (_name, source) => {
+		["a completed block with no other filter", "status: completed", false],
+		["a completed block with a priority, a schedule day and a deadline range", "status: completed\npriority: high, none\nscheduled: this week\ndue: this week", false],
+		["a block with both statuses and a priority", "status: all\npriority: high, none", true],
+		["a block with both statuses, a schedule day and a deadline range", "status: all\nscheduled: this week\ndue: this week", true],
+	])("#222: %s queries 50,000 tasks in one pass", async (_name, source, both) => {
 		const h = await appHarness();
 		const data = h.store.data;
 		const tasks = new Map(data.tasks);
@@ -214,7 +216,15 @@ describe("ten dashboard blocks over 50,000 tasks", () => {
 		expect(r.kind).toBe("ok");
 		if (r.kind === "ok") {
 			expect(r.entries.length).toBeGreaterThan(0);
-			expect(r.entries.every((e) => e.occurrence !== null || e.task.status === "completed")).toBe(true);
+			if (both) {
+				// The open rows come first, then the completed ones.
+				const firstDone = r.entries.findIndex((e) => e.occurrence !== null || e.task.status === "completed");
+				expect(firstDone).toBeGreaterThan(0);
+				expect(r.entries.slice(0, firstDone).every((e) => e.task.status === "open")).toBe(true);
+				expect(r.entries.slice(firstDone).every((e) => e.occurrence !== null || e.task.status === "completed")).toBe(true);
+			} else {
+				expect(r.entries.every((e) => e.occurrence !== null || e.task.status === "completed")).toBe(true);
+			}
 		}
 	}, 120_000);
 

@@ -100,6 +100,21 @@ describe("the views a block opens", () => {
 		expect(r.view).toEqual({ kind: "completed" });
 	});
 
+	it.each([
+		["a list", "status: all\nlist: Work", { kind: "category" as const }],
+		["a tag", "status: all\ntag: Calls", { kind: "tag" as const, key: "calls" }],
+		["today", "status: all\ndue: today", { kind: "today" as const }],
+		["a range ahead", "status: all\nscheduled: next 7 days", { kind: "upcoming" as const }],
+		["nothing a view shows", "status: all\npriority: high", null],
+	])("#222: status: all opens the view the open rules give, for %s", async (_name, source, expected) => {
+		let id = "";
+		const r = await view(source, async (h) => {
+			id = (await h.app.categories.create("Work")).id;
+			await h.app.tags.create("Calls");
+		});
+		expect(r.view).toEqual(expected === null ? null : expected.kind === "category" ? { kind: "category", id } : expected);
+	});
+
 	it("#222: status: open opens the same view as no status line", async () => {
 		let id = "";
 		const r = await view("status: open\nlist: Work", async (h) => void (id = (await h.app.categories.create("Work")).id));

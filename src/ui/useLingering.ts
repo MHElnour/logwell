@@ -110,7 +110,8 @@ export function useLingering(store: ChangeFeed, tasks: ReadonlyMap<ID, Task>, ac
  * `useLingering` for a dashboard block. The block shows a few rows out of possibly tens of thousands of tasks, so it
  * does not keep a status for every task: a task is held when its row was in the entries drawn last time and its status
  * has changed since, which takes it out of the block: completed now (an open block) or open again (a `status:
- * completed` block). A row of a done occurrence is never held: reopening it has its own notice and the row leaves at
+ * completed` block). A block that lists both statuses keeps the task's row, in the other part, so it holds nothing.
+ * A row of a done occurrence is never held: reopening it has its own notice and the row leaves at
  * once. The held set holds task IDs. The look is made once per new `entries` array (the block draws a new one after
  * each query), while rendering, so the held row is already in place in the pass that changed it. A task shown again
  * is released at once. Timers run on `win`, the window of the block's element, since a block may sit in a pop-out window.
@@ -128,10 +129,15 @@ export function useLingeringShown(entries: readonly ListEntry[], tasks: Readonly
 			}
 		}
 		if (last !== null) {
+			// The tasks whose own row is drawn now, built when the first changed row needs it: a block that lists both
+			// statuses still draws a task after its status changed, so it moves and is not held.
+			let drawn: Set<ID> | null = null;
 			for (const entry of last) {
 				// A task that is gone (deleted) leaves with no hold.
 				const now = entry.occurrence === null ? tasks.get(entry.task.id) : undefined;
-				if (now !== undefined && now.status !== entry.task.status) hold(entry.task.id);
+				if (now === undefined || now.status === entry.task.status) continue;
+				drawn ??= new Set(entries.filter((e) => e.occurrence === null).map((e) => e.task.id));
+				if (!drawn.has(entry.task.id)) hold(entry.task.id);
 			}
 		}
 	}

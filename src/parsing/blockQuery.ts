@@ -16,8 +16,8 @@ export interface BlockDateRange {
 /** The values `due:` and `scheduled:` accept: a word, or a typed date or range (`DD-MM-YYYY`). */
 export type BlockDate = "today" | "overdue" | "this-week" | "next-7-days" | BlockDateRange;
 
-/** The tasks a block lists: open ones (the default) or completed ones. The app's status filter without "all". */
-export type BlockStatus = Exclude<StatusFilter, "all">;
+/** The tasks a block lists: open ones (the default), completed ones, or both (open first). The app's status filter. */
+export type BlockStatus = StatusFilter;
 
 /** The filters a block holds. A key that is absent (or had an error) leaves its field undefined. */
 export interface BlockFilters {
@@ -57,7 +57,7 @@ const DATE_VALUES: Readonly<Record<string, BlockDate>> = {
 	"next 7 days": "next-7-days",
 };
 
-const STATUS_VALUES: Readonly<Record<string, BlockStatus>> = { open: "open", completed: "completed" };
+const STATUS_VALUES: Readonly<Record<string, BlockStatus>> = { open: "open", completed: "completed", all: "all" };
 
 const PRIORITY_VALUES: Readonly<Record<string, Priority>> = { high: 1, medium: 2, low: 3, none: 0 };
 
@@ -72,6 +72,10 @@ const QUADRANT_VALUES: Readonly<Record<string, Quadrant>> = {
 	"urgent not important": "urgent",
 	neither: "neither",
 };
+
+/** A block has to name which tasks to show: at least one of these must be written (`section` needs a `list` anyway). */
+const NARROWING_KEYS: readonly Key[] = ["list", "tag", "due", "scheduled", "linked"];
+const NARROWING_ERROR = "Add a list, tag, due, scheduled or linked line to choose which tasks to show.";
 
 const own = (table: object, key: string): boolean => Object.prototype.hasOwnProperty.call(table, key);
 
@@ -148,8 +152,8 @@ function readTags(value: string): string[] | null {
 
 /**
  * Parses the source of a `logwell` block. Keys are case-insensitive; blank lines are ignored. Every
- * problem (unknown or duplicate key, bad value, `section` without `list`) adds one message and the
- * offending line is left out of `filters`.
+ * problem (unknown or duplicate key, bad value, `section` without `list`, no `list`, `tag`, `due`, `scheduled`
+ * or `linked` line) adds one message and the offending line is left out of `filters`.
  */
 export function parseBlockQuery(source: string): BlockParse {
 	const filters: BlockFilters = {};
@@ -186,7 +190,7 @@ export function parseBlockQuery(source: string): BlockParse {
 			case "status": {
 				const word = keyword(value);
 				if (own(STATUS_VALUES, word)) filters.status = STATUS_VALUES[word];
-				else errors.push(`Unknown status value “${value}”. Use open or completed.`);
+				else errors.push(`Unknown status value “${value}”. Use open, completed or all.`);
 				break;
 			}
 			case "list":
@@ -234,6 +238,9 @@ export function parseBlockQuery(source: string): BlockParse {
 	if (sectionLine && filters.list === undefined) {
 		errors.push("section needs a list filter.");
 		delete filters.section;
+	} else if (!NARROWING_KEYS.some((key) => seen.has(key))) {
+		// A line with a bad value counts: its own message says what to fix. The section message above already covers a lone section.
+		errors.push(NARROWING_ERROR);
 	}
 	return { filters, errors };
 }

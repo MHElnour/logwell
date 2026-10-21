@@ -14,14 +14,14 @@ export interface BlockQueryState {
 	readonly categories: ReadonlyMap<ID, Category>;
 	readonly sections: ReadonlyMap<ID, Section>;
 	readonly tags: ReadonlyMap<string, Tag>;
-	/** The done occurrences of repeating tasks, which a `status: completed` block lists. */
+	/** The done occurrences of repeating tasks, which a `status: completed` or `status: all` block lists. */
 	readonly occurrenceRecords: ReadonlyMap<string, OccurrenceRecord>;
 }
 
 export type BlockQueryResult =
 	/** A reference does not resolve (list, section or tag); `message` is shown in place of the list. */
 	| { kind: "error"; message: string }
-	/** The rows to draw: the list's default order, or newest completed first for `status: completed`. May be empty ("No tasks found"). */
+	/** The rows to draw: the list's default order, newest completed first for `status: completed`, or the open rows then the completed ones for `status: all`. May be empty ("No tasks found"). */
 	| { kind: "ok"; entries: ListEntry[] };
 
 /** A note path as the app stores it: forward slashes, no empty segments, no leading or trailing slash. */
@@ -59,10 +59,10 @@ export type BlockMatcher =
 	| { kind: "error"; message: string }
 	| {
 			kind: "ok";
-			/** True for a task with the block's status (open unless `status: completed`) that every filter accepts, whatever the other tasks are. */
+			/** True for a task with a status the block lists (open unless `status` says otherwise) that every filter accepts, whatever the other tasks are. */
 			matches: (task: Task) => boolean;
 			/**
-			 * The done occurrences of repeating tasks that a `status: completed` block lists: the task passes the filters and
+			 * The done occurrences of repeating tasks that a `status: completed` or `status: all` block lists: the task passes the filters and
 			 * the occurrence's own day passes `scheduled`; `due` never matches one. Empty, and no record is read, in any other block.
 			 */
 			doneOccurrences: () => DoneOccurrence[];
@@ -72,24 +72,25 @@ export type BlockMatcher =
 
 /**
  * Runs `filters` over `state`. All filters combine with AND; only open tasks match, or only completed ones with
- * `status: completed`. `notePath` is the path of the note that holds the block (for `linked: this note`). `ctx` is
+ * `status: completed`, or both with `status: all`. `notePath` is the path of the note that holds the block (for `linked: this note`). `ctx` is
  * `CheckpointApp.queryContext()`.
  *
  * Every task is tested on its own, as in the app's filtered views; the matches are then arranged like a
  * list (sort-key order, a matching subtask nested under its matching parent, any other subtask alone with
  * its parent's title). A `status: completed` block lists the Completed view's rows (`completedRows`): the matching
- * completed tasks and done occurrences, newest first and flat. A `section` without a `list` is ignored (the parser
+ * completed tasks and done occurrences, newest first and flat. `status: all` lists the open rows as above, then those. A `section` without a `list` is ignored (the parser
  * reports it).
  */
 export function runBlockQuery(filters: BlockFilters, state: BlockQueryState, ctx: QueryContext, notePath: string): BlockQueryResult {
 	const matcher = compileBlockQuery(filters, state, ctx, notePath);
 	if (matcher.kind === "error") return matcher;
-	const matched: Task[] = [];
-	for (const task of state.tasks.values()) if (matcher.matches(task)) matched.push(task);
-	if (filters.status === "completed") {
-		return { kind: "ok", entries: completedRows(matched, matcher.doneOccurrences(), state.tasks, ctx) };
-	}
-	return { kind: "ok", entries: arrangeHierarchy(matched, state.tasks, ctx) };
+	const open: Task[] = [];
+	const completed: Task[] = [];
+	for (const task of state.tasks.values()) if (matcher.matches(task)) (task.status === "open" ? open : completed).push(task);
+	// The open rows as an open block lists them, then the completed rows as a completed block does (one part is empty for the other statuses).
+	const entries = arrangeHierarchy(open, state.tasks, ctx);
+	if (filters.status === "completed" || filters.status === "all") entries.push(...completedRows(completed, matcher.doneOccurrences(), state.tasks, ctx));
+	return { kind: "ok", entries };
 }
 
 /**
@@ -156,7 +157,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	};
 
 	const matches = (task: Task): boolean => {
-		if (task.status !== status || !fieldsMatch(task)) return false;
+		if ((status !== "all" && task.status !== status) || !fieldsMatch(task)) return false;
 		// The app's own date rule on one date: the deadline for `due`, the effective schedule (a repeating task's current occurrence) for `scheduled`.
 		if (due !== null && !matchesTaskDate(task, due, ctx, "deadline")) return false;
 		if (scheduled !== null && !matchesTaskDate(task, scheduled, ctx, "schedule")) return false;
@@ -164,7 +165,7 @@ export function compileBlockQuery(filters: BlockFilters, state: BlockQueryState,
 	};
 	// A repeating task's done occurrences are rows of a completed block unless `due` is set: an occurrence has no deadline.
 	// The task is tested once; each of its done records then only needs the `scheduled` day.
-	const listsOccurrences = status === "completed" && due === null;
+	const listsOccurrences = status !== "open" && due === null;
 	const occurrenceTask = (task: Task): boolean => listsOccurrences && task.recurrence !== null && fieldsMatch(task);
 	const doneOccurrences = (): DoneOccurrence[] =>
 		listsOccurrences ? collectDoneOccurrences(state, occurrenceTask, (task, record) => scheduled === null || matchesOccurrenceDate(task, record, scheduled, ctx)) : [];

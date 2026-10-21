@@ -996,6 +996,46 @@ describe("status: completed", () => {
 		expect(rowsOf("status: completed\ndue: today", g)).toEqual([]);
 	});
 
+	it.each([
+		["no other filter", "", ["open", "water", "plan", "water@2026-10-11", "water@2026-10-10", "chores"]],
+		["a list", "list: Work", ["open", "water", "plan", "water@2026-10-11", "water@2026-10-10"]],
+		["a tag", "tag: calls", ["open", "plan"]],
+		["a priority", "priority: high", ["open", "plan"]],
+		["a schedule day, for a task and an occurrence", "scheduled: 13-10-2026", ["open", "plan"]],
+		["a schedule day of an occurrence", "scheduled: 11-10-2026", ["water@2026-10-11"]],
+		["a deadline, which no open task here has", "due: 12-10-2026", ["plan"]],
+	])("#222: status: all lists the open rows, then the completed rows, narrowed by %s", (_name, extra, expected) => {
+		expect(rowsOf(`status: all\n${extra}`)).toEqual(expected);
+	});
+
+	it("#222: status: all is the open rows of an open block followed by the rows of a completed block", () => {
+		for (const extra of ["list: Work", "tag: calls", "scheduled: 13-10-2026", "due: 12-10-2026", "priority: high"]) {
+			expect(rowsOf(`status: all\n${extra}`), extra).toEqual([...rowsOf(`status: open\n${extra}`), ...rowsOf(`status: completed\n${extra}`)]);
+		}
+	});
+
+	it("#222: status: all nests open subtasks under their parent and lists a completed subtask in the completed part", () => {
+		const parent = task("parent", { title: "Parent", sortKey: "a" });
+		const openChild = task("kid", { parentId: "parent", sortKey: "b" });
+		const doneChild = task("done-kid", { parentId: "parent", sortKey: "c", status: "completed", completedAt: doneAt("2026-10-13") });
+		const r = run("status: all\ndue: today\nlist: Inbox", { tasks: [parent, openChild, doneChild].map((t) => ({ ...t, deadline: day(TODAY) })) });
+		if (r.kind !== "ok") throw new Error(r.message);
+		expect(r.entries.map((e) => [e.task.id, e.depth, e.parentTitle])).toEqual([
+			["parent", 0, null],
+			["kid", 1, null],
+			["done-kid", 0, "Parent"],
+		]);
+	});
+
+	it("#222: a task is in the open part or the completed part, never both, and status: all matches both statuses", () => {
+		const c = compiled("status: all\nlist: Work");
+		expect(c.matches(task("o", { categoryId: "work" }))).toBe(true);
+		expect(c.matches(task("c", { categoryId: "work", status: "completed", completedAt: TS }))).toBe(true);
+		expect(c.matches(task("h", { categoryId: "home" }))).toBe(false);
+		expect(c.mayShow(water)).toBe(true);
+		expect(compiled("status: all\ndue: today").mayShow(water)).toBe(false);
+	});
+
 	it("#222: an open block never lists a done occurrence or a completed task", () => {
 		expect(rowsOf("status: open")).toEqual(["open", "water"]);
 		expect(rowsOf("")).toEqual(["open", "water"]);

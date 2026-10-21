@@ -4,9 +4,9 @@ import { describeBlockFilters, parseBlockQuery } from "../../src/parsing/blockQu
 // The source of a `logwell` block.
 
 describe("block query parser: shape", () => {
-	it("an empty source has no filters and no errors", () => {
-		expect(parseBlockQuery("")).toEqual({ filters: {}, errors: [] });
-		expect(parseBlockQuery("\n  \n\t\n")).toEqual({ filters: {}, errors: [] });
+	it("an empty source has no filters", () => {
+		expect(parseBlockQuery("").filters).toEqual({});
+		expect(parseBlockQuery("\n  \n\t\n").filters).toEqual({});
 	});
 
 	it("reads one filter per line and ignores blank lines", () => {
@@ -56,9 +56,9 @@ describe("block query parser: shape", () => {
 
 describe("block query parser: errors in the lines", () => {
 	it("an unknown key", () => {
-		const r = parseBlockQuery("colour: red");
+		const r = parseBlockQuery("colour: red\nlist: Work");
 		expect(r.errors).toEqual(["Unknown filter “colour”."]);
-		expect(r.filters).toEqual({});
+		expect(r.filters).toEqual({ list: "Work" });
 	});
 
 	it("an unknown key keeps the other lines", () => {
@@ -74,15 +74,16 @@ describe("block query parser: errors in the lines", () => {
 	});
 
 	it("a line without a colon", () => {
-		const r = parseBlockQuery("list Work");
+		const r = parseBlockQuery("list Work\ndue: today");
 		expect(r.errors).toEqual(["Expected “key: value”, got “list Work”."]);
 	});
 
 	it("an empty value", () => {
 		for (const key of ["list", "tag", "due", "scheduled", "priority", "quadrant", "linked"]) {
-			const r = parseBlockQuery(`${key}:`);
+			// An empty narrowing line still counts as written; the others get a list line.
+			const r = parseBlockQuery(["priority", "quadrant"].includes(key) ? `${key}:\ndue: today` : `${key}:`);
 			expect(r.errors, key).toEqual([`The “${key}” filter needs a value.`]);
-			expect(r.filters, key).toEqual({});
+			expect(r.filters, key).toEqual(["priority", "quadrant"].includes(key) ? { due: "today" } : {});
 		}
 	});
 
@@ -162,22 +163,22 @@ describe("block query parser: priority", () => {
 	});
 
 	it("a bad value names it and the allowed values", () => {
-		const r = parseBlockQuery("priority: high, urgent");
+		const r = parseBlockQuery("priority: high, urgent\nlist: Work");
 		expect(r.errors).toEqual(["Unknown priority “urgent”. Use high, medium, low or none."]);
-		expect(r.filters).toEqual({});
+		expect(r.filters).toEqual({ list: "Work" });
 	});
 
 	it("one error per bad value", () => {
-		expect(parseBlockQuery("priority: a, b").errors).toEqual([
+		expect(parseBlockQuery("priority: a, b\nlist: Work").errors).toEqual([
 			"Unknown priority “a”. Use high, medium, low or none.",
 			"Unknown priority “b”. Use high, medium, low or none.",
 		]);
 	});
 
 	it("an empty item in the list is an error", () => {
-		const r = parseBlockQuery("priority: high,");
+		const r = parseBlockQuery("priority: high,\nlist: Work");
 		expect(r.errors).toHaveLength(1);
-		expect(r.filters).toEqual({});
+		expect(r.filters).toEqual({ list: "Work" });
 	});
 });
 
@@ -201,11 +202,11 @@ describe("block query parser: quadrant", () => {
 	});
 
 	it("a bad value names it and the allowed values", () => {
-		const r = parseBlockQuery("quadrant: 5");
+		const r = parseBlockQuery("quadrant: 5\nlist: Work");
 		expect(r.errors).toEqual([
 			"Unknown quadrant “5”. Use 1 to 4, urgent and important, important not urgent, urgent not important or neither.",
 		]);
-		expect(r.filters).toEqual({});
+		expect(r.filters).toEqual({ list: "Work" });
 	});
 });
 
@@ -437,28 +438,30 @@ describe("block query parser: specific dates", () => {
 });
 
 describe("block query parser: status", () => {
+	// Each source carries a list line: a block needs a narrowing line (see the gate below).
 	it.each([
 		["open", "status: open", "open"],
 		["completed", "status: completed", "completed"],
+		["all", "status: all", "all"],
 		["any casing", "STATUS:  Completed ", "completed"],
-		["padded and spaced", "  status :   OPEN", "open"],
+		["padded and spaced", "  status :   ALL", "all"],
 	])("#222: %s reads as a status", (_name, source, status) => {
-		expect(parseBlockQuery(source)).toEqual({ filters: { status }, errors: [] });
+		expect(parseBlockQuery(`${source}\nlist: Work`)).toEqual({ filters: { status, list: "Work" }, errors: [] });
 	});
 
 	it.each([
-		["an unknown word", "status: done", "Unknown status value “done”. Use open or completed."],
-		["a comma list", "status: open, completed", "Unknown status value “open, completed”. Use open or completed."],
-		["all", "status: all", "Unknown status value “all”. Use open or completed."],
+		["an unknown word", "status: done", "Unknown status value \u201cdone\u201d. Use open, completed or all."],
+		["a comma list", "status: open, completed", "Unknown status value \u201copen, completed\u201d. Use open, completed or all."],
+		["both", "status: both", "Unknown status value \u201cboth\u201d. Use open, completed or all."],
 	])("#222: %s is an error and leaves the status out", (_name, source, message) => {
-		expect(parseBlockQuery(source)).toEqual({ filters: {}, errors: [message] });
+		expect(parseBlockQuery(`${source}\nlist: Work`)).toEqual({ filters: { list: "Work" }, errors: [message] });
 	});
 
 	it("#222: an empty value and a second status line are reported like the other keys", () => {
-		expect(parseBlockQuery("status:").errors).toEqual(["The “status” filter needs a value."]);
-		expect(parseBlockQuery("status: open\nSTATUS: completed")).toEqual({
-			filters: { status: "open" },
-			errors: ["Duplicate filter “status”."],
+		expect(parseBlockQuery("status:\nlist: Work").errors).toEqual(["The \u201cstatus\u201d filter needs a value."]);
+		expect(parseBlockQuery("status: open\nSTATUS: completed\nlist: Work")).toEqual({
+			filters: { status: "open", list: "Work" },
+			errors: ["Duplicate filter \u201cstatus\u201d."],
 		});
 	});
 
@@ -468,9 +471,47 @@ describe("block query parser: status", () => {
 	});
 
 	it("#222: the chip reads status first and re-parses to the same filters", () => {
-		const { filters } = parseBlockQuery("list: Work\nstatus: COMPLETED\npriority: high");
-		expect(describeBlockFilters(filters)).toEqual(["status: completed", "list: Work", "priority: high"]);
-		expect(parseBlockQuery(describeBlockFilters(filters).join("\n"))).toEqual({ filters, errors: [] });
-		expect(describeBlockFilters(parseBlockQuery("status: open").filters)).toEqual(["status: open"]);
+		for (const status of ["completed", "all", "open"]) {
+			const { filters } = parseBlockQuery(`list: Work\nstatus: ${status.toUpperCase()}\npriority: high`);
+			expect(describeBlockFilters(filters)).toEqual([`status: ${status}`, "list: Work", "priority: high"]);
+			expect(parseBlockQuery(describeBlockFilters(filters).join("\n"))).toEqual({ filters, errors: [] });
+		}
+	});
+});
+
+describe("block query parser: a block needs a narrowing line", () => {
+	const GATE = "Add a list, tag, due, scheduled or linked line to choose which tasks to show.";
+
+	it.each([
+		["an empty block", ""],
+		["only blank lines", "\n  \n"],
+		["only a priority", "priority: high"],
+		["only a quadrant", "quadrant: 1"],
+		["only a status", "status: completed"],
+		["a status, a priority and a quadrant", "status: all\npriority: low\nquadrant: 2"],
+	])("#222: %s says so", (_name, source) => {
+		expect(parseBlockQuery(source).errors).toEqual([GATE]);
+	});
+
+	it.each([
+		["list", "list: Work"],
+		["tag", "tag: Calls"],
+		["due", "due: today"],
+		["scheduled", "scheduled: overdue"],
+		["linked", "linked: this note"],
+		["a typed date", "due: 02-10-2026"],
+	])("#222: %s alone is enough", (_name, source) => {
+		expect(parseBlockQuery(source).errors).toEqual([]);
+	});
+
+	it("#222: a section without a list keeps its own message and adds no second one", () => {
+		expect(parseBlockQuery("section: Planning").errors).toEqual(["section needs a list filter."]);
+		expect(parseBlockQuery("section: Planning\npriority: high").errors).toEqual(["section needs a list filter."]);
+	});
+
+	it("#222: other problems are listed with it, the message last; a narrowing line with a bad value is not a missing one", () => {
+		expect(parseBlockQuery("colour: red").errors).toEqual(["Unknown filter \u201ccolour\u201d.", GATE]);
+		expect(parseBlockQuery("due: soon").errors).toEqual([expect.stringContaining("Unknown due value")]);
+		expect(parseBlockQuery("tag: ,").errors).toEqual([expect.stringContaining("A tag name is missing")]);
 	});
 });
