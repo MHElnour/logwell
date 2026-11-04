@@ -7,6 +7,7 @@ import { syncLinkId } from "../../src/domain/types";
 import { ConfirmationPrompter, type LinkFlowDeps, linkListFlow, NOT_READY_TEXT, type PrompterDeps, unlinkListFlow } from "../../src/obsidian/tickTickFlow";
 import { linkedList, type SyncHarness, syncHarness, syncTwice } from "../app/sync-harness";
 import { buildLinkForm, buildMissingForm, buildPreviewForm, missingTitle } from "../../src/obsidian/tickTickDialogs";
+import { settle } from "../ui/app-helpers";
 
 describe("linking and unlinking", () => {
 	// The steps around the dialogs, with scripted answers and the real engine.
@@ -338,7 +339,6 @@ describe("linking and unlinking", () => {
 			});
 			return { p, asked, undo, undoButtons, notices, errors };
 		}
-		const settle = () => new Promise((r) => setTimeout(r, 0));
 
 		it("Move to Trash moves the listed tasks, in one undo step, with an Undo notice", async () => {
 			const { s, ids, listId } = await withTasks(6);
@@ -577,9 +577,6 @@ describe("dialog forms", () => {
 	});
 	afterEach(() => document.body.replaceChildren());
 
-	const settle = async () => {
-		for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
-	};
 	const box = () => {
 		const c = document.createElement("div");
 		document.body.appendChild(c);

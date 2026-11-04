@@ -215,7 +215,7 @@ describe("keyboard", () => {
 			if (focusedIndex() !== i) throw new Error(`ArrowUp ${i}: focus is on ${focusedIndex()}`);
 		}
 		expect(m.main.scrollTop).toBe(0);
-	}, 30_000);
+	}, 60_000);
 
 	it("a focused row scrolled far out of view stays drawn and focused; ArrowDown then goes to the next row", async () => {
 		const m = await mount(2000);

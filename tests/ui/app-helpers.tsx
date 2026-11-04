@@ -147,7 +147,7 @@ export const lastNotice = (m: { notices: Notice[] }): Notice | undefined => m.no
  * Only two rounds wait on a real zero timer: on Windows one takes about 15 ms, so ten of them made every settle over
  * 100 ms. Between them the turns go through setImmediate. That is the order Preact's passive effects need: a frame
  * (an immediate), then a timer that runs the effects, and an effect that sets state starts the same two steps again.
- * The timers keep whatever a test or the app queued with setTimeout(0) running before this returns.
+ * So a chain of up to two zero timers, or two levels of passive effects, has run when this returns; a deeper chain has not.
  */
 export async function settle(): Promise<void> {
 	if (vi.isFakeTimers()) {

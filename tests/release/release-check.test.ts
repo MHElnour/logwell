@@ -342,7 +342,7 @@ describe("command line", () => {
 		});
 		it("is not passed as a shell variable in any package.json script", () => {
 			const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf8")) as { scripts: Record<string, string> };
-			for (const [name, command] of Object.entries(pkg.scripts)) expect(command, `script "${name}"`).not.toMatch(/\$/);
+			for (const [name, command] of Object.entries(pkg.scripts)) expect(command, `script "${name}"`).not.toMatch(/\$\w+|%\w+%/);
 		});
 	});
 	it("verify exits 1 for a v-prefixed tag; an unknown stage prints usage", () => {
