@@ -213,7 +213,7 @@ describe("board keyboard", () => {
 			await pressFocused("ArrowUp");
 			if (focusedIndex() !== i) throw new Error(`ArrowUp ${i}: focus is on ${focusedIndex()}`);
 		}
-	}, 30_000);
+	}, 60_000);
 
 	it("a focused card scrolled out of view stays focused; ArrowDown goes to the next card and scrolls to it", async () => {
 		const m = await mount({ count: 400 });

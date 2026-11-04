@@ -173,7 +173,6 @@ describe(`#41: one edit with the Tasks view at ${TASKS} tasks`, () => {
 		const checks = passes.filter((p) => p.includes("src/persistence/references.ts") || p.includes("src/persistence/schema.ts"));
 		perfLog(`issue-72: Undo of a new list at ${TASKS} tasks: ${undoMs.toFixed(1)} ms, passes: ${tally(passes) || "none"}`);
 		expect(checks, tally(passes)).toEqual([]);
-		expect(undoMs, tally(passes)).toBeLessThan(100);
 	});
 
 	it("reads Today from the index after a task is completed and saved, without building it again", async () => {

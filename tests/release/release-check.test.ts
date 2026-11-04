@@ -281,7 +281,7 @@ describe("command line", () => {
 	const cli = (files: Record<string, string>, args: string[], env: Record<string, string> = {}, git = false) => {
 		const root = project({ ...files, "scripts/release-check.mjs": readFileSync(SCRIPT, "utf8") });
 		if (git) execFileSync("git", ["init", "-q"], { cwd: root });
-		const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("npm_")));
+		const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toLowerCase().startsWith("npm_")));
 		return { root, ...spawnSync(process.execPath, [join(root, "scripts", "release-check.mjs"), ...args], { cwd: root, encoding: "utf8", env: { ...cleanEnv, ...env } }) };
 	};
 
@@ -316,6 +316,34 @@ describe("command line", () => {
 		expect(r.status).toBe(0);
 		expect(existsSync(join(r.root, "docs/releases/0.1.1.md"))).toBe(true);
 		expect(readFileSync(join(r.root, "docs/releases/unreleased.md"), "utf8")).toBe(EMPTY_UNRELEASED);
+	});
+	// npm sets npm_package_version for the version script. package.json cannot pass `$npm_package_version` on the
+	// command line: on Windows the shell hands it over as literal text.
+	describe("#231: the new version of the version stage", () => {
+		const files = () => baseFiles("0.1.0", unreleased("## Fixed\n\n- (#4) y. Thanks to @z for reporting.\n"));
+		it("is read from npm_package_version when no argument is given", () => {
+			const r = cli(files(), ["version"], { npm_package_version: "0.1.1" }, true);
+			expect(r.status).toBe(0);
+			expect(existsSync(join(r.root, "docs/releases/0.1.1.md"))).toBe(true);
+			expect((JSON.parse(read(r.root, "manifest.json")) as { version: string }).version).toBe("0.1.1");
+			expect(Object.keys(JSON.parse(read(r.root, "versions.json")) as Record<string, string>)).toContain("0.1.1");
+		});
+		it("is the argument when both are given", () => {
+			const r = cli(files(), ["version", "0.1.2"], { npm_package_version: "0.1.1" }, true);
+			expect(r.status).toBe(0);
+			expect(existsSync(join(r.root, "docs/releases/0.1.2.md"))).toBe(true);
+			expect(existsSync(join(r.root, "docs/releases/0.1.1.md"))).toBe(false);
+		});
+		it("fails with the usage line when neither exists", () => {
+			const r = cli(files(), ["version"], {}, true);
+			expect(r.status).toBe(1);
+			expect(r.stderr).toContain("Usage: release-check.mjs version <newVersion>");
+			expect(existsSync(join(r.root, "docs/releases/0.1.1.md"))).toBe(false);
+		});
+		it("is not passed as a shell variable in any package.json script", () => {
+			const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf8")) as { scripts: Record<string, string> };
+			for (const [name, command] of Object.entries(pkg.scripts)) expect(command, `script "${name}"`).not.toMatch(/\$\w+|%\w+%/);
+		});
 	});
 	it("verify exits 1 for a v-prefixed tag; an unknown stage prints usage", () => {
 		expect(cli(baseFiles("0.1.0", EMPTY_UNRELEASED), ["verify", "v0.1.0"]).status).toBe(1);

@@ -65,6 +65,8 @@ vi.mock("../../src/obsidian/modals", async (importOriginal) => ({
 const A = "A.cpbase";
 const B = "B.cpbase";
 const PATH = "Checkpoint.cpbase";
+/** When the v6 fixture was written; the Trash entries it holds are fresh only at this time, so a test that keeps the file as it is pins the clock here. */
+const V6_WRITTEN_AT = new Date("2026-10-07T08:00:00.000Z");
 const fixture = (version: number) => readFileSync(join(import.meta.dirname, "..", "fixtures", `schema-v${version}.cpbase`), "utf8");
 
 /** Two databases, A and B. */
@@ -88,6 +90,7 @@ beforeEach(() => {
 afterEach(() => {
 	process.off("unhandledRejection", onUnhandled);
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 type Emitter = { onStoreEvent(e: unknown): void };
@@ -164,6 +167,7 @@ describe("opening a database", () => {
 	});
 
 	it("#104: two sections with one name: opening says so on each open and leaves the file as it is", async () => {
+		vi.setSystemTime(V6_WRITTEN_AT);
 		// Week 2 renamed to Week 1 in the same list, as a merge or another device can leave it.
 		const text = fixture(6).replace('"name":"Week 2","nameKey":"week 2"', '"name":"Week 1","nameKey":"week 1"');
 		const fake = fakeApp();
@@ -199,6 +203,7 @@ describe("opening a database", () => {
 	});
 
 	it("an untouched current-schema (v6) database is not rewritten", async () => {
+		vi.setSystemTime(V6_WRITTEN_AT);
 		const fake = fakeApp();
 		fake.files.set(PATH, fixture(6));
 		const plugin = await loadPlugin(fake, PATH);

@@ -62,13 +62,17 @@ describe("the reference check", () => {
 			["its Undo", () => store.undo()],
 		];
 		const lines: string[] = [];
+		const times: number[] = [];
 		for (const [name, run] of steps) {
 			const { ms, checkMs, passes } = await measuredCheck(h, run);
 			const checks = passes.filter((p) => p.includes("src/persistence/references.ts"));
 			lines.push(`${name} ${ms.toFixed(1)} ms, check ${checkMs.toFixed(2)} ms, passes: ${tally(passes) || "none"}`);
 			expect(checks, `${name}: ${tally(passes)}`).toEqual([]);
-			if (name === "its Undo") expect(ms, lines.join("; ")).toBeLessThan(100);
+			times.push(ms);
 		}
+		// The Undo restores what the delete removed, so it costs about the same on any machine.
+		const [deleteMs, undoMs] = times.slice(-2) as [number, number];
+		expect(undoMs, lines.join("; ")).toBeLessThan(deleteMs * 3);
 		expect(store.state.categories.has(lists[0]!)).toBe(true);
 		expect(index.rebuilds).toBe(rebuilds);
 		expect(index.verify(store.state)).toEqual([]);

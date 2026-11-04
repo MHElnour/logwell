@@ -321,7 +321,7 @@ describe("date popover", () => {
 		// Dispatch both keys to the day that has focus now, without waiting for a re-render.
 		start.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
 		start.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
-		for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+		await settle();
 		expect(document.activeElement).toBe(popDay(m.root, "2026-10-09"));
 	});
 

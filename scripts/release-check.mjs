@@ -6,7 +6,7 @@
 // own `<version>.md`. `README.md` there is the generated index.
 //
 //   node scripts/release-check.mjs pre [patch|minor|major|<x.y.z>]   npm "preversion"
-//   node scripts/release-check.mjs version <newVersion>              npm "version"
+//   node scripts/release-check.mjs version [newVersion]              npm "version" (no argument: npm_package_version)
 //   node scripts/release-check.mjs verify <tag>                      CI, prints the release notes
 //   node scripts/release-check.mjs lint                              CI, light check of unreleased.md and the index
 //   node scripts/release-check.mjs index                             rewrites docs/releases/README.md
@@ -305,11 +305,15 @@ export function main(argv, env, root) {
 			console.error(`release-check: ok (${note}; entries under ${result.headings.join(", ")})`);
 			return;
 		}
-		case "version":
-			if (!arg) fail("Usage: release-check.mjs version <newVersion>");
-			versionStage(root, arg);
-			console.error(`release-check: ${RELEASES_DIR}/${arg}.md written, unreleased.md reset, index, manifest.json and versions.json updated for ${arg}`);
+		case "version": {
+			// package.json cannot pass `$npm_package_version`: Windows' shell hands it over as literal text. npm sets the
+			// variable to the new version while it runs the version script.
+			const version = arg || env.npm_package_version;
+			if (!version) fail("Usage: release-check.mjs version <newVersion> (or run it from npm version, which sets npm_package_version)");
+			versionStage(root, version);
+			console.error(`release-check: ${RELEASES_DIR}/${version}.md written, unreleased.md reset, index, manifest.json and versions.json updated for ${version}`);
 			return;
+		}
 		case "verify":
 			if (!arg) fail("Usage: release-check.mjs verify <tag>");
 			process.stdout.write(verify(root, arg));

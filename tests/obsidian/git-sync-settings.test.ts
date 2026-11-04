@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CheckpointSettingTab } from "../../src/obsidian/SettingTab";
 import { GIT_ATTRIBUTES_LINE, addGitAttributesLine, gitAttributesAddition, gitSyncNeeded, gitSyncRow, hasGitAttributesLine, type GitSyncFiles } from "../../src/obsidian/gitSync";
+import { drainPromises } from "../helpers";
 
 // The "Git sync" row of the settings tab: shown only in a vault that Git tracks and whose .gitattributes lacks the
 // database line. The row is data (a definition with a render callback), driven here with a fake Setting.
@@ -57,8 +58,6 @@ function setup(root: GitSyncFiles) {
 	};
 	return { git, row, render, notices, errors, refresh, shown: () => row.visible() };
 }
-
-const settle = () => new Promise((r) => setTimeout(r, 0));
 
 describe("#224: the .gitattributes line", () => {
 	it("is the line that keeps Git from merging the database line by line", () => {
@@ -131,20 +130,20 @@ describe("#224: when the Git sync row is shown", () => {
 		const root = rootWith({});
 		const t = setup(root);
 		expect(t.shown()).toBe(false);
-		await settle();
+		await drainPromises();
 
 		// `git init` after the first display; the next display runs its own check.
 		root.files.set(".git", "");
 		expect(t.shown()).toBe(false);
-		await settle();
+		await drainPromises();
 		expect(t.refresh).toHaveBeenCalledTimes(1);
 		expect(t.shown()).toBe(true);
-		await settle();
+		await drainPromises();
 
 		// A pull brings the line in.
 		root.files.set(".gitattributes", `${LINE}\n`);
 		expect(t.shown()).toBe(true);
-		await settle();
+		await drainPromises();
 		expect(t.shown()).toBe(false);
 		expect(t.refresh).toHaveBeenCalledTimes(2);
 	});
@@ -176,7 +175,7 @@ describe("#224: the Add to .gitattributes button", () => {
 		await t.git.check();
 		expect(t.shown()).toBe(true);
 		t.render().button.click();
-		await settle();
+		await drainPromises();
 		expect(root.files.get(".gitattributes")).toBe(after);
 		expect(root.appends).toEqual([".gitattributes"]);
 		expect(t.notices).toEqual(["Added to .gitattributes."]);
@@ -191,9 +190,9 @@ describe("#224: the Add to .gitattributes button", () => {
 		const s = t.render();
 		s.button.click();
 		s.button.click();
-		await settle();
+		await drainPromises();
 		s.button.click();
-		await settle();
+		await drainPromises();
 		expect(root.appends).toEqual([".gitattributes"]);
 		expect(root.files.get(".gitattributes")).toBe(`${LINE}\n`);
 		expect(t.notices).toEqual(["Added to .gitattributes."]);
@@ -205,7 +204,7 @@ describe("#224: the Add to .gitattributes button", () => {
 		await t.git.check();
 		root.files.set(".gitattributes", `*.md text\n${LINE}\n`);
 		t.render().button.click();
-		await settle();
+		await drainPromises();
 		expect(root.files.get(".gitattributes")).toBe(`*.md text\n${LINE}\n`);
 		expect(root.appends).toEqual([]);
 		expect(t.notices).toEqual(["Git sync is already set up."]);
@@ -228,7 +227,7 @@ describe("#224: the Add to .gitattributes button", () => {
 			return exists(path);
 		};
 		t.render().button.click();
-		await settle();
+		await drainPromises();
 		expect(root.files.get(".gitattributes")).toBe(`${pulled}${LINE}\n`);
 	});
 
@@ -240,7 +239,7 @@ describe("#224: the Add to .gitattributes button", () => {
 		await t.git.check();
 		const s = t.render();
 		s.button.click();
-		await settle();
+		await drainPromises();
 		expect(t.errors).toEqual([failure]);
 		expect(t.notices).toEqual([]);
 		expect(t.shown()).toBe(true);
@@ -265,13 +264,13 @@ describe("#224: the Add to .gitattributes button", () => {
 			return old;
 		};
 		const slow = t.git.check();
-		await settle();
+		await drainPromises();
 		t.render().button.click();
-		await settle();
+		await drainPromises();
 		expect(t.shown()).toBe(false);
 		release();
 		await slow;
-		await settle();
+		await drainPromises();
 		expect(t.shown()).toBe(false);
 		expect(root.files.get(".gitattributes")).toBe(`*.md text\n${LINE}\n`);
 	});
