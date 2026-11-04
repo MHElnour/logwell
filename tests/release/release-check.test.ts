@@ -325,8 +325,8 @@ describe("command line", () => {
 			const r = cli(files(), ["version"], { npm_package_version: "0.1.1" }, true);
 			expect(r.status).toBe(0);
 			expect(existsSync(join(r.root, "docs/releases/0.1.1.md"))).toBe(true);
-			expect(JSON.parse(read(r.root, "manifest.json")).version).toBe("0.1.1");
-			expect(Object.keys(JSON.parse(read(r.root, "versions.json")))).toContain("0.1.1");
+			expect((JSON.parse(read(r.root, "manifest.json")) as { version: string }).version).toBe("0.1.1");
+			expect(Object.keys(JSON.parse(read(r.root, "versions.json")) as Record<string, string>)).toContain("0.1.1");
 		});
 		it("is the argument when both are given", () => {
 			const r = cli(files(), ["version", "0.1.2"], { npm_package_version: "0.1.1" }, true);
