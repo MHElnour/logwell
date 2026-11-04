@@ -142,13 +142,22 @@ export function recordNotices(host: U1Host): Notice[] {
 
 export const lastNotice = (m: { notices: Notice[] }): Notice | undefined => m.notices[m.notices.length - 1];
 
-/** Lets pending promises and zero-delay timers run, so Preact has re-rendered; also works while timers are faked. */
+/**
+ * Lets pending promises and zero-delay timers run, so Preact has re-rendered; also works while timers are faked.
+ * Only two rounds wait on a real zero timer: on Windows one takes about 15 ms, so ten of them made every settle over
+ * 100 ms. Between them the turns go through setImmediate. That is the order Preact's passive effects need: a frame
+ * (an immediate), then a timer that runs the effects, and an effect that sets state starts the same two steps again.
+ * The timers keep whatever a test or the app queued with setTimeout(0) running before this returns.
+ */
 export async function settle(): Promise<void> {
 	if (vi.isFakeTimers()) {
 		for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(0);
 		return;
 	}
-	for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+	for (let round = 0; round < 2; round++) {
+		for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+		await new Promise((r) => setTimeout(r, 0));
+	}
 }
 
 /** `settle` plus time for Preact's passive effects (it runs them after a frame or 100 ms). */
