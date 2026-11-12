@@ -13,6 +13,8 @@ Type `every …` in Quick Add, such as `Pay rent every month on the 1st #Home`, 
 
 Pick **Never**, **Daily**, **Every weekday**, **Weekly**, **Monthly**, **Yearly** or **Custom…**. Weekly, Monthly and Yearly follow the task's date, which is also the first date (today if it has none). A weekly repeat on picked weekdays starts on the first of those weekdays on or after that date, so "every 2 weeks on Monday" made on a Wednesday first falls on the coming Monday. A yearly repeat on Feb 29 falls on Feb 28 in other years. Changing an existing repeat to Yearly keeps the month and day of the series' first date, which the picker shows. A task's time applies to every occurrence.
 
+A repeating task shows a repeat icon on its row or card; hover the icon to read the rule, such as "Repeats every Fri at 16:10 · ends after 10 times".
+
 A subtask cannot repeat, but a repeating task can have subtasks: they come back unchecked each time. A repeating task has no deadline, so Logwell removes one and says so.
 
 ## Type a repeat
@@ -99,7 +101,7 @@ By default the schedule is fixed: "every Monday" stays on Mondays however late y
 
 Tick the checkbox, press Cmd+Enter (Ctrl+Enter) on the row, or choose **Complete** in the row menu. The task moves to its next date.
 
-A task whose repeat has ended but which is still open, after an edit of the database file or a sync, shows no repeat chip and completes like any other task, from its row, its menu or a task block.
+A task whose repeat has ended but which is still open, after an edit of the database file or a sync, shows no repeat icon and completes like any other task, from its row, its menu or a task block.
 
 If you fall behind on a fixed schedule, completing marks the earliest missed date done and skips the others before today, and the notice says how many. A repeat that counts from completion never skips dates on its own.
 

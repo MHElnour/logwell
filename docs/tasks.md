@@ -13,7 +13,22 @@ Type in the add bar at the top of a list view and press Enter, or run the comman
   <img src="images/today-light.png" alt="The Today view: overdue and today tasks with tags, lists, durations, time focused and dates on each row">
 </picture>
 
-Right of the title, a row shows what the task has: its first tag and a count, a note icon, a repeat chip such as "every Fri", subtasks done out of total, the list (outside its own view), the deadline, the duration, the time focused, "Urgent" or "Important", and the date. Overdue dates are red, today's blue and tomorrow's orange. The checkbox takes the priority color: red for high, yellow for medium, blue for low.
+A row has two lines. The first line is the title and, at its right edge, the date. The second line is small and gray and holds everything else the task has, always in the same order. A task with nothing to show there has one line, and a long second line wraps instead of hiding anything.
+
+| Mark on the second line | What it means |
+| --- | --- |
+| A colored dot and a name | The list (not shown inside that list's own view). |
+| `@name` in color | A tag. Every tag is listed. |
+| A flag and a date | The deadline. A red flag is a missed deadline. |
+| Two arrows | The task repeats. Hover the icon to read the rule, such as "Repeats every Fri at 16:10". |
+| A checked box and `2/5` | Subtasks done out of total. |
+| A page | The task has a description note. |
+| A clock and `1h` | The planned time, when nothing has been focused yet. |
+| A target and `25m of 30m` | The time focused, with the planned time when there is one. |
+| `Urgent` or `Important` | The matrix flags. |
+| `Not synced` | An open task of a TickTick list that does not sync. |
+
+The date on the first line is gray. It is red when the task is late and blue when it is today. A task that has only a deadline shows it there, with a flag: a flag always means a deadline. Under a heading that already names the day, such as Today or a day in Upcoming, the row does not repeat that day: it shows the time, or nothing for an all-day task. A completed task is faint, with no line through its title. The checkbox takes the priority color: red for high, yellow for medium, blue for low.
 
 On the keyboard, Up and Down move between rows, Enter or Space opens the details, Cmd+Enter (Ctrl+Enter on Windows and Linux) completes, and the context-menu key or Shift+F10 opens the row menu.
 
