@@ -75,6 +75,11 @@ export interface ViewGroup {
 	entries: ListEntry[];
 }
 
+/** The one day a group's heading names (a date heading, or Today's "Today"), else null. Display only. */
+export function groupDay(group: Pick<ViewGroup, "key" | "date">, today: LocalDate): LocalDate | null {
+	return group.date ?? (group.key === "today" ? today : null);
+}
+
 /** Heading color of a day: overdue red, today blue, tomorrow orange. */
 export function dateTone(date: LocalDate, today: LocalDate): GroupTone | undefined {
 	if (date < today) return "overdue";

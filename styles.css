@@ -30,7 +30,10 @@
 	--cp-side-icon: 20px;
 	--cp-side-radius: 10px;
 	--cp-meta-icon: 16px;
-	--cp-row-h: 52px;
+	--cp-row-pad-y: 10px;
+	--cp-row-date-size: 13px;
+	--cp-row-meta-size: 12.5px;
+	--cp-row-meta-icon: 13px;
 	--cp-row-pad: 14px;
 	--cp-row-radius: 12px;
 	--cp-cb: 20px;
@@ -268,8 +271,8 @@ body.is-mobile .checkpoint-view .cp-app {
 	background: var(--background-secondary);
 }
 
-/* The list column is a size container: rows adapt to its width, not the window's. At 1200 px
-   (rail 64 + sidebar 268 + details 420) it is about 448 px; it never gets narrower than that. */
+/* The list column is a size container named cp-list. At 1200 px (rail 64 + sidebar 268 + details 420) it is about
+   448 px; it never gets narrower than that. A row needs no width rules: its second line wraps. */
 .checkpoint-view .cp-main {
 	flex: 1 1 auto;
 	min-width: min(440px, 100%);
@@ -711,11 +714,11 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-task-row {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: var(--cp-row-pad);
-	height: var(--cp-row-h);
+	min-height: var(--cp-hit);
 	box-sizing: border-box;
-	padding: 0 var(--cp-row-pad);
+	padding: var(--cp-row-pad-y) var(--cp-row-pad);
 	border: 1.5px solid transparent;
 	border-radius: var(--cp-row-radius);
 	cursor: pointer;
@@ -736,7 +739,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-task-row.is-completed .cp-task-title {
 	color: var(--text-faint);
-	text-decoration: line-through;
 }
 
 .checkpoint-view .cp-task-row.is-completing {
@@ -788,113 +790,105 @@ body.is-mobile .checkpoint-view .cp-app {
 	background-color: var(--cp-blue-soft);
 }
 
+/* A row is two lines: the title and its date on the first, the marks (rowMeta.tsx `metaLine`) on a second that wraps.
+   Nothing is hidden by width. The checkbox is offset to the first line's middle. */
+.checkpoint-view .cp-task-row > .cp-task-checkbox {
+	margin-top: calc((var(--cp-font) * 1.4 - var(--cp-cb)) / 2);
+}
+
+.checkpoint-view .cp-task-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+}
+
+.checkpoint-view .cp-task-top {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-3);
+	min-width: 0;
+}
+
 .checkpoint-view .cp-task-title {
-	flex: 1 1 120px;
-	/* Never narrower than this: the meta below is hidden first (container queries on the list). */
-	min-width: 120px;
+	flex: 1 1 auto;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
+.checkpoint-view .cp-task-top > .cp-meta-date {
+	flex: none;
+	font-size: var(--cp-row-date-size);
+}
+
 .checkpoint-view .cp-task-meta {
-	/* May shrink: the meta never pushes the date past the row's edge. */
-	flex: 0 1 auto;
-	min-width: 0;
-	overflow: hidden;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	justify-content: flex-end;
-	gap: var(--size-4-2);
-	max-width: 60%;
-	color: var(--text-faint);
-	font-size: 13px;
+	gap: var(--size-2-1) var(--size-4-3);
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--cp-row-meta-size);
+	line-height: 1.5;
 }
 
 .checkpoint-view .cp-task-meta > * {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--size-2-2);
-	white-space: nowrap;
 	flex: 0 1 auto;
+	max-width: 100%;
 	min-width: 0;
+	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* The date is the one meta item that must always be fully visible. */
-.checkpoint-view .cp-task-meta > .cp-meta-date {
-	flex-shrink: 0;
-	overflow: visible;
-}
-
-.checkpoint-view .cp-meta-tags {
-	gap: var(--size-2-2);
-	min-width: 0;
-}
-
-.checkpoint-view .cp-meta-tags .cp-tag-pill {
-	max-width: 220px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	display: inline-block;
-}
-
-.checkpoint-view .cp-tag-more {
-	font-size: var(--cp-label-size);
-	font-weight: var(--font-semibold);
-	color: var(--text-faint);
+.checkpoint-view .cp-task-meta .cp-icon svg,
+.checkpoint-view .cp-meta-date .cp-icon svg {
+	width: var(--cp-row-meta-icon);
+	height: var(--cp-row-meta-icon);
 }
 
 .checkpoint-view .cp-meta-list-name {
-	max-width: 12ch;
+	max-width: 24ch;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* Narrow list (details open next to the sidebar): drop the lower-priority meta, never the title. */
-@container cp-list (max-width: 560px) {
-	.checkpoint-view .cp-meta-tags {
-		display: none;
-	}
-
-	.checkpoint-view .cp-meta-matrix {
-		display: none;
-	}
-}
-
-@container cp-list (max-width: 440px) {
-	.checkpoint-view .cp-meta-list-name {
-		display: none;
-	}
-}
-
-@container cp-list (max-width: 340px) {
-	.checkpoint-view .cp-meta-note,
-	.checkpoint-view .cp-meta-subtasks,
-	.checkpoint-view .cp-meta-duration,
-	.checkpoint-view .cp-meta-matrix,
-	.checkpoint-view .cp-meta-deadline {
-		display: none;
-	}
+/* A tag in a row's or a card's meta: tinted text, no pill. */
+.checkpoint-view .cp-meta-tag {
+	display: inline-block;
+	color: var(--cp-hue-text, var(--text-muted));
+	font-weight: var(--font-semibold);
 }
 
 .checkpoint-view .cp-meta-deadline.is-missed {
 	color: var(--cp-red-text);
 }
 
+/* The date: muted, red when late, blue when today. */
 .checkpoint-view .cp-meta-date {
-	min-width: 84px;
-	justify-content: flex-end;
-	font-weight: var(--font-semibold);
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	color: var(--text-muted);
+	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
 
-.checkpoint-view .cp-meta-date.is-overdue { color: var(--cp-red-text); }
-.checkpoint-view .cp-meta-date.is-today { color: var(--cp-blue-text); }
-.checkpoint-view .cp-meta-date.is-tomorrow { color: var(--cp-orange-text); }
-.checkpoint-view .cp-meta-date.is-later,
-.checkpoint-view .cp-meta-date.is-none { color: var(--text-faint); }
+.checkpoint-view .cp-meta-date.is-overdue {
+	color: var(--cp-red-text);
+	font-weight: var(--font-semibold);
+}
+
+.checkpoint-view .cp-meta-date.is-today {
+	color: var(--cp-blue-text);
+	font-weight: var(--font-semibold);
+}
 
 .checkpoint-view .cp-parent-prefix {
 	color: var(--text-muted);
@@ -1183,7 +1177,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-subtasks li.is-completed .cp-link-button {
 	color: var(--text-muted);
-	text-decoration: line-through;
 }
 
 .checkpoint-view .cp-add-subtask {
@@ -3527,8 +3520,7 @@ body.is-mobile .checkpoint-view .cp-app {
 }
 
 .checkpoint-view .cp-matrix-q-body {
-	/* A size container with the list column's name: the row meta thins out with the quadrant's width
-	   by the same @container cp-list rules as in the lists. */
+	/* A size container with the list column's name, like the list column and the task block. */
 	container-type: inline-size;
 	container-name: cp-list;
 	flex: 1 1 auto;
@@ -3572,7 +3564,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* Cards are the shared rows, framed as cards. */
 .checkpoint-view .cp-matrix-q .cp-task-row {
-	height: 46px;
 	margin-bottom: 4px;
 	border-color: var(--background-modifier-border);
 	border-radius: 10px;
@@ -3609,7 +3600,6 @@ body.is-mobile .checkpoint-view .cp-app {
 	position: absolute;
 	z-index: var(--layer-popover);
 	box-sizing: border-box;
-	height: 46px;
 	margin: 0;
 	border: var(--border-width) solid var(--background-modifier-border);
 	border-radius: 10px;
@@ -4002,38 +3992,11 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-board-item.is-completed .cp-board-title {
 	color: var(--text-faint);
-	text-decoration: line-through;
 }
 
 /* The meta line sits under the title, aligned with it (past the checkbox). */
 .checkpoint-view .cp-board-meta {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--size-2-3) var(--size-4-2);
 	padding-left: 28px;
-	color: var(--text-faint);
-	font-size: 12px;
-}
-
-.checkpoint-view .cp-board-meta > * {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--size-2-2);
-	white-space: nowrap;
-}
-
-.checkpoint-view .cp-board-meta .cp-meta-date {
-	min-width: 0;
-	justify-content: flex-start;
-}
-
-.checkpoint-view .cp-board-meta .cp-meta-deadline.is-missed {
-	color: var(--cp-red-text);
-}
-
-.checkpoint-view .cp-board-meta .cp-meta-list-name {
-	max-width: 14ch;
 }
 
 .checkpoint-view .cp-board-chevron {
@@ -4065,11 +4028,6 @@ body.is-mobile .checkpoint-view .cp-app {
 /* The completed group of a column sits below its cards. */
 .checkpoint-view .cp-board-completed {
 	margin-top: var(--size-4-3);
-}
-
-.checkpoint-view .cp-board-completed .cp-task-row {
-	height: auto;
-	min-height: 40px;
 }
 
 /* Where a drop would land: a line before the card, or at the end of the list. */
@@ -5309,14 +5267,7 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* The focus chip on a row and the total next to the details Focus button. */
 .checkpoint-view .cp-meta-focus {
-	color: var(--cp-accent-text);
 	font-variant-numeric: tabular-nums;
-}
-
-@container cp-list (max-width: 340px) {
-	.checkpoint-view .cp-meta-focus {
-		display: none;
-	}
 }
 
 .checkpoint-view .cp-focus-total {
@@ -6894,8 +6845,8 @@ body.is-mobile .checkpoint-view .cp-app {
 	color: var(--cp-accent-text);
 }
 
-/* The rows scroll inside the block. A size container with the list column's name, so the row meta thins out with
-   the block's width by the same @container cp-list rules as in the lists. The windowed list follows this box. */
+/* The rows scroll inside the block. A size container with the list column's name, like the list column. The windowed
+   list follows this box. */
 .checkpoint-view .cp-block-body {
 	max-height: var(--cp-block-max-h);
 	overflow-y: auto;
@@ -6955,16 +6906,6 @@ body.is-mobile .checkpoint-view .cp-app {
 .checkpoint-view .cp-sync-status > span:last-child {
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-/* "Not synced": a repeating task, or one kept in Logwell only, in a list synced with TickTick. */
-.checkpoint-view .cp-meta-notsynced {
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--cp-orange-soft);
-	color: var(--cp-orange-text);
-	font-weight: var(--font-medium);
-	white-space: nowrap;
 }
 
 /* The dialogs of the sync: the link list, the first-sync preview and the confirmation of removed tasks. */
@@ -7529,30 +7470,8 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* -- Rows and cards ---------------------------------------------------------------------------- */
 
-.checkpoint-view .cp-meta-repeat {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--cp-purple-soft);
-	color: var(--cp-purple-text);
-	font-weight: var(--font-medium);
-}
-
-.checkpoint-view .cp-meta-repeat .cp-icon svg {
-	width: 13px;
-	height: 13px;
-}
-
-.checkpoint-view .cp-meta-repeat-text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* A narrow row shrinks the words with an ellipsis (the meta cells shrink: .cp-task-meta > *); the icon stays. */
+/* The repeat mark of a row or a card is the icon alone, laid out like every mark of the meta line; its label (a hover)
+   says the rule. */
 
 .checkpoint-view .cp-occurrence-date {
 	color: var(--text-muted);

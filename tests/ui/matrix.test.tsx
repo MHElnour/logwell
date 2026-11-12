@@ -90,6 +90,19 @@ describe("matrix section", () => {
 			await click(quadrantEl(m.root, "neither").querySelector(".cp-matrix-q-add")); // no crash without a host quickAdd
 		});
 
+		it("a card in the Today group says only its time, and a card under another group keeps its date", async () => {
+			const m = await mountApp();
+			await seed(m);
+			await m.h.app.tasks.create({ title: "Pay the bill", urgent: true, important: true, scheduled: day("2026-10-01") });
+			await settle();
+			await openMatrix(m);
+			const date = (title: string) => card(m.root, title).querySelector(".cp-task-top .cp-meta-date");
+			expect(date("Study")!.textContent).toBe("19:00");
+			expect(date("Pay the bill")).toBeNull();
+			expect(date("Ship report")!.textContent).not.toBe("");
+			expect(date("Read book")!.textContent).not.toBe("");
+		});
+
 		it("shows 'No tasks' in an empty quadrant", async () => {
 			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Only one", urgent: true });
@@ -570,10 +583,10 @@ describe("matrix section", () => {
 
 		it("the drag ghost has its own card styles (it lives outside the quadrant)", () => {
 			const block = /\.cp-matrix-ghost \{([^}]*)\}/.exec(css)?.[1] ?? "";
-			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "height: 46px", "box-shadow"]) expect(block).toContain(prop);
+			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "box-shadow"]) expect(block).toContain(prop);
 		});
 
-		it("cards have no matrix chip, the header holds the view menu, and the row meta thins out per quadrant", async () => {
+		it("cards have no matrix chip, the header holds the view menu, and a quadrant is a list-width container", async () => {
 			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
@@ -585,8 +598,6 @@ describe("matrix section", () => {
 			const body = /\.cp-matrix-q-body \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			expect(body).toContain("container-type: inline-size");
 			expect(body).toContain("container-name: cp-list");
-			// The @container cp-list rules are the ones that thin the meta; they now match inside a quadrant.
-			for (const w of ["560px", "440px", "340px"]) expect(css).toContain(`@container cp-list (max-width: ${w})`);
 		});
 	});
 

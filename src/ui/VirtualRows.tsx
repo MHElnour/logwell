@@ -5,8 +5,8 @@ import { type IndexRange, OVERSCAN_PX, type VirtualHandle, covers, itemOffsets, 
 // One listbox of task rows, or one board column's
 // cards. Disabled, it renders `items.map(renderItem)` inside the listbox element, exactly as the plain markup did.
 // Enabled, it draws only the items in or near the scroller's viewport and keeps every drawn item at its true offset
-// with spacers, so the list looks and scrolls the same. Heights are measured after each render (a list row is one
-// fixed height; a card varies); an item never measured counts as the average of those that were.
+// with spacers, so the list looks and scrolls the same. Heights are measured after each render (a row is one or two
+// lines; a card varies); an item never measured counts as the average of those that were.
 //
 // Pinned items stay drawn wherever they are: the one holding focus (so focus, and keys, survive scrolling it out of
 // view), a dragged row (the pointer capture lives on it) and one the keyboard is moving to. Preact never moves a

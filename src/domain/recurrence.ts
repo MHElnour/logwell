@@ -506,7 +506,7 @@ function describeVersion(r: RepeatRule, anchor: LocalDate): string {
 	return k === 1 ? `monthly ${on}` : `every ${k} months ${on}`;
 }
 
-/** "every Fri", "3 days after done", "monthly on the 1st", "yearly on Mar 14" (the row chip). `at` picks the version (default: the last). */
+/** "every Fri", "3 days after done", "monthly on the 1st", "yearly on Mar 14" (the repeat mark's label). `at` picks the version (default: the last). */
 export function describeRule(rec: Recurrence, at?: LocalDate): string {
 	const v = at === undefined ? rec.versions[rec.versions.length - 1]! : versionAt(rec, at);
 	return describeVersion(v.rule, rec.anchor);

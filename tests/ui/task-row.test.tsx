@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { TOGGLE_COMPLETE_EVENT } from "../../src/ui/TaskList";
-import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
+import { dateTone, detailsDateText, formatDateSpec, rowDateText } from "../../src/ui/format";
 import { click, day, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
 import { render } from "preact";
+import type { ListEntry, QueryContext } from "../../src/domain/queries";
+import { type SyncLink, syncLinkId } from "../../src/domain/types";
 import { TaskCheckbox } from "../../src/ui/common";
+import { metaLine } from "../../src/ui/rowMeta";
 import { css } from "./styles-helpers";
 
 describe("task row", () => {
@@ -32,6 +35,22 @@ describe("task row", () => {
 		});
 	});
 
+	describe("a row's date under its group heading", () => {
+		const timed = (date: string, time: string) => ({ kind: "datetime" as const, local: `${date}T${time}`, tz: "Europe/Berlin" });
+		const allDay = (date: string) => ({ kind: "date" as const, date });
+		it.each([
+			{ name: "a timed task on the group's day is its time", spec: timed(TODAY, "19:00"), groupDay: TODAY, text: "19:00" },
+			{ name: "an all-day task on the group's day is nothing", spec: allDay(TODAY), groupDay: TODAY, text: "" },
+			{ name: "a timed task on a later group's day is its time", spec: timed("2026-10-05", "09:30"), groupDay: "2026-10-05", text: "09:30" },
+			{ name: "an all-day task on a later group's day is nothing", spec: allDay("2026-10-05"), groupDay: "2026-10-05", text: "" },
+			{ name: "a task on another day than the group's is the full date", spec: allDay("2026-10-05"), groupDay: TODAY, text: null },
+			{ name: "a timed task on another day than the group's is the full date with its time", spec: timed("2026-10-05", "09:30"), groupDay: TODAY, text: null },
+			{ name: "no group day is the text as before", spec: allDay(TODAY), groupDay: null, text: "Today" },
+		])("rowDateText: $name", ({ spec, groupDay, text }) => {
+			expect(rowDateText(spec, "Europe/Berlin", TODAY, groupDay)).toBe(text ?? formatDateSpec(spec, "Europe/Berlin", TODAY));
+		});
+	});
+
 	describe("task row", () => {
 		it("checkbox carries the priority class and an accessible label", async () => {
 			const { h, root } = await mountApp();
@@ -45,18 +64,18 @@ describe("task row", () => {
 			expect(plain.getAttribute("aria-label")).toBe('Complete "Plain thing"');
 		});
 
-		it("shows the first tag and a +N count, with every tag in the tooltip", async () => {
+		it("lists every tag as tinted text", async () => {
 			const { h, root } = await mountApp();
 			await h.app.tags.create("python", "yellow");
 			await h.app.tags.create("programming", "orange");
 			await h.app.tags.create("study", "blue");
 			await h.app.tasks.create({ title: "Many tags", tagKeys: ["python", "programming", "study"], scheduled: { kind: "date", date: "2026-09-29" } });
 			await settle();
-			const tags = row(root, "Many tags").querySelector(".cp-meta-tags")!;
-			expect(tags.querySelectorAll(".cp-tag-pill")).toHaveLength(1);
-			expect(tags.querySelector(".cp-tag-pill")?.textContent).toBe("@python");
-			expect(tags.querySelector(".cp-tag-more")?.textContent).toBe("+2");
-			expect(tags.getAttribute("title")).toBe("@python @programming @study");
+			const tags = [...row(root, "Many tags").querySelectorAll<HTMLElement>(".cp-task-meta .cp-meta-tag")];
+			expect(tags.map((t) => t.textContent)).toEqual(["@python", "@programming", "@study"]);
+			expect(tags[0]!.classList.contains("cp-hue-yellow")).toBe(true);
+			expect(tags[1]!.classList.contains("cp-hue-orange")).toBe(true);
+			expect(row(root, "Many tags").querySelector(".cp-tag-pill, .cp-tag-more, .cp-meta-tags")).toBeNull();
 		});
 
 		it("lists keep the matrix chip", async () => {
@@ -66,33 +85,180 @@ describe("task row", () => {
 			expect(row(root, "Flagged").querySelector(".cp-meta-matrix")?.textContent).toBe("Urgent · Important");
 		});
 
-		it("shows meta in order: tags, note, subtasks, list, date", async () => {
+		it("draws the title and the date on the first line and the marks on a second line", async () => {
+			const { h, root } = await mountApp();
+			const cat = await h.app.categories.create("Work", "briefcase");
+			await h.app.categories.setColor(cat.id, "green");
+			await h.app.tasks.create({ title: "Report", categoryId: cat.id, scheduled: { kind: "date", date: "2026-09-29" } });
+			await settle();
+			const r = row(root, "Report");
+			const body = r.querySelector(".cp-task-body")!;
+			expect([...r.children].map((c) => c.className.split(" ")[0])).toEqual(["cp-task-checkbox", "cp-task-body"]);
+			expect([...body.children].map((c) => c.className.split(" ")[0])).toEqual(["cp-task-top", "cp-task-meta"]);
+			const top = body.querySelector(".cp-task-top")!;
+			expect([...top.children].map((c) => c.className.split(" ")[0])).toEqual(["cp-task-title", "cp-meta-date"]);
+			expect(top.querySelector(".cp-meta-date")!.classList.contains("is-overdue")).toBe(true);
+			expect(body.querySelector(".cp-task-meta .cp-meta-date")).toBeNull();
+			expect(body.querySelector(".cp-task-meta .cp-meta-list")?.textContent).toContain("Work");
+		});
+
+		it("a task with no marks draws no second line", async () => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title: "Buy milk", scheduled: { kind: "date", date: "2026-09-29" } });
+			await openInbox(root);
+			const r = row(root, "Buy milk");
+			expect(r.querySelector(".cp-task-top .cp-meta-date")).not.toBeNull();
+			expect(r.querySelector(".cp-task-meta")).toBeNull();
+		});
+
+		it("the second line keeps one order: list, tags, deadline, repeat, subtasks, note, time, matrix flags, Not synced", async () => {
 			const { h, root } = await mountApp();
 			const cat = await h.app.categories.create("Work", "briefcase");
 			await h.app.categories.setColor(cat.id, "green");
 			const tag = await h.app.tags.create("urgent", "red");
+			await h.app.tags.create("calls", "blue");
 			const { task } = await h.app.tasks.create({
 				title: "Report",
 				categoryId: cat.id,
-				tagKeys: [tag.key],
+				tagKeys: [tag.key, "calls"],
 				scheduled: { kind: "date", date: "2026-09-29" },
+				deadline: { kind: "date", date: "2026-10-05" },
+				plannedDurationMin: 90,
+				urgent: true,
+				important: true,
 			});
 			await h.app.tasks.create({ title: "Sub", parentId: task.id });
 			h.notes.files.set("Plan.md", "x");
 			await h.app.tasks.linkNote(task.id, "Plan.md");
 			await settle();
-			const r = row(root, "Report");
-			const meta = r.querySelector(".cp-task-meta")!;
+			const meta = row(root, "Report").querySelector(".cp-task-meta")!;
 			const order = [...meta.children].map((c) => c.className.split(" ").find((x) => x.startsWith("cp-meta-")));
-			expect(order).toEqual(["cp-meta-tags", "cp-meta-note", "cp-meta-subtasks", "cp-meta-list", "cp-meta-date"]);
-			expect(meta.querySelector(".cp-tag-pill.cp-hue-red")?.textContent).toBe("@urgent");
+			expect(order).toEqual(["cp-meta-list", "cp-meta-tag", "cp-meta-tag", "cp-meta-deadline", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix"]);
+			expect(meta.querySelector(".cp-meta-tag.cp-hue-red")?.textContent).toBe("@urgent");
 			expect(meta.querySelector(".cp-meta-note")?.getAttribute("aria-label")).toBe("Has description note");
+			expect(meta.querySelector(".cp-meta-note")?.hasAttribute("title")).toBe(false);
 			expect(meta.querySelector(".cp-meta-note [data-icon]")?.getAttribute("data-icon")).toBe("file-text");
 			expect(meta.querySelector(".cp-meta-subtasks")?.textContent).toBe("0/1");
+			expect(meta.querySelector(".cp-meta-subtasks [data-icon]")?.getAttribute("data-icon")).toBe("square-check");
 			expect(meta.querySelector(".cp-meta-list .cp-list-dot.cp-hue-green")).not.toBeNull();
 			expect(meta.querySelector(".cp-meta-list")?.textContent).toContain("Work");
-			const date = meta.querySelector(".cp-meta-date")!;
-			expect(date.classList.contains("is-overdue")).toBe(true);
+		});
+
+		it("the repeat and Not synced marks sit between the deadline and the time and last of all", async () => {
+			// A repeating task has no deadline, so this order is read from `metaLine` on a record that has both.
+			const m = await mountApp();
+			const cat = await m.h.app.categories.create("Work", "briefcase");
+			const { task } = await m.h.app.tasks.create({ title: "Review", categoryId: cat.id, scheduled: { kind: "date", date: "2026-10-09" }, repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } });
+			const withDeadline = { ...task, deadline: { kind: "date" as const, date: "2026-10-12" }, plannedDurationMin: 30, urgent: true, descriptionNote: { path: "Plan.md", linkedAt: task.modifiedAt } };
+			const state = { ...m.h.app.store.state, syncLinks: new Map([[syncLinkId("list", cat.id), {} as SyncLink]]) };
+			const entry = { task: withDeadline, depth: 0, parentTitle: null, occurrence: null, schedule: { kind: "date" as const, date: "2026-10-09" } };
+			const ctx = { today: "2026-10-01", zone: "Europe/Berlin" } as QueryContext;
+			const line = mountNode(metaLine("cp-task-meta", m.host, state, entry as ListEntry, ctx, { showCategory: true, showMatrix: true, subtasks: { total: 2, done: 1 } }));
+			const order = [...line.querySelector(".cp-task-meta")!.children].map((c) => c.className.split(" ").find((x) => x.startsWith("cp-meta-")));
+			expect(order).toEqual(["cp-meta-list", "cp-meta-deadline", "cp-meta-repeat", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix", "cp-meta-notsynced"]);
+		});
+
+		it("a deadline-only task shows its deadline at the right edge with a flag; a missed one is red", async () => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title: "Pay rent", deadline: { kind: "date", date: "2026-10-20" } });
+			await h.app.tasks.create({ title: "File the form", deadline: { kind: "date", date: "2026-09-29" } });
+			await h.app.tasks.create({ title: "Both", scheduled: { kind: "date", date: "2026-10-20" }, deadline: { kind: "date", date: "2026-10-25" } });
+			await openInbox(root);
+			const rent = row(root, "Pay rent").querySelector(".cp-task-top .cp-meta-date")!;
+			expect(rent.classList.contains("is-deadline")).toBe(true);
+			expect(rent.getAttribute("title")).toBe("Deadline");
+			expect(rent.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			expect(rent.querySelector(".cp-sr-only")?.textContent).toBe("Deadline");
+			expect(rent.textContent).toContain("Oct 20");
+			expect(row(root, "Pay rent").querySelector(".cp-task-meta")).toBeNull();
+			const missed = row(root, "File the form").querySelector(".cp-task-top .cp-meta-date")!;
+			expect(missed.classList.contains("is-overdue")).toBe(true);
+			expect(missed.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			// A task with a schedule keeps its schedule on the right and its flag on the second line.
+			const both = row(root, "Both");
+			expect(both.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-deadline")).toBe(false);
+			expect(both.querySelector(".cp-task-top .cp-meta-date [data-icon]")).toBeNull();
+			expect(both.querySelector(".cp-task-meta .cp-meta-deadline [data-icon]")?.getAttribute("data-icon")).toBe("flag");
+		});
+
+		it.each([
+			{ name: "a timed task under Today", view: "Today", input: { scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" } }, shown: "19:00" },
+			{ name: "an all-day task under Today", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: null },
+			{ name: "a timed task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "datetime", local: "2026-10-03T09:30", tz: "Europe/Berlin" } }, shown: "09:30" },
+			{ name: "an all-day task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "date", date: "2026-10-03" } }, shown: null },
+			{ name: "a deadline-only task on the group's day: the flag alone", view: "Today", input: { deadline: { kind: "date", date: "2026-10-01" } }, shown: "" },
+			{ name: "a deadline-only task on an Upcoming day: the flag alone", view: "Upcoming", input: { deadline: { kind: "date", date: "2026-10-05" } }, shown: "" },
+			{ name: "a deadline-only task under the Overdue group: the flag and the date", view: "Today", input: { deadline: { kind: "date", date: "2026-09-30" } }, shown: "date" },
+			{ name: "a repeating task, by its current occurrence", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } }, shown: null },
+			{ name: "a task under the Overdue group keeps its date", view: "Today", input: { scheduled: { kind: "date", date: "2026-09-30" } }, shown: "date" },
+			{ name: "a task in the Inbox keeps its date", view: "Inbox", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: "Today" },
+			{ name: "a task in the search results keeps its date", view: "Search", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: "Today" },
+		])("a row does not repeat the day its heading says: $name", async ({ view, input, shown }) => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title: "Call the bank", ...input } as never);
+			if (view === "Search") {
+				await click(root.querySelector('.cp-rail [aria-label="Search"]'));
+				const box = root.querySelector<HTMLInputElement>('.cp-search input[type="search"]')!;
+				box.value = "bank";
+				box.dispatchEvent(new Event("input", { bubbles: true }));
+				await settle();
+			} else if (view !== "Today") {
+				await click(sidebarItem(root, view));
+			}
+			const r = [...root.querySelectorAll<HTMLElement>(view === "Search" ? ".cp-search .cp-task-row" : ".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Call the bank"))!;
+			const date = r.querySelector<HTMLElement>(".cp-task-top .cp-meta-date");
+			if (shown === null) {
+				expect(date).toBeNull();
+			} else if (shown === "") {
+				// The flag alone: no text but the icon and the screen-reader word.
+				expect(date!.classList.contains("is-deadline")).toBe(true);
+				expect([...date!.children].filter((c) => !c.matches(".cp-icon, .cp-sr-only"))).toEqual([]);
+			} else if (shown === "date") {
+				expect(date!.textContent.replace("Deadline", "").trim()).not.toBe("");
+				expect(date!.textContent).not.toMatch(/^\d\d:\d\d$/);
+			} else {
+				expect(date!.textContent).toBe(shown);
+			}
+		});
+
+		it("a completed row draws the same two lines", async () => {
+			const { h, root } = await mountApp();
+			const cat = await h.app.categories.create("Work", "briefcase");
+			const { task } = await h.app.tasks.create({ title: "Done thing", categoryId: cat.id, scheduled: { kind: "date", date: "2026-09-29" }, plannedDurationMin: 30 });
+			await h.app.tasks.complete(task.id);
+			await click(sidebarItem(root, "Completed"));
+			const r = row(root, "Done thing");
+			expect(r.classList.contains("is-completed")).toBe(true);
+			expect([...r.querySelector(".cp-task-body")!.children].map((c) => c.className.split(" ")[0])).toEqual(["cp-task-top", "cp-task-meta"]);
+			// A done task has no date color.
+			expect(r.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-none")).toBe(true);
+			expect(r.querySelector(".cp-task-meta .cp-meta-list")).not.toBeNull();
+			expect(r.querySelector(".cp-task-meta .cp-meta-duration")).not.toBeNull();
+		});
+
+		it.each([
+			{ name: "planned time only", planned: 90, focusMin: 0, mark: ".cp-meta-duration", visible: "1h 30m", icon: "clock" },
+			{ name: "focused time only", planned: null, focusMin: 25, mark: ".cp-meta-focus", visible: "25m", icon: "target", sr: "25m focused" },
+			{ name: "both: one mark with the focused time of the planned time", planned: 30, focusMin: 25, mark: ".cp-meta-focus", visible: "25m of 30m", icon: "target", sr: "25m focused of 30m planned" },
+		])("time mark: $name", async ({ planned, focusMin, mark, visible, icon, sr }) => {
+			const { h, root } = await mountApp();
+			const { task } = await h.app.tasks.create({ title: "Budget", plannedDurationMin: planned, scheduled: { kind: "date", date: TODAY } });
+			if (focusMin > 0) {
+				const start = "2026-10-01T08:00:00.000Z";
+				const end = new Date(Date.parse(start) + focusMin * 60_000).toISOString();
+				await h.app.store.run("Edit focus record", (tx) =>
+					tx.put("focusSessions", { id: "s1", deviceId: "d", taskId: task.id, taskTitleSnapshot: "Budget", plannedSec: 1500, status: "completed", segments: [{ start, end }], unobserved: [], splitFrom: null, startedAt: start, endedAt: end, finalizedAt: end } as never),
+				);
+			}
+			await settle();
+			const meta = row(root, "Budget").querySelector(".cp-task-meta")!;
+			const marks = [...meta.querySelectorAll(".cp-meta-duration, .cp-meta-focus")];
+			expect(marks).toHaveLength(1);
+			const el = marks[0]!;
+			expect(el.matches(mark)).toBe(true);
+			expect(el.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe(icon);
+			expect(el.querySelector('[aria-hidden="true"]:not([data-icon])')?.textContent ?? el.textContent.trim()).toBe(visible);
+			expect(el.querySelector(".cp-sr-only")?.textContent).toBe(sr);
 		});
 
 		it("hides the list name inside that list's own view", async () => {

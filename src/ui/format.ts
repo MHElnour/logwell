@@ -118,10 +118,15 @@ export function dateTone(spec: DateSpec | null, zone: string, today: LocalDate):
 	return dayTone(dateSpecDate(spec, zone), today) ?? "later";
 }
 
-/** A row's date: only the time when it is today and timed. */
-export function rowDateText(spec: DateSpec, zone: string, today: LocalDate): string {
+/**
+ * A row's date: only the time when it is today and timed. Under a heading that names the spec's own day
+ * (`groupDay`: a date group, Today), the day is not repeated: the time when timed, else nothing.
+ */
+export function rowDateText(spec: DateSpec, zone: string, today: LocalDate, groupDay: LocalDate | null = null): string {
 	const local = dateSpecDisplayLocal(spec, zone);
-	if (local !== null && dateSpecDate(spec, zone) === today) return wallClockOf(local);
+	const day = dateSpecDate(spec, zone);
+	if (day === groupDay) return local === null ? "" : wallClockOf(local);
+	if (local !== null && day === today) return wallClockOf(local);
 	return formatDateSpec(spec, zone, today);
 }
 

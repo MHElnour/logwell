@@ -95,7 +95,7 @@ describe("the tag tree", () => {
 		it("task rows show the tag by its own name", async () => {
 			const m = await mount();
 			await click(tagRow(m, "Go"));
-			const pill = m.root.querySelector(".cp-tasks .cp-task-row .cp-tag-pill")!;
+			const pill = m.root.querySelector(".cp-tasks .cp-task-row .cp-meta-tag")!;
 			expect(pill.textContent).toBe("@Go");
 		});
 	});

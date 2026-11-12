@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBoard, buildList, type TaskView, type ViewGroup, viewTitle } from "../../src/app/views";
+import { buildBoard, buildList, groupDay, type TaskView, type ViewGroup, viewTitle } from "../../src/app/views";
 import { defaultGroupBy, effectiveGroupBy, type GroupBy, groupByOptions, type GroupViewKind } from "../../src/domain/groupBy";
 import { emptyFilter, type TaskSort } from "../../src/domain/queries";
 import { INBOX_ID } from "../../src/domain/types";
@@ -307,5 +307,16 @@ describe("group by options", () => {
 		expect(effectiveGroupBy("tag", "tag")).toBe("none");
 		expect(effectiveGroupBy("inbox", "list")).toBe("none");
 		expect(effectiveGroupBy("completed", "date")).toBe("none");
+	});
+});
+
+describe("the day a group heading names", () => {
+	it.each([
+		["a date group names its date", { key: "d:2026-10-03", date: "2026-10-03" }, "2026-10-03"],
+		["the Today group names today", { key: "today", date: null }, "2026-10-01"],
+		["the Overdue group names no day", { key: "overdue", date: null }, null],
+		["a plain group names no day", { key: "all", date: null }, null],
+	])("%s", (_name, group, expected) => {
+		expect(groupDay(group, "2026-10-01")).toBe(expected);
 	});
 });

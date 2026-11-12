@@ -396,6 +396,7 @@ function Column(props: Parameters<typeof BoardView>[0] & {
 			onSelect={props.onSelect}
 			draggingId={props.draggingId}
 			dropBeforeId={over?.beforeId ?? null}
+			groupDay={column.date}
 			collapsed={props.collapsed.has(data.entry.task.id)}
 			onToggleCollapse={props.onToggleCollapse}
 			dropEnd={over?.endKey === data.entry.task.id}

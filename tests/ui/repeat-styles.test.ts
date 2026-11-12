@@ -41,7 +41,6 @@ describe("the repeat stylesheet section", () => {
 			".cp-repeat-seg button[aria-pressed=\"true\"]",
 			".cp-repeat-summary",
 			".cp-repeat-summary.is-problem",
-			".cp-meta-repeat",
 			".cp-cal-entry.is-future",
 			".cp-cal-repeat",
 		]) {
@@ -53,8 +52,8 @@ describe("the repeat stylesheet section", () => {
 		expect(section).toMatch(/\.cp-cal-entry\.is-future\s*\{[^}]*opacity:[^}]*border-left-style:\s*dashed/);
 	});
 
-	it("colors the repeat chip and the typed and picked repeat pills purple, from the theme variables", () => {
-		expect(section).toMatch(/\.cp-meta-repeat\s*\{[^}]*background:\s*var\(--cp-purple-soft\)[^}]*color:\s*var\(--cp-purple-text\)/);
+	it("the row's repeat mark has no fill, and the typed and picked repeat pills are purple, from the theme variables", () => {
+		expect(section).not.toMatch(/\.cp-meta-repeat[^{}]*\{[^}]*(background|color)/);
 		expect(section).toMatch(/\.cp-qa-manual\[data-kind="recurrence"\]\s*\{[^}]*var\(--cp-purple-soft\)/);
 	});
 

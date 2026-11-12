@@ -29,6 +29,8 @@ export const ICON = {
 	flag: "flag",
 	clock: "clock",
 	note: "file-text",
+	/** Subtasks done, in a row or card meta. */
+	subtasks: "square-check",
 	openNote: "external-link",
 	// Habits.
 	check: "check",
