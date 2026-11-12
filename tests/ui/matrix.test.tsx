@@ -570,10 +570,10 @@ describe("matrix section", () => {
 
 		it("the drag ghost has its own card styles (it lives outside the quadrant)", () => {
 			const block = /\.cp-matrix-ghost \{([^}]*)\}/.exec(css)?.[1] ?? "";
-			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "height: 46px", "box-shadow"]) expect(block).toContain(prop);
+			for (const prop of ["background: var(--background-primary)", "border:", "border-radius: 10px", "box-shadow"]) expect(block).toContain(prop);
 		});
 
-		it("cards have no matrix chip, the header holds the view menu, and the row meta thins out per quadrant", async () => {
+		it("cards have no matrix chip, the header holds the view menu, and a quadrant is a list-width container", async () => {
 			const m = await mountApp();
 			await seed(m);
 			await openMatrix(m);
@@ -585,8 +585,6 @@ describe("matrix section", () => {
 			const body = /\.cp-matrix-q-body \{([^}]*)\}/.exec(css)?.[1] ?? "";
 			expect(body).toContain("container-type: inline-size");
 			expect(body).toContain("container-name: cp-list");
-			// The @container cp-list rules are the ones that thin the meta; they now match inside a quadrant.
-			for (const w of ["560px", "440px", "340px"]) expect(css).toContain(`@container cp-list (max-width: ${w})`);
 		});
 	});
 

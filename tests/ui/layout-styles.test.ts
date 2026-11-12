@@ -87,33 +87,34 @@ describe("list column", () => {
 		expect(main).toMatch(/container-name:\s*cp-list/);
 	});
 
-	it("the title never gets under 120 px before meta is hidden, and ellipsizes past that", () => {
+	it("a row has no fixed height and keeps a minimum hit height", () => {
+		const row = cssBlock(".checkpoint-view .cp-task-row {");
+		expect(row).toMatch(/min-height:\s*var\(--cp-hit\)/);
+		expect(row).not.toMatch(/(^|[\s;])height:/);
+		expect(css).not.toContain("--cp-row-h");
+		// The matrix frames the same row as a card and the drag ghost copies it: both take the row's natural height.
+		expect(cssBlock(".checkpoint-view .cp-matrix-q .cp-task-row {")).not.toMatch(/(^|[\s;])height:/);
+		expect(cssBlock(".checkpoint-view .cp-matrix-ghost {")).not.toMatch(/(^|[\s;])height:/);
+		for (const token of ["--cp-row-pad-y", "--cp-row-date-size", "--cp-row-meta-size", "--cp-row-meta-icon"]) expect(css, token).toContain(`${token}: `);
+	});
+
+	it("the title shrinks to an ellipsis and the date never shrinks, so the date stays inside the row", () => {
 		const t = cssBlock(".checkpoint-view .cp-task-title {");
-		expect(t).toMatch(/min-width:\s*120px/);
+		expect(t).toMatch(/min-width:\s*0/);
 		expect(t).toMatch(/text-overflow:\s*ellipsis/);
 		expect(t).toMatch(/overflow:\s*hidden/);
+		expect(cssBlock(".checkpoint-view .cp-task-body {")).toMatch(/min-width:\s*0/);
+		expect(cssBlock(".checkpoint-view .cp-task-top > .cp-meta-date {")).toMatch(/flex:\s*none/);
 	});
 
-	it("the meta can shrink and the date never does, so the date stays inside the row", () => {
-		expect(cssBlock(".checkpoint-view .cp-task-meta {")).toMatch(/flex:\s*0 1 auto/);
-		expect(cssBlock(".checkpoint-view .cp-task-meta {")).toMatch(/min-width:\s*0/);
-		expect(cssBlock(".checkpoint-view .cp-task-meta {")).toMatch(/overflow:\s*hidden/);
-		expect(cssBlock(".checkpoint-view .cp-task-meta > .cp-meta-date {")).toMatch(/flex-shrink:\s*0/);
-	});
-
-	it("hides tags first, then the list name, then the rest of the meta, as the list narrows", () => {
-		const q = containerQueries("cp-list").sort((a, b) => b - a);
-		expect(q.length).toBeGreaterThanOrEqual(3);
-		const [tags, listName, rest] = q as [number, number, number];
-		expect(cssBlock(`@container cp-list (max-width: ${tags}px)`)).toMatch(/\.cp-meta-tags\s*\{[^}]*display:\s*none/);
-		expect(cssBlock(`@container cp-list (max-width: ${listName}px)`)).toMatch(/\.cp-meta-list-name\s*\{[^}]*display:\s*none/);
-		expect(cssBlock(`@container cp-list (max-width: ${rest}px)`)).toMatch(/\.cp-meta-note/);
-		// The tag threshold is wider than the list-name one: tags go first.
-		expect(tags).toBeGreaterThan(listName);
-		expect(listName).toBeGreaterThan(rest);
-		// The details-open inline layout (list content about 384 px) must hide tags and the list name.
-		const inlineContent = 1200 - px("--cp-rail-w") - px("--cp-side-w") - px("--cp-details-w") - 64;
-		expect(inlineContent).toBeLessThanOrEqual(listName);
+	it("the second line wraps and nothing is hidden by width", () => {
+		const meta = cssBlock(".checkpoint-view .cp-task-meta {");
+		expect(meta).toMatch(/flex-wrap:\s*wrap/);
+		expect(meta).toMatch(/min-width:\s*0/);
+		expect(meta).not.toMatch(/overflow:\s*hidden/);
+		// No mark is hidden when the list narrows: no container query on the list, no `display: none` on a mark.
+		expect(containerQueries("cp-list")).toEqual([]);
+		expect(uncommented(css)).not.toMatch(/(\.cp-meta-[\w-]+|\.cp-task-meta)[^{}]*\{[^}]*display:\s*none/);
 	});
 });
 
@@ -144,11 +145,12 @@ describe("task checkbox", () => {
 	});
 });
 
-describe("task row tag pill", () => {
-	it("is wide enough for a two-level name, still ellipsized beyond that", () => {
-		const rule = cssBlock(".checkpoint-view .cp-meta-tags .cp-tag-pill {");
-		expect(Number(/max-width:\s*(\d+)px/.exec(rule)![1])).toBeGreaterThanOrEqual(220);
-		expect(rule).toContain("text-overflow: ellipsis");
+describe("task row tag", () => {
+	it("is tinted text, not a pill, and ellipsized when longer than the line", () => {
+		const rule = cssBlock(".checkpoint-view .cp-meta-tag {");
+		expect(rule).toMatch(/color:\s*var\(--cp-hue-text/);
+		expect(rule).not.toMatch(/background|border/);
+		expect(cssBlock(".checkpoint-view .cp-task-meta > * {")).toMatch(/text-overflow:\s*ellipsis/);
 	});
 });
 
