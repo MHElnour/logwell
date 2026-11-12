@@ -1,16 +1,13 @@
 import { useRef } from "preact/hooks";
 import type { ListEntry, QueryContext } from "../domain/queries";
-import { tagLabel } from "../domain/tags";
 import type { SubtaskCount } from "../domain/tasks";
 import type { ID, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { occurrenceMenu, taskMenu } from "./actions";
-import { TaskCheckbox, hueClass } from "./common";
-import { dueSpecOf, entryKey, formatDate, formatDuration } from "./format";
+import { TaskCheckbox } from "./common";
+import { dueSpecOf, entryKey, formatDate } from "./format";
 import type { UiHost } from "./host";
-import { quadrantWords } from "./matrix/quadrants";
-import { RepeatChip } from "./RepeatChip";
-import { deadlineMark, dueMark, focusMark, listMark, noteMark, notSyncedMark, subtaskMark, toneOf } from "./rowMeta";
+import { dueMark, metaLine, toneOf } from "./rowMeta";
 import { memoComponent, sameDay, sameEntry, sameFocusTotal, sameLookups, sameSubtasks, sameSyncMark } from "./rowMemo";
 import { onItemKeyDown, useCompleteToggle } from "./rowItem";
 
@@ -103,8 +100,6 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 	// A Completed history row is one done occurrence of a repeating task; it reads as completed and reopens that date.
 	const occurrence = entry.occurrence;
 	const done = occurrence !== null || task.status === "completed";
-	const category = state.categories.get(task.categoryId);
-	const subCount = task.parentId === null ? (subtasks?.total ?? 0) : 0;
 	// The date is the effective schedule (the current occurrence of a repeating task), not task.scheduled.
 	const due = occurrence !== null ? null : dueSpecOf(task, entry.schedule);
 	const tone = toneOf(done, due, ctx);
@@ -112,9 +107,6 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 	const rowRef = useRef<HTMLDivElement>(null);
 	const { completing, justCompleted, toggle, animationEnded } = useCompleteToggle(host, task, rowRef, occurrence?.date ?? null, block?.complete);
 	const menuFor = (el: HTMLElement) => (occurrence === null ? taskMenu(host, task, ctx.today, open, el) : occurrenceMenu(host, task, occurrence.date, open));
-
-	const tags = task.tagKeys;
-	const firstTag = tags.length > 0 ? state.tags.get(tags[0]!) : undefined;
 	return (
 		<div
 			class={`cp-task-row${selected ? " is-selected" : ""}${done ? " is-completed" : ""}${completing ? " is-completing" : ""}${justCompleted ? " is-just-completed" : ""}${entry.depth === 1 ? " is-subtask" : ""}${dragging === true ? " is-dragging" : ""}`}
@@ -142,34 +134,16 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 			}
 		>
 			<TaskCheckbox done={done} title={task.title} tabIndex={-1} priority={task.priority} onToggle={() => toggle(task)} />
-			<div class="cp-task-title">
-				{entry.parentTitle !== null && <span class="cp-parent-prefix">{entry.parentTitle} › </span>}
-				{task.title}
-				{occurrence !== null && <span class="cp-occurrence-date">{` · ${formatDate(occurrence.date, ctx.today)}`}</span>}
-			</div>
-			<div class="cp-task-meta">
-				{tags.length > 0 && (
-					<span class="cp-meta-tags" title={tags.map((k) => `@${tagLabel(state.tags, k)}`).join(" ")}>
-						{/* First tag, then a count, so a pill is never cut off mid-word in a tight row. */}
-						<span class={`cp-tag-pill ${hueClass(firstTag?.color)}`}>@{tagLabel(state.tags, tags[0]!)}</span>
-						{tags.length > 1 && <span class="cp-tag-more">+{tags.length - 1}</span>}
-					</span>
-				)}
-				{task.descriptionNote !== null && noteMark(host)}
-				{occurrence === null && task.recurrence !== null && <RepeatChip host={host} task={task} today={ctx.today} />}
-				{/* An open task of a TickTick list that does not sync says so. */}
-				{occurrence === null && notSyncedMark(state, task)}
-				{subtaskMark(subCount, subtasks)}
-				{showCategory && category !== undefined && listMark(category)}
-				{deadlineMark(host, entry, ctx)}
-				{task.plannedDurationMin !== null && <span class="cp-meta-duration">{formatDuration(task.plannedDurationMin)}</span>}
-				{focusMark(host, state, task)}
-				{showMatrix && (task.urgent || task.important) && (
-					<span class="cp-meta-matrix" title="Matrix flags">
-						{quadrantWords(task.urgent, task.important)}
-					</span>
-				)}
-				{due !== null && dueMark(due, tone, ctx)}
+			<div class="cp-task-body">
+				<div class="cp-task-top">
+					<div class="cp-task-title">
+						{entry.parentTitle !== null && <span class="cp-parent-prefix">{entry.parentTitle} › </span>}
+						{task.title}
+						{occurrence !== null && <span class="cp-occurrence-date">{` · ${formatDate(occurrence.date, ctx.today)}`}</span>}
+					</div>
+					{due !== null && dueMark(due, tone, ctx)}
+				</div>
+				{metaLine("cp-task-meta", host, state, entry, ctx, { showCategory, showMatrix, subtasks })}
 			</div>
 		</div>
 	);

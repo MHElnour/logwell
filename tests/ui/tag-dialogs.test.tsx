@@ -280,7 +280,7 @@ describe("Edit tag", () => {
 			expect(tagLabels(m)).toEqual(["Errands", "Home", "Garden", "Phone"]);
 			// The task row shows the new name.
 			await click(tagRow(m, "Phone"));
-			expect(m.root.querySelector(".cp-tasks .cp-task-row .cp-tag-pill")!.textContent).toBe("@Phone");
+			expect(m.root.querySelector(".cp-tasks .cp-task-row .cp-meta-tag")!.textContent).toBe("@Phone");
 			await m.host.undoButtons.at(-1)!();
 			await settle();
 			expect(m.h.app.store.state.tags).toEqual(before.tags);

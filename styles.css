@@ -840,6 +840,13 @@ body.is-mobile .checkpoint-view .cp-app {
 	display: inline-block;
 }
 
+/* A tag in a row's or a card's meta: tinted text, no pill. */
+.checkpoint-view .cp-meta-tag {
+	display: inline-block;
+	color: var(--cp-hue-text, var(--text-muted));
+	font-weight: var(--font-semibold);
+}
+
 .checkpoint-view .cp-tag-more {
 	font-size: var(--cp-label-size);
 	font-weight: var(--font-semibold);
@@ -5309,7 +5316,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* The focus chip on a row and the total next to the details Focus button. */
 .checkpoint-view .cp-meta-focus {
-	color: var(--cp-accent-text);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -6959,11 +6965,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* "Not synced": a repeating task, or one kept in Logwell only, in a list synced with TickTick. */
 .checkpoint-view .cp-meta-notsynced {
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--cp-orange-soft);
-	color: var(--cp-orange-text);
-	font-weight: var(--font-medium);
 	white-space: nowrap;
 }
 
@@ -7529,30 +7530,11 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* -- Rows and cards ---------------------------------------------------------------------------- */
 
+/* The repeat mark of a row or a card is the icon alone; its label (a hover) says the rule. */
 .checkpoint-view .cp-meta-repeat {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--cp-purple-soft);
-	color: var(--cp-purple-text);
-	font-weight: var(--font-medium);
 }
-
-.checkpoint-view .cp-meta-repeat .cp-icon svg {
-	width: 13px;
-	height: 13px;
-}
-
-.checkpoint-view .cp-meta-repeat-text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* A narrow row shrinks the words with an ellipsis (the meta cells shrink: .cp-task-meta > *); the icon stays. */
 
 .checkpoint-view .cp-occurrence-date {
 	color: var(--text-muted);

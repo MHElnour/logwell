@@ -25,7 +25,7 @@ const checkbox = (row: HTMLElement) => q<HTMLInputElement>(row, ".cp-task-checkb
 const completedToggle = (root: HTMLElement) => q<HTMLButtonElement>(root, ".cp-completed-toggle");
 
 describe("the row", () => {
-	it("shows the current occurrence's date and a purple repeat chip with the rule, next to the subtask count", async () => {
+	it("shows the current occurrence's date on the first line and the repeat icon before the subtask count on the second", async () => {
 		const m = await mountM7();
 		const t = await create(m, "Weekly review");
 		await m.h.app.tasks.create({ title: "Inbox zero", parentId: t.id });
@@ -33,28 +33,36 @@ describe("the row", () => {
 		await m.h.app.tasks.create({ title: "Plain" });
 		const section = await showInbox(m);
 		const row = rowFor(section, "Weekly review");
-		const chip = q(row, ".cp-meta-repeat");
-		expect(chip.querySelector('[data-icon="repeat"]')).not.toBeNull();
-		expect(q(chip, ".cp-meta-repeat-text").textContent).toBe("every Fri");
-		expect(chip.title).toBe("Repeats every Fri");
 		expect(q(row, ".cp-meta-subtasks").textContent).toBe("0/2");
 		expect(dateOf(row)).toBe("Fri, Oct 9");
-		// The chip comes before the subtask count and the date.
+		expect(q(row, ".cp-task-top .cp-meta-date")).toBe(row.querySelector(".cp-meta-date"));
+		// The icon comes before the subtask count; the date is not on the second line.
 		const meta = [...q(row, ".cp-task-meta").children].map((c) => c.className.split(" ")[0]);
-		expect(meta.indexOf("cp-meta-repeat")).toBeLessThan(meta.indexOf("cp-meta-subtasks"));
-		expect(meta.indexOf("cp-meta-subtasks")).toBeLessThan(meta.indexOf("cp-meta-date"));
-		// A task that does not repeat looks as before.
+		expect(meta).toEqual(["cp-meta-repeat", "cp-meta-subtasks"]);
+		// A task that does not repeat has no icon.
 		expect(rowFor(section, "Plain").querySelector(".cp-meta-repeat")).toBeNull();
 	});
 
-	it("words the chip title with the end", async () => {
+	it("the repeat mark is the icon alone and its label says the rule (row and card)", async () => {
 		const m = await mountM7();
 		await create(m, "Gym", { repeat: { rule: weeklyFriday.rule, end: { kind: "count", count: 4 } } });
-		const row = rowFor(await showInbox(m), "Gym");
-		expect(q(row, ".cp-meta-repeat").title).toBe("Repeats every Fri · ends after 4 times");
+		await create(m, "Weekly review");
+		const section = await showInbox(m);
+		for (const [title, label] of [["Gym", "Repeats every Fri · ends after 4 times"], ["Weekly review", "Repeats every Fri"]] as const) {
+			const mark = q(rowFor(section, title), ".cp-meta-repeat");
+			expect(mark.querySelector('[data-icon="repeat"]')).not.toBeNull();
+			expect(mark.textContent).toBe("");
+			expect(mark.getAttribute("role")).toBe("img");
+			expect(mark.getAttribute("aria-label")).toBe(label);
+			expect(mark.hasAttribute("title")).toBe(false);
+			expect(mark.querySelector(".cp-meta-repeat-text")).toBeNull();
+		}
+		await openBoard(m, "Inbox");
+		const card = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-board-item")].find((i) => i.textContent?.includes("Gym"))!;
+		expect(q(card, ".cp-meta-repeat").getAttribute("aria-label")).toBe("Repeats every Fri · ends after 4 times");
 	});
 
-	it("#135: the chip reads the rule in force on the day its row was drawn for, not the app's day", async () => {
+	it("#135: the mark reads the rule in force on the day its row was drawn for, not the app's day", async () => {
 		const m = await mountM7();
 		const t = await create(m, "Weekly review");
 		const rec = t.recurrence!;
@@ -62,16 +70,16 @@ describe("the row", () => {
 		// A daily rule from November on: the app's day (October 1) still has the weekly one.
 		const task = { ...t, recurrence: { ...rec, versions: [first, { ...first, effectiveFrom: "2026-11-06", rule: { ...first.rule, freq: "daily" as const } }] } };
 		const root = mountNode(<RepeatChip host={m.host} task={task} today="2026-11-10" />);
-		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).toBe(describeRule(task.recurrence, "2026-11-10"));
-		expect(root.querySelector(".cp-meta-repeat-text")!.textContent).not.toBe("every Fri");
+		const label = root.querySelector(".cp-meta-repeat")!.getAttribute("aria-label")!;
+		expect(label).toBe(`Repeats ${describeRule(task.recurrence, "2026-11-10")}`);
+		expect(label).not.toBe("Repeats every Fri");
 	});
 
-	it("a board card shows the chip and the occurrence's date", async () => {
+	it("a board card shows the occurrence's date", async () => {
 		const m = await mountM7();
 		await create(m, "Weekly review");
 		await openBoard(m, "Inbox");
 		const item = [...m.root.querySelectorAll<HTMLElement>(".cp-tasks .cp-board-item")].find((i) => i.textContent?.includes("Weekly review"))!;
-		expect(q(item, ".cp-meta-repeat-text").textContent).toBe("every Fri");
 		expect(q(item, ".cp-meta-date").textContent).toBe("Fri, Oct 9");
 	});
 });

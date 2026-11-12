@@ -78,6 +78,33 @@ describe("columns and cards", () => {
 		expect(item(m.root, "Lunch").querySelector(".cp-meta-date.is-today")).not.toBeNull();
 	});
 
+	it("a card draws the same marks in the same order as a row, with the date first", async () => {
+		const m = await mountApp();
+		const T = m.h.app.tasks;
+		const work = await m.h.app.categories.create("Work", "briefcase");
+		const tag = await m.h.app.tags.create("calls", "blue");
+		const { task } = await T.create({
+			title: "Plan the quarter",
+			categoryId: work.id,
+			tagKeys: [tag.key],
+			scheduled: at("2026-10-01", "19:00"),
+			deadline: day("2026-10-05"),
+			plannedDurationMin: 90,
+			urgent: true,
+			important: true,
+		});
+		await T.create({ title: "Draft", parentId: task.id });
+		m.h.notes.files.set("Plan.md", "x");
+		await m.h.app.tasks.linkNote(task.id, "Plan.md");
+		await settle();
+		await openBoard(m, "Today");
+		const order = [...item(m.root, "Plan the quarter").querySelector(".cp-board-meta")!.children].map((c) => c.className.split(" ").find((x) => x.startsWith("cp-meta-")));
+		expect(order).toEqual(["cp-meta-date", "cp-meta-list", "cp-meta-tag", "cp-meta-deadline", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix"]);
+		expect(item(m.root, "Plan the quarter").querySelector(".cp-board-meta")!.classList.contains("cp-task-meta")).toBe(true);
+		// One note mark, with no path tooltip.
+		expect(item(m.root, "Plan the quarter").querySelector(".cp-meta-note")!.hasAttribute("title")).toBe(false);
+	});
+
 	it("#125: ticking the only overdue card keeps it and the Overdue column in place during its check animation", async () => {
 		const m = await mountApp();
 		await seed(m);

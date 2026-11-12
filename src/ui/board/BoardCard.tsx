@@ -2,17 +2,15 @@ import type { TargetedKeyboardEvent } from "preact";
 import { useRef } from "preact/hooks";
 import type { BoardCard as BoardCardData } from "../../domain/board";
 import type { ListEntry, QueryContext } from "../../domain/queries";
-import { tagLabel } from "../../domain/tags";
-import { type SubtaskCount, isActiveSeries } from "../../domain/tasks";
+import type { SubtaskCount } from "../../domain/tasks";
 import type { ID } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
 import { taskMenu } from "../actions";
-import { Icon, TaskCheckbox, hueClass } from "../common";
+import { Icon, TaskCheckbox } from "../common";
 import { dueSpecOf } from "../format";
 import type { UiHost } from "../host";
-import { RepeatChip } from "../RepeatChip";
 import { onItemKeyDown, useCompleteToggle } from "../rowItem";
-import { deadlineMark, dueMark, focusMark, listMark, noteMark, notSyncedMark, subtaskMark, toneOf } from "../rowMeta";
+import { dueMark, metaLine, toneOf } from "../rowMeta";
 import { memoComponent, sameDay, sameEntry, sameFocusTotal, sameLookups, sameSubtasks, sameSyncMark } from "../rowMemo";
 
 // A board card: the checkbox and title on one line, a meta line under it, and the parent's subtasks
@@ -32,7 +30,7 @@ interface CommonProps {
 	dropBeforeId: ID | null;
 }
 
-/** The meta line: date (colored), repeat, "Not synced", list, tags as pills, note, subtasks n/m, focused time. */
+/** The meta line: the date first (colored), then the marks of `metaLine`. */
 function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	host: UiHost;
 	state: DbData;
@@ -46,38 +44,7 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	// The effective schedule, so a repeating card shows its current occurrence.
 	const due = dueSpecOf(task, entry.schedule);
 	const tone = toneOf(done, due, ctx);
-	const repeats = isActiveSeries(task);
-	const category = state.categories.get(task.categoryId);
-	const subCount = task.parentId === null ? (subtasks?.total ?? 0) : 0;
-	const notSynced = notSyncedMark(state, task);
-	const focus = focusMark(host, state, task);
-	const hasMeta =
-		due !== null ||
-		repeats ||
-		(showCategory && category !== undefined) ||
-		task.tagKeys.length > 0 ||
-		task.descriptionNote !== null ||
-		subCount > 0 ||
-		notSynced !== null ||
-		focus !== null;
-	if (!hasMeta) return null;
-	return (
-		<div class="cp-board-meta">
-			{due !== null && dueMark(due, tone, ctx)}
-			{repeats && <RepeatChip host={host} task={task} today={ctx.today} />}
-			{notSynced}
-			{deadlineMark(host, entry, ctx)}
-			{showCategory && category !== undefined && listMark(category)}
-			{task.tagKeys.map((key) => (
-				<span key={key} class={`cp-tag-pill ${hueClass(state.tags.get(key)?.color)}`}>
-					@{tagLabel(state.tags, key)}
-				</span>
-			))}
-			{task.descriptionNote !== null && noteMark(host, task.descriptionNote.path)}
-			{subtaskMark(subCount, subtasks)}
-			{focus}
-		</div>
-	);
+	return metaLine("cp-task-meta cp-board-meta", host, state, entry, ctx, { showCategory, showMatrix: true, subtasks, lead: due !== null ? dueMark(due, tone, ctx) : null });
 }
 
 /** One task in a card: the parent, or a nested subtask. Focusable; Alt+Arrow and the menu keys work on it. */

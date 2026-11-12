@@ -133,7 +133,7 @@ describe("render passes", () => {
 			await m.h.app.tasks.complete(sub2.task.id);
 			await flushEffects();
 			expect(meta(m, parentRow())).toContain("1/2");
-			const pill = () => rows(m)[parentRow()]!.querySelector(".cp-tag-pill")!;
+			const pill = () => rows(m)[parentRow()]!.querySelector(".cp-meta-tag")!;
 			const before = pill().className;
 			await m.h.app.tags.setColor(tag.key, "purple");
 			await flushEffects();

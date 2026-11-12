@@ -91,7 +91,7 @@ export function TaskDetails(props: {
 	const dueSpec = dueSpecOf(task, schedule);
 	// The rule in force today (a later version that has not started yet is not the repeat the task has now).
 	const dateText = detailsDateText(task, ctx.zone, ctx.today, { schedule, repeat: rec === null ? null : describeRule(rec, ctx.today) });
-	// Spelled out from the series' own anchor (not from the date on screen), so the line and a Custom → Done agree with the row chip.
+	// Spelled out from the series' own anchor (not from the date on screen), so the line and a Custom → Done agree with the row's repeat mark.
 	const repeatChoice: RepeatChoice | null = rec === null ? null : { rule: explicitRule(versionAt(rec, ctx.today).rule, rec.anchor), end: rec.end };
 	// The picker names weekdays and days from the current occurrence (the series' first date may be long past), and
 	// its Weekly and Monthly presets store them, so the hint and the stored rule agree.

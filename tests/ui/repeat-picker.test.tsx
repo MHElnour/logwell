@@ -759,7 +759,7 @@ describe("the picker with series, panes and the calendar", () => {
 			await click(q(section, ".cp-details .cp-due-chip"));
 			const button = q(section, ".cp-details .cp-repeat-button");
 			expect(button.textContent).toBe("monthly on the 31st");
-			expect(rowFor(section, "Rent").querySelector(".cp-meta-repeat-text")?.textContent).toContain("31st");
+			expect(rowFor(section, "Rent").querySelector(".cp-meta-repeat")?.getAttribute("aria-label")).toContain("31st");
 			// Custom → Done with nothing changed is no edit; in particular it never stores the 30th (Dec 30, Jan 30, Mar 30).
 			await click(button);
 			await click(q(section, '.cp-details [data-preset="custom"]'));
@@ -847,22 +847,20 @@ describe("the picker with series, panes and the calendar", () => {
 		});
 	});
 
-	describe("the row chip describes the rule in force today", () => {
-		it("a version that starts in the future is not the chip's text", async () => {
+	describe("the row repeat mark describes the rule in force today", () => {
+		it("a version that starts in the future is not the mark's label", async () => {
 			const m = await mountM7();
 			const t = await create(m, "Gym");
 			await m.h.app.recurrence.setRepeat(t.id, { ...weeklyFriday.rule, freq: "daily" } as never, "2026-10-20");
 			const section = await showInbox(m);
-			expect(rowFor(section, "Gym").querySelector(".cp-meta-repeat-text")?.textContent).toBe("every Fri");
-			expect(rowFor(section, "Gym").querySelector<HTMLElement>(".cp-meta-repeat")!.title).toBe("Repeats every Fri");
+			expect(rowFor(section, "Gym").querySelector(".cp-meta-repeat")!.getAttribute("aria-label")).toBe("Repeats every Fri");
 		});
 
-		it("a timed rule's time is in the chip's title", async () => {
+		it("a timed rule's time is in the mark's label", async () => {
 			const m = await mountM7();
 			await create(m, "Gym", { scheduled: timedWeekly });
 			const section = await showInbox(m);
-			expect(rowFor(section, "Gym").querySelector(".cp-meta-repeat-text")?.textContent).toBe("every Fri");
-			expect(rowFor(section, "Gym").querySelector<HTMLElement>(".cp-meta-repeat")!.title).toBe("Repeats every Fri at 07:00");
+			expect(rowFor(section, "Gym").querySelector(".cp-meta-repeat")!.getAttribute("aria-label")).toBe("Repeats every Fri at 07:00");
 		});
 	});
 
