@@ -739,7 +739,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-task-row.is-completed .cp-task-title {
 	color: var(--text-faint);
-	text-decoration: line-through;
 }
 
 .checkpoint-view .cp-task-row.is-completing {
@@ -1178,7 +1177,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-subtasks li.is-completed .cp-link-button {
 	color: var(--text-muted);
-	text-decoration: line-through;
 }
 
 .checkpoint-view .cp-add-subtask {
@@ -3994,7 +3992,6 @@ body.is-mobile .checkpoint-view .cp-app {
 
 .checkpoint-view .cp-board-item.is-completed .cp-board-title {
 	color: var(--text-faint);
-	text-decoration: line-through;
 }
 
 /* The meta line sits under the title, aligned with it (past the checkbox). */

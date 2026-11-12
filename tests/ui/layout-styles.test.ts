@@ -145,6 +145,24 @@ describe("task checkbox", () => {
 	});
 });
 
+describe("completed titles", () => {
+	it("a completed title is not struck through in a row, a card or the details subtask list, only faint", () => {
+		for (const rule of [
+			".checkpoint-view .cp-task-row.is-completed .cp-task-title {",
+			".checkpoint-view .cp-board-item.is-completed .cp-board-title {",
+			".checkpoint-view .cp-subtasks li.is-completed .cp-link-button {",
+		]) {
+			const block = cssBlock(rule);
+			expect(block, rule).not.toMatch(/text-decoration/);
+			expect(block, rule).toMatch(/color:\s*var\(--text-(faint|muted)\)/);
+		}
+	});
+
+	it("a calendar entry keeps its strike-through: it has no checkbox to say it is done", () => {
+		expect(cssBlock(".checkpoint-view .cp-cal-entry.is-completed")).toMatch(/text-decoration:\s*line-through/);
+	});
+});
+
 describe("task row tag", () => {
 	it("is tinted text, not a pill, and ellipsized when longer than the line", () => {
 		const rule = cssBlock(".checkpoint-view .cp-meta-tag {");
