@@ -1,5 +1,5 @@
 import { type ComponentChild, render } from "preact";
-import { afterEach, expect, vi } from "vitest";
+import { afterAll, afterEach, expect, vi } from "vitest";
 import type { CheckpointApp } from "../../src/app/App";
 import { EventBus } from "../../src/app/events";
 import { type CheckpointSettings, DEFAULT_SETTINGS, type WeekStart } from "../../src/app/settings";
@@ -24,6 +24,16 @@ export function unmountAll(): void {
 	for (const undo of cleanups.splice(0).reverse()) undo();
 }
 afterEach(unmountAll);
+
+// Preact runs passive effects from a real timer (a frame or up to 100 ms later). If that timer is still pending when
+// a file ends, it fires after the DOM environment is torn down and fails the run as an unhandled error, so a file that
+// mounted anything waits for it once at the end.
+let mountedInFile = false;
+afterAll(async () => {
+	if (!mountedInFile) return;
+	if (vi.isFakeTimers()) vi.useRealTimers();
+	await flushEffects();
+});
 
 // -- The host and the app -----------------------------------------------------------------------------------------
 
@@ -169,6 +179,7 @@ export async function flushEffects(): Promise<void> {
 
 /** A new element under `parent`, removed (with whatever is rendered into it) after the test. */
 function attach(parent: HTMLElement): { root: HTMLElement; unmount: () => void } {
+	mountedInFile = true;
 	const root = document.createElement("div");
 	parent.appendChild(root);
 	let live = true;
