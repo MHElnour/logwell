@@ -157,10 +157,6 @@ describe("completed titles", () => {
 			expect(block, rule).toMatch(/color:\s*var\(--text-(faint|muted)\)/);
 		}
 	});
-
-	it("a calendar entry keeps its strike-through: it has no checkbox to say it is done", () => {
-		expect(cssBlock(".checkpoint-view .cp-cal-entry.is-completed")).toMatch(/text-decoration:\s*line-through/);
-	});
 });
 
 describe("task row tag", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cssBlock, cssSection, selectors, uncommented } from "./styles-helpers";
+import { cssSection, selectors, uncommented } from "./styles-helpers";
 
 // The repeat stylesheet section (marked "M7 recurrence" in styles.css); the visual pass (dark and light, wide and
 // narrow) is done in real Obsidian. Its scoping, hygiene and place as the last block are checked with the other
@@ -41,7 +41,6 @@ describe("the repeat stylesheet section", () => {
 			".cp-repeat-seg button[aria-pressed=\"true\"]",
 			".cp-repeat-summary",
 			".cp-repeat-summary.is-problem",
-			".cp-meta-repeat",
 			".cp-cal-entry.is-future",
 			".cp-cal-repeat",
 		]) {
@@ -54,7 +53,7 @@ describe("the repeat stylesheet section", () => {
 	});
 
 	it("the row's repeat mark has no fill, and the typed and picked repeat pills are purple, from the theme variables", () => {
-		expect(cssBlock(".checkpoint-view .cp-meta-repeat {", section)).not.toMatch(/background|color/);
+		expect(section).not.toMatch(/\.cp-meta-repeat[^{}]*\{[^}]*(background|color)/);
 		expect(section).toMatch(/\.cp-qa-manual\[data-kind="recurrence"\]\s*\{[^}]*var\(--cp-purple-soft\)/);
 	});
 

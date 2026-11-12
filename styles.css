@@ -271,8 +271,8 @@ body.is-mobile .checkpoint-view .cp-app {
 	background: var(--background-secondary);
 }
 
-/* The list column is a size container: rows adapt to its width, not the window's. At 1200 px
-   (rail 64 + sidebar 268 + details 420) it is about 448 px; it never gets narrower than that. */
+/* The list column is a size container named cp-list. At 1200 px (rail 64 + sidebar 268 + details 420) it is about
+   448 px; it never gets narrower than that. A row needs no width rules: its second line wraps. */
 .checkpoint-view .cp-main {
 	flex: 1 1 auto;
 	min-width: min(440px, 100%);
@@ -6908,11 +6908,6 @@ body.is-mobile .checkpoint-view .cp-app {
 	text-overflow: ellipsis;
 }
 
-/* "Not synced": a repeating task, or one kept in Logwell only, in a list synced with TickTick. */
-.checkpoint-view .cp-meta-notsynced {
-	white-space: nowrap;
-}
-
 /* The dialogs of the sync: the link list, the first-sync preview and the confirmation of removed tasks. */
 .checkpoint-tt-dialog .cp-tt-lead {
 	margin: 0 0 var(--size-4-3);
@@ -7475,11 +7470,8 @@ body.is-mobile .checkpoint-view .cp-app {
 
 /* -- Rows and cards ---------------------------------------------------------------------------- */
 
-/* The repeat mark of a row or a card is the icon alone; its label (a hover) says the rule. */
-.checkpoint-view .cp-meta-repeat {
-	display: inline-flex;
-	align-items: center;
-}
+/* The repeat mark of a row or a card is the icon alone, laid out like every mark of the meta line; its label (a hover)
+   says the rule. */
 
 .checkpoint-view .cp-occurrence-date {
 	color: var(--text-muted);

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { EDIT_TASK_LABEL } from "../app/TaskService";
-import { menuTasks } from "../app/views";
+import { groupDay, menuTasks } from "../app/views";
 import { type MatrixGroup, QUADRANT_ORDER, matrixQuadrants, quadrantFlags } from "../domain/matrix";
 import { type ListEntry, type Quadrant, type QueryContext, type TaskFilter, emptyFilter, quadrantOf } from "../domain/queries";
 import type { SubtaskCount } from "../domain/tasks";
@@ -244,7 +244,7 @@ function QuadrantCard(props: {
 				) : (
 					<div class="cp-task-list cp-matrix-q-list" role="group" aria-labelledby={titleId}>
 						{groups.map((g) => {
-							const day = g.id === "today" ? props.ctx.today : null;
+							const day = groupDay({ key: g.id, date: null }, props.ctx.today);
 							const row = (entry: ListEntry) => taskRowFor(props, props.counts, entry, true, { showMatrix: false, dragging: entry.task.id === props.draggingId, groupDay: day });
 							if (g.id === "completed") {
 								return (
