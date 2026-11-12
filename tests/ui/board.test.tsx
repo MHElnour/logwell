@@ -75,7 +75,9 @@ describe("columns and cards", () => {
 		expect(columnEl(m.root, "today").querySelector(".cp-board-col-count")!.textContent).toBe("2");
 		// The meta line: the date in color.
 		expect(item(m.root, "Late").querySelector(".cp-meta-date.is-overdue")).not.toBeNull();
-		expect(item(m.root, "Lunch").querySelector(".cp-meta-date.is-today")).not.toBeNull();
+		// A card in the Today column says its time, not the day the column's heading already says.
+		expect(item(m.root, "Report").querySelector(".cp-meta-date.is-today")!.textContent).toBe("19:00");
+		expect(item(m.root, "Lunch").querySelector(".cp-meta-date")).toBeNull();
 	});
 
 	it("a card draws the same marks in the same order as a row, with the date first", async () => {
@@ -103,6 +105,18 @@ describe("columns and cards", () => {
 		expect(item(m.root, "Plan the quarter").querySelector(".cp-board-meta")!.classList.contains("cp-task-meta")).toBe(true);
 		// One note mark, with no path tooltip.
 		expect(item(m.root, "Plan the quarter").querySelector(".cp-meta-note")!.hasAttribute("title")).toBe(false);
+	});
+
+	it("a card in a day column shows only the time", async () => {
+		const m = await mountApp();
+		await seed(m);
+		await openBoard(m, "Upcoming");
+		expect(item(m.root, "Tomorrow A").querySelector(".cp-meta-date")!.textContent).toBe("09:30");
+		expect(item(m.root, "Tomorrow B").querySelector(".cp-meta-date")).toBeNull();
+		// The Inbox board has no day columns: the full date stays.
+		await click(sidebarItem(m.root, "Inbox"));
+		await click(modeButton(m.root, "Board"));
+		expect(item(m.root, "Tomorrow B").querySelector(".cp-meta-date")!.textContent).toBe("Tomorrow");
 	});
 
 	it("#125: ticking the only overdue card keeps it and the Overdue column in place during its check animation", async () => {

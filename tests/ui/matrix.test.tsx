@@ -90,6 +90,19 @@ describe("matrix section", () => {
 			await click(quadrantEl(m.root, "neither").querySelector(".cp-matrix-q-add")); // no crash without a host quickAdd
 		});
 
+		it("a card in the Today group says only its time, and a card under another group keeps its date", async () => {
+			const m = await mountApp();
+			await seed(m);
+			await m.h.app.tasks.create({ title: "Pay the bill", urgent: true, important: true, scheduled: day("2026-10-01") });
+			await settle();
+			await openMatrix(m);
+			const date = (title: string) => card(m.root, title).querySelector(".cp-task-top .cp-meta-date");
+			expect(date("Study")!.textContent).toBe("19:00");
+			expect(date("Pay the bill")).toBeNull();
+			expect(date("Ship report")!.textContent).not.toBe("");
+			expect(date("Read book")!.textContent).not.toBe("");
+		});
+
 		it("shows 'No tasks' in an empty quadrant", async () => {
 			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Only one", urgent: true });

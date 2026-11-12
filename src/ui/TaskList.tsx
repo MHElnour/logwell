@@ -1,8 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { ViewGroup } from "../app/views";
+import { type ViewGroup, groupDay } from "../app/views";
 import type { ListEntry, QueryContext, TaskSort } from "../domain/queries";
 import type { SubtaskCount } from "../domain/tasks";
-import type { ID } from "../domain/types";
+import type { ID, LocalDate } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { CompletedGroup } from "./CompletedGroup";
 import { AddSectionField } from "./AddSectionField";
@@ -24,7 +24,7 @@ import { VirtualRows } from "./VirtualRows";
 
 export { TOGGLE_COMPLETE_EVENT } from "./rowItem";
 
-/** A row's height before one was measured (styles.css `--cp-row-h`). */
+/** A typical row's height, before any row was measured; real heights are measured (a row is one or two lines). */
 const ROW_ESTIMATE_PX = 52;
 const NO_PINS: readonly string[] = [];
 
@@ -142,28 +142,29 @@ export function TaskList(props: {
 	 * A listbox of option rows only: headings and their buttons sit outside it (a listbox owns only options). Windowed,
 	 * each row tells assistive technology the listbox's size and its position, since not every row is in the DOM.
 	 */
-	const rows = (entries: ListEntry[], labelledBy: string) =>
+	const rows = (entries: ListEntry[], labelledBy: string, day: LocalDate | null) =>
 		entries.length > 0 && (
 			<VirtualRows
 				enabled={windowed}
 				items={entries}
 				keyOf={entryKey}
-				renderItem={windowed ? (entry: ListEntry, i: number) => row(entry, { size: entries.length, pos: i + 1 }) : plainRow}
+				renderItem={windowed ? (entry: ListEntry, i: number) => row(entry, day, { size: entries.length, pos: i + 1 }) : (entry: ListEntry) => row(entry, day)}
 				box={{ class: "cp-task-rows", role: "listbox", "aria-labelledby": labelledBy }}
 				scroller={props.scroller ?? ".cp-main"}
 				estimate={ROW_ESTIMATE_PX}
 				pinned={pinned}
 			/>
 		);
-	const row = (entry: ListEntry, set?: { size: number; pos: number }) =>
+	const row = (entry: ListEntry, day: LocalDate | null, set?: { size: number; pos: number }) =>
 		taskRowFor(props, counts, entry, props.showCategory, {
 			dragging: reorder.draggingId === entry.task.id,
 			setSize: set?.size,
 			posInSet: set?.pos,
 			block: props.block,
+			groupDay: day,
 		});
-	/** A row without a set position; also what `map` calls, so its index is never taken for one. */
-	const plainRow = (entry: ListEntry) => row(entry);
+	/** A row under no day heading (Completed, sections); a `map` callback, so its index is never taken for a set position. */
+	const undatedRow = (entry: ListEntry) => row(entry, null);
 	/** A section's heading: the Today-style heading with a collapse chevron, the count, "+" and ⋯. */
 	const renderSection = (g: ViewGroup, headingId: string, sections: NonNullable<typeof props.sections>) => {
 		const section = g.section!;
@@ -207,7 +208,7 @@ export function TaskList(props: {
 						/>
 					)}
 				</div>
-				{!collapsed && rows(g.entries, headingId)}
+				{!collapsed && rows(g.entries, headingId, null)}
 			</div>
 		);
 	};
@@ -246,7 +247,7 @@ export function TaskList(props: {
 									<span class="cp-group-count">{g.entries.length}</span>
 								</div>
 							)}
-							{rows(g.entries, headed ? nameIds : labelId)}
+							{rows(g.entries, headed ? nameIds : labelId, groupDay(g, props.ctx.today))}
 						</div>
 					);
 				})}
@@ -261,7 +262,7 @@ export function TaskList(props: {
 						entries={explicit.entries}
 						open={explicit.open}
 						onToggle={explicit.onToggle}
-						renderRow={plainRow}
+						renderRow={undatedRow}
 					/>
 				)}
 				{completed.length > 0 && (
@@ -271,7 +272,7 @@ export function TaskList(props: {
 							<span id={completedId}>Completed</span>
 							<span class="cp-completed-count">{completed.length}</span>
 						</button>
-						{showDone && rows(completed, completedId)}
+						{showDone && rows(completed, completedId, null)}
 					</div>
 				)}
 			</div>

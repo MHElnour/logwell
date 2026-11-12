@@ -244,7 +244,8 @@ function QuadrantCard(props: {
 				) : (
 					<div class="cp-task-list cp-matrix-q-list" role="group" aria-labelledby={titleId}>
 						{groups.map((g) => {
-							const row = (entry: ListEntry) => taskRowFor(props, props.counts, entry, true, { showMatrix: false, dragging: entry.task.id === props.draggingId });
+							const day = g.id === "today" ? props.ctx.today : null;
+							const row = (entry: ListEntry) => taskRowFor(props, props.counts, entry, true, { showMatrix: false, dragging: entry.task.id === props.draggingId, groupDay: day });
 							if (g.id === "completed") {
 								return (
 									<CompletedGroup

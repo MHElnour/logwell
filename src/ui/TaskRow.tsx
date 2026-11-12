@@ -1,7 +1,7 @@
 import { useRef } from "preact/hooks";
 import type { ListEntry, QueryContext } from "../domain/queries";
 import type { SubtaskCount } from "../domain/tasks";
-import type { ID, Task } from "../domain/types";
+import type { ID, LocalDate, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { occurrenceMenu, taskMenu } from "./actions";
 import { TaskCheckbox } from "./common";
@@ -39,6 +39,8 @@ interface RowProps {
 	posInSet?: number;
 	/** Set in a dashboard block; see BlockRowOps. */
 	block?: BlockRowOps;
+	/** The day this row's group heading names (`groupDay` in app/views.ts); the row does not repeat it. Display only. */
+	groupDay?: LocalDate | null;
 }
 
 /**
@@ -85,6 +87,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
 		a.setSize === b.setSize &&
 		a.posInSet === b.posInSet &&
 		a.block === b.block &&
+		a.groupDay === b.groupDay &&
 		a.onSelect === b.onSelect &&
 		sameDay(a.ctx, b.ctx) &&
 		sameEntry(a.entry, b.entry) &&
@@ -95,7 +98,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
 	);
 }
 
-function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks, onSelect, dragging, showMatrix = true, setSize, posInSet, block }: RowProps) {
+function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks, onSelect, dragging, showMatrix = true, setSize, posInSet, block, groupDay }: RowProps) {
 	const { task } = entry;
 	// A Completed history row is one done occurrence of a repeating task; it reads as completed and reopens that date.
 	const occurrence = entry.occurrence;
@@ -141,7 +144,7 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 						{task.title}
 						{occurrence !== null && <span class="cp-occurrence-date">{` · ${formatDate(occurrence.date, ctx.today)}`}</span>}
 					</div>
-					{due !== null && dueMark(host, entry, due, tone, ctx)}
+					{due !== null && dueMark(host, entry, due, tone, ctx, groupDay ?? null)}
 				</div>
 				{metaLine("cp-task-meta", host, state, entry, ctx, { showCategory, showMatrix, subtasks })}
 			</div>

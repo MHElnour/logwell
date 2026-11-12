@@ -3,7 +3,7 @@ import { useRef } from "preact/hooks";
 import type { BoardCard as BoardCardData } from "../../domain/board";
 import type { ListEntry, QueryContext } from "../../domain/queries";
 import type { SubtaskCount } from "../../domain/tasks";
-import type { ID } from "../../domain/types";
+import type { ID, LocalDate } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
 import { taskMenu } from "../actions";
 import { Icon, TaskCheckbox } from "../common";
@@ -28,23 +28,26 @@ interface CommonProps {
 	draggingId: ID | null;
 	/** The card or subtask a drag would drop before; draws the line. */
 	dropBeforeId: ID | null;
+	/** The day the column's heading names (`column.date`); the card does not repeat it. */
+	groupDay: LocalDate | null;
 }
 
 /** The meta line: the date first (colored), then the marks of `metaLine`. */
-function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
+function BoardMeta({ host, state, ctx, entry, showCategory, subtasks, groupDay }: {
 	host: UiHost;
 	state: DbData;
 	ctx: QueryContext;
 	entry: ListEntry;
 	showCategory: boolean;
 	subtasks: SubtaskCount | undefined;
+	groupDay: LocalDate | null;
 }) {
 	const { task } = entry;
 	const done = task.status === "completed";
 	// The effective schedule, so a repeating card shows its current occurrence.
 	const due = dueSpecOf(task, entry.schedule);
 	const tone = toneOf(done, due, ctx);
-	return metaLine("cp-task-meta cp-board-meta", host, state, entry, ctx, { showCategory, showMatrix: true, subtasks, lead: due !== null ? dueMark(host, entry, due, tone, ctx) : null });
+	return metaLine("cp-task-meta cp-board-meta", host, state, entry, ctx, { showCategory, showMatrix: true, subtasks, lead: due !== null ? dueMark(host, entry, due, tone, ctx, groupDay) : null });
 }
 
 /** One task in a card: the parent, or a nested subtask. Focusable; Alt+Arrow and the menu keys work on it. */
@@ -118,6 +121,7 @@ function BoardItem(props: CommonProps & {
 				entry={entry}
 				showCategory={props.showCategory && !isSub}
 				subtasks={props.counts.get(task.id)}
+				groupDay={props.groupDay}
 			/>
 		</div>
 	);
@@ -143,6 +147,7 @@ function sameCard(a: BoardCardProps, b: BoardCardProps): boolean {
 		a.onToggleCollapse !== b.onToggleCollapse ||
 		a.collapsed !== b.collapsed ||
 		a.dropEnd !== b.dropEnd ||
+		a.groupDay !== b.groupDay ||
 		a.setSize !== b.setSize ||
 		a.posInSet !== b.posInSet ||
 		!sameDay(a.ctx, b.ctx) ||

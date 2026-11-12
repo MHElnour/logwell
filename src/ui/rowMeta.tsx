@@ -4,7 +4,7 @@ import type { ListEntry, QueryContext } from "../domain/queries";
 import { isDeadlineMissed } from "../domain/queries";
 import { tagLabel } from "../domain/tags";
 import { type SubtaskCount, isActiveSeries } from "../domain/tasks";
-import type { Category, DateSpec, Task } from "../domain/types";
+import type { Category, DateSpec, LocalDate, Task } from "../domain/types";
 import type { DbData } from "../persistence/schema";
 import { Icon, hueClass } from "./common";
 import { focusedText } from "./focus/format";
@@ -25,17 +25,18 @@ export function toneOf(done: boolean, due: DateSpec | null, ctx: QueryContext): 
 }
 
 /**
- * The date (colored by its tone). A task with only a deadline shows it here, with the flag: the flag always means
- * "deadline", and a missed one is red by its tone.
+ * The date (colored by its tone), without the day the row's group heading already names (`groupDay`); nothing when
+ * that leaves no text. A task with only a deadline shows it here, with the flag (alone when the heading names its day):
+ * the flag always means "deadline", and a missed one is red by its tone.
  */
-export function dueMark(host: UiHost, entry: ListEntry, due: DateSpec, tone: DateTone, ctx: QueryContext) {
-	const text = rowDateText(due, ctx.zone, ctx.today);
-	if (entry.schedule !== null) return <span class={`cp-meta-date is-${tone}`}>{text}</span>;
+export function dueMark(host: UiHost, entry: ListEntry, due: DateSpec, tone: DateTone, ctx: QueryContext, groupDay: LocalDate | null) {
+	const text = rowDateText(due, ctx.zone, ctx.today, groupDay);
+	if (entry.schedule !== null) return text === "" ? null : <span class={`cp-meta-date is-${tone}`}>{text}</span>;
 	return (
 		<span class={`cp-meta-date is-${tone} is-deadline`} title="Deadline">
 			<Icon host={host} icon={ICON.flag} />
 			<span class="cp-sr-only">Deadline</span>
-			<span>{text}</span>
+			{text !== "" && <span>{text}</span>}
 		</span>
 	);
 }

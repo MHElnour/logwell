@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as views from "../../src/app/views";
 import * as format from "../../src/ui/format";
 import { useFocus } from "../../src/ui/hooks";
-import { type AppMount, click, flushEffects, mountApp, settle, unmountAll } from "./app-helpers";
+import { type AppMount, click, flushEffects, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
+import type { ListEntry, QueryContext } from "../../src/domain/queries";
+import { TaskRow } from "../../src/ui/TaskRow";
 import { syncLinkId } from "../../src/domain/types";
 
 // One change re-renders the Tasks section once, and a row whose own inputs did not
@@ -222,8 +224,28 @@ describe("render passes", () => {
 			expect(m.h.app.store.state.tasks.get(t.id)).toBe(task);
 		});
 
+		it("a change of the group's day redraws the row, and the same group day does not", async () => {
+			const { m, ids } = await mountWithTasks(["A"]);
+			const task = m.h.app.store.state.tasks.get(ids[0]!)!;
+			const entry = { task, depth: 0, parentTitle: null, occurrence: null, schedule: task.scheduled } as ListEntry;
+			const host = mountNode(null);
+			const props = { host: m.host, state: m.h.app.store.state, entry, ctx: { today: "2026-10-01", zone: "Europe/Berlin" } as QueryContext, selected: false, showCategory: false, subtasks: undefined, onSelect: () => undefined };
+			const draw = (groupDay: string | null) => render(<TaskRow {...props} groupDay={groupDay} />, host);
+			draw(null);
+			expect(host.querySelector(".cp-meta-date")!.textContent).toBe("Today");
+			const r0 = rowRenders();
+			draw(null);
+			expect(rowRenders() - r0).toBe(0);
+			draw("2026-10-01");
+			expect(rowRenders() - r0).toBe(1);
+			expect(host.querySelector(".cp-meta-date")).toBeNull();
+		});
+
 		it("the due date text follows a change of the display day", async () => {
-			const { m } = await mountWithTasks(["A"]);
+			// Timed, so the row says its time under Today (an all-day task says nothing there).
+			const m = await mountApp();
+			await m.h.app.tasks.create({ title: "A", scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" } });
+			await flushEffects();
 			const date = () => rows(m)[0]!.querySelector(".cp-meta-date")!.textContent;
 			const before = date();
 			expect(before).toBeTruthy();

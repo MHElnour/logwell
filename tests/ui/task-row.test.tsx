@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { TOGGLE_COMPLETE_EVENT } from "../../src/ui/TaskList";
-import { dateTone, detailsDateText, rowDateText } from "../../src/ui/format";
+import { dateTone, detailsDateText, formatDateSpec, rowDateText } from "../../src/ui/format";
 import { click, day, menuItem, mountApp, mountNode, settle, sidebarItem } from "./app-helpers";
 import { render } from "preact";
 import type { ListEntry, QueryContext } from "../../src/domain/queries";
@@ -33,6 +33,22 @@ describe("task row", () => {
 			expect(rowDateText({ kind: "date", date: TODAY }, "Europe/Berlin", TODAY)).toBe("Today");
 			expect(detailsDateText({ scheduled: timed, deadline: null, plannedDurationMin: 45 }, "Europe/Berlin", TODAY)).toBe("Today, 19:00 · 45m");
 			expect(detailsDateText({ scheduled: null, deadline: null, plannedDurationMin: null }, "Europe/Berlin", TODAY)).toBe("No date");
+		});
+	});
+
+	describe("a row's date under its group heading", () => {
+		const timed = (date: string, time: string) => ({ kind: "datetime" as const, local: `${date}T${time}`, tz: "Europe/Berlin" });
+		const allDay = (date: string) => ({ kind: "date" as const, date });
+		it.each([
+			{ name: "a timed task on the group's day is its time", spec: timed(TODAY, "19:00"), groupDay: TODAY, text: "19:00" },
+			{ name: "an all-day task on the group's day is nothing", spec: allDay(TODAY), groupDay: TODAY, text: "" },
+			{ name: "a timed task on a later group's day is its time", spec: timed("2026-10-05", "09:30"), groupDay: "2026-10-05", text: "09:30" },
+			{ name: "an all-day task on a later group's day is nothing", spec: allDay("2026-10-05"), groupDay: "2026-10-05", text: "" },
+			{ name: "a task on another day than the group's is the full date", spec: allDay("2026-10-05"), groupDay: TODAY, text: null },
+			{ name: "a timed task on another day than the group's is the full date with its time", spec: timed("2026-10-05", "09:30"), groupDay: TODAY, text: null },
+			{ name: "no group day is the text as before", spec: allDay(TODAY), groupDay: null, text: "Today" },
+		])("rowDateText: $name", ({ spec, groupDay, text }) => {
+			expect(rowDateText(spec, "Europe/Berlin", TODAY, groupDay)).toBe(text ?? formatDateSpec(spec, "Europe/Berlin", TODAY));
 		});
 	});
 
@@ -164,6 +180,61 @@ describe("task row", () => {
 			expect(both.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-deadline")).toBe(false);
 			expect(both.querySelector(".cp-task-top .cp-meta-date [data-icon]")).toBeNull();
 			expect(both.querySelector(".cp-task-meta .cp-meta-deadline [data-icon]")?.getAttribute("data-icon")).toBe("flag");
+		});
+
+		it.each([
+			{ name: "a timed task under Today", view: "Today", input: { scheduled: { kind: "datetime", local: "2026-10-01T19:00", tz: "Europe/Berlin" } }, shown: "19:00" },
+			{ name: "an all-day task under Today", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: null },
+			{ name: "a timed task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "datetime", local: "2026-10-03T09:30", tz: "Europe/Berlin" } }, shown: "09:30" },
+			{ name: "an all-day task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "date", date: "2026-10-03" } }, shown: null },
+			{ name: "a deadline-only task on the group's day: the flag alone", view: "Today", input: { deadline: { kind: "date", date: "2026-10-01" } }, shown: "" },
+			{ name: "a deadline-only task on an Upcoming day: the flag alone", view: "Upcoming", input: { deadline: { kind: "date", date: "2026-10-05" } }, shown: "" },
+			{ name: "a deadline-only task under the Overdue group: the flag and the date", view: "Today", input: { deadline: { kind: "date", date: "2026-09-30" } }, shown: "date" },
+			{ name: "a repeating task, by its current occurrence", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } }, shown: null },
+			{ name: "a task under the Overdue group keeps its date", view: "Today", input: { scheduled: { kind: "date", date: "2026-09-30" } }, shown: "date" },
+			{ name: "a task in the Inbox keeps its date", view: "Inbox", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: "Today" },
+			{ name: "a task in the search results keeps its date", view: "Search", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: "Today" },
+		])("a row does not repeat the day its heading says: $name", async ({ view, input, shown }) => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title: "Call the bank", ...input } as never);
+			if (view === "Search") {
+				await click(root.querySelector('.cp-rail [aria-label="Search"]'));
+				const box = root.querySelector<HTMLInputElement>('.cp-search input[type="search"]')!;
+				box.value = "bank";
+				box.dispatchEvent(new Event("input", { bubbles: true }));
+				await settle();
+			} else if (view !== "Today") {
+				await click(sidebarItem(root, view));
+			}
+			const r = [...root.querySelectorAll<HTMLElement>(view === "Search" ? ".cp-search .cp-task-row" : ".cp-tasks .cp-task-row")].find((e) => e.textContent?.includes("Call the bank"))!;
+			const date = r.querySelector<HTMLElement>(".cp-task-top .cp-meta-date");
+			if (shown === null) {
+				expect(date).toBeNull();
+			} else if (shown === "") {
+				// The flag alone: no text but the icon and the screen-reader word.
+				expect(date!.classList.contains("is-deadline")).toBe(true);
+				expect([...date!.children].filter((c) => !c.matches(".cp-icon, .cp-sr-only"))).toEqual([]);
+			} else if (shown === "date") {
+				expect(date!.textContent.replace("Deadline", "").trim()).not.toBe("");
+				expect(date!.textContent).not.toMatch(/^\d\d:\d\d$/);
+			} else {
+				expect(date!.textContent).toBe(shown);
+			}
+		});
+
+		it("a completed row draws the same two lines", async () => {
+			const { h, root } = await mountApp();
+			const cat = await h.app.categories.create("Work", "briefcase");
+			const { task } = await h.app.tasks.create({ title: "Done thing", categoryId: cat.id, scheduled: { kind: "date", date: "2026-09-29" }, plannedDurationMin: 30 });
+			await h.app.tasks.complete(task.id);
+			await click(sidebarItem(root, "Completed"));
+			const r = row(root, "Done thing");
+			expect(r.classList.contains("is-completed")).toBe(true);
+			expect([...r.querySelector(".cp-task-body")!.children].map((c) => c.className.split(" ")[0])).toEqual(["cp-task-top", "cp-task-meta"]);
+			// A done task has no date color.
+			expect(r.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-none")).toBe(true);
+			expect(r.querySelector(".cp-task-meta .cp-meta-list")).not.toBeNull();
+			expect(r.querySelector(".cp-task-meta .cp-meta-duration")).not.toBeNull();
 		});
 
 		it.each([
