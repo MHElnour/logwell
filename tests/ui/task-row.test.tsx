@@ -143,6 +143,29 @@ describe("task row", () => {
 			expect(order).toEqual(["cp-meta-list", "cp-meta-deadline", "cp-meta-repeat", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix", "cp-meta-notsynced"]);
 		});
 
+		it("a deadline-only task shows its deadline at the right edge with a flag; a missed one is red", async () => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title: "Pay rent", deadline: { kind: "date", date: "2026-10-20" } });
+			await h.app.tasks.create({ title: "File the form", deadline: { kind: "date", date: "2026-09-29" } });
+			await h.app.tasks.create({ title: "Both", scheduled: { kind: "date", date: "2026-10-20" }, deadline: { kind: "date", date: "2026-10-25" } });
+			await openInbox(root);
+			const rent = row(root, "Pay rent").querySelector(".cp-task-top .cp-meta-date")!;
+			expect(rent.classList.contains("is-deadline")).toBe(true);
+			expect(rent.getAttribute("title")).toBe("Deadline");
+			expect(rent.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			expect(rent.querySelector(".cp-sr-only")?.textContent).toBe("Deadline");
+			expect(rent.textContent).toContain("Oct 20");
+			expect(row(root, "Pay rent").querySelector(".cp-task-meta")).toBeNull();
+			const missed = row(root, "File the form").querySelector(".cp-task-top .cp-meta-date")!;
+			expect(missed.classList.contains("is-overdue")).toBe(true);
+			expect(missed.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			// A task with a schedule keeps its schedule on the right and its flag on the second line.
+			const both = row(root, "Both");
+			expect(both.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-deadline")).toBe(false);
+			expect(both.querySelector(".cp-task-top .cp-meta-date [data-icon]")).toBeNull();
+			expect(both.querySelector(".cp-task-meta .cp-meta-deadline [data-icon]")?.getAttribute("data-icon")).toBe("flag");
+		});
+
 		it.each([
 			{ name: "planned time only", planned: 90, focusMin: 0, mark: ".cp-meta-duration", visible: "1h 30m", icon: "clock" },
 			{ name: "focused time only", planned: null, focusMin: 25, mark: ".cp-meta-focus", visible: "25m", icon: "target", sr: "25m focused" },

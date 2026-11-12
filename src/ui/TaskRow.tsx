@@ -141,7 +141,7 @@ function TaskRowView({ host, state, entry, ctx, selected, showCategory, subtasks
 						{task.title}
 						{occurrence !== null && <span class="cp-occurrence-date">{` · ${formatDate(occurrence.date, ctx.today)}`}</span>}
 					</div>
-					{due !== null && dueMark(due, tone, ctx)}
+					{due !== null && dueMark(host, entry, due, tone, ctx)}
 				</div>
 				{metaLine("cp-task-meta", host, state, entry, ctx, { showCategory, showMatrix, subtasks })}
 			</div>

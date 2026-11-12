@@ -24,9 +24,20 @@ export function toneOf(done: boolean, due: DateSpec | null, ctx: QueryContext): 
 	return done ? "none" : dateTone(due, ctx.zone, ctx.today);
 }
 
-/** The date (colored by its tone). */
-export function dueMark(due: DateSpec, tone: DateTone, ctx: QueryContext) {
-	return <span class={`cp-meta-date is-${tone}`}>{rowDateText(due, ctx.zone, ctx.today)}</span>;
+/**
+ * The date (colored by its tone). A task with only a deadline shows it here, with the flag: the flag always means
+ * "deadline", and a missed one is red by its tone.
+ */
+export function dueMark(host: UiHost, entry: ListEntry, due: DateSpec, tone: DateTone, ctx: QueryContext) {
+	const text = rowDateText(due, ctx.zone, ctx.today);
+	if (entry.schedule !== null) return <span class={`cp-meta-date is-${tone}`}>{text}</span>;
+	return (
+		<span class={`cp-meta-date is-${tone} is-deadline`} title="Deadline">
+			<Icon host={host} icon={ICON.flag} />
+			<span class="cp-sr-only">Deadline</span>
+			<span>{text}</span>
+		</span>
+	);
 }
 
 /** The deadline flag, beside a schedule; nothing for a task without both. */

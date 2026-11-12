@@ -44,7 +44,7 @@ function BoardMeta({ host, state, ctx, entry, showCategory, subtasks }: {
 	// The effective schedule, so a repeating card shows its current occurrence.
 	const due = dueSpecOf(task, entry.schedule);
 	const tone = toneOf(done, due, ctx);
-	return metaLine("cp-task-meta cp-board-meta", host, state, entry, ctx, { showCategory, showMatrix: true, subtasks, lead: due !== null ? dueMark(due, tone, ctx) : null });
+	return metaLine("cp-task-meta cp-board-meta", host, state, entry, ctx, { showCategory, showMatrix: true, subtasks, lead: due !== null ? dueMark(host, entry, due, tone, ctx) : null });
 }
 
 /** One task in a card: the parent, or a nested subtask. Focusable; Alt+Arrow and the menu keys work on it. */
