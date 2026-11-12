@@ -6,7 +6,6 @@ import { click, day, menuItem, mountApp, mountNode, settle, sidebarItem } from "
 import { render } from "preact";
 import type { ListEntry, QueryContext } from "../../src/domain/queries";
 import { type SyncLink, syncLinkId } from "../../src/domain/types";
-import type { DbData } from "../../src/persistence/schema";
 import { TaskCheckbox } from "../../src/ui/common";
 import { metaLine } from "../../src/ui/rowMeta";
 import { css } from "./styles-helpers";
@@ -154,7 +153,7 @@ describe("task row", () => {
 			const state = { ...m.h.app.store.state, syncLinks: new Map([[syncLinkId("list", cat.id), {} as SyncLink]]) };
 			const entry = { task: withDeadline, depth: 0, parentTitle: null, occurrence: null, schedule: { kind: "date" as const, date: "2026-10-09" } };
 			const ctx = { today: "2026-10-01", zone: "Europe/Berlin" } as QueryContext;
-			const line = mountNode(metaLine("cp-task-meta", m.host, state as DbData, entry as ListEntry, ctx, { showCategory: true, showMatrix: true, subtasks: { total: 2, done: 1 } }));
+			const line = mountNode(metaLine("cp-task-meta", m.host, state, entry as ListEntry, ctx, { showCategory: true, showMatrix: true, subtasks: { total: 2, done: 1 } }));
 			const order = [...line.querySelector(".cp-task-meta")!.children].map((c) => c.className.split(" ").find((x) => x.startsWith("cp-meta-")));
 			expect(order).toEqual(["cp-meta-list", "cp-meta-deadline", "cp-meta-repeat", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix", "cp-meta-notsynced"]);
 		});
