@@ -5096,8 +5096,8 @@ body.is-mobile .checkpoint-view .cp-app {
 }
 
 .checkpoint-view .cp-focus-set.is-end-recovered {
-	--cp-focus-end: var(--cp-yellow);
-	--cp-focus-end-text: var(--cp-yellow-text);
+	--cp-focus-end: var(--cp-purple);
+	--cp-focus-end-text: var(--cp-purple-text);
 }
 
 .checkpoint-view .cp-focus-set-head {
