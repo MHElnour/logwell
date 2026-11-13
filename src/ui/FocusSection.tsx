@@ -28,7 +28,7 @@ export function FocusSection(props: { host: UiHost; state: DbData; ctx: QueryCon
 						</div>
 					</section>
 					<aside class="cp-focus-insights">
-						<Overview state={state} ctx={ctx} />
+						<Overview host={host} state={state} ctx={ctx} />
 						<History host={host} state={state} ctx={ctx} />
 					</aside>
 				</div>

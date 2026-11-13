@@ -496,15 +496,21 @@ describe("Focus page", () => {
 	});
 
 	describe("overview and history", () => {
-		it("shows today's and all-time counts and focus time", async () => {
+		it("the overview shows Pomos and Focused for Today and All time as two labelled groups", async () => {
 			const m = await mountApp();
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
-			const heads = [...page.querySelectorAll(".cp-focus-stats thead th")].map((h) => h.textContent);
-			expect(heads).toEqual(["Pomos", "Focused"]);
-			const stats = [...page.querySelectorAll(".cp-focus-stat")].map((s) => [text(s, ".cp-focus-stat-label"), text(s, ".cp-focus-stat-count"), text(s, ".cp-focus-stat-value")]);
-			expect(stats).toEqual([["Today", "1", "1m"], ["All time", "1", "1m"]]);
+			expect(page.querySelector(".cp-focus-stats table")).toBeNull();
+			const groups = [...page.querySelectorAll<HTMLElement>(".cp-focus-stat")];
+			expect(groups.map((g) => g.getAttribute("role"))).toEqual(["group", "group"]);
+			expect(groups.map((g) => page.ownerDocument.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Today", "All time"]);
+			for (const g of groups) {
+				expect(g.hasAttribute("aria-label")).toBe(false);
+				expect([...g.querySelectorAll(".cp-focus-fig")].map((f) => [text(f, "dt"), text(f, "dd")])).toEqual([["Pomos", "1"], ["Focused", "1m"]]);
+			}
+			expect(groups.map((g) => g.querySelector(".cp-focus-stat-label .cp-icon")?.getAttribute("data-icon"))).toEqual(["sun", "sigma"]);
+			expect(groups.map((g) => [...g.classList].filter((c) => c.startsWith("cp-hue-")))).toEqual([[], ["cp-hue-blue"]]);
 		});
 
 		it("groups by day, newest first, then by set, with range, task, time and status", async () => {

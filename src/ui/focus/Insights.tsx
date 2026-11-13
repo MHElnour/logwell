@@ -4,49 +4,57 @@ import { type FocusRound, type FocusSetNode, focusHistoryTree, focusOverview, fo
 import type { QueryContext } from "../../domain/queries";
 import type { FocusGap, FocusSession } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
-import { Icon, IconButton } from "../common";
+import { Icon, IconButton, hueClass } from "../common";
 import { formatDate } from "../format";
 import { useUniqueId } from "../hooks";
 import type { MenuSpec, UiHost } from "../host";
+import { ICON } from "../icons";
 import { notifyWrite } from "../writeNotice";
 import { dotClass, focusedText, gapSec, roundStatusText, roundsText, timeRange } from "./format";
 
 // The right column: the overview (today, then all time) and the history by day.
 
-export function Overview(props: { state: DbData; ctx: QueryContext }) {
-	const { state, ctx } = props;
+export function Overview(props: { host: UiHost; state: DbData; ctx: QueryContext }) {
+	const { host, state, ctx } = props;
 	const headingId = useUniqueId("cp-focus-overview");
 	const o = useMemo(() => focusOverview(state.focusSessions.values(), ctx.today, ctx.zone), [state.focusSessions, ctx.today, ctx.zone]);
-	const rows: [string, number, number][] = [
-		["Today", o.todayCount, o.todaySec],
-		["All time", o.totalCount, o.totalSec],
-	];
 	return (
 		<section class="cp-focus-overview" aria-labelledby={headingId}>
 			<h3 id={headingId} class="cp-focus-side-heading">
 				Overview
 			</h3>
-			<table class="cp-focus-stats">
-				<thead>
-					<tr>
-						<td />
-						<th scope="col">Pomos</th>
-						<th scope="col">Focused</th>
-					</tr>
-				</thead>
-				<tbody>
-					{rows.map(([label, count, sec]) => (
-						<tr key={label} class="cp-focus-stat">
-							<th scope="row" class="cp-focus-stat-label">
-								{label}
-							</th>
-							<td class="cp-focus-stat-count">{count}</td>
-							<td class="cp-focus-stat-value">{focusedText(sec)}</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
+			<div class="cp-focus-stats">
+				<StatTile host={host} label="Today" icon={ICON.today} hue="" count={o.todayCount} sec={o.todaySec} />
+				<StatTile host={host} label="All time" icon={ICON.focusAllTime} hue={hueClass("blue")} count={o.totalCount} sec={o.totalSec} />
+			</div>
 		</section>
+	);
+}
+
+/** One tile of the overview: its name, then Pomos and Focused. */
+function StatTile(props: { host: UiHost; label: string; icon: string; hue: string; count: number; sec: number }) {
+	const labelId = useUniqueId("cp-focus-stat");
+	return (
+		<div class={`cp-focus-stat ${props.hue}`.trim()} role="group" aria-labelledby={labelId}>
+			<div id={labelId} class="cp-focus-stat-label">
+				<Icon host={props.host} icon={props.icon} />
+				<span>{props.label}</span>
+			</div>
+			<dl class="cp-focus-figs">
+				<Figure caption="Pomos" value={String(props.count)} />
+				<Figure caption="Focused" value={focusedText(props.sec)} />
+			</dl>
+		</div>
+	);
+}
+
+/** One figure with its caption. The caption comes first for a screen reader; the stylesheet draws the value above it. */
+function Figure(props: { caption: string; value: string }) {
+	return (
+		<div class="cp-focus-fig">
+			<dt class="cp-focus-fig-cap">{props.caption}</dt>
+			<dd class="cp-focus-fig-value">{props.value}</dd>
+		</div>
 	);
 }
 

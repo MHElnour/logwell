@@ -4944,37 +4944,67 @@ body.is-mobile .checkpoint-view .cp-app {
 	text-transform: uppercase;
 }
 
+/* The overview: two tinted tiles in one grid row, so their labels and figures are level. */
 .checkpoint-view .cp-focus-stats {
-	border-collapse: separate;
-	border-spacing: 14px 10px;
-	margin: -10px -14px;
-	width: calc(100% + 28px);
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 12px;
 }
 
-.checkpoint-view .cp-focus-stats th,
-.checkpoint-view .cp-focus-stats td {
-	padding: 0;
-	border: 0;
-	text-align: left;
-}
-
-.checkpoint-view .cp-focus-stats thead th {
-	color: var(--text-faint);
-	font-size: 12px;
-	font-weight: var(--font-normal);
+.checkpoint-view .cp-focus-stat {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+	padding: 14px 16px;
+	border-radius: 14px;
+	background: var(--cp-hue-soft);
 }
 
 .checkpoint-view .cp-focus-stat-label {
-	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--cp-hue-text);
 	font-size: 13px;
-	font-weight: var(--font-normal);
+	font-weight: var(--font-semibold);
 }
 
-.checkpoint-view .cp-focus-stat-count,
-.checkpoint-view .cp-focus-stat-value {
-	font-size: 20px;
-	font-weight: var(--font-semibold);
+.checkpoint-view .cp-focus-stat-label .cp-icon {
+	display: flex;
+}
+
+.checkpoint-view .cp-focus-stat-label .cp-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* The two figures sit on one baseline: a figure baseline is its first row, the value. */
+.checkpoint-view .cp-focus-figs {
+	display: flex;
+	align-items: baseline;
+	gap: 20px;
+	margin: 0;
+}
+
+.checkpoint-view .cp-focus-fig {
+	display: grid;
+	min-width: 0;
+}
+
+.checkpoint-view .cp-focus-fig-value {
+	grid-row: 1;
+	margin: 0;
+	font-size: 24px;
+	font-weight: var(--font-bold);
 	font-variant-numeric: tabular-nums;
+	line-height: 1.2;
+}
+
+.checkpoint-view .cp-focus-fig-cap {
+	grid-row: 2;
+	color: var(--text-muted);
+	font-size: 12.5px;
+	font-weight: var(--font-normal);
 }
 
 /* The focus record: a timeline grouped by day. */

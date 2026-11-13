@@ -76,6 +76,16 @@ describe("focus stylesheet section", () => {
 		expect(main).toContain("height: var(--cp-focus-main-disc)");
 	});
 
+	it("the overview figures align on the baseline and the two tiles share one grid row", () => {
+		expect(rule(".checkpoint-view .cp-focus-figs")).toContain("align-items: baseline");
+		expect(rule(".checkpoint-view .cp-focus-stats")).toContain("repeat(auto-fit, minmax(150px, 1fr))");
+		expect(rule(".checkpoint-view .cp-focus-stat")).toContain("background: var(--cp-hue-soft)");
+		expect(rule(".checkpoint-view .cp-focus-fig-value")).toContain("grid-row: 1");
+		expect(rule(".checkpoint-view .cp-focus-fig-cap")).toContain("grid-row: 2");
+		expect(section).not.toContain("cp-focus-stat-count");
+		expect(section).not.toContain("border-spacing");
+	});
+
 	it("the steppers are three fixed columns and the settings line centers its parts", () => {
 		const field = rule(".checkpoint-view .cp-focus-field");
 		expect(field).toContain("grid-template-columns: var(--cp-focus-tile) minmax(0, 1fr) auto");
