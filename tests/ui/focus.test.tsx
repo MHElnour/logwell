@@ -3,9 +3,9 @@ import { render } from "preact";
 import { describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
 import { useFocus } from "../../src/ui/hooks";
-import { type AppMount, U1Host, click, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
+import { type AppMount, U1Host, click, flushEffects, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
 import type { MenuSpec } from "../../src/ui/host";
-import { type AppHarness, makeReadOnly } from "../app/harness";
+import { type AppHarness, appHarness, makeReadOnly } from "../app/harness";
 import { SetLine, stepFor } from "../../src/ui/focus/Controls";
 
 describe("Focus page", () => {
@@ -20,12 +20,17 @@ describe("Focus page", () => {
 		return m.root.querySelector<HTMLElement>(".cp-focus")!;
 	}
 
-	async function tickFor(m: AppMount, seconds: number): Promise<void> {
+	async function tickFor(m: Pick<AppMount, "h">, seconds: number): Promise<void> {
 		for (let i = 0; i < seconds; i++) {
 			m.h.clock.advance(1000);
 			await m.h.app.focus.tick();
 		}
 		await settle();
+	}
+
+	/** Opens every collapsed set of the record. */
+	async function openSets(page: HTMLElement): Promise<void> {
+		for (const head of page.querySelectorAll('.cp-focus-set-head[aria-expanded="false"]')) await click(head);
 	}
 
 	const buttons = (el: ParentNode) => [...el.querySelectorAll<HTMLButtonElement>("button")];
@@ -135,6 +140,7 @@ describe("Focus page", () => {
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.status).toBe("stopped");
 			expect(buttonByText(page, "Start")).toBeDefined();
 			// The record shows a hollow dot and a note, since it did not complete.
+			await openSets(page);
 			expect(text(page, ".cp-focus-round-status em")).toBe("Stopped early");
 			expect(page.querySelector(".cp-focus-rec .cp-focus-status-dot")?.classList.contains("is-stopped")).toBe(true);
 		});
@@ -408,6 +414,8 @@ describe("Focus page", () => {
 			const m = await mountApp();
 			await finishedRound(m, null);
 			const page = await openFocus(m);
+			await openSets(page);
+			expect(page.querySelectorAll("button.cp-icon-button").length).toBeGreaterThan(0);
 			for (const b of page.querySelectorAll<HTMLButtonElement>("button.cp-icon-button")) {
 				expect(b.getAttribute("aria-label")).toBeTruthy();
 			}
@@ -472,6 +480,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const days = [...page.querySelectorAll(".cp-focus-day")];
 			expect(days.length).toBe(2);
 			expect(text(days[0]!, ".cp-focus-day-name")).toBe("Today");
@@ -498,6 +507,7 @@ describe("Focus page", () => {
 			await m.h.app.tasks.update(task.id, { title: "New name" });
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(text(page, ".cp-focus-set-task")).toBe("New name");
 			await m.h.app.tasks.delete(task.id);
 			await settle();
@@ -515,6 +525,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const gap = page.querySelector<HTMLElement>(".cp-focus-gap")!;
 			expect(gap.textContent).toContain("+5m unobserved, not counted");
 			const spy = vi.spyOn(m.h.app.focus, "includeGap");
@@ -543,6 +554,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const notify = vi.spyOn(m.host as unknown as { notifyUndo(message: string, label: string): void }, "notifyUndo");
 			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Include");
 			await settle();
@@ -561,6 +573,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			await click(page.querySelector(".cp-focus-rec .cp-icon-button"));
 			const menu = m.host.menus.at(-1)!;
 			expect(menuTitles(menu)).toEqual(["Assign to task…", "Delete record"]);
@@ -588,6 +601,7 @@ describe("Focus page", () => {
 			const task = (await m.h.app.tasks.create({ title: "Complete the long lesson on type hints" })).task;
 			await twoRounds(m, task.id);
 			const page = await openFocus(m);
+			await openSets(page);
 			const sets = page.querySelectorAll(".cp-focus-set");
 			expect(sets.length).toBe(1);
 			expect(text(sets[0]!, ".cp-focus-set-name")).toBe("Focus set · 2 of 2 rounds");
@@ -602,21 +616,51 @@ describe("Focus page", () => {
 			expect(text(sets[0]!, ".cp-focus-set-sum")).toBe("2m");
 		});
 
-		it("a set folds with its heading button (aria-expanded), per view", async () => {
-			const m = await mountApp();
-			await twoRounds(m, null);
+		it("#240: a set starts collapsed and its heading opens and closes it", async () => {
+			const h = await appHarness();
+			await h.app.focus.start(cfg(2, 60), null);
+			await tickFor({ h }, 60 + 60 + 60);
+			const m = await mountApp({}, { harness: h });
 			const page = await openFocus(m);
 			const head = page.querySelector<HTMLButtonElement>(".cp-focus-set-head")!;
+			expect(head.getAttribute("aria-expanded")).toBe("false");
+			expect(page.querySelector(".cp-focus-rounds")).toBeNull();
+			// The heading keeps the summary when closed.
+			expect(text(page, ".cp-focus-set-name")).toBe("Focus set · 2 of 2 rounds");
+			await click(head);
 			expect(head.getAttribute("aria-expanded")).toBe("true");
+			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(2);
 			await click(head);
 			expect(head.getAttribute("aria-expanded")).toBe("false");
 			expect(page.querySelector(".cp-focus-rounds")).toBeNull();
-			expect(page.querySelector(".cp-focus-set-task")).toBeNull();
-			// The heading keeps the summary when folded.
-			expect(text(page, ".cp-focus-set-name")).toBe("Focus set · 2 of 2 rounds");
-			await click(page.querySelector(".cp-focus-set-head"));
+		});
+
+		it("#240: the running set starts open, and stays as it is when it finishes", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			await flushEffects();
+			const page = await openFocus(m);
+			await tickFor(m, 60);
+			const head = page.querySelector<HTMLButtonElement>(".cp-focus-set-head")!;
+			expect(head.getAttribute("aria-expanded")).toBe("true");
+			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(1);
+			await tickFor(m, 120);
+			expect(m.h.app.focus.timer()).toBeNull();
 			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("true");
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(2);
+		});
+
+		it("#240: a running set the user closed stays closed when it finishes", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			await flushEffects();
+			const page = await openFocus(m);
+			await tickFor(m, 60);
+			await click(page.querySelector(".cp-focus-set-head"));
+			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("false");
+			await tickFor(m, 120);
+			expect(m.h.app.focus.timer()).toBeNull();
+			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("false");
 		});
 
 		it("rounds with different tasks show their own task and the heading shows none", async () => {
@@ -629,6 +673,7 @@ describe("Focus page", () => {
 			await tickFor(m, 60);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelector(".cp-focus-set-task")).toBeNull();
 			const own = [...page.querySelectorAll(".cp-focus-round-task")].map((e) => e.textContent);
 			expect(own).toEqual(["Task A", "Task B"]);
@@ -656,6 +701,7 @@ describe("Focus page", () => {
 			await pressButton(page, "Start");
 			await tickFor(m, 120);
 			await pressButton(page, "Finish");
+			await openSets(page);
 			const set = page.querySelector(".cp-focus-set")!;
 			expect(text(set, ".cp-focus-set-meta")).toMatch(/· in progress$/);
 			expect(text(set, ".cp-focus-round-status em")).toBe("Finished early");
@@ -673,6 +719,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelector(".cp-focus-rec .cp-focus-status-dot")?.classList.contains("is-recovered")).toBe(true);
 			expect(text(page, ".cp-focus-set-meta")).toMatch(/· recovered$/);
 		});
@@ -699,10 +746,36 @@ describe("Focus page", () => {
 			});
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(50);
 			await pressButton(page, "Show more");
+			await openSets(page);
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(55);
 			expect(page.querySelector(".cp-focus-more")).toBeNull();
+		});
+
+		it("#240: Show more keeps each set's state", async () => {
+			// Seeded before the page opens, so no set of it was ever the running one.
+			const h = await appHarness();
+			await h.app.focus.start(cfg(), null);
+			await tickFor({ h }, 60);
+			const proto = [...h.app.store.state.focusSessions.values()][0]!;
+			await h.app.store.run("Edit focus record", (tx) => {
+				for (let i = 0; i < 54; i++) tx.put("focusSessions", { ...proto, id: `bulk-${i}`, setId: `bulk-set-${i}`, startedAt: new Date(Date.parse(proto.startedAt) - (i + 1) * 3600_000).toISOString() });
+			});
+			const m = await mountApp({}, { harness: h });
+			await settle();
+			const page = await openFocus(m);
+			const heads = () => [...page.querySelectorAll<HTMLButtonElement>(".cp-focus-set-head")];
+			expect(heads().length).toBe(50);
+			expect(heads().every((h) => h.getAttribute("aria-expanded") === "false")).toBe(true);
+			const opened = heads()[0]!;
+			await click(opened);
+			await pressButton(page, "Show more");
+			expect(heads().length).toBe(55);
+			expect(opened.isConnected).toBe(true);
+			expect(opened.getAttribute("aria-expanded")).toBe("true");
+			expect(heads().filter((h) => h.getAttribute("aria-expanded") === "true")).toEqual([opened]);
 		});
 	});
 
@@ -714,6 +787,7 @@ describe("Focus page", () => {
 			return task;
 		}
 		const openMenu = async (page: HTMLElement, m: AppMount) => {
+			await openSets(page);
 			await click(page.querySelector(".cp-focus-rec .cp-icon-button"));
 			return m.host.menus.at(-1)!;
 		};
@@ -781,6 +855,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelector(".cp-focus-rec .cp-focus-round-more")).not.toBeNull();
 			await makeReadOnly(m.h);
 			m.h.app.store.notifyStatus();

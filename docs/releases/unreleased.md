@@ -27,6 +27,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#222) A task block now needs a list, tag, due, scheduled or linked line; without one it says so instead of listing every open task.
 - (#234) Task rows and board cards have a clearer two-line look: the title and its date on top, everything else small underneath in one fixed order. An hourglass always marks a deadline, a completed task has no line through its title, and a row no longer repeats the day its heading says.
 - (#237) A deadline now shows an hourglass everywhere, and the flag means priority only.
+- (#240) Focus sets in the focus record now start closed, so a long history is quick to scan. Click a set to see its rounds; the set that is running starts open.
 
 ## Fixed
 

@@ -270,6 +270,9 @@ describe("Focus", function () {
 		expect(rec).toMatchObject({ status: "recovered", taskId, focusedSec: 180, gaps: ["pending"] });
 		expect(await timerState()).toBeNull();
 
+		// The set was the running one, so it is expected open; the guard keeps this spec about recovery.
+		const head = focus.$(".cp-focus-set-head");
+		if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
 		await expect(focus.$(".cp-focus-rec .cp-focus-round-time")).toHaveText("3m");
 		await focus.$(".cp-focus-gap").$("button=Include").click();
 		await browser.waitUntil(async () => (await records())[0]?.gaps[0] === "included", { timeout: 5000 });

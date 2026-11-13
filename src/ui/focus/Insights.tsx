@@ -68,13 +68,17 @@ export function History(props: { host: UiHost; state: DbData; ctx: QueryContext 
 	const { host, state, ctx } = props;
 	const headingId = useUniqueId("cp-focus-history");
 	const [shown, setShown] = useState(PAGE);
-	// Folded sets, by key. Per view: it is not saved.
-	const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
 	const activeSetId = useActiveSetId(host);
+	// Open sets, by key. Per view: it is not saved. A set starts closed; the set whose timer runs is opened once,
+	// when it becomes the running set, and then keeps the state the user gives it.
+	const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(activeSetId === null ? [] : [activeSetId]));
+	useEffect(() => {
+		if (activeSetId !== null) setOpen((cur) => (cur.has(activeSetId) ? cur : new Set(cur).add(activeSetId)));
+	}, [activeSetId]);
 	const days = useMemo(() => focusHistoryTree(state.focusSessions.values(), ctx.zone, activeSetId), [state.focusSessions, ctx.zone, activeSetId]);
 	const total = state.focusSessions.size;
 	const toggle = (key: string) =>
-		setFolded((cur) => {
+		setOpen((cur) => {
 			const next = new Set(cur);
 			if (!next.delete(key)) next.add(key);
 			return next;
@@ -106,7 +110,7 @@ export function History(props: { host: UiHost; state: DbData; ctx: QueryContext 
 								<span class="cp-focus-day-total">{focusedText(day.totalSec)}</span>
 							</h4>
 							{sets.map((set) => (
-								<SetNode key={set.key} host={host} state={state} ctx={ctx} set={set} open={!folded.has(set.key)} onToggle={() => toggle(set.key)} />
+								<SetNode key={set.key} host={host} state={state} ctx={ctx} set={set} open={open.has(set.key)} onToggle={() => toggle(set.key)} />
 							))}
 						</div>
 					),

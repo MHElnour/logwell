@@ -6,9 +6,9 @@ The focus record shows the rounds you saved on the [Focus](focus.md) page: how l
 
 The **Overview**, at the top of the right column of the Focus page, shows **Today** and **All time**, each with **Pomos** and **Focused**. A pomo is a completed focus round with at least one minute of focus. A round you end with **Finish** counts too, with its real minutes. Stopped and split rounds add to the time focused but are not pomos.
 
-Below it, the **Focus record** lists your history by day, newest day first. Each day shows its total. Under a day are its focus sets, such as "Focus set · 3 of 4 rounds", with the time range and how the set ended: done, stopped after round 3, recovered or in progress. Click a set to fold it. **Show more** loads older rounds.
+Below it, the **Focus record** lists your history by day, newest day first. Each day shows its total. Under a day are its focus sets, such as "Focus set · 3 of 4 rounds", with the time range and how the set ended: done, stopped after round 3, recovered or in progress. Sets start closed: click one to see its rounds. The set that is running starts open. **Show more** loads older rounds.
 
-Under a set are its rounds, each with its time range, its length and its status:
+Inside a set are its rounds, each with its time range, its length and its status:
 
 - **Completed**: the round ran to its end.
 - **Finished early**: you ended it with **Finish** before its planned length.
