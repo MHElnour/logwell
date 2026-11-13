@@ -1028,8 +1028,8 @@ body.is-mobile .checkpoint-view .cp-app {
 }
 
 .checkpoint-view .cp-due-chip.is-today { color: var(--cp-blue-text); }
-.checkpoint-view .cp-due-chip.is-tomorrow { color: var(--cp-orange-text); }
 .checkpoint-view .cp-due-chip.is-overdue { color: var(--cp-red-text); }
+.checkpoint-view .cp-due-chip.is-tomorrow,
 .checkpoint-view .cp-due-chip.is-later { color: var(--text-muted); }
 .checkpoint-view .cp-due-chip.is-none,
 .checkpoint-view .cp-due-chip.is-empty { color: var(--text-faint); }
@@ -2886,7 +2886,7 @@ body.is-mobile .checkpoint-view .cp-app {
 	border-left: 3px dashed var(--cp-hue, var(--cp-accent));
 }
 
-/* Deadline: an outline pill with the flag, unlike the filled schedule entries. */
+/* Deadline: an outline pill with the hourglass, unlike the filled schedule entries. */
 .checkpoint-view .cp-cal-entry.is-deadline {
 	--cp-cal-bg: transparent;
 	border: 1px solid var(--cp-hue, var(--cp-accent));

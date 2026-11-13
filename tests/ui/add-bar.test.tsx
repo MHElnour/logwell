@@ -381,6 +381,22 @@ describe("more menu", () => {
 		expect(m.root.querySelector(".cp-more-pop .cp-pop-label")!.textContent).toBe("Priority");
 	});
 
+	it.each([
+		{ name: "the deadline pill is an hourglass", kind: "deadline", icon: "hourglass" },
+		{ name: "the priority pill is a flag", kind: "priority", icon: "flag" },
+	])("one icon per meaning: $name", async ({ kind, icon }) => {
+		const m = await mountQuickForm();
+		await click(dateTool(m.root));
+		await click(m.root.querySelector('.cp-pop-row[data-row="deadline"]'));
+		const dl = m.root.querySelector<HTMLInputElement>('.cp-date-pop input[type="date"]')!;
+		dl.value = "2026-10-09";
+		dl.dispatchEvent(new Event("input", { bubbles: true }));
+		await settle();
+		await click(moreTool(m.root));
+		await click(m.root.querySelector('.cp-pri-flags [aria-label="High"]'));
+		expect(m.root.querySelector(`.cp-qa-manual[data-kind="${kind}"] [data-icon]`)?.getAttribute("data-icon")).toBe(icon);
+	});
+
 	it("picking High marks it .is-on, shows a pill and saves priority 1", async () => {
 		const m = await mountQuickForm();
 		await click(moreTool(m.root));

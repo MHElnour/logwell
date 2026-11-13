@@ -11,6 +11,7 @@ import { formatDateSpec } from "../format";
 import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
 import { repeatLine } from "../repeat";
 import { useUniqueId } from "../hooks";
+import { ICON } from "../icons";
 
 import { dayLabel, monthGrid, shiftDateByMonths } from "./calendar";
 import { monthTitle } from "../calendar/format";
@@ -342,7 +343,7 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 							{editing === "time" && <FieldEdit type="time" label="Time" value={time} onValue={setTimeValue} onDone={() => doneEditing("time")} />}
 							<Row
 								setIcon={setIcon}
-								icon="flag"
+								icon={ICON.deadline}
 								label="Deadline"
 								row="deadline"
 								value={deadlineText}
@@ -501,7 +502,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 							onClick={() => model.setPriority(p)}
 							onKeyDown={(e) => onFlagKey(e, i)}
 						>
-							<QaIcon setIcon={setIcon} name="flag" />
+							<QaIcon setIcon={setIcon} name={ICON.flag} />
 						</button>
 					))}
 				</div>

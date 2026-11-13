@@ -26,7 +26,10 @@ export const ICON = {
 	calToday: "calendar-check",
 	calUnscheduled: "list-todo",
 	// Popovers and meta.
+	/** Priority only; a deadline is `deadline`. */
 	flag: "flag",
+	/** A deadline, never a priority. */
+	deadline: "hourglass",
 	clock: "clock",
 	note: "file-text",
 	/** Subtasks done, in a row or card meta. */

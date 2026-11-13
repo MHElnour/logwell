@@ -1,4 +1,4 @@
-import { categoryText } from "../icons";
+import { ICON, categoryText } from "../icons";
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { WeekStart } from "../../app/settings";
@@ -273,12 +273,12 @@ export function QuickAddEditor(props: {
 
 const CHIP_ICON: Record<Chip["kind"], string> = {
 	scheduled: "calendar",
-	deadline: "flag",
+	deadline: ICON.deadline,
 	duration: "clock",
 	category: "list",
 	tag: "tag",
 	note: "file-text",
-	priority: "flag",
+	priority: ICON.flag,
 	recurrence: "repeat",
 	repeatEnd: "repeat",
 };

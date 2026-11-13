@@ -42,7 +42,7 @@ export function manualPills(model: QuickAddModel): ManualPill[] {
 			key: "deadline",
 			kind: "deadline",
 			label: spec === null ? "No deadline" : `Deadline: ${formatDateSpec(spec, zone, today)}`,
-			icon: ICON.flag,
+			icon: ICON.deadline,
 			remove: () => model.revertManual("deadline"),
 		});
 	}

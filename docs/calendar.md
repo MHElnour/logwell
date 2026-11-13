@@ -31,7 +31,7 @@ The calendar shows every task and subtask that has a date or a deadline in the r
 Each day is a column with 24 hour rows. The grid opens at about 07:00, or an hour before the current time when today is in view. Today's column is highlighted, and a line marks the current time.
 
 - **Timed tasks** are blocks at their time. A block is as tall as the task's planned duration. A task with a time but no duration gets a half-hour block with a dashed edge, marked "no duration". Overlapping blocks sit side by side. A block that runs past midnight continues at the top of the next day.
-- **The all-day row** at the top lists tasks that have a date but no time, and deadlines, marked with a flag. A day shows three entries, then "+k more", which expands the whole row. **Show less** collapses it.
+- **The all-day row** at the top lists tasks that have a date but no time, and deadlines, marked with an hourglass. A day shows three entries, then "+k more", which expands the whole row. **Show less** collapses it.
 - **Daylight saving.** On the day the clocks go forward, the skipped hour is hatched. On the day they go back, the repeated hour is marked "×2".
 
 Entries take the color of their list. Open tasks whose date or time has passed are muted with a red edge, and missed deadlines are red.
@@ -57,7 +57,7 @@ Drag an entry with the mouse or a pen. Each drop is one change, with an Undo not
 - **An all-day entry** moves to another day in the all-day row and stays without a time.
 - **In the month view** drag an entry to another day. A timed task keeps its time.
 
-A timed block cannot go onto the all-day row, and an all-day entry cannot go onto the hour grid. The calendar marks such a spot as refused and the drop does nothing. Deadline flags and repeating tasks cannot be dragged. To change them, use the details pane. A drop works from the task as it is when you let go, so a change that came in during the drag, such as from TickTick sync, is kept; a task that started repeating during the drag does not move.
+A timed block cannot go onto the all-day row, and an all-day entry cannot go onto the hour grid. The calendar marks such a spot as refused and the drop does nothing. Deadline entries and repeating tasks cannot be dragged. To change them, use the details pane. A drop works from the task as it is when you let go, so a change that came in during the drag, such as from TickTick sync, is kept; a task that started repeating during the drag does not move.
 
 Touch drag is not supported. On a touch screen, use the details pane to change dates.
 

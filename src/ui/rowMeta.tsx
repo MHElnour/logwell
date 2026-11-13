@@ -26,28 +26,28 @@ export function toneOf(done: boolean, due: DateSpec | null, ctx: QueryContext): 
 
 /**
  * The date (colored by its tone), without the day the row's group heading already names (`groupDay`); nothing when
- * that leaves no text. A task with only a deadline shows it here, with the flag (alone when the heading names its day):
- * the flag always means "deadline", and a missed one is red by its tone.
+ * that leaves no text. A task with only a deadline shows it here, with the hourglass (alone when the heading names its day):
+ * the hourglass always means "deadline", and a missed one is red by its tone.
  */
 export function dueMark(host: UiHost, entry: ListEntry, due: DateSpec, tone: DateTone, ctx: QueryContext, groupDay: LocalDate | null) {
 	const text = rowDateText(due, ctx.zone, ctx.today, groupDay);
 	if (entry.schedule !== null) return text === "" ? null : <span class={`cp-meta-date is-${tone}`}>{text}</span>;
 	return (
 		<span class={`cp-meta-date is-${tone} is-deadline`} title="Deadline">
-			<Icon host={host} icon={ICON.flag} />
+			<Icon host={host} icon={ICON.deadline} />
 			<span class="cp-sr-only">Deadline</span>
 			{text !== "" && <span>{text}</span>}
 		</span>
 	);
 }
 
-/** The deadline flag, beside a schedule; nothing for a task without both. */
+/** The deadline hourglass, beside a schedule; nothing for a task without both. */
 export function deadlineMark(host: UiHost, entry: ListEntry, ctx: QueryContext) {
 	const { task } = entry;
 	if (entry.schedule === null || task.deadline === null) return null;
 	return (
 		<span class={`cp-meta-deadline${isDeadlineMissed(task, ctx) ? " is-missed" : ""}`} title="Deadline">
-			<Icon host={host} icon={ICON.flag} />
+			<Icon host={host} icon={ICON.deadline} />
 			{formatDateSpec(task.deadline, ctx.zone, ctx.today)}
 		</span>
 	);
