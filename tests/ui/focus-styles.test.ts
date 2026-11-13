@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cssBlock, cssSection } from "./styles-helpers";
+import { cssBlock, cssSection, selectors } from "./styles-helpers";
 
 // Keyboard focus is visible on the Focus page's small controls and on the status-bar item. The section's scoping and
 // hygiene are checked with the other sections in layout-styles.test.ts.
@@ -18,15 +18,11 @@ describe("focus stylesheet section", () => {
 		expect(section).toMatch(/:focus-visible[^{]*\{[^}]*outline:\s*2px solid var\(--/);
 	});
 
-	it("the tree line, the four dots and the keyboard outlines are styled with theme variables", () => {
-		const rule = (sel: string): string => cssBlock(`${sel} {`, section);
-		expect(rule(".checkpoint-view .cp-focus-rec::before")).toMatch(/background:\s*var\(--background-modifier-border\)/);
-		expect(rule(".checkpoint-view .cp-focus-rec:only-child::before")).toContain("display: none");
-		expect(rule(".checkpoint-view .cp-focus-rec:first-child::before")).toContain("top: var(--cp-dot-y)");
-		expect(rule(".checkpoint-view .cp-focus-rec:last-child::before")).toContain("height: var(--cp-dot-y)");
-		expect(rule(".checkpoint-view .cp-focus-status-dot.is-recovered")).toContain("var(--color-yellow)");
-		expect(rule(".checkpoint-view .cp-focus-status-dot.is-early")).toContain("var(--cp-accent)");
-		expect(rule(".checkpoint-view .cp-focus-status-dot.is-stopped")).toContain("var(--text-faint)");
+	it("the status dots use the hues of the focus record and the keyboard outlines use theme variables", () => {
+		expect(rule(".checkpoint-view .cp-focus-status-dot.is-completed")).toContain("background: var(--cp-green)");
+		expect(rule(".checkpoint-view .cp-focus-status-dot.is-early")).toContain("background: var(--cp-blue)");
+		expect(rule(".checkpoint-view .cp-focus-status-dot.is-stopped")).toContain("background: var(--cp-orange)");
+		expect(rule(".checkpoint-view .cp-focus-status-dot.is-recovered")).toContain("background: var(--cp-purple)");
 		expect(section).toContain("grid-template-columns: minmax(0, 1fr) 430px");
 		expect(section).toContain(".checkpoint-view .cp-focus-set-head:focus-visible");
 		expect(section).toContain(".checkpoint-view .cp-focus-round-more:focus-visible");
@@ -74,6 +70,43 @@ describe("focus stylesheet section", () => {
 		const main = rule(".checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc");
 		expect(main).toContain("width: var(--cp-focus-main-disc)");
 		expect(main).toContain("height: var(--cp-focus-main-disc)");
+	});
+
+	it("a set dot takes its place from the tokens of the day line and half the head height", () => {
+		const line = rule(".checkpoint-view .cp-focus-sets::before");
+		expect(line).toContain("left: calc(var(--cp-focus-axis) - var(--cp-focus-line-w) / 2)");
+		expect(line).toContain("width: var(--cp-focus-line-w)");
+		const dot = rule(".checkpoint-view .cp-focus-set-head::before");
+		expect(dot).toContain("left: calc(var(--cp-focus-axis) - var(--cp-focus-rail) - var(--cp-focus-set-dot) / 2)");
+		expect(dot).toContain("top: calc(50% - var(--cp-focus-set-dot) / 2)");
+		expect(rule(".checkpoint-view .cp-focus-set-head")).toContain("position: relative");
+		expect(rule(".checkpoint-view .cp-focus-sets")).toContain("padding-left: var(--cp-focus-rail)");
+		// The head left edge is the card left edge: the card has no padding and no border.
+		const card = rule(".checkpoint-view .cp-focus-set");
+		expect(card).not.toContain("padding");
+		expect(card).not.toContain("border:");
+	});
+
+	it("the status dot has one size and no halo, and the set head and legend do not restyle it", () => {
+		const base = rule(".checkpoint-view .cp-focus-status-dot");
+		expect(base).toContain("width: var(--cp-focus-dot)");
+		expect(base).toContain("height: var(--cp-focus-dot)");
+		expect(base).not.toContain("box-shadow");
+		expect(selectors(section).filter((sel) => /(-set-dots|-legend) .*cp-focus-status-dot/.test(sel))).toEqual([]);
+	});
+
+	it("a round and a set head share their padding, gap and last column", () => {
+		for (const grid of [rule(".checkpoint-view .cp-focus-set-head"), rule(".checkpoint-view .cp-focus-rec")]) {
+			expect(grid).toContain("var(--cp-focus-end-col)");
+			expect(grid).toContain("column-gap: var(--cp-focus-col-gap)");
+		}
+		expect(rule(".checkpoint-view .cp-focus-set-head")).toContain("padding: 12px var(--cp-focus-set-pad)");
+		expect(rule(".checkpoint-view .cp-focus-rounds")).toContain("var(--cp-focus-set-pad)");
+		const rec = rule(".checkpoint-view .cp-focus-rec");
+		expect(rec).toContain("align-items: center");
+		expect(rec).toContain("grid-template-columns: var(--cp-focus-dot) minmax(0, 1fr) auto var(--cp-focus-end-col)");
+		expect(section).not.toContain(".cp-focus-rec::before");
+		expect(section).not.toContain("--cp-dot-y");
 	});
 
 	it("the overview figures align on the baseline and the two tiles share one grid row", () => {

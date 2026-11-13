@@ -66,9 +66,16 @@ export function roundStatusText(s: FocusSession): string {
 	}
 }
 
-/** The dot of a round: filled accent, half for finished early, hollow grey for stopped or split, yellow for recovered. */
+/** The dot of a round: green for completed, blue for finished early, orange for stopped or split, purple for recovered (styles.css `.cp-focus-status-dot`). */
 export function dotClass(s: FocusSession): string {
 	if (s.status === "recovered") return "is-recovered";
 	if (s.status === "completed") return isFinishedEarly(s) ? "is-early" : "is-completed";
 	return "is-stopped";
+}
+
+/** The dot classes of a set rounds, each once, in order of first appearance: the dots of a set heading. */
+export function setDotClasses(sessions: Iterable<FocusSession>): string[] {
+	const seen = new Set<string>();
+	for (const s of sessions) seen.add(dotClass(s));
+	return [...seen];
 }

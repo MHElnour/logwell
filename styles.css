@@ -4371,6 +4371,14 @@ body.is-mobile .checkpoint-view .cp-app {
 	--cp-focus-step: 30px; /* a stepper button */
 	--cp-focus-value-w: 62px; /* the stepper value cell */
 	--cp-focus-main-disc: 72px; /* the main button, and the height of the row every control disc is centered in */
+	--cp-focus-axis: 8px; /* the day line center, from the record left edge */
+	--cp-focus-rail: 24px; /* the set cards left edge, from the record left edge */
+	--cp-focus-line-w: 2px;
+	--cp-focus-set-dot: 12px; /* a set dot on the day line */
+	--cp-focus-dot: 8px; /* a round status dot */
+	--cp-focus-set-pad: 14px; /* inline padding of a set head and its rounds */
+	--cp-focus-col-gap: 10px; /* column gap of a set head and of a round */
+	--cp-focus-end-col: 28px; /* the last column: the twisty, the round menu */
 	/* A tile without a .cp-hue-* class shows the accent. */
 	--cp-hue-soft: var(--cp-accent-soft);
 	--cp-hue-text: var(--cp-accent-text);
@@ -5014,63 +5022,100 @@ body.is-mobile .checkpoint-view .cp-app {
 	min-width: 0;
 }
 
-.checkpoint-view .cp-focus-history .cp-focus-side-heading {
-	margin-bottom: 10px;
-}
-
 .checkpoint-view .cp-focus-empty {
 	margin: 0;
 	color: var(--text-faint);
 }
 
+.checkpoint-view .cp-focus-day {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
 .checkpoint-view .cp-focus-day + .cp-focus-day {
-	margin-top: 16px;
+	margin-top: 20px;
 }
 
 .checkpoint-view .cp-focus-day-heading {
 	display: flex;
-	justify-content: space-between;
-	margin: 0 0 4px;
-	color: var(--text-muted);
-	font-size: 13px;
-	font-weight: var(--font-semibold);
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	color: var(--text-normal);
+	font-size: var(--cp-font);
+	font-weight: var(--font-bold);
 }
 
 .checkpoint-view .cp-focus-day-total {
-	color: var(--text-faint);
-	font-weight: var(--font-normal);
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 12.5px;
+	font-weight: var(--font-semibold);
 	font-variant-numeric: tabular-nums;
 }
 
-/* A focus set: a heading that folds, its task, then the rounds as a tree. */
+/* A day sets hang on one line. The line and every set dot take their place from --cp-focus-axis. */
+.checkpoint-view .cp-focus-sets {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-left: var(--cp-focus-rail);
+}
+
+.checkpoint-view .cp-focus-sets::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--cp-focus-axis) - var(--cp-focus-line-w) / 2);
+	width: var(--cp-focus-line-w);
+	background: var(--background-modifier-border);
+}
+
+/* A set card. No padding and no border: the head left edge is the card left edge, which the dot place relies on. */
 .checkpoint-view .cp-focus-set {
-	padding: var(--size-4-1) var(--size-4-1) var(--size-4-2);
-	border-radius: 12px;
+	--cp-focus-end: var(--cp-accent);
+	--cp-focus-end-text: var(--cp-accent-text);
+	min-width: 0;
+	border-radius: 14px;
 	background: var(--background-secondary);
 }
 
-.checkpoint-view .cp-focus-set + .cp-focus-set {
-	margin-top: var(--size-4-2);
+.checkpoint-view .cp-focus-set.is-end-done {
+	--cp-focus-end: var(--cp-green);
+	--cp-focus-end-text: var(--cp-green-text);
 }
 
-.checkpoint-view .cp-focus-set.is-closed {
-	padding-bottom: var(--size-4-1);
+.checkpoint-view .cp-focus-set.is-end-stopped {
+	--cp-focus-end: var(--cp-orange);
+	--cp-focus-end-text: var(--cp-orange-text);
+}
+
+.checkpoint-view .cp-focus-set.is-end-recovered {
+	--cp-focus-end: var(--cp-yellow);
+	--cp-focus-end-text: var(--cp-yellow-text);
 }
 
 .checkpoint-view .cp-focus-set-head {
+	position: relative;
 	display: grid;
-	grid-template-columns: 16px minmax(0, 1fr) auto;
-	gap: var(--size-4-2);
+	grid-template-columns: minmax(0, 1fr) auto var(--cp-focus-end-col);
+	column-gap: var(--cp-focus-col-gap);
 	align-items: center;
 	width: 100%;
 	height: auto;
-	padding: var(--size-4-2) 10px;
+	padding: 12px var(--cp-focus-set-pad);
 	border: 0;
-	border-radius: 9px;
+	border-radius: 14px;
 	background: transparent;
 	box-shadow: none;
 	color: var(--text-normal);
 	text-align: left;
+	white-space: normal;
 	cursor: pointer;
 }
 
@@ -5078,147 +5123,125 @@ body.is-mobile .checkpoint-view .cp-app {
 	background: var(--background-modifier-hover);
 }
 
-.checkpoint-view .cp-focus-set-twisty {
-	display: inline-flex;
-	color: var(--text-faint);
-	transition: transform 0.15s;
-}
-
-.checkpoint-view .cp-focus-set-twisty svg {
-	width: 14px;
-	height: 14px;
-}
-
-.checkpoint-view .cp-focus-set.is-closed .cp-focus-set-twisty {
-	transform: rotate(-90deg);
+/* The set dot: on the day line, at half the head height, open or closed. */
+.checkpoint-view .cp-focus-set-head::before {
+	content: "";
+	position: absolute;
+	left: calc(var(--cp-focus-axis) - var(--cp-focus-rail) - var(--cp-focus-set-dot) / 2);
+	top: calc(50% - var(--cp-focus-set-dot) / 2);
+	width: var(--cp-focus-set-dot);
+	height: var(--cp-focus-set-dot);
+	border-radius: 50%;
+	background: var(--cp-focus-end);
+	box-shadow: 0 0 0 3px var(--background-primary);
 }
 
 .checkpoint-view .cp-focus-set-title {
 	display: grid;
-	gap: 1px;
+	gap: 3px;
 	min-width: 0;
 }
 
 .checkpoint-view .cp-focus-set-name {
-	font-size: 13.5px;
+	overflow: hidden;
 	font-weight: var(--font-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.checkpoint-view .cp-focus-set-name.is-none {
+	color: var(--text-muted);
 }
 
 .checkpoint-view .cp-focus-set-meta {
-	color: var(--text-faint);
-	font-size: 12px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	color: var(--text-muted);
+	font-size: 12.5px;
 	font-variant-numeric: tabular-nums;
+}
+
+.checkpoint-view .cp-focus-set-dots {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.checkpoint-view .cp-focus-set-end {
+	color: var(--cp-focus-end-text);
+	font-weight: var(--font-semibold);
 }
 
 .checkpoint-view .cp-focus-set-sum {
 	font-weight: var(--font-bold);
 	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
 }
 
-.checkpoint-view .cp-focus-set-task {
+/* The twisty sits in the last column, the same column as the round menu; it points up when the set is open. */
+.checkpoint-view .cp-focus-set-twisty {
 	display: flex;
-	align-items: flex-start;
-	gap: var(--size-4-2);
-	padding: 2px 12px 6px 34px;
+	justify-self: center;
+	color: var(--text-faint);
+	transform: rotate(180deg);
 }
 
-.checkpoint-view .cp-focus-set-task .svg-icon {
-	flex: none;
-	width: 15px;
-	height: 15px;
-	margin-top: 2px;
-	color: var(--cp-accent-text);
+.checkpoint-view .cp-focus-set-twisty svg {
+	width: 16px;
+	height: 16px;
 }
 
-.checkpoint-view .cp-focus-set-task span {
-	font-weight: var(--font-semibold);
-	line-height: 1.35;
-	overflow-wrap: anywhere;
+.checkpoint-view .cp-focus-set.is-closed .cp-focus-set-twisty {
+	transform: none;
 }
 
-.checkpoint-view .cp-focus-set-task.is-none span {
-	color: var(--text-muted);
-	font-style: italic;
-	font-weight: var(--font-normal);
+@media (prefers-reduced-motion: no-preference) {
+	.checkpoint-view .cp-focus-set-twisty {
+		transition: transform 0.15s;
+	}
 }
 
-/* The tree line runs through the centers of the dots: --cp-dot-y is the height of a round's first row, halved. */
+/* The rounds of an open set: the same inline padding, column gap and last column as the head. */
 .checkpoint-view .cp-focus-rounds {
-	--cp-dot-y: 23px;
-	position: relative;
 	margin: 0;
-	padding: 0 var(--size-4-2) 0 34px;
+	padding: 0 var(--cp-focus-set-pad) 6px;
 	list-style: none;
 }
 
 .checkpoint-view .cp-focus-rec {
-	position: relative;
 	display: grid;
-	grid-template-columns: 16px minmax(0, 1fr) auto 28px;
-	gap: 0 var(--size-4-2);
+	grid-template-columns: var(--cp-focus-dot) minmax(0, 1fr) auto var(--cp-focus-end-col);
+	column-gap: var(--cp-focus-col-gap);
 	align-items: center;
-	padding: 6px 4px;
-	border-radius: 8px;
+	padding: 7px 0;
+	border-top: var(--border-width) solid var(--background-modifier-border);
 }
 
-.checkpoint-view .cp-focus-rec::before {
-	content: "";
-	position: absolute;
-	left: 11.25px;
-	top: 0;
-	bottom: 0;
-	width: 1.5px;
-	background: var(--background-modifier-border);
-}
-
-.checkpoint-view .cp-focus-rec:first-child::before {
-	top: var(--cp-dot-y);
-}
-
-.checkpoint-view .cp-focus-rec:last-child::before {
-	bottom: auto;
-	height: var(--cp-dot-y);
-}
-
-.checkpoint-view .cp-focus-rec:only-child::before {
-	display: none;
-}
-
-.checkpoint-view .cp-focus-rec:hover,
-.checkpoint-view .cp-focus-rec:focus-within {
-	background: var(--background-primary);
-}
-
+/* The one status dot: rounds and set heads (and the legend). */
 .checkpoint-view .cp-focus-status-dot {
-	position: relative;
-	z-index: 1;
-	display: inline-block;
-	width: 9px;
-	height: 9px;
-	box-sizing: border-box;
-	justify-self: center;
+	flex: none;
+	display: block;
+	width: var(--cp-focus-dot);
+	height: var(--cp-focus-dot);
 	border-radius: 50%;
-	background: var(--cp-accent);
-	box-shadow: 0 0 0 3px var(--background-secondary);
 }
 
-.checkpoint-view .cp-focus-rec:hover .cp-focus-status-dot,
-.checkpoint-view .cp-focus-rec:focus-within .cp-focus-status-dot {
-	box-shadow: 0 0 0 3px var(--background-primary);
+.checkpoint-view .cp-focus-status-dot.is-completed {
+	background: var(--cp-green);
 }
 
 .checkpoint-view .cp-focus-status-dot.is-early {
-	border: 1.5px solid var(--cp-accent);
-	background: var(--background-secondary);
+	background: var(--cp-blue);
 }
 
 .checkpoint-view .cp-focus-status-dot.is-stopped {
-	border: 1.5px solid var(--text-faint);
-	background: var(--background-secondary);
+	background: var(--cp-orange);
 }
 
 .checkpoint-view .cp-focus-status-dot.is-recovered {
-	background: var(--color-yellow);
+	background: var(--cp-purple);
 }
 
 .checkpoint-view .cp-focus-round-what {
@@ -5338,10 +5361,6 @@ body.is-mobile .checkpoint-view .cp-app {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-}
-
-.checkpoint-view .cp-focus-legend .cp-focus-status-dot {
-	box-shadow: none;
 }
 
 /* The focus chip on a row and the total next to the details Focus button. */

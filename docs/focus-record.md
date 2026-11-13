@@ -6,7 +6,7 @@ The focus record shows the rounds you saved on the [Focus](focus.md) page: how l
 
 The **Overview**, at the top of the right column of the Focus page, shows **Today** and **All time**, each with **Pomos** and **Focused**. A pomo is a completed focus round with at least one minute of focus. A round you end with **Finish** counts too, with its real minutes. Stopped and split rounds add to the time focused but are not pomos.
 
-Below it, the **Focus record** lists your history by day, newest day first. Each day shows its total. Under a day are its focus sets, such as "Focus set · 3 of 4 rounds", with the time range and how the set ended: done, stopped after round 3, recovered or in progress. Sets start closed: click one to see its rounds. The set that is running starts open. **Show more** loads older rounds.
+Below it, the **Focus record** lists your history by day, newest day first. Each day shows its total, and its focus sets hang on one line, each with a dot in the color of how it ended. A set shows what you worked on (the task, "No task", or "Several tasks"), a dot for each kind of round it has, how far it got, such as "3 of 4 rounds", its time range and how it ended: done, stopped after round 3, recovered or in progress. Sets start closed: click one to see its rounds. The set that is running starts open. **Show more** loads older rounds.
 
 Inside a set are its rounds, each with its time range, its length and its status:
 
@@ -16,7 +16,7 @@ Inside a set are its rounds, each with its time range, its length and its status
 - **Split to another task**: the part before a **Split**.
 - **Recovered**: the timer was interrupted during the round. See [Recover the timer after a crash or sleep](#recover-the-timer-after-a-crash-or-sleep) below.
 
-A colored dot repeats the status, with a legend at the bottom. When the rounds of a set have different tasks, each round shows its own. A round whose task you deleted shows the task's name with "(deleted)".
+A colored dot repeats the status (green for completed, blue for finished early, orange for stopped or split, purple for recovered), with a legend at the bottom. When the rounds of a set have different tasks, each round shows its own. A round whose task you deleted shows the task's name with "(deleted)".
 
 ## Fix or delete a round
 

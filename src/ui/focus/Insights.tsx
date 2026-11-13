@@ -10,7 +10,7 @@ import { useUniqueId } from "../hooks";
 import type { MenuSpec, UiHost } from "../host";
 import { ICON } from "../icons";
 import { notifyWrite } from "../writeNotice";
-import { dotClass, focusedText, gapSec, roundStatusText, roundsText, timeRange } from "./format";
+import { dotClass, focusedText, gapSec, roundStatusText, roundsText, setDotClasses, timeRange } from "./format";
 
 // The right column: the overview (today, then all time) and the history by day.
 
@@ -117,9 +117,11 @@ export function History(props: { host: UiHost; state: DbData; ctx: QueryContext 
 								<span class="cp-focus-day-name">{formatDate(day.day, ctx.today)}</span>
 								<span class="cp-focus-day-total">{focusedText(day.totalSec)}</span>
 							</h4>
-							{sets.map((set) => (
-								<SetNode key={set.key} host={host} state={state} ctx={ctx} set={set} open={open.has(set.key)} onToggle={() => toggle(set.key)} />
-							))}
+							<div class="cp-focus-sets">
+								{sets.map((set) => (
+									<SetNode key={set.key} host={host} state={state} ctx={ctx} set={set} open={open.has(set.key)} onToggle={() => toggle(set.key)} />
+								))}
+							</div>
 						</div>
 					),
 				)
@@ -162,11 +164,15 @@ function taskLabel(state: DbData, s: FocusSession): string {
 	return `${s.taskTitleSnapshot === "" ? "Task" : s.taskTitleSnapshot} (deleted)`;
 }
 
-/** "Focus set · 2 of 6 rounds", or "Focus set · 2 rounds" for records that do not know the plan. */
-function setName(set: FocusSetNode): string {
+/** What a set was worked on: its task, or "Several tasks" when its rounds differ (each round then shows its own). */
+function setTitle(state: DbData, set: FocusSetNode): string {
+	return set.mixedTasks ? "Several tasks" : taskLabel(state, set.rounds[0]!.session);
+}
+
+/** "2 of 6 rounds", or "2 rounds" for records that do not know the plan. */
+function setCountText(set: FocusSetNode): string {
 	const n = set.roundCount;
-	if (set.plannedRounds === null) return `Focus set · ${roundsText(n)}`;
-	return `Focus set · ${n} of ${roundsText(set.plannedRounds)}`;
+	return set.plannedRounds === null ? roundsText(n) : `${n} of ${roundsText(set.plannedRounds)}`;
 }
 
 function setEndText(set: FocusSetNode): string {
@@ -185,32 +191,40 @@ function setEndText(set: FocusSetNode): string {
 function SetNode(props: { host: UiHost; state: DbData; ctx: QueryContext; set: FocusSetNode; open: boolean; onToggle: () => void }) {
 	const { host, state, ctx, set, open } = props;
 	const bodyId = useUniqueId("cp-focus-set-body");
-	const first = set.rounds[0]!.session;
 	const range = timeRange(set, ctx.zone, " – ");
+	const dots = useMemo(() => setDotClasses(set.rounds.map((r) => r.session)), [set.rounds]);
+	const none = !set.mixedTasks && set.rounds[0]!.session.taskId === null;
+	// Read out between the parts of the heading; the eye gets the gaps of the meta line.
+	const comma = <span class="cp-sr-only">, </span>;
 	return (
-		<div class={`cp-focus-set${open ? "" : " is-closed"}`}>
+		<div class={`cp-focus-set is-end-${set.end}${open ? "" : " is-closed"}`}>
 			<button type="button" class="cp-focus-set-head" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={props.onToggle}>
-				<Icon host={host} icon="chevron-down" cls="cp-focus-set-twisty" />
 				<span class="cp-focus-set-title">
-					<b class="cp-focus-set-name">{setName(set)}</b>
-					<small class="cp-focus-set-meta">{`${range} · ${setEndText(set)}`}</small>
+					<b class={`cp-focus-set-name${none ? " is-none" : ""}`}>{setTitle(state, set)}</b>
+					<span class="cp-focus-set-meta">
+						{comma}
+						<span class="cp-focus-set-dots" aria-hidden="true">
+							{dots.map((cls) => (
+								<i key={cls} class={`cp-focus-status-dot ${cls}`} />
+							))}
+						</span>
+						<span class="cp-focus-set-count">{setCountText(set)}</span>
+						{comma}
+						<span class="cp-focus-set-range">{range}</span>
+						{comma}
+						<span class="cp-focus-set-end">{setEndText(set)}</span>
+						{comma}
+					</span>
 				</span>
 				<span class="cp-focus-set-sum">{focusedText(set.totalSec)}</span>
+				<Icon host={host} icon="chevron-down" cls="cp-focus-set-twisty" />
 			</button>
 			{open && (
-				<div id={bodyId}>
-					{!set.mixedTasks && (
-						<div class={`cp-focus-set-task${first.taskId === null ? " is-none" : ""}`}>
-							<Icon host={host} icon="target" />
-							<span>{taskLabel(state, first)}</span>
-						</div>
-					)}
-					<ol class="cp-focus-rounds">
-						{set.rounds.map((r) => (
-							<Round key={r.session.id} host={host} state={state} ctx={ctx} round={r} showTask={set.mixedTasks} />
-						))}
-					</ol>
-				</div>
+				<ol id={bodyId} class="cp-focus-rounds">
+					{set.rounds.map((r) => (
+						<Round key={r.session.id} host={host} state={state} ctx={ctx} round={r} showTask={set.mixedTasks} />
+					))}
+				</ol>
 			)}
 		</div>
 	);

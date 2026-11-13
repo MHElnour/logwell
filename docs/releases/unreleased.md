@@ -28,6 +28,7 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#234) Task rows and board cards have a clearer two-line look: the title and its date on top, everything else small underneath in one fixed order. An hourglass always marks a deadline, a completed task has no line through its title, and a row no longer repeats the day its heading says.
 - (#237) A deadline now shows an hourglass everywhere, and the flag means priority only.
 - (#240) Focus sets in the focus record now start closed, so a long history is quick to scan. Click a set to see its rounds; the set that is running starts open.
+- (#241) The Focus page has more color and a connected record. The ring keeps the accent color in every phase, each setting has its own icon, the overview shows Today and All time as two tiles, and each day's sets hang on one line with the task as their title.
 
 ## Fixed
 

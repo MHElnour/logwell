@@ -216,7 +216,7 @@ describe("Focus", function () {
 		const saved = await records();
 		expect(saved).toHaveLength(1);
 		expect(saved[0]).toMatchObject({ taskId, status: "completed", focusedSec: 60 });
-		await expect(focus.$(".cp-focus-set .cp-focus-set-task")).toHaveText("Write chapter");
+		await expect(focus.$(".cp-focus-set .cp-focus-set-name")).toHaveText("Write chapter");
 
 		const tasks = await visibleTasksSection();
 		const chip = tasks.$(`.cp-task-row[data-task-id="${taskId}"] .cp-meta-focus`);
