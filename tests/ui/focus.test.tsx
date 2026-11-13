@@ -2,10 +2,11 @@
 import { render } from "preact";
 import { describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
+import type { FocusSession } from "../../src/domain/types";
 import { useFocus } from "../../src/ui/hooks";
-import { type AppMount, click, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
+import { type AppMount, U1Host, click, flushEffects, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
 import type { MenuSpec } from "../../src/ui/host";
-import { makeReadOnly } from "../app/harness";
+import { type AppHarness, appHarness, makeReadOnly } from "../app/harness";
 import { SetLine, stepFor } from "../../src/ui/focus/Controls";
 
 describe("Focus page", () => {
@@ -20,12 +21,17 @@ describe("Focus page", () => {
 		return m.root.querySelector<HTMLElement>(".cp-focus")!;
 	}
 
-	async function tickFor(m: AppMount, seconds: number): Promise<void> {
+	async function tickFor(m: Pick<AppMount, "h">, seconds: number): Promise<void> {
 		for (let i = 0; i < seconds; i++) {
 			m.h.clock.advance(1000);
 			await m.h.app.focus.tick();
 		}
 		await settle();
+	}
+
+	/** Opens every collapsed set of the record. */
+	async function openSets(page: HTMLElement): Promise<void> {
+		for (const head of page.querySelectorAll('.cp-focus-set-head[aria-expanded="false"]')) await click(head);
 	}
 
 	const buttons = (el: ParentNode) => [...el.querySelectorAll<HTMLButtonElement>("button")];
@@ -134,7 +140,8 @@ describe("Focus page", () => {
 			expect(m.h.app.focus.timer()).toBeNull();
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.status).toBe("stopped");
 			expect(buttonByText(page, "Start")).toBeDefined();
-			// The record shows a hollow dot and a note, since it did not complete.
+			// The record shows the stopped dot and a note, since it did not complete.
+			await openSets(page);
 			expect(text(page, ".cp-focus-round-status em")).toBe("Stopped early");
 			expect(page.querySelector(".cp-focus-rec .cp-focus-status-dot")?.classList.contains("is-stopped")).toBe(true);
 		});
@@ -153,6 +160,20 @@ describe("Focus page", () => {
 			await tickFor(m, 60);
 			expect(text(page, ".cp-focus-phase")).toBe("Long break");
 			expect(page.querySelectorAll(".cp-focus-dot.is-done").length).toBe(4);
+		});
+
+		it("the ring keeps one tone class in a break and marks a paused timer", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			const page = await openFocus(m);
+			const wrap = () => page.querySelector(".cp-focus-ring-wrap")!;
+			await tickFor(m, 60);
+			expect(text(page, ".cp-focus-phase")).toBe("Short break");
+			expect(wrap().className).toBe("cp-focus-ring-wrap");
+			await pressButton(page, "Pause");
+			expect(text(page, ".cp-focus-phase")).toBe("Paused");
+			expect(wrap().classList.contains("is-paused")).toBe(true);
+			expect(wrap().classList.contains("is-break")).toBe(false);
 		});
 
 		it("a finished set shows the summary and Start for another", async () => {
@@ -219,6 +240,75 @@ describe("Focus page", () => {
 			await settle();
 			await pressButton(page, "Start");
 			expect(m.h.app.focus.timer()?.taskId).toBe(task.id);
+		});
+
+		const oneMinuteHost = (h: AppHarness) => Object.assign(new U1Host(h), { focusConfig: () => cfg(1, 60) });
+		const pickTask = async (page: HTMLElement, id: string): Promise<HTMLSelectElement> => {
+			const select = page.querySelector<HTMLSelectElement>(".cp-focus-task select")!;
+			select.value = id;
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			await settle();
+			return select;
+		};
+		const startButton = (page: HTMLElement) => buttonByText(page, "Start again") ?? buttonByText(page, "Start");
+
+		it.each<[string, (m: AppMount, page: HTMLElement, taskId: string) => Promise<void>]>([
+			["a set runs to its end", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 60); }],
+			["a set is stopped", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 5); await pressButton(page, "Stop"); }],
+			[
+				"a set ends while another page is shown",
+				async (m, page) => {
+					await pressButton(page, "Start");
+					await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
+					await tickFor(m, 60);
+					await openFocus(m);
+				},
+			],
+			["the picked task is completed", async (m, _page, id) => { await m.h.app.tasks.complete(id); await settle(); }],
+			["the picked task is moved to Trash", async (m, _page, id) => { await m.h.app.tasks.delete(id); await settle(); }],
+		])("#239: the picked task goes back to No task when %s", async (_name, act) => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			const select = await pickTask(page, task.id);
+			expect(select.value).toBe(task.id);
+			await act(m, page, task.id);
+			expect(m.h.app.focus.timer()).toBeNull();
+			expect(select.value).toBe("");
+			expect(page.querySelector(".cp-focus-task")?.classList.contains("is-none")).toBe(true);
+			await click(startButton(page));
+			expect(m.h.app.focus.timer()?.taskId).toBeNull();
+		});
+
+		it("#239: a task picked after a set ended is kept and the next set starts on it", async () => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			await pressButton(page, "Start");
+			await tickFor(m, 60);
+			expect(m.h.app.focus.timer()).toBeNull();
+			const select = await pickTask(page, task.id);
+			expect(select.value).toBe(task.id);
+			await settle();
+			expect(select.value).toBe(task.id);
+			await click(startButton(page));
+			expect(m.h.app.focus.timer()?.taskId).toBe(task.id);
+		});
+
+		it("#239: a picked task that is reopened shows again", async () => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			const select = await pickTask(page, task.id);
+			await m.h.app.tasks.complete(task.id);
+			await settle();
+			expect(select.value).toBe("");
+			await m.h.app.store.undo();
+			await settle();
+			expect(select.value).toBe(task.id);
 		});
 
 		it("changing the task during a focus goes through startFocus (Split or Reassign), during a break it reassigns", async () => {
@@ -293,6 +383,27 @@ describe("Focus page", () => {
 			expect(setConfig).toHaveBeenLastCalledWith({ rounds: 6, focusSec: 1500, breakSec: 600, longBreakSec: 900 });
 		});
 
+		it("each setting has an icon tile beside its label, in its own hue", async () => {
+			const m = await mountApp();
+			const page = await openFocus(m);
+			const fields = [...page.querySelectorAll<HTMLElement>(".cp-focus-settings .cp-focus-field")];
+			expect(fields.length).toBe(4);
+			const tiles = fields.map((f) => f.firstElementChild!);
+			expect(tiles.every((t) => t.classList.contains("cp-habit-icon"))).toBe(true);
+			expect(tiles.map((t) => [...t.classList].filter((c) => c.startsWith("cp-hue-")))).toEqual([["cp-hue-purple"], [], ["cp-hue-green"], ["cp-hue-blue"]]);
+			expect(tiles.map((t) => t.querySelector(".cp-icon")?.getAttribute("data-icon"))).toEqual(["repeat", "target", "coffee", "sofa"]);
+			// The tile adds nothing to the name of its group.
+			expect(fields.map((f) => page.ownerDocument.getElementById(f.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Rounds", "Focus", "Break", "Long break"]);
+		});
+
+		it("the stepper buttons draw their minus and plus with icons", async () => {
+			const m = await mountApp();
+			const page = await openFocus(m);
+			expect(step(page, "Decrease rounds").querySelector(".cp-icon")?.getAttribute("data-icon")).toBe("minus");
+			expect(step(page, "Increase rounds").querySelector(".cp-icon")?.getAttribute("data-icon")).toBe("plus");
+			expect(step(page, "Decrease rounds").textContent).toBe("");
+		});
+
 		it("each setting is a labelled group and the buttons have labels", async () => {
 			const m = await mountApp();
 			const page = await openFocus(m);
@@ -348,6 +459,8 @@ describe("Focus page", () => {
 			const m = await mountApp();
 			await finishedRound(m, null);
 			const page = await openFocus(m);
+			await openSets(page);
+			expect(page.querySelectorAll("button.cp-icon-button").length).toBeGreaterThan(0);
 			for (const b of page.querySelectorAll<HTMLButtonElement>("button.cp-icon-button")) {
 				expect(b.getAttribute("aria-label")).toBeTruthy();
 			}
@@ -393,15 +506,21 @@ describe("Focus page", () => {
 	});
 
 	describe("overview and history", () => {
-		it("shows today's and all-time counts and focus time", async () => {
+		it("the overview shows Pomos and Focused for Today and All time as two labelled groups", async () => {
 			const m = await mountApp();
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
-			const heads = [...page.querySelectorAll(".cp-focus-stats thead th")].map((h) => h.textContent);
-			expect(heads).toEqual(["Pomos", "Focused"]);
-			const stats = [...page.querySelectorAll(".cp-focus-stat")].map((s) => [text(s, ".cp-focus-stat-label"), text(s, ".cp-focus-stat-count"), text(s, ".cp-focus-stat-value")]);
-			expect(stats).toEqual([["Today", "1", "1m"], ["All time", "1", "1m"]]);
+			expect(page.querySelector(".cp-focus-stats table")).toBeNull();
+			const groups = [...page.querySelectorAll<HTMLElement>(".cp-focus-stat")];
+			expect(groups.map((g) => g.getAttribute("role"))).toEqual(["group", "group"]);
+			expect(groups.map((g) => page.ownerDocument.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Today", "All time"]);
+			for (const g of groups) {
+				expect(g.hasAttribute("aria-label")).toBe(false);
+				expect([...g.querySelectorAll(".cp-focus-fig")].map((f) => [text(f, "dt"), text(f, "dd")])).toEqual([["Pomos", "1"], ["Focused", "1m"]]);
+			}
+			expect(groups.map((g) => g.querySelector(".cp-focus-stat-label .cp-icon")?.getAttribute("data-icon"))).toEqual(["sun", "sigma"]);
+			expect(groups.map((g) => [...g.classList].filter((c) => c.startsWith("cp-hue-")))).toEqual([[], ["cp-hue-blue"]]);
 		});
 
 		it("groups by day, newest first, then by set, with range, task, time and status", async () => {
@@ -412,6 +531,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const days = [...page.querySelectorAll(".cp-focus-day")];
 			expect(days.length).toBe(2);
 			expect(text(days[0]!, ".cp-focus-day-name")).toBe("Today");
@@ -419,16 +539,17 @@ describe("Focus page", () => {
 			// The day's focused total sits in the heading.
 			expect(text(days[1]!, ".cp-focus-day-total")).toBe("1m");
 			const set = days[1]!.querySelector(".cp-focus-set")!;
-			expect(text(set, ".cp-focus-set-name")).toBe("Focus set · 1 of 1 round");
-			expect(text(set, ".cp-focus-set-meta")).toMatch(/^\d\d:\d\d – \d\d:\d\d · done$/);
+			expect(text(set, ".cp-focus-set-name")).toBe("Write report");
+			expect(text(set, ".cp-focus-set-count")).toBe("1 of 1 round");
+			expect(text(set, ".cp-focus-set-range")).toMatch(/^\d\d:\d\d – \d\d:\d\d$/);
+			expect(text(set, ".cp-focus-set-end")).toBe("done");
 			expect(text(set, ".cp-focus-set-sum")).toBe("1m");
-			expect(text(set, ".cp-focus-set-task")).toBe("Write report");
 			const round = set.querySelector(".cp-focus-rec")!;
 			expect(text(round, ".cp-focus-round-name")).toBe("Round 1");
 			expect(text(round, ".cp-focus-round-status")).toMatch(/^\d\d:\d\d – \d\d:\d\d · Completed$/);
 			expect(text(round, ".cp-focus-round-time")).toBe("1m");
-			expect(text(days[0]!, ".cp-focus-set-task")).toBe("No task");
-			expect(days[0]!.querySelector(".cp-focus-set-task")?.classList.contains("is-none")).toBe(true);
+			expect(text(days[0]!, ".cp-focus-set-name")).toBe("No task");
+			expect(days[0]!.querySelector(".cp-focus-set-name")?.classList.contains("is-none")).toBe(true);
 		});
 
 		it("shows the live title, and the saved title with (deleted) once the task is in Trash", async () => {
@@ -438,11 +559,12 @@ describe("Focus page", () => {
 			await m.h.app.tasks.update(task.id, { title: "New name" });
 			await settle();
 			const page = await openFocus(m);
-			expect(text(page, ".cp-focus-set-task")).toBe("New name");
+			await openSets(page);
+			expect(text(page, ".cp-focus-set-name")).toBe("New name");
 			await m.h.app.tasks.delete(task.id);
 			await settle();
 			// The snapshot is the title when the round was saved.
-			expect(text(page, ".cp-focus-set-task")).toBe("Old name (deleted)");
+			expect(text(page, ".cp-focus-set-name")).toBe("Old name (deleted)");
 		});
 
 		it("Include and Exclude a pending gap call includeGap, each with an Undo notice labelled as the store write", async () => {
@@ -455,6 +577,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const gap = page.querySelector<HTMLElement>(".cp-focus-gap")!;
 			expect(gap.textContent).toContain("+5m unobserved, not counted");
 			const spy = vi.spyOn(m.h.app.focus, "includeGap");
@@ -483,6 +606,7 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			const notify = vi.spyOn(m.host as unknown as { notifyUndo(message: string, label: string): void }, "notifyUndo");
 			await pressButton(page.querySelector<HTMLElement>(".cp-focus-gap")!, "Include");
 			await settle();
@@ -501,6 +625,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			await click(page.querySelector(".cp-focus-rec .cp-icon-button"));
 			const menu = m.host.menus.at(-1)!;
 			expect(menuTitles(menu)).toEqual(["Assign to task…", "Delete record"]);
@@ -510,7 +635,7 @@ describe("Focus page", () => {
 			await settle();
 			const rec = [...m.h.app.store.state.focusSessions.values()][0]!;
 			expect(rec.taskId).toBe(task.id);
-			expect(text(page, ".cp-focus-set-task")).toBe("Later task");
+			expect(text(page, ".cp-focus-set-name")).toBe("Later task");
 		});
 	});
 
@@ -523,16 +648,18 @@ describe("Focus page", () => {
 			await tickFor(m, 60 + 60 + 60);
 		}
 
-		it("a set shows its rounds as a tree: a heading, the task once, rounds with dots", async () => {
+		it("a set shows its rounds under a heading with the task, and each round has its dot", async () => {
 			const m = await mountApp();
 			const task = (await m.h.app.tasks.create({ title: "Complete the long lesson on type hints" })).task;
 			await twoRounds(m, task.id);
 			const page = await openFocus(m);
+			await openSets(page);
 			const sets = page.querySelectorAll(".cp-focus-set");
 			expect(sets.length).toBe(1);
-			expect(text(sets[0]!, ".cp-focus-set-name")).toBe("Focus set · 2 of 2 rounds");
-			expect(text(sets[0]!, ".cp-focus-set-meta")).toMatch(/· done$/);
-			expect(sets[0]!.querySelectorAll(".cp-focus-set-task").length).toBe(1);
+			expect(text(sets[0]!, ".cp-focus-set-name")).toBe("Complete the long lesson on type hints");
+			expect(text(sets[0]!, ".cp-focus-set-count")).toBe("2 of 2 rounds");
+			expect(text(sets[0]!, ".cp-focus-set-end")).toBe("done");
+			expect(sets[0]!.querySelector(".cp-focus-set-task")).toBeNull();
 			const rounds = [...sets[0]!.querySelectorAll(".cp-focus-rounds > li.cp-focus-rec")];
 			expect(rounds.map((r) => text(r, ".cp-focus-round-name"))).toEqual(["Round 1", "Round 2"]);
 			for (const r of rounds) {
@@ -542,21 +669,51 @@ describe("Focus page", () => {
 			expect(text(sets[0]!, ".cp-focus-set-sum")).toBe("2m");
 		});
 
-		it("a set folds with its heading button (aria-expanded), per view", async () => {
-			const m = await mountApp();
-			await twoRounds(m, null);
+		it("#240: a set starts collapsed and its heading opens and closes it", async () => {
+			const h = await appHarness();
+			await h.app.focus.start(cfg(2, 60), null);
+			await tickFor({ h }, 60 + 60 + 60);
+			const m = await mountApp({}, { harness: h });
 			const page = await openFocus(m);
 			const head = page.querySelector<HTMLButtonElement>(".cp-focus-set-head")!;
+			expect(head.getAttribute("aria-expanded")).toBe("false");
+			expect(page.querySelector(".cp-focus-rounds")).toBeNull();
+			// The heading keeps the summary when closed.
+			expect(text(page, ".cp-focus-set-count")).toBe("2 of 2 rounds");
+			await click(head);
 			expect(head.getAttribute("aria-expanded")).toBe("true");
+			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(2);
 			await click(head);
 			expect(head.getAttribute("aria-expanded")).toBe("false");
 			expect(page.querySelector(".cp-focus-rounds")).toBeNull();
-			expect(page.querySelector(".cp-focus-set-task")).toBeNull();
-			// The heading keeps the summary when folded.
-			expect(text(page, ".cp-focus-set-name")).toBe("Focus set · 2 of 2 rounds");
-			await click(page.querySelector(".cp-focus-set-head"));
+		});
+
+		it("#240: the running set starts open, and stays as it is when it finishes", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			await flushEffects();
+			const page = await openFocus(m);
+			await tickFor(m, 60);
+			const head = page.querySelector<HTMLButtonElement>(".cp-focus-set-head")!;
+			expect(head.getAttribute("aria-expanded")).toBe("true");
+			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(1);
+			await tickFor(m, 120);
+			expect(m.h.app.focus.timer()).toBeNull();
 			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("true");
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(2);
+		});
+
+		it("#240: a running set the user closed stays closed when it finishes", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			await flushEffects();
+			const page = await openFocus(m);
+			await tickFor(m, 60);
+			await click(page.querySelector(".cp-focus-set-head"));
+			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("false");
+			await tickFor(m, 120);
+			expect(m.h.app.focus.timer()).toBeNull();
+			expect(page.querySelector(".cp-focus-set-head")?.getAttribute("aria-expanded")).toBe("false");
 		});
 
 		it("rounds with different tasks show their own task and the heading shows none", async () => {
@@ -569,10 +726,11 @@ describe("Focus page", () => {
 			await tickFor(m, 60);
 			await settle();
 			const page = await openFocus(m);
-			expect(page.querySelector(".cp-focus-set-task")).toBeNull();
+			await openSets(page);
+			expect(text(page, ".cp-focus-set-name")).toBe("Several tasks");
 			const own = [...page.querySelectorAll(".cp-focus-round-task")].map((e) => e.textContent);
 			expect(own).toEqual(["Task A", "Task B"]);
-			// One round that was split, shown with the hollow dot.
+			// One round that was split, shown with the stopped dot.
 			const dots = [...page.querySelectorAll(".cp-focus-rec .cp-focus-status-dot")].map((d) => d.className);
 			expect(dots[0]).toContain("is-stopped");
 			expect(dots[1]).toContain("is-completed");
@@ -586,7 +744,7 @@ describe("Focus page", () => {
 			await m.h.app.store.run("Edit focus record", (tx) => tx.put("focusSessions", old as typeof rec));
 			await settle();
 			const page = await openFocus(m);
-			expect(text(page, ".cp-focus-set-name")).toBe("Focus set · 1 round");
+			expect(text(page, ".cp-focus-set-count")).toBe("1 round");
 			expect(page.querySelectorAll(".cp-focus-set").length).toBe(1);
 		});
 
@@ -596,11 +754,13 @@ describe("Focus page", () => {
 			await pressButton(page, "Start");
 			await tickFor(m, 120);
 			await pressButton(page, "Finish");
+			await openSets(page);
 			const set = page.querySelector(".cp-focus-set")!;
-			expect(text(set, ".cp-focus-set-meta")).toMatch(/· in progress$/);
+			expect(text(set, ".cp-focus-set-end")).toBe("in progress");
+			expect(set.classList.contains("is-end-active")).toBe(true);
 			expect(text(set, ".cp-focus-round-status em")).toBe("Finished early");
 			expect(set.querySelector(".cp-focus-status-dot")?.classList.contains("is-early")).toBe(true);
-			expect(text(set, ".cp-focus-set-name")).toBe("Focus set · 1 of 4 rounds");
+			expect(text(set, ".cp-focus-set-count")).toBe("1 of 4 rounds");
 		});
 
 		it("recovered and stopped rounds get their own dots", async () => {
@@ -613,8 +773,108 @@ describe("Focus page", () => {
 			await m.h.app.focus.resolveRecovery("finish");
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelector(".cp-focus-rec .cp-focus-status-dot")?.classList.contains("is-recovered")).toBe(true);
-			expect(text(page, ".cp-focus-set-meta")).toMatch(/· recovered$/);
+			expect(text(page, ".cp-focus-set-end")).toBe("recovered");
+		});
+
+		/**
+		 * Seeds one finished set into a harness before the page opens: round i is a saved one-minute round with the
+		 * overrides of rounds[i], numbered in order, `planned` rounds in the plan (null: records that do not know it).
+		 */
+		async function seedSet(h: AppHarness, rounds: Partial<FocusSession>[], planned: number | null = rounds.length): Promise<void> {
+			await h.app.focus.start(cfg(), null);
+			await tickFor({ h }, 60);
+			const { setRounds: _plan, ...base } = [...h.app.store.state.focusSessions.values()][0]!;
+			const at = (iso: string, minutes: number) => new Date(Date.parse(iso) + minutes * 60_000).toISOString();
+			await h.app.store.run("Edit focus record", (tx) => {
+				rounds.forEach((r, i) => {
+					const id = i === 0 ? base.id : `seed-${i}`;
+					const session: FocusSession = { ...base, ...(planned === null ? {} : { setRounds: planned }), id, setId: "seed-set", setRound: i + 1, startedAt: at(base.startedAt, i * 2), endedAt: at(base.endedAt, i * 2), ...r };
+					tx.put("focusSessions", session);
+				});
+			});
+		}
+		const early: Partial<FocusSession> = { plannedSec: 600 };
+		const rounds = (n: number, over: Partial<FocusSession> = {}) => Array.from({ length: n }, () => over);
+
+		it.each<[string, Partial<FocusSession>[], string[]]>([
+			["every round completed is one dot", rounds(3), ["is-completed"]],
+			["a finished early round adds a dot between completed ones", [{}, early, {}], ["is-completed", "is-early"]],
+			["a split round comes first and a completed one after it", [{ status: "split" }, {}], ["is-stopped", "is-completed"]],
+			["a recovered round is its own dot", [{ status: "recovered" }], ["is-recovered"]],
+		])("a set heading shows one dot per kind of round, in order of first appearance: %s", async (_name, list, expected) => {
+			const h = await appHarness();
+			await seedSet(h, list);
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			const dots = [...page.querySelectorAll(".cp-focus-set-head .cp-focus-set-dots .cp-focus-status-dot")].map((d) => [...d.classList].filter((c) => c.startsWith("is-")));
+			expect(dots).toEqual(expected.map((c) => [c]));
+		});
+
+		it.each<[string, (a: string, b: string) => Partial<FocusSession>[], string, boolean]>([
+			["one task: its title", (a) => rounds(2, { taskId: a }), "Write report", false],
+			["no task: No task, muted", () => rounds(2), "No task", true],
+			["rounds on two tasks: Several tasks", (a, b) => [{ taskId: a }, { taskId: b }], "Several tasks", false],
+		])("a set heading names what was worked on: %s", async (_name, list, title, none) => {
+			const h = await appHarness();
+			const a = (await h.app.tasks.create({ title: "Write report" })).task;
+			const b = (await h.app.tasks.create({ title: "Call the bank" })).task;
+			await seedSet(h, list(a.id, b.id));
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			const name = page.querySelector(".cp-focus-set-name")!;
+			expect(name.textContent).toBe(title);
+			expect(name.classList.contains("is-none")).toBe(none);
+			await openSets(page);
+			const own = [...page.querySelectorAll(".cp-focus-round-task")].map((e) => e.textContent);
+			expect(own).toEqual(title === "Several tasks" ? ["Write report", "Call the bank"] : []);
+		});
+
+		it.each<[string, number | null, number, string]>([
+			["planned 4, reached 3", 4, 3, "3 of 4 rounds"],
+			["planned 1, reached 1", 1, 1, "1 of 1 round"],
+			["planned 8, reached 8", 8, 8, "8 of 8 rounds"],
+			["plan unknown, one record", null, 1, "1 round"],
+			["plan unknown, three rounds", null, 3, "3 rounds"],
+		])("a set heading counts its rounds: %s", async (_name, planned, reached, expected) => {
+			const h = await appHarness();
+			await seedSet(h, rounds(reached), planned);
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			expect(text(page, ".cp-focus-set-count")).toBe(expected);
+		});
+
+		it.each<[string, Partial<FocusSession>[], number | null, string, string]>([
+			["done", rounds(2), 2, "is-end-done", "done"],
+			["stopped after the last round it reached", [{}, { status: "stopped" }], 4, "is-end-stopped", "stopped after round 2"],
+			["recovered", [{ status: "recovered" }], 1, "is-end-recovered", "recovered"],
+		])("a set is marked by how it ended: %s", async (_name, list, planned, cls, word) => {
+			const h = await appHarness();
+			await seedSet(h, list, planned);
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			const set = page.querySelector(".cp-focus-set")!;
+			expect(set.classList.contains(cls)).toBe(true);
+			expect(text(set, ".cp-focus-set-end")).toBe(word);
+		});
+
+		it("a set heading reads out as one sentence: task, rounds, range, end and total", async () => {
+			const h = await appHarness();
+			const a = (await h.app.tasks.create({ title: "Write report" })).task;
+			await seedSet(h, rounds(1, { taskId: a.id }));
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			expect(page.querySelector(".cp-focus-set-head")?.textContent).toMatch(/^Write report, 1 of 1 round, \d\d:\d\d – \d\d:\d\d, done, 1m$/);
+		});
+
+		it("the sets of a day sit in one wrapper that carries the day line", async () => {
+			const h = await appHarness();
+			await seedSet(h, rounds(1));
+			const m = await mountApp({}, { harness: h });
+			const page = await openFocus(m);
+			const wrapper = page.querySelector(".cp-focus-day > .cp-focus-sets")!;
+			expect(wrapper.querySelectorAll(":scope > .cp-focus-set").length).toBe(1);
 		});
 
 		it("the legend lists four dots", async () => {
@@ -639,10 +899,36 @@ describe("Focus page", () => {
 			});
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(50);
 			await pressButton(page, "Show more");
+			await openSets(page);
 			expect(page.querySelectorAll(".cp-focus-rec").length).toBe(55);
 			expect(page.querySelector(".cp-focus-more")).toBeNull();
+		});
+
+		it("#240: Show more keeps each set's state", async () => {
+			// Seeded before the page opens, so no set of it was ever the running one.
+			const h = await appHarness();
+			await h.app.focus.start(cfg(), null);
+			await tickFor({ h }, 60);
+			const proto = [...h.app.store.state.focusSessions.values()][0]!;
+			await h.app.store.run("Edit focus record", (tx) => {
+				for (let i = 0; i < 54; i++) tx.put("focusSessions", { ...proto, id: `bulk-${i}`, setId: `bulk-set-${i}`, startedAt: new Date(Date.parse(proto.startedAt) - (i + 1) * 3600_000).toISOString() });
+			});
+			const m = await mountApp({}, { harness: h });
+			await settle();
+			const page = await openFocus(m);
+			const heads = () => [...page.querySelectorAll<HTMLButtonElement>(".cp-focus-set-head")];
+			expect(heads().length).toBe(50);
+			expect(heads().every((h) => h.getAttribute("aria-expanded") === "false")).toBe(true);
+			const opened = heads()[0]!;
+			await click(opened);
+			await pressButton(page, "Show more");
+			expect(heads().length).toBe(55);
+			expect(opened.isConnected).toBe(true);
+			expect(opened.getAttribute("aria-expanded")).toBe("true");
+			expect(heads().filter((h) => h.getAttribute("aria-expanded") === "true")).toEqual([opened]);
 		});
 	});
 
@@ -654,6 +940,7 @@ describe("Focus page", () => {
 			return task;
 		}
 		const openMenu = async (page: HTMLElement, m: AppMount) => {
+			await openSets(page);
 			await click(page.querySelector(".cp-focus-rec .cp-icon-button"));
 			return m.host.menus.at(-1)!;
 		};
@@ -687,7 +974,7 @@ describe("Focus page", () => {
 			menuItem(await openMenu(page, m), "Remove task").run();
 			await settle();
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.taskId).toBeNull();
-			expect(text(page, ".cp-focus-set-task")).toBe("No task");
+			expect(text(page, ".cp-focus-set-name")).toBe("No task");
 			expect(notify).toHaveBeenCalledTimes(2);
 			expect(notify.mock.calls[1]![1]).toBe(m.h.app.store.undoLabel);
 			await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
@@ -721,6 +1008,7 @@ describe("Focus page", () => {
 			await finishedRound(m, null);
 			await settle();
 			const page = await openFocus(m);
+			await openSets(page);
 			expect(page.querySelector(".cp-focus-rec .cp-focus-round-more")).not.toBeNull();
 			await makeReadOnly(m.h);
 			m.h.app.store.notifyStatus();

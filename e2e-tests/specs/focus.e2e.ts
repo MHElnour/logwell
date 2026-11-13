@@ -216,7 +216,7 @@ describe("Focus", function () {
 		const saved = await records();
 		expect(saved).toHaveLength(1);
 		expect(saved[0]).toMatchObject({ taskId, status: "completed", focusedSec: 60 });
-		await expect(focus.$(".cp-focus-set .cp-focus-set-task")).toHaveText("Write chapter");
+		await expect(focus.$(".cp-focus-set .cp-focus-set-name")).toHaveText("Write chapter");
 
 		const tasks = await visibleTasksSection();
 		const chip = tasks.$(`.cp-task-row[data-task-id="${taskId}"] .cp-meta-focus`);
@@ -270,6 +270,9 @@ describe("Focus", function () {
 		expect(rec).toMatchObject({ status: "recovered", taskId, focusedSec: 180, gaps: ["pending"] });
 		expect(await timerState()).toBeNull();
 
+		// The set was the running one, so it is expected open; the guard keeps this spec about recovery.
+		const head = focus.$(".cp-focus-set-head");
+		if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
 		await expect(focus.$(".cp-focus-rec .cp-focus-round-time")).toHaveText("3m");
 		await focus.$(".cp-focus-gap").$("button=Include").click();
 		await browser.waitUntil(async () => (await records())[0]?.gaps[0] === "included", { timeout: 5000 });

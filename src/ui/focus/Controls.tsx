@@ -2,10 +2,12 @@ import { useMemo, useRef } from "preact/hooks";
 import { FOCUS_RANGES } from "../../app/settings";
 import type { ActiveTimer, FocusSetConfig } from "../../domain/focus";
 import { clamp } from "../../domain/text";
+import type { TagColor } from "../../domain/types";
 import type { DbData } from "../../persistence/schema";
-import { Icon } from "../common";
+import { Icon, hueClass } from "../common";
 import { useUniqueId } from "../hooks";
 import type { UiHost } from "../host";
+import { ICON } from "../icons";
 import { PHASE_LABEL, focusedText, gapSec, roundsText, summaryText } from "./format";
 import { formatDuration } from "../format";
 
@@ -43,13 +45,25 @@ interface Field {
 	/** Steps by 5 above 5 (and by 1 at or below it) so a long range is quick to cross. */
 	coarse: boolean;
 	hint?: string;
+	icon: string;
+	/** The tile's hue; null is the accent. */
+	hue: TagColor | null;
 }
 
 const FIELDS: Field[] = [
-	{ key: "rounds", label: "Rounds", ...FOCUS_RANGES.focusRounds, unit: "", coarse: false },
-	{ key: "focusMin", label: "Focus", ...FOCUS_RANGES.focusMin, unit: "min", coarse: true },
-	{ key: "breakMin", label: "Break", ...FOCUS_RANGES.breakMin, unit: "min", coarse: true },
-	{ key: "longBreakMin", label: "Long break", ...FOCUS_RANGES.longBreakMin, unit: "min", coarse: true, hint: "After round 4, in sets over 4" },
+	{ key: "rounds", label: "Rounds", ...FOCUS_RANGES.focusRounds, unit: "", coarse: false, icon: ICON.focusRounds, hue: "purple" },
+	{ key: "focusMin", label: "Focus", ...FOCUS_RANGES.focusMin, unit: "min", coarse: true, icon: ICON.railFocus, hue: null },
+	{ key: "breakMin", label: "Break", ...FOCUS_RANGES.breakMin, unit: "min", coarse: true, icon: ICON.focusBreak, hue: "green" },
+	{
+		key: "longBreakMin",
+		label: "Long break",
+		...FOCUS_RANGES.longBreakMin,
+		unit: "min",
+		coarse: true,
+		hint: "After round 4, in sets over 4",
+		icon: ICON.focusLongBreak,
+		hue: "blue",
+	},
 ];
 
 /**
@@ -62,7 +76,7 @@ export const stepFor = (value: number, dir: 1 | -1, coarse: boolean): number => 
 };
 
 /** One setting with its minus and plus buttons. Each click is one commit; clicks in a row read the value from a ref. */
-function Stepper(props: { field: Field; value: number; onCommit: (n: number) => void }) {
+function Stepper(props: { host: UiHost; field: Field; value: number; onCommit: (n: number) => void }) {
 	const { field, value } = props;
 	const labelId = useUniqueId("cp-focus-field");
 	const latest = useRef(value);
@@ -76,6 +90,9 @@ function Stepper(props: { field: Field; value: number; onCommit: (n: number) => 
 	const name = field.label.toLowerCase();
 	return (
 		<div class="cp-focus-field" role="group" aria-labelledby={labelId}>
+			<span class={`cp-habit-icon${field.hue === null ? "" : ` ${hueClass(field.hue)}`}`}>
+				<Icon host={props.host} icon={field.icon} />
+			</span>
 			<div class="cp-focus-field-text">
 				<span id={labelId} class="cp-focus-field-label">
 					{field.label}
@@ -84,14 +101,14 @@ function Stepper(props: { field: Field; value: number; onCommit: (n: number) => 
 			</div>
 			<div class="cp-focus-stepper">
 				<button type="button" class="cp-focus-step" aria-label={`Decrease ${name}`} aria-disabled={value <= field.min} onClick={() => bump(-1)}>
-					{"−"}
+					<Icon host={props.host} icon="minus" />
 				</button>
 				<span class="cp-focus-value">
 					{value}
 					{field.unit !== "" && <span class="cp-focus-unit">{field.unit}</span>}
 				</span>
 				<button type="button" class="cp-focus-step" aria-label={`Increase ${name}`} aria-disabled={value >= field.max} onClick={() => bump(1)}>
-					+
+					<Icon host={props.host} icon={ICON.add} />
 				</button>
 			</div>
 		</div>
@@ -99,11 +116,11 @@ function Stepper(props: { field: Field; value: number; onCommit: (n: number) => 
 }
 
 /** The compact settings panel, shown before a set. Changes arrive as patches so quick clicks on two fields do not lose one. */
-export function SetSettings(props: { minutes: SetMinutes; onChange: (patch: Partial<SetMinutes>) => void }) {
+export function SetSettings(props: { host: UiHost; minutes: SetMinutes; onChange: (patch: Partial<SetMinutes>) => void }) {
 	return (
 		<div class="cp-focus-settings">
 			{FIELDS.map((f) => (
-				<Stepper key={f.key} field={f} value={props.minutes[f.key]} onCommit={(n) => props.onChange({ [f.key]: n })} />
+				<Stepper key={f.key} host={props.host} field={f} value={props.minutes[f.key]} onCommit={(n) => props.onChange({ [f.key]: n })} />
 			))}
 		</div>
 	);
@@ -148,7 +165,7 @@ export function TaskPicker(props: { host: UiHost; state: DbData; timer: ActiveTi
 	};
 	return (
 		<div class={`cp-focus-task${value === "" ? " is-none" : ""}`}>
-			<Icon host={host} icon="target" cls="cp-focus-task-icon" />
+			<Icon host={host} icon={ICON.railFocus} cls="cp-focus-task-icon" />
 			<label for={id} class="cp-sr-only">
 				Focus on
 			</label>

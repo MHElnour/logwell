@@ -39,12 +39,11 @@ export function Ring(props: {
 	// Rounds finished: all before the current focus round, or the current one once its break began.
 	const finished = finishedSet ? rounds : timer === null ? 0 : timer.phase === "focus" ? timer.round - 1 : timer.round;
 	const phase: FocusPhase = timer === null ? "focus" : timer.phase;
-	const tone = phase === "focus" && !finishedSet ? "is-focus" : "is-break";
 	const paused = timer?.state === "paused";
 	const name = finishedSet ? "Set done" : timer === null ? "Ready" : paused ? "Paused" : PHASE_LABEL[phase];
 	const round = timer !== null ? roundText(timer.round, rounds) : finishedSet ? "" : roundsText(rounds);
 	return (
-		<div class={`cp-focus-ring-wrap ${tone}${paused ? " is-paused" : ""}${finishedSet ? " is-done" : ""}`}>
+		<div class={`cp-focus-ring-wrap${paused ? " is-paused" : ""}${finishedSet ? " is-done" : ""}`}>
 			<div class="cp-focus-ring">
 				<svg viewBox="0 0 300 300" aria-hidden="true" focusable="false">
 					<circle class="cp-focus-ring-track" cx="150" cy="150" r={RADIUS} />

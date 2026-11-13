@@ -1,5 +1,6 @@
-import { useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { QueryContext } from "../domain/queries";
+import { isOpen } from "../domain/tasks";
 import type { DbData } from "../persistence/schema";
 import { Buttons, RecoveryBanner, type SetMinutes, SetLine, SetSettings, SetSummary, TaskPicker, toConfig, toMinutes } from "./focus/Controls";
 import { History, Overview } from "./focus/Insights";
@@ -27,7 +28,7 @@ export function FocusSection(props: { host: UiHost; state: DbData; ctx: QueryCon
 						</div>
 					</section>
 					<aside class="cp-focus-insights">
-						<Overview state={state} ctx={ctx} />
+						<Overview host={host} state={state} ctx={ctx} />
 						<History host={host} state={state} ctx={ctx} />
 					</aside>
 				</div>
@@ -45,6 +46,15 @@ function TimerPanel(props: { host: UiHost; state: DbData; visible: boolean }) {
 	const latest = useRef(minutes);
 	latest.current = minutes;
 	const [picked, setPicked] = useState<string>("");
+	// A pick is for the next set only: it goes when a set ends, finished or stopped. Keyed on "a timer runs", so a
+	// pick made after the set ended stays. A layout effect, so the old pick is never painted beside the finished set.
+	const running = timer !== null;
+	useLayoutEffect(() => {
+		if (!running) setPicked("");
+	}, [running]);
+	// The pick counts only while its task is open: completed or in Trash reads "No task".
+	const pickedTask = picked === "" ? undefined : state.tasks.get(picked);
+	const pick = pickedTask !== undefined && isOpen(pickedTask) ? picked : "";
 	const idle = toConfig(minutes);
 
 	const change = (patch: Partial<SetMinutes>) => {
@@ -54,7 +64,7 @@ function TimerPanel(props: { host: UiHost; state: DbData; visible: boolean }) {
 		void host.setFocusConfig(toConfig(next)).catch((err: unknown) => host.error(err));
 	};
 	const start = () => {
-		const task = picked !== "" && state.tasks.has(picked) ? picked : null;
+		const task = pick === "" ? null : pick;
 		host.focusGesture();
 		void host.app.focus.start(idle, task).then(
 			(result) => {
@@ -66,12 +76,12 @@ function TimerPanel(props: { host: UiHost; state: DbData; visible: boolean }) {
 
 	return (
 		<>
-			<TaskPicker host={host} state={state} timer={timer} picked={picked} onPick={setPicked} />
+			<TaskPicker host={host} state={state} timer={timer} picked={pick} onPick={setPicked} />
 			{timer?.needsRecovery === true && <RecoveryBanner host={host} timer={timer} />}
 			<Ring host={host} timer={timer} now={now} idle={idle} summary={summary} />
 			{timer === null && summary !== null && <SetSummary summary={summary} />}
 			<Buttons host={host} timer={timer} again={summary !== null} start={start} />
-			{timer === null ? <SetSettings minutes={minutes} onChange={change} /> : <SetLine minutes={toMinutes(timer.config)} />}
+			{timer === null ? <SetSettings host={host} minutes={minutes} onChange={change} /> : <SetLine minutes={toMinutes(timer.config)} />}
 		</>
 	);
 }

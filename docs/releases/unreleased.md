@@ -27,11 +27,14 @@ Sections: Added, Changed, Fixed, Security (Removed is also accepted, for a minor
 - (#222) A task block now needs a list, tag, due, scheduled or linked line; without one it says so instead of listing every open task.
 - (#234) Task rows and board cards have a clearer two-line look: the title and its date on top, everything else small underneath in one fixed order. An hourglass always marks a deadline, a completed task has no line through its title, and a row no longer repeats the day its heading says.
 - (#237) A deadline now shows an hourglass everywhere, and the flag means priority only.
+- (#240) Focus sets in the focus record now start closed, so a long history is quick to scan. Click a set to see its rounds; the set that is running starts open.
+- (#241) The Focus page has more color and a connected record. The ring keeps the accent color in every phase, each setting has its own icon, the overview shows Today and All time as two tiles, and each day's sets hang on one line with the task as their title.
 
 ## Fixed
 
 - (#215) Undo no longer leaves a subtask without its parent after a TickTick sync added the subtask.
 - (#215) A tag that sits under a tag missing from the database now gets that tag back when the database opens, so it can be renamed and recolored.
 - (#224) A database that Git merged from two computers now says so, in the notice, the banner and the Data page. It explains how to recover (add the Git sync setting, then Restore backup), instead of leading to an empty conflict view.
+- (#239) Fixed the Focus page keeping the picked task after a set ended, or after that task was completed or deleted. The Focus on box now goes back to No task.
 
 ## Security

@@ -25,7 +25,7 @@ A set is a number of focus rounds, with a break after each one except the last. 
 
 Logwell remembers these values for your next set. Click **Start**.
 
-The set then runs by itself: each break and each next round starts on its own. After the last round the page shows a summary such as "4 rounds · 1h 40m focused", and **Start again** begins a new set with the same values.
+The set then runs by itself: each break and each next round starts on its own. After the last round the page shows a summary such as "4 rounds · 1h 40m focused", and **Start again** begins a new set with the same values and no task.
 
 Only one timer runs at a time. If you start focus on the task that already runs, Logwell says "A focus timer is running" and offers **Go to running timer**.
 
@@ -53,6 +53,8 @@ A set can have a task, or none. Choose it in the **Focus on** box above the time
 - the **Focus** button at the bottom of the task's details,
 - **Start focus** in the task's row menu,
 - the command **Start focus on selected task**, which needs a selected task and otherwise says "Select a task first."
+
+The box goes back to **No task** when a set ends, and when you complete or delete the task you picked before starting.
 
 Each saved round counts toward its task. The task's rows and details show the time focused. Time on a subtask counts toward the subtask only.
 
