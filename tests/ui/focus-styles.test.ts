@@ -31,4 +31,67 @@ describe("focus stylesheet section", () => {
 		expect(section).toContain(".checkpoint-view .cp-focus-set-head:focus-visible");
 		expect(section).toContain(".checkpoint-view .cp-focus-round-more:focus-visible");
 	});
+
+	const rule = (sel: string): string => cssBlock(`${sel} {`, section);
+
+	it("the ring has one tone in every phase", () => {
+		expect(section).not.toContain("is-break");
+		const stage = rule(".checkpoint-view .cp-focus-stage");
+		expect(stage).toContain("--cp-focus-tone: var(--cp-accent);");
+		expect(stage).toContain("--cp-focus-tone-soft: var(--cp-accent-soft);");
+		expect(stage).toContain("--cp-focus-tone-text: var(--cp-accent-text);");
+		expect(rule(".checkpoint-view .cp-focus-ring-wrap")).not.toContain("--cp-focus-tone");
+		expect(rule(".checkpoint-view .cp-focus-ring-track")).toContain("stroke: var(--cp-focus-tone-soft)");
+		expect(rule(".checkpoint-view .cp-focus-ring-bar")).toContain("stroke: var(--cp-focus-tone)");
+		expect(rule(".checkpoint-view .cp-focus-dot")).toContain("background: var(--cp-focus-tone-soft)");
+		expect(rule(".checkpoint-view .cp-focus-dot.is-done")).toContain("background: var(--cp-focus-tone)");
+		expect(rule(".checkpoint-view .cp-focus-phase")).toContain("color: var(--cp-focus-tone-text)");
+		expect(rule(".checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc")).toContain("background: var(--cp-focus-tone)");
+		expect(rule(".checkpoint-view .cp-focus-summary-main")).toContain("color: var(--cp-focus-tone-text)");
+		const pill = rule(".checkpoint-view .cp-focus-task");
+		expect(pill).toContain("background: var(--cp-focus-tone-soft)");
+		expect(pill).toContain("color: var(--cp-focus-tone-text)");
+		// A paused ring is the same hue, dimmed; the track keeps its tint.
+		expect(rule(".checkpoint-view .cp-focus-ring-wrap.is-paused")).toContain("--cp-focus-tone: color-mix(in srgb, var(--cp-accent) 45%, transparent)");
+		expect(rule(".checkpoint-view .cp-focus-ring-wrap.is-paused .cp-focus-phase")).toContain("color: var(--text-muted)");
+	});
+
+	it("the finished-set check is a disc as tall as the time, so the phase line does not move", () => {
+		const check = rule(".checkpoint-view .cp-focus-check");
+		expect(check).toContain("width: var(--cp-focus-face)");
+		expect(check).toContain("height: var(--cp-focus-face)");
+		expect(check).toContain("place-items: center");
+		expect(rule(".checkpoint-view .cp-focus-time")).toContain("font-size: var(--cp-focus-face)");
+	});
+
+	it("the control discs are centered on one line and the captions sit on another", () => {
+		expect(rule(".checkpoint-view .cp-focus-controls")).toContain("align-items: flex-start");
+		const ctl = rule(".checkpoint-view .cp-focus-ctl");
+		expect(ctl).toContain("display: grid");
+		expect(ctl).toContain("grid-template-rows: var(--cp-focus-main-disc) auto");
+		expect(ctl).toContain("justify-items: center");
+		expect(rule(".checkpoint-view .cp-focus-ctl-disc")).toContain("align-self: center");
+		const main = rule(".checkpoint-view .cp-focus-ctl.is-main .cp-focus-ctl-disc");
+		expect(main).toContain("width: var(--cp-focus-main-disc)");
+		expect(main).toContain("height: var(--cp-focus-main-disc)");
+	});
+
+	it("the steppers are three fixed columns and the settings line centers its parts", () => {
+		const field = rule(".checkpoint-view .cp-focus-field");
+		expect(field).toContain("grid-template-columns: var(--cp-focus-tile) minmax(0, 1fr) auto");
+		expect(field).toContain("align-items: center");
+		const stepper = rule(".checkpoint-view .cp-focus-stepper");
+		expect(stepper).toContain("grid-template-columns: var(--cp-focus-step) var(--cp-focus-value-w) var(--cp-focus-step)");
+		expect(stepper).toContain("align-items: center");
+		const step = rule(".checkpoint-view .cp-focus-step");
+		expect(step).toContain("display: grid");
+		expect(step).toContain("place-items: center");
+		expect(step).toContain("width: var(--cp-focus-step)");
+		expect(step).toContain("height: var(--cp-focus-step)");
+		const value = rule(".checkpoint-view .cp-focus-value");
+		expect(value).toContain("text-align: center");
+		expect(value).toContain("font-variant-numeric: tabular-nums");
+		expect(rule(".checkpoint-view .cp-focus-field .cp-habit-icon")).toContain("width: var(--cp-focus-tile)");
+		expect(rule(".checkpoint-view .cp-focus-settings")).toContain("width: min(420px, 100%)");
+	});
 });

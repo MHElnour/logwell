@@ -43,6 +43,11 @@ export const ICON = {
 	remove: "trash-2",
 	archive: "archive",
 	restore: "rotate-ccw",
+	// Focus page. The Focus setting's icon is `railFocus`; Today's tile is `today`.
+	focusRounds: "repeat",
+	focusBreak: "coffee",
+	focusLongBreak: "sofa",
+	focusAllTime: "sigma",
 } as const;
 
 type StoredIcon = { kind: "lucide"; name: string } | { kind: "emoji"; text: string };

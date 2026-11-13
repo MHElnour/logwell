@@ -81,7 +81,7 @@ function TimerPanel(props: { host: UiHost; state: DbData; visible: boolean }) {
 			<Ring host={host} timer={timer} now={now} idle={idle} summary={summary} />
 			{timer === null && summary !== null && <SetSummary summary={summary} />}
 			<Buttons host={host} timer={timer} again={summary !== null} start={start} />
-			{timer === null ? <SetSettings minutes={minutes} onChange={change} /> : <SetLine minutes={toMinutes(timer.config)} />}
+			{timer === null ? <SetSettings host={host} minutes={minutes} onChange={change} /> : <SetLine minutes={toMinutes(timer.config)} />}
 		</>
 	);
 }

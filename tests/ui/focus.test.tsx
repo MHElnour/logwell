@@ -161,6 +161,20 @@ describe("Focus page", () => {
 			expect(page.querySelectorAll(".cp-focus-dot.is-done").length).toBe(4);
 		});
 
+		it("the ring keeps one tone class in a break and marks a paused timer", async () => {
+			const m = await mountApp();
+			await m.h.app.focus.start(cfg(2, 60), null);
+			const page = await openFocus(m);
+			const wrap = () => page.querySelector(".cp-focus-ring-wrap")!;
+			await tickFor(m, 60);
+			expect(text(page, ".cp-focus-phase")).toBe("Short break");
+			expect(wrap().className).toBe("cp-focus-ring-wrap");
+			await pressButton(page, "Pause");
+			expect(text(page, ".cp-focus-phase")).toBe("Paused");
+			expect(wrap().classList.contains("is-paused")).toBe(true);
+			expect(wrap().classList.contains("is-break")).toBe(false);
+		});
+
 		it("a finished set shows the summary and Start for another", async () => {
 			const m = await mountApp();
 			const page = await openFocus(m);
@@ -357,6 +371,27 @@ describe("Focus page", () => {
 			await settle();
 			expect(setConfig).toHaveBeenCalledTimes(3);
 			expect(setConfig).toHaveBeenLastCalledWith({ rounds: 6, focusSec: 1500, breakSec: 600, longBreakSec: 900 });
+		});
+
+		it("each setting has an icon tile beside its label, in its own hue", async () => {
+			const m = await mountApp();
+			const page = await openFocus(m);
+			const fields = [...page.querySelectorAll<HTMLElement>(".cp-focus-settings .cp-focus-field")];
+			expect(fields.length).toBe(4);
+			const tiles = fields.map((f) => f.firstElementChild!);
+			expect(tiles.every((t) => t.classList.contains("cp-habit-icon"))).toBe(true);
+			expect(tiles.map((t) => [...t.classList].filter((c) => c.startsWith("cp-hue-")))).toEqual([["cp-hue-purple"], [], ["cp-hue-green"], ["cp-hue-blue"]]);
+			expect(tiles.map((t) => t.querySelector(".cp-icon")?.getAttribute("data-icon"))).toEqual(["repeat", "target", "coffee", "sofa"]);
+			// The tile adds nothing to the name of its group.
+			expect(fields.map((f) => page.ownerDocument.getElementById(f.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Rounds", "Focus", "Break", "Long break"]);
+		});
+
+		it("the stepper buttons draw their minus and plus with icons", async () => {
+			const m = await mountApp();
+			const page = await openFocus(m);
+			expect(step(page, "Decrease rounds").querySelector(".cp-icon")?.getAttribute("data-icon")).toBe("minus");
+			expect(step(page, "Increase rounds").querySelector(".cp-icon")?.getAttribute("data-icon")).toBe("plus");
+			expect(step(page, "Decrease rounds").textContent).toBe("");
 		});
 
 		it("each setting is a labelled group and the buttons have labels", async () => {
