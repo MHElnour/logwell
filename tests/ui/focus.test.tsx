@@ -140,7 +140,7 @@ describe("Focus page", () => {
 			expect(m.h.app.focus.timer()).toBeNull();
 			expect([...m.h.app.store.state.focusSessions.values()][0]?.status).toBe("stopped");
 			expect(buttonByText(page, "Start")).toBeDefined();
-			// The record shows a hollow dot and a note, since it did not complete.
+			// The record shows the stopped dot and a note, since it did not complete.
 			await openSets(page);
 			expect(text(page, ".cp-focus-round-status em")).toBe("Stopped early");
 			expect(page.querySelector(".cp-focus-rec .cp-focus-status-dot")?.classList.contains("is-stopped")).toBe(true);
@@ -255,6 +255,15 @@ describe("Focus page", () => {
 		it.each<[string, (m: AppMount, page: HTMLElement, taskId: string) => Promise<void>]>([
 			["a set runs to its end", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 60); }],
 			["a set is stopped", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 5); await pressButton(page, "Stop"); }],
+			[
+				"a set ends while another page is shown",
+				async (m, page) => {
+					await pressButton(page, "Start");
+					await click(m.root.querySelector('.cp-rail [aria-label="Tasks"]'));
+					await tickFor(m, 60);
+					await openFocus(m);
+				},
+			],
 			["the picked task is completed", async (m, _page, id) => { await m.h.app.tasks.complete(id); await settle(); }],
 			["the picked task is moved to Trash", async (m, _page, id) => { await m.h.app.tasks.delete(id); await settle(); }],
 		])("#239: the picked task goes back to No task when %s", async (_name, act) => {
@@ -721,7 +730,7 @@ describe("Focus page", () => {
 			expect(text(page, ".cp-focus-set-name")).toBe("Several tasks");
 			const own = [...page.querySelectorAll(".cp-focus-round-task")].map((e) => e.textContent);
 			expect(own).toEqual(["Task A", "Task B"]);
-			// One round that was split, shown with the hollow dot.
+			// One round that was split, shown with the stopped dot.
 			const dots = [...page.querySelectorAll(".cp-focus-rec .cp-focus-status-dot")].map((d) => d.className);
 			expect(dots[0]).toContain("is-stopped");
 			expect(dots[1]).toContain("is-completed");

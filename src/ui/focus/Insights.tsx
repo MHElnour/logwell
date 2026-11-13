@@ -200,7 +200,9 @@ function SetNode(props: { host: UiHost; state: DbData; ctx: QueryContext; set: F
 		<div class={`cp-focus-set is-end-${set.end}${open ? "" : " is-closed"}`}>
 			<button type="button" class="cp-focus-set-head" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={props.onToggle}>
 				<span class="cp-focus-set-title">
-					<b class={`cp-focus-set-name${none ? " is-none" : ""}`}>{setTitle(state, set)}</b>
+					<b class={`cp-focus-set-name${none ? " is-none" : ""}`} title={setTitle(state, set)}>
+						{setTitle(state, set)}
+					</b>
 					<span class="cp-focus-set-meta">
 						{comma}
 						<span class="cp-focus-set-dots" aria-hidden="true">
