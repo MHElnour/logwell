@@ -3,9 +3,9 @@ import { render } from "preact";
 import { describe, expect, it, vi } from "vitest";
 import type { FocusSetConfig } from "../../src/domain/focus";
 import { useFocus } from "../../src/ui/hooks";
-import { type AppMount, click, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
+import { type AppMount, U1Host, click, menuItem, mountApp, mountNode, settle, unmountAll } from "./app-helpers";
 import type { MenuSpec } from "../../src/ui/host";
-import { makeReadOnly } from "../app/harness";
+import { type AppHarness, makeReadOnly } from "../app/harness";
 import { SetLine, stepFor } from "../../src/ui/focus/Controls";
 
 describe("Focus page", () => {
@@ -219,6 +219,66 @@ describe("Focus page", () => {
 			await settle();
 			await pressButton(page, "Start");
 			expect(m.h.app.focus.timer()?.taskId).toBe(task.id);
+		});
+
+		const oneMinuteHost = (h: AppHarness) => Object.assign(new U1Host(h), { focusConfig: () => cfg(1, 60) });
+		const pickTask = async (page: HTMLElement, id: string): Promise<HTMLSelectElement> => {
+			const select = page.querySelector<HTMLSelectElement>(".cp-focus-task select")!;
+			select.value = id;
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			await settle();
+			return select;
+		};
+		const startButton = (page: HTMLElement) => buttonByText(page, "Start again") ?? buttonByText(page, "Start");
+
+		it.each<[string, (m: AppMount, page: HTMLElement, taskId: string) => Promise<void>]>([
+			["a set runs to its end", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 60); }],
+			["a set is stopped", async (m, page) => { await pressButton(page, "Start"); await tickFor(m, 5); await pressButton(page, "Stop"); }],
+			["the picked task is completed", async (m, _page, id) => { await m.h.app.tasks.complete(id); await settle(); }],
+			["the picked task is moved to Trash", async (m, _page, id) => { await m.h.app.tasks.delete(id); await settle(); }],
+		])("#239: the picked task goes back to No task when %s", async (_name, act) => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			const select = await pickTask(page, task.id);
+			expect(select.value).toBe(task.id);
+			await act(m, page, task.id);
+			expect(m.h.app.focus.timer()).toBeNull();
+			expect(select.value).toBe("");
+			expect(page.querySelector(".cp-focus-task")?.classList.contains("is-none")).toBe(true);
+			await click(startButton(page));
+			expect(m.h.app.focus.timer()?.taskId).toBeNull();
+		});
+
+		it("#239: a task picked after a set ended is kept and the next set starts on it", async () => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			await pressButton(page, "Start");
+			await tickFor(m, 60);
+			expect(m.h.app.focus.timer()).toBeNull();
+			const select = await pickTask(page, task.id);
+			expect(select.value).toBe(task.id);
+			await settle();
+			expect(select.value).toBe(task.id);
+			await click(startButton(page));
+			expect(m.h.app.focus.timer()?.taskId).toBe(task.id);
+		});
+
+		it("#239: a picked task that is reopened shows again", async () => {
+			const m = await mountApp({}, { host: oneMinuteHost });
+			const task = (await m.h.app.tasks.create({ title: "Write report" })).task;
+			await settle();
+			const page = await openFocus(m);
+			const select = await pickTask(page, task.id);
+			await m.h.app.tasks.complete(task.id);
+			await settle();
+			expect(select.value).toBe("");
+			await m.h.app.store.undo();
+			await settle();
+			expect(select.value).toBe(task.id);
 		});
 
 		it("changing the task during a focus goes through startFocus (Split or Reassign), during a break it reassigns", async () => {
