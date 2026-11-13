@@ -199,7 +199,7 @@ describe("calendar section", () => {
 
 			const report = entry(cell(r, "allday-cell", "2026-10-03"), "Report");
 			expect(report.classList.contains("is-deadline")).toBe(true);
-			expect(iconOf(report)).toBe("flag");
+			expect(iconOf(report)).toBe("hourglass");
 			expect(report.classList.contains("is-missed")).toBe(false);
 
 			const old = entry(cell(r, "allday-cell", "2026-09-29"), "Old");
@@ -646,7 +646,7 @@ describe("calendar section", () => {
 			expect(cal(m.root).querySelector(".cp-cal-unscheduled")).toBeNull();
 		});
 
-		it("a deadline-only task is a flag in the grid and a row in the drawer, and the toggle counts the drawer's rows", async () => {
+		it("a deadline-only task is an hourglass entry in the grid and a row in the drawer, and the toggle counts the drawer's rows", async () => {
 			const m = await mountApp();
 			await m.h.app.tasks.create({ title: "Someday" });
 			await m.h.app.tasks.create({ title: "Report", deadline: day("2026-10-03") });

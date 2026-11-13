@@ -183,7 +183,7 @@ export async function setPriority(host: UiHost, task: Task, priority: Priority):
 export function priorityItems(host: UiHost, task: Task, title: (p: Priority) => string): MenuItemSpec[] {
 	return PRIORITIES.map((p) => ({
 		title: title(p),
-		icon: "flag",
+		icon: ICON.flag,
 		checked: task.priority === p,
 		run: () => void setPriority(host, task, p),
 	}));

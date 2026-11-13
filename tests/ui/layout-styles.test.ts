@@ -174,3 +174,11 @@ describe("group headings", () => {
 		expect(cssBlock(".checkpoint-view .cp-group-heading .cp-group-overdue {")).toMatch(/color:\s*var\(--cp-red-text\)/);
 	});
 });
+
+describe("details date chip", () => {
+	it("tomorrow in the details date chip is muted like later, not orange; late stays red", () => {
+		expect(cssBlock(".checkpoint-view .cp-due-chip.is-tomorrow,\n.checkpoint-view .cp-due-chip.is-later {")).toMatch(/color:\s*var\(--text-muted\)/);
+		expect(css).not.toMatch(/\.cp-due-chip\.is-tomorrow\s*\{[^}]*orange/);
+		expect(cssBlock(".checkpoint-view .cp-due-chip.is-overdue {")).toMatch(/--cp-red-text/);
+	});
+});

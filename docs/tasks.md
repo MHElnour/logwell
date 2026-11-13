@@ -19,7 +19,7 @@ A row has two lines. The first line is the title and, at its right edge, the dat
 | --- | --- |
 | A colored dot and a name | The list (not shown inside that list's own view). |
 | `@name` in color | A tag. Every tag is listed. |
-| A flag and a date | The deadline. A red flag is a missed deadline. |
+| An hourglass and a date | The deadline. A red hourglass is a missed deadline. |
 | Two arrows | The task repeats. Hover the icon to read the rule, such as "Repeats every Fri at 16:10". |
 | A checked box and `2/5` | Subtasks done out of total. |
 | A page | The task has a description note. |
@@ -28,7 +28,7 @@ A row has two lines. The first line is the title and, at its right edge, the dat
 | `Urgent` or `Important` | The matrix flags. |
 | `Not synced` | An open task of a TickTick list that does not sync. |
 
-The date on the first line is gray. It is red when the task is late and blue when it is today. A task that has only a deadline shows it there, with a flag: a flag always means a deadline. Under a heading that already names the day, such as Today or a day in Upcoming, the row does not repeat that day: it shows the time, or nothing for an all-day task. A completed task is faint, with no line through its title. The checkbox takes the priority color: red for high, yellow for medium, blue for low.
+The date on the first line is gray. It is red when the task is late and blue when it is today. A task that has only a deadline shows it there, with an hourglass: an hourglass always means a deadline. Under a heading that already names the day, such as Today or a day in Upcoming, the row does not repeat that day: it shows the time, or nothing for an all-day task. A completed task is faint, with no line through its title. The checkbox takes the priority color: red for high, yellow for medium, blue for low.
 
 On the keyboard, Up and Down move between rows, Enter or Space opens the details, Cmd+Enter (Ctrl+Enter on Windows and Linux) completes, and the context-menu key or Shift+F10 opens the row menu.
 

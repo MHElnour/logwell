@@ -91,7 +91,7 @@ export function MonthView(props: {
 																	: (ev, el) => dnd.start(ev, el, { kind: "month", task: e.task })
 															}
 														>
-															{view.deadline && <Icon host={props.host} icon={ICON.flag} />}
+															{view.deadline && <Icon host={props.host} icon={ICON.deadline} />}
 															<RepeatMark host={props.host} view={view} />
 															{view.time !== null && <span class="cp-cal-entry-time">{view.time}</span>}
 															<span class="cp-cal-entry-text">{e.task.title}</span>

@@ -158,7 +158,7 @@ describe("task row", () => {
 			expect(order).toEqual(["cp-meta-list", "cp-meta-deadline", "cp-meta-repeat", "cp-meta-subtasks", "cp-meta-note", "cp-meta-duration", "cp-meta-matrix", "cp-meta-notsynced"]);
 		});
 
-		it("a deadline-only task shows its deadline at the right edge with a flag; a missed one is red", async () => {
+		it("a deadline-only task shows its deadline at the right edge with an hourglass; a missed one is red", async () => {
 			const { h, root } = await mountApp();
 			await h.app.tasks.create({ title: "Pay rent", deadline: { kind: "date", date: "2026-10-20" } });
 			await h.app.tasks.create({ title: "File the form", deadline: { kind: "date", date: "2026-09-29" } });
@@ -167,18 +167,28 @@ describe("task row", () => {
 			const rent = row(root, "Pay rent").querySelector(".cp-task-top .cp-meta-date")!;
 			expect(rent.classList.contains("is-deadline")).toBe(true);
 			expect(rent.getAttribute("title")).toBe("Deadline");
-			expect(rent.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			expect(rent.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("hourglass");
 			expect(rent.querySelector(".cp-sr-only")?.textContent).toBe("Deadline");
 			expect(rent.textContent).toContain("Oct 20");
 			expect(row(root, "Pay rent").querySelector(".cp-task-meta")).toBeNull();
 			const missed = row(root, "File the form").querySelector(".cp-task-top .cp-meta-date")!;
 			expect(missed.classList.contains("is-overdue")).toBe(true);
-			expect(missed.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("flag");
-			// A task with a schedule keeps its schedule on the right and its flag on the second line.
+			expect(missed.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("hourglass");
+			// A task with a schedule keeps its schedule on the right and its hourglass on the second line.
 			const both = row(root, "Both");
 			expect(both.querySelector(".cp-task-top .cp-meta-date")!.classList.contains("is-deadline")).toBe(false);
 			expect(both.querySelector(".cp-task-top .cp-meta-date [data-icon]")).toBeNull();
-			expect(both.querySelector(".cp-task-meta .cp-meta-deadline [data-icon]")?.getAttribute("data-icon")).toBe("flag");
+			expect(both.querySelector(".cp-task-meta .cp-meta-deadline [data-icon]")?.getAttribute("data-icon")).toBe("hourglass");
+		});
+
+		it.each([
+			{ name: "a deadline-only date at the right edge", title: "Pay rent", input: {}, pick: ".cp-task-top .cp-meta-date", icon: "hourglass" },
+			{ name: "a second-line deadline beside a schedule", title: "Both", input: { scheduled: { kind: "date", date: "2026-10-20" } }, pick: ".cp-task-meta .cp-meta-deadline", icon: "hourglass" },
+		] as const)("one icon per meaning: $name shows the $icon", async ({ title, input, pick, icon }) => {
+			const { h, root } = await mountApp();
+			await h.app.tasks.create({ title, deadline: { kind: "date", date: "2026-10-25" }, ...input });
+			await openInbox(root);
+			expect(row(root, title).querySelector(`${pick} [data-icon]`)?.getAttribute("data-icon")).toBe(icon);
 		});
 
 		it.each([
@@ -186,9 +196,9 @@ describe("task row", () => {
 			{ name: "an all-day task under Today", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: null },
 			{ name: "a timed task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "datetime", local: "2026-10-03T09:30", tz: "Europe/Berlin" } }, shown: "09:30" },
 			{ name: "an all-day task under an Upcoming day", view: "Upcoming", input: { scheduled: { kind: "date", date: "2026-10-03" } }, shown: null },
-			{ name: "a deadline-only task on the group's day: the flag alone", view: "Today", input: { deadline: { kind: "date", date: "2026-10-01" } }, shown: "" },
-			{ name: "a deadline-only task on an Upcoming day: the flag alone", view: "Upcoming", input: { deadline: { kind: "date", date: "2026-10-05" } }, shown: "" },
-			{ name: "a deadline-only task under the Overdue group: the flag and the date", view: "Today", input: { deadline: { kind: "date", date: "2026-09-30" } }, shown: "date" },
+			{ name: "a deadline-only task on the group's day: the hourglass alone", view: "Today", input: { deadline: { kind: "date", date: "2026-10-01" } }, shown: "" },
+			{ name: "a deadline-only task on an Upcoming day: the hourglass alone", view: "Upcoming", input: { deadline: { kind: "date", date: "2026-10-05" } }, shown: "" },
+			{ name: "a deadline-only task under the Overdue group: the hourglass and the date", view: "Today", input: { deadline: { kind: "date", date: "2026-09-30" } }, shown: "date" },
 			{ name: "a repeating task, by its current occurrence", view: "Today", input: { scheduled: { kind: "date", date: "2026-10-01" }, repeat: { rule: { freq: "weekly", interval: 1, weekdays: null, monthly: null, afterCompletion: false, time: null, tz: null } } }, shown: null },
 			{ name: "a task under the Overdue group keeps its date", view: "Today", input: { scheduled: { kind: "date", date: "2026-09-30" } }, shown: "date" },
 			{ name: "a task in the Inbox keeps its date", view: "Inbox", input: { scheduled: { kind: "date", date: "2026-10-01" } }, shown: "Today" },
@@ -210,7 +220,7 @@ describe("task row", () => {
 			if (shown === null) {
 				expect(date).toBeNull();
 			} else if (shown === "") {
-				// The flag alone: no text but the icon and the screen-reader word.
+				// The hourglass alone: no text but the icon and the screen-reader word.
 				expect(date!.classList.contains("is-deadline")).toBe(true);
 				expect([...date!.children].filter((c) => !c.matches(".cp-icon, .cp-sr-only"))).toEqual([]);
 			} else if (shown === "date") {

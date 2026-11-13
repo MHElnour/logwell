@@ -192,6 +192,14 @@ describe("columns and cards", () => {
 		await click(columnEl(m.root, "none").querySelector(".cp-board-add"));
 		expect(calls.at(-1)).toMatchObject({ date: null });
 	});
+
+	it("one icon per meaning: a card with only a deadline shows the hourglass", async () => {
+		const m = await mountApp();
+		await m.h.app.tasks.create({ title: "Pay rent", deadline: day("2026-10-20") });
+		await settle();
+		await openBoard(m, "Inbox");
+		expect(item(m.root, "Pay rent").querySelector(".cp-meta-date [data-icon]")?.getAttribute("data-icon")).toBe("hourglass");
+	});
 });
 
 describe("drag", () => {

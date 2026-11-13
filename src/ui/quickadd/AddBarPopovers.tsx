@@ -20,6 +20,7 @@ import { focusables, popoverKeyDown } from "../popoverKeys";
 import { applyPopoverFit, attachPopover } from "./popoverFit";
 import { QaIcon, type SetIcon } from "./QaIcon";
 import type { QuickAddModel } from "./QuickAddModel";
+import { ICON } from "../icons";
 
 // The add bar's two popovers: the date popover and the more menu.
 // They render inside the plugin container (never on the body; popoverFit.ts lifts them into the
@@ -342,7 +343,7 @@ export function DatePopover(props: PopoverProps & { weekStart: WeekStart }) {
 							{editing === "time" && <FieldEdit type="time" label="Time" value={time} onValue={setTimeValue} onDone={() => doneEditing("time")} />}
 							<Row
 								setIcon={setIcon}
-								icon="flag"
+								icon={ICON.deadline}
 								label="Deadline"
 								row="deadline"
 								value={deadlineText}
@@ -501,7 +502,7 @@ export function MorePopover(props: PopoverProps & { pickNote: () => Promise<stri
 							onClick={() => model.setPriority(p)}
 							onKeyDown={(e) => onFlagKey(e, i)}
 						>
-							<QaIcon setIcon={setIcon} name="flag" />
+							<QaIcon setIcon={setIcon} name={ICON.flag} />
 						</button>
 					))}
 				</div>

@@ -167,7 +167,7 @@ export function WeekView(props: {
 							dragging={dnd.draggingId === e.task.id}
 							onDragStart={e.kind === "date" && !view.repeat ? (ev, el) => dnd.start(ev, el, { kind: "allday", task: e.task }) : undefined}
 						>
-							{view.deadline && <Icon host={host} icon={ICON.flag} />}
+							{view.deadline && <Icon host={host} icon={ICON.deadline} />}
 							<RepeatMark host={host} view={view} />
 							<span class="cp-cal-entry-text">{e.task.title}</span>
 						</EntryButton>

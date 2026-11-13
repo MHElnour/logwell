@@ -36,6 +36,8 @@ describe("details pane", () => {
 			expect(icon(flag)).toBe("flag");
 			flag.click();
 			const menu = host.menus.at(-1);
+			// One icon per meaning: every priority menu item is a flag.
+			for (const title of ["High", "Medium", "Low", "None"]) expect(menuItem(menu, title).icon).toBe("flag");
 			expect(menuItem(menu, "Medium").run).toBeTypeOf("function");
 			menuItem(menu, "Medium").run();
 			await settle();
