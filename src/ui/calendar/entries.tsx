@@ -132,7 +132,7 @@ export function EntryButton(props: {
 	extraClass?: string;
 	style?: Vars;
 	onSelect: (id: ID) => void;
-	/** Mouse and pen press on the entry: starts a move. Deadline flags pass nothing. */
+	/** Mouse and pen press on the entry: starts a move. Deadline entries pass nothing. */
 	onDragStart?: (e: PointerEvent, el: HTMLElement) => void;
 	/** The bottom-edge resize handle; decorative, not focusable. */
 	onResizeStart?: (e: PointerEvent, el: HTMLElement) => void;

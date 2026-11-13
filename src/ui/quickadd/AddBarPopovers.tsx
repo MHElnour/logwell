@@ -11,6 +11,7 @@ import { formatDateSpec } from "../format";
 import { RepeatCustom, RepeatPresets } from "../RepeatPicker";
 import { repeatLine } from "../repeat";
 import { useUniqueId } from "../hooks";
+import { ICON } from "../icons";
 
 import { dayLabel, monthGrid, shiftDateByMonths } from "./calendar";
 import { monthTitle } from "../calendar/format";
@@ -20,7 +21,6 @@ import { focusables, popoverKeyDown } from "../popoverKeys";
 import { applyPopoverFit, attachPopover } from "./popoverFit";
 import { QaIcon, type SetIcon } from "./QaIcon";
 import type { QuickAddModel } from "./QuickAddModel";
-import { ICON } from "../icons";
 
 // The add bar's two popovers: the date popover and the more menu.
 // They render inside the plugin container (never on the body; popoverFit.ts lifts them into the
