@@ -45,7 +45,7 @@ export function HabitControl(props: HabitControlProps) {
 						<small>{` / ${amountText(target)}`}</small>
 					</span>
 					{met && <Met host={host} />}
-					<AddButton host={host} habit={habit} date={date} amount={1} label={plusLabel(habit.name)} />
+					<AddButton host={host} habit={habit} date={date} amount={1} label={plusLabel(habit.name, met)} off={met} />
 				</>
 			);
 		case "quantity": {
@@ -106,15 +106,21 @@ function CheckButton(props: { host: UiHost; habit: Habit; date: LocalDate; on: b
 	);
 }
 
-/** "+1" (a count) or "+n" (a quantity card): one tap, one check-in. */
-function AddButton(props: { host: UiHost; habit: Habit; date: LocalDate; amount: number; label: string }) {
+/**
+ * "+1" (a count) or "+n" (a quantity card): one tap, one check-in. `off` (a count whose goal is met) keeps the button
+ * in place and focusable with aria-disabled, and a tap writes nothing.
+ */
+function AddButton(props: { host: UiHost; habit: Habit; date: LocalDate; amount: number; label: string; off?: boolean }) {
 	const { host, habit, date, amount } = props;
 	return (
 		<button
 			type="button"
 			class="cp-habit-plus"
 			aria-label={props.label}
-			onClick={() => void runWrite(host, () => host.app.habits.add(habit.id, date, amount), checkedInText(habit))}
+			aria-disabled={props.off === true}
+			onClick={() => {
+				if (props.off !== true) void runWrite(host, () => host.app.habits.add(habit.id, date, amount), checkedInText(habit));
+			}}
 		>
 			{`+${amountText(amount)}`}
 		</button>

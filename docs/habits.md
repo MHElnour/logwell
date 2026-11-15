@@ -34,8 +34,8 @@ A change to the goal or to **When** applies from today, or from the start of thi
 The control on each row depends on how you track the habit:
 
 - **Done or not**: a round check button. Click it again to remove the check-in.
-- **Count**: the progress, such as "5 / 8", and a **+1** button.
-- **Amount**: a number field with the unit, and **Add**. Press Enter or choose **Add**. Use a point or a comma for decimals, up to six. A value such as "10,000" is refused, because it could mean ten thousand or ten.
+- **Count**: the progress, such as "5 / 8", and a **+1** button. A count stops at its goal: once the day (or the week, for a goal per week) holds the goal, **+1** is switched off and shows a check mark. Delete a check-in, or Undo, and **+1** works again. A check-in you edit cannot be raised past the goal.
+- **Amount**: a number field with the unit, and **Add**. An amount can go over its goal. Press Enter or choose **Add**. Use a point or a comma for decimals, up to six. A value such as "10,000" is refused, because it could mean ten thousand or ten.
 
 Every check-in shows a notice with **Undo**. You cannot check in for a future day or for a day before the habit began.
 

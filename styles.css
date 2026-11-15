@@ -5922,8 +5922,14 @@ body.is-mobile .checkpoint-view .cp-app {
 	cursor: pointer;
 }
 
-.checkpoint-view .cp-habit-plus:hover {
+.checkpoint-view .cp-habit-plus:hover:not([aria-disabled="true"]) {
 	background: var(--background-modifier-hover);
+}
+
+/* A count whose goal is met: +1 stays in place and focusable, and adds nothing. */
+.checkpoint-view .cp-habit-plus[aria-disabled="true"] {
+	color: var(--text-faint);
+	cursor: default;
 }
 
 .checkpoint-view .cp-habit-row.is-selected .cp-habit-plus,

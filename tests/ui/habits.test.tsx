@@ -540,7 +540,8 @@ describe("Habits page", () => {
 			expect(qa<HTMLButtonElement>(el, 'button[aria-label="Delete check-in"]').every((b) => !b.disabled)).toBe(true);
 			await select(el, "Drink water");
 			expect(qa(el, ".cp-habit-entry-value").map((e) => text(e).slice(0, 2))).toEqual(Array(5).fill("+1"));
-			// Fifty at a time.
+			// Fifty at a time (a count stops at its goal, so the goal is raised to leave room).
+			await m.h.app.habits.update(habits.water.id, input({ name: "Drink water", icon: "droplet", color: "blue", timeOfDay: "anytime", goal: { type: "count", target: 100, unit: "glasses", period: "day" } }));
 			for (let i = 0; i < 52; i++) await m.h.app.habits.add(habits.water.id, "2026-10-04", 1);
 			await settle();
 			expect(qa(el, ".cp-habit-entry")).toHaveLength(50);
@@ -907,6 +908,11 @@ describe("plusLabel", () => {
 	it("names the habit, whatever its unit", () => {
 		expect(plusLabel("Drink water")).toBe("Add one to Drink water");
 		expect(plusLabel("Push-ups")).toBe("Add one to Push-ups");
+	});
+
+	it("#243: says the goal is met once +1 is switched off", () => {
+		expect(plusLabel("Drink water", true)).toBe("Drink water: goal met");
+		expect(plusLabel("Drink water", false)).toBe("Add one to Drink water");
 	});
 });
 
