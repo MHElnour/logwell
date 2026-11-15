@@ -587,6 +587,18 @@ describe("Habits page", () => {
 			expect(qa(el, ".cp-habit-entry")).toHaveLength(6);
 		});
 
+		it("#243: an edit in the log that would pass a count's goal shows the message and leaves the value as it was", async () => {
+			const { m, el, habits } = await page();
+			await select(el, "Drink water");
+			Object.assign(m.host, { prompt: async () => ({ value: "9" }) });
+			const n = m.notices.length;
+			const entry = () => qa(el, ".cp-habit-entry")[0]!;
+			await click(q(entry(), 'button[aria-label="Edit check-in"]'));
+			expect(m.host.messages.at(-1)).toBe("This would go past the goal of 8.");
+			expect(m.notices).toHaveLength(n);
+			expect(m.h.app.habits.index().active(habits.water.id).map((c) => c.value)).toEqual([1, 1, 1, 1, 1]);
+		});
+
 		it("has more: archive and delete in a menu; Archive hides the habit and tells it", async () => {
 			const { m, el, habits } = await page();
 			await select(el, "Read");

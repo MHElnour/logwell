@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { click, day, pressKey, q, qa, settle, sidebarItem, text, undoDepth } from "./app-helpers";
 import { board, cardTitles, modeButton } from "./board-helpers";
-import { type HabitMount, mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
+import { type HabitMount, input, mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
 
 // Habits in Today: the block above the list, the first board column, the fold
 // line, and where they do not show. The clock is Sunday 2026-10-04, 20:30 in Europe/Berlin (seedMockup).
@@ -267,6 +267,27 @@ describe("a count habit at its goal", () => {
 		await settle();
 		expect(plus().getAttribute("aria-disabled")).not.toBe("true");
 		expect(plus().getAttribute("aria-label")).toBe("Add one to Drink water");
+	});
+
+	it.each(places)("#243: +1 is also switched off when one more would pass the goal, and a click or Enter writes nothing ($place)", async ({ open, control }) => {
+		const { m } = await today();
+		// An amount habit with 4.5 checked in becomes a count of 5: +1 would make 5.5.
+		const pagesInput = input({ name: "Pages", icon: null, color: null, timeOfDay: "anytime", goal: { type: "quantity", target: 10, unit: "pages", period: "day" } });
+		const pages = await m.h.app.habits.create(pagesInput);
+		await m.h.app.habits.add(pages.id, "2026-10-04", 4.5);
+		await m.h.app.habits.update(pages.id, { ...pagesInput, goal: { type: "count", target: 5, unit: "pages", period: "day" } });
+		await settle();
+		await open(m);
+		const plus = () => q(control(m, "Pages"), ".cp-habit-plus");
+		expect(plus().getAttribute("aria-disabled")).toBe("true");
+		expect(control(m, "Pages").querySelector(".cp-habit-met")).toBeNull();
+		const depth = undoDepth(m);
+		const notices = m.notices.length;
+		await click(plus());
+		await pressKey(plus(), "Enter");
+		expect(undoDepth(m)).toBe(depth);
+		expect(m.notices).toHaveLength(notices);
+		expect(m.h.app.habits.index().active(pages.id).map((c) => c.value)).toEqual([4.5]);
 	});
 
 	it.each(places)("#243: an amount habit's Add stays enabled at its goal ($place)", async ({ open, control }) => {

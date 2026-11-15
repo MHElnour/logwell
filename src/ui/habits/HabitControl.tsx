@@ -45,7 +45,7 @@ export function HabitControl(props: HabitControlProps) {
 						<small>{` / ${amountText(target)}`}</small>
 					</span>
 					{met && <Met host={host} />}
-					<AddButton host={host} habit={habit} date={date} amount={1} label={plusLabel(habit.name, met)} off={met} />
+					<AddButton host={host} habit={habit} date={date} amount={1} label={plusLabel(habit.name, met)} off={met || value + 1 > target} />
 				</>
 			);
 		case "quantity": {
@@ -107,8 +107,9 @@ function CheckButton(props: { host: UiHost; habit: Habit; date: LocalDate; on: b
 }
 
 /**
- * "+1" (a count) or "+n" (a quantity card): one tap, one check-in. `off` (a count whose goal is met) keeps the button
- * in place and focusable with aria-disabled, and a tap writes nothing.
+ * "+1" (a count) or "+n" (a quantity card): one tap, one check-in. `off` (a count whose +1 the service would refuse:
+ * the goal is met, or one more would pass it) keeps the button in place and focusable with aria-disabled, and a tap
+ * writes nothing.
  */
 function AddButton(props: { host: UiHost; habit: Habit; date: LocalDate; amount: number; label: string; off?: boolean }) {
 	const { host, habit, date, amount } = props;

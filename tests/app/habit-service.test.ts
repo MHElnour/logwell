@@ -466,6 +466,18 @@ describe("count goals stop at their target", () => {
 		expect(total(app, w.id, "2026-10-14")).toBe(3);
 	});
 
+	it("#243: an edit on a week goal counts the whole week: 3 and 1 on two days, the 1 cannot become 3 but can become 2", async () => {
+		const { h, app, labelled } = await setup();
+		const w = await app.habits.create(water(5, "week"));
+		await app.habits.add(w.id, "2026-10-14", 3);
+		h.clock.set("2026-10-15T10:00:00.000Z");
+		await app.habits.add(w.id, "2026-10-15", 1);
+		const one = active(app, w.id).find((c) => c.date === "2026-10-15")!;
+		await expectDomainError(app.habits.editCheckin(one.id, { value: 3 }), "InvalidValue", "This would go past the goal of 5.");
+		await labelled(app.habits.editCheckin(one.id, { value: 2 }), EDIT_CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-15")).toBe(5);
+	});
+
 	it("#243: on a day already over its target a note edit and a lower value work, a higher value does not", async () => {
 		const { h, app, labelled } = await setup("2026-10-01T10:00:00.000Z");
 		const w = await app.habits.create(water(5));

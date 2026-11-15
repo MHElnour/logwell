@@ -240,6 +240,20 @@ describe("reminder host", () => {
 			expect(app.store.undoLabel).toBe(CHECKIN_LABEL);
 		});
 
+		it("#243: Check in on a count habit whose goal is met in the meantime writes nothing and shows no Undo", async () => {
+			const { app, ui, shown, host, tickAt } = await setup();
+			const water = await app.habits.create(count());
+			host.attach(r(app));
+			tickAt(AT_20);
+			await app.habits.add(water.id, "2026-10-14", 8);
+			const state = app.store.state;
+			await press(shown[0]!, "Check in");
+			expect(app.store.state).toBe(state);
+			expect(app.habits.index().active(water.id).map((c) => c.value)).toEqual([8]);
+			expect(ui.notifyUndo).not.toHaveBeenCalled();
+			expect(ui.error).not.toHaveBeenCalled();
+		});
+
 		it("opens the Habits page on a quantity habit with its control focused, and writes nothing", async () => {
 			const { app, ui, shown, host, tickAt } = await setup();
 			const read = await app.habits.create(quantity());
