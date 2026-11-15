@@ -48,9 +48,12 @@ export function amountFieldLabel(unit: string | null): string {
 	return `${capitalize(unit ?? "amount")} to add`;
 }
 
-/** The accessible name of a count habit's "+1" button: "Add one to Drink water" (a unit like "glasses" cannot be made singular). */
-export function plusLabel(habitName: string): string {
-	return `Add one to ${habitName}`;
+/**
+ * The accessible name of a count habit's "+1" button: "Add one to Drink water" (a unit like "glasses" cannot be made singular);
+ * "Drink water: goal met" once the goal is met and +1 is switched off.
+ */
+export function plusLabel(habitName: string, met = false): string {
+	return met ? `${habitName}: goal met` : `Add one to ${habitName}`;
 }
 
 /** The "n" of a board card's quantity button: the last check-in's value, else a third of the target rounded up. */

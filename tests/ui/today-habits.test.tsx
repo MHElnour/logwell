@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { click, day, pressKey, q, qa, settle, sidebarItem, text, undoDepth } from "./app-helpers";
 import { board, cardTitles, modeButton } from "./board-helpers";
-import { type HabitMount, mountHabits, seedMockup } from "./habits-helpers";
+import { type HabitMount, input, mountHabits, openHabits, rowOf, seedMockup } from "./habits-helpers";
 
 // Habits in Today: the block above the list, the first board column, the fold
 // line, and where they do not show. The clock is Sunday 2026-10-04, 20:30 in Europe/Berlin (seedMockup).
@@ -221,5 +221,82 @@ describe("the Habits column in the Today board (Board mode)", () => {
 		card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: 10, clientY: 10, pointerId: 1 }));
 		await settle();
 		expect(board(m.root).classList.contains("is-dragging-card")).toBe(false);
+	});
+});
+
+describe("a count habit at its goal", () => {
+	/** The control of one habit where a met habit stays visible: the page row and the board card (the Today block folds a met habit away). */
+	const places: { place: string; open: (m: HabitMount) => Promise<void>; control: (m: HabitMount, name: string) => HTMLElement }[] = [
+		{
+			place: "the Habits page row",
+			open: async (m) => void (await openHabits(m)),
+			control: (m, name) => rowOf(q(m.root, ".cp-habits"), name),
+		},
+		{
+			place: "the Today board card",
+			open: async (m) => click(modeButton(m.root, "Board")),
+			control: (m, name) => qa(m.root, ".cp-board-habits .cp-habit-card").find((c) => text(q(c, ".cp-habit-name")) === name)!,
+		},
+	];
+
+	it.each(places)("#243: +1 is switched off, labelled and writes nothing at the goal, and comes back under it ($place)", async ({ open, control }) => {
+		const { m, habits } = await today();
+		await open(m);
+		const plus = () => q(control(m, "Drink water"), ".cp-habit-plus");
+		// Below the goal: 5 of 8, enabled, no mark.
+		expect(plus().getAttribute("aria-disabled")).not.toBe("true");
+		expect(plus().getAttribute("aria-label")).toBe("Add one to Drink water");
+		await click(plus());
+		await click(plus());
+		await click(plus());
+		await settle();
+		// At the goal: still a focusable button in the DOM, switched off with its reason as the label.
+		expect(plus().getAttribute("aria-disabled")).toBe("true");
+		expect(plus().tagName).toBe("BUTTON");
+		expect(plus().hasAttribute("disabled")).toBe(false);
+		expect(plus().getAttribute("aria-label")).toBe("Drink water: goal met");
+		expect(control(m, "Drink water").querySelector(".cp-habit-met")).not.toBeNull();
+		const depth = undoDepth(m);
+		const notices = m.notices.length;
+		await click(plus());
+		expect(undoDepth(m)).toBe(depth);
+		expect(m.notices).toHaveLength(notices);
+		expect(m.h.app.habits.index().active(habits.water.id)).toHaveLength(8);
+		// Deleting a check-in brings it back.
+		await m.h.app.habits.deleteCheckin(m.h.app.habits.index().active(habits.water.id)[0]!.id);
+		await settle();
+		expect(plus().getAttribute("aria-disabled")).not.toBe("true");
+		expect(plus().getAttribute("aria-label")).toBe("Add one to Drink water");
+	});
+
+	it.each(places)("#243: +1 is also switched off when one more would pass the goal, and a click or Enter writes nothing ($place)", async ({ open, control }) => {
+		const { m } = await today();
+		// An amount habit with 4.5 checked in becomes a count of 5: +1 would make 5.5.
+		const pagesInput = input({ name: "Pages", icon: null, color: null, timeOfDay: "anytime", goal: { type: "quantity", target: 10, unit: "pages", period: "day" } });
+		const pages = await m.h.app.habits.create(pagesInput);
+		await m.h.app.habits.add(pages.id, "2026-10-04", 4.5);
+		await m.h.app.habits.update(pages.id, { ...pagesInput, goal: { type: "count", target: 5, unit: "pages", period: "day" } });
+		await settle();
+		await open(m);
+		const plus = () => q(control(m, "Pages"), ".cp-habit-plus");
+		expect(plus().getAttribute("aria-disabled")).toBe("true");
+		expect(control(m, "Pages").querySelector(".cp-habit-met")).toBeNull();
+		const depth = undoDepth(m);
+		const notices = m.notices.length;
+		await click(plus());
+		await pressKey(plus(), "Enter");
+		expect(undoDepth(m)).toBe(depth);
+		expect(m.notices).toHaveLength(notices);
+		expect(m.h.app.habits.index().active(pages.id).map((c) => c.value)).toEqual([4.5]);
+	});
+
+	it.each(places)("#243: an amount habit's Add stays enabled at its goal ($place)", async ({ open, control }) => {
+		const { m, habits } = await today();
+		await open(m);
+		await m.h.app.habits.add(habits.read.id, "2026-10-04", 10);
+		await settle();
+		const add = () => q(control(m, "Read"), ".cp-habit-add, .cp-habit-plus");
+		expect(add().getAttribute("aria-disabled")).not.toBe("true");
+		expect(add().hasAttribute("disabled")).toBe(false);
 	});
 });

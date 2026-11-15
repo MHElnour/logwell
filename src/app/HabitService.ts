@@ -6,6 +6,7 @@ import {
 	hasAtMostSixDecimals,
 	indexCheckins,
 	nextVersion,
+	progressOn,
 	sameRule,
 	validateHabitInput,
 	versionAt,
@@ -259,18 +260,25 @@ export class HabitService {
 		return outcome === "retry" ? "retry" : { wrote: outcome, label };
 	}
 
-	/** Count (+1) and quantity (an amount); a past date is a backfill. */
+	/**
+	 * Count (+1) and quantity (an amount); a past date is a backfill. A count stops at its target: when the
+	 * period (the day, or the week) already holds it, or the value would take it past, nothing is written.
+	 */
 	add(habitId: ID, date: LocalDate, value: number): Promise<WriteResult> {
 		return this.write(CHECKIN_LABEL, (tx) => {
 			const habit = this.writableHabit(tx, habitId, date);
 			if (versionAt(habit, date)?.goal.type === "binary") invalidValue("This habit is done-or-not; check it in instead.");
 			requireValue(habit, date, value);
+			if (versionAt(habit, date)?.goal.type === "count") {
+				const progress = progressOn(habit, this.txIndex(tx), date);
+				if (progress !== null && progress.value + value > progress.target) return false;
+			}
 			tx.put("checkins", this.newCheckin(tx, habitId, date, value));
 			return true;
 		});
 	}
 
-	/** The value and note change in place; the date never does. A binary value stays 1. */
+	/** The value and note change in place; the date never does. A binary value stays 1; a count is never raised past its target. */
 	editCheckin(id: ID, patch: { value?: number; note?: string | null }): Promise<WriteResult> {
 		return this.write(EDIT_CHECKIN_LABEL, (tx) => {
 			const current = tx.get("checkins", id);
@@ -280,6 +288,10 @@ export class HabitService {
 			if (value !== current.value) {
 				if (versionAt(habit, current.date)?.goal.type === "binary") invalidValue("A done-or-not check-in has no amount to change.");
 				requireValue(habit, current.date, value);
+				if (value > current.value && versionAt(habit, current.date)?.goal.type === "count") {
+					const progress = progressOn(habit, this.txIndex(tx), current.date);
+					if (progress !== null && progress.value - current.value + value > progress.target) invalidValue(`This would go past the goal of ${progress.target}.`);
+				}
 			}
 			const note = patch.note === undefined ? current.note : patch.note?.trim() || null;
 			if (value === current.value && note === current.note) return false;

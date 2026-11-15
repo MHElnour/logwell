@@ -338,6 +338,159 @@ describe("check-ins", () => {
 	});
 });
 
+describe("count goals stop at their target", () => {
+	const water = (target: number, period: "day" | "week" = "day") =>
+		count({ goal: { type: "count", target, unit: null, period }, ...(period === "week" ? { schedule: { kind: "weekly" } } : {}) });
+	const total = (app: CheckpointApp, habitId: string, date: string) => progressOn(app.store.state.habits.get(habitId)!, app.habits.index(), date)!.value;
+	/** A check-in the way an import or a sync leaves one, written outside the service. */
+	const seed = (app: CheckpointApp, habitId: string, date: string, value: number) =>
+		app.store.run("Seed", (tx) => {
+			tx.put("checkins", { id: `seed-${date}-${value}`, habitId, date, value, note: null, createdAt: tx.now, modifiedAt: tx.now, deletedAt: null });
+		});
+
+	it("#243: +1 at the target writes nothing: no check-in, no undo entry, no error", async () => {
+		const { app, labelled } = await setup();
+		const w = await app.habits.create(water(3));
+		for (let i = 0; i < 3; i++) await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL);
+		const state = app.store.state;
+		const undo = app.store.undoMark();
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		expect(app.store.state).toBe(state);
+		expect(app.store.undoMark()).toBe(undo);
+		expect(active(app, w.id)).toHaveLength(3);
+	});
+
+	it("#243: +1 below the target writes, and a value that would pass the target writes nothing", async () => {
+		const { app, labelled } = await setup();
+		const w = await app.habits.create(water(5));
+		await labelled(app.habits.add(w.id, "2026-10-14", 4), CHECKIN_LABEL);
+		await labelled(app.habits.add(w.id, "2026-10-14", 2), CHECKIN_LABEL, false);
+		expect(total(app, w.id, "2026-10-14")).toBe(4);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-14")).toBe(5);
+		// A count value is still a whole number above 0.
+		await refused(app.habits.add(w.id, "2026-10-14", 1.5));
+	});
+
+	it("#243: two taps issued at once at target - 1 end at the target, never over", async () => {
+		const { app } = await setup();
+		const w = await app.habits.create(water(5));
+		await app.habits.add(w.id, "2026-10-14", 4);
+		const [a, b] = await Promise.all([app.habits.add(w.id, "2026-10-14", 1), app.habits.add(w.id, "2026-10-14", 1)]);
+		expect([a.wrote, b.wrote]).toEqual([true, false]);
+		expect(total(app, w.id, "2026-10-14")).toBe(5);
+	});
+
+	it("#243: a week goal stops on the week's total across its days", async () => {
+		const { h, app, labelled } = await setup();
+		const w = await app.habits.create(water(5, "week"));
+		await app.habits.add(w.id, "2026-10-14", 3);
+		h.clock.set("2026-10-15T10:00:00.000Z");
+		await labelled(app.habits.add(w.id, "2026-10-15", 1), CHECKIN_LABEL);
+		await labelled(app.habits.add(w.id, "2026-10-15", 1), CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-15")).toBe(5);
+		await labelled(app.habits.add(w.id, "2026-10-15", 1), CHECKIN_LABEL, false);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		expect(active(app, w.id)).toHaveLength(3);
+	});
+
+	it("#243: a past day stops by its own goal version: a goal raised later does not reopen it", async () => {
+		const { h, app, labelled } = await setup("2026-10-01T10:00:00.000Z");
+		const w = await app.habits.create(water(3));
+		h.clock.set("2026-10-03T10:00:00.000Z");
+		await app.habits.add(w.id, "2026-10-02", 3);
+		h.clock.set("2026-10-14T10:00:00.000Z");
+		await app.habits.update(w.id, water(5));
+		await labelled(app.habits.add(w.id, "2026-10-02", 1), CHECKIN_LABEL, false);
+		for (let i = 0; i < 5; i++) await app.habits.add(w.id, "2026-10-14", 1);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		expect(total(app, w.id, "2026-10-02")).toBe(3);
+		expect(total(app, w.id, "2026-10-14")).toBe(5);
+	});
+
+	it("#243: a goal lowered later leaves an older day as it is; a day already over its target is not rewritten and stays off", async () => {
+		const { h, app, labelled } = await setup("2026-10-01T10:00:00.000Z");
+		const w = await app.habits.create(water(5));
+		await seed(app, w.id, "2026-10-02", 7);
+		h.clock.set("2026-10-14T10:00:00.000Z");
+		await app.habits.update(w.id, water(3));
+		await labelled(app.habits.add(w.id, "2026-10-02", 1), CHECKIN_LABEL, false);
+		expect(total(app, w.id, "2026-10-02")).toBe(7);
+		for (let i = 0; i < 3; i++) await app.habits.add(w.id, "2026-10-14", 1);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		// Delete still works on the over-target day, and +1 comes back once the day is under its target.
+		const seeded = active(app, w.id).find((c) => c.date === "2026-10-02")!;
+		await labelled(app.habits.deleteCheckin(seeded.id), DELETE_CHECKIN_LABEL);
+		await labelled(app.habits.add(w.id, "2026-10-02", 1), CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-02")).toBe(1);
+	});
+
+	it("#243: after a delete or an Undo brings the total under the target, +1 writes again", async () => {
+		const { app, labelled } = await setup();
+		const w = await app.habits.create(water(2));
+		await app.habits.add(w.id, "2026-10-14", 1);
+		await app.habits.add(w.id, "2026-10-14", 1);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		await app.habits.deleteCheckin(active(app, w.id)[0]!.id);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL, false);
+		expect(await app.store.undo()).toBe(CHECKIN_LABEL);
+		await labelled(app.habits.add(w.id, "2026-10-14", 1), CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-14")).toBe(2);
+	});
+
+	it("#243: an amount goal can still go over its target", async () => {
+		const { app, labelled } = await setup();
+		const r = await app.habits.create(input());
+		await labelled(app.habits.add(r.id, "2026-10-14", 20), CHECKIN_LABEL);
+		await labelled(app.habits.add(r.id, "2026-10-14", 20), CHECKIN_LABEL);
+		expect(total(app, r.id, "2026-10-14")).toBe(40);
+		const c = active(app, r.id)[0]!;
+		await labelled(app.habits.editCheckin(c.id, { value: 50 }), EDIT_CHECKIN_LABEL);
+		expect(total(app, r.id, "2026-10-14")).toBe(70);
+	});
+
+	it("#243: an edit that would take a count past its target is refused; lowering and a note still work", async () => {
+		const { app, labelled } = await setup();
+		const w = await app.habits.create(water(5));
+		await app.habits.add(w.id, "2026-10-14", 1);
+		await app.habits.add(w.id, "2026-10-14", 1);
+		const [first] = active(app, w.id);
+		const state = app.store.state;
+		await expectDomainError(app.habits.editCheckin(first!.id, { value: 5 }), "InvalidValue", "This would go past the goal of 5.");
+		expect(app.store.state).toBe(state);
+		await labelled(app.habits.editCheckin(first!.id, { value: 4 }), EDIT_CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-14")).toBe(5);
+		await labelled(app.habits.editCheckin(first!.id, { value: 2 }), EDIT_CHECKIN_LABEL);
+		await labelled(app.habits.editCheckin(first!.id, { note: "with lunch" }), EDIT_CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-14")).toBe(3);
+	});
+
+	it("#243: an edit on a week goal counts the whole week: 3 and 1 on two days, the 1 cannot become 3 but can become 2", async () => {
+		const { h, app, labelled } = await setup();
+		const w = await app.habits.create(water(5, "week"));
+		await app.habits.add(w.id, "2026-10-14", 3);
+		h.clock.set("2026-10-15T10:00:00.000Z");
+		await app.habits.add(w.id, "2026-10-15", 1);
+		const one = active(app, w.id).find((c) => c.date === "2026-10-15")!;
+		await expectDomainError(app.habits.editCheckin(one.id, { value: 3 }), "InvalidValue", "This would go past the goal of 5.");
+		await labelled(app.habits.editCheckin(one.id, { value: 2 }), EDIT_CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-15")).toBe(5);
+	});
+
+	it("#243: on a day already over its target a note edit and a lower value work, a higher value does not", async () => {
+		const { h, app, labelled } = await setup("2026-10-01T10:00:00.000Z");
+		const w = await app.habits.create(water(5));
+		await seed(app, w.id, "2026-10-02", 7);
+		h.clock.set("2026-10-14T10:00:00.000Z");
+		const over = active(app, w.id)[0]!;
+		await labelled(app.habits.editCheckin(over.id, { note: "a busy day" }), EDIT_CHECKIN_LABEL);
+		await refused(app.habits.editCheckin(over.id, { value: 8 }));
+		await labelled(app.habits.editCheckin(over.id, { value: 6 }), EDIT_CHECKIN_LABEL);
+		expect(total(app, w.id, "2026-10-02")).toBe(6);
+	});
+});
+
 describe("check-in dates, kept reminders and zero values", () => {
 	it("refuses a date that is not a real day and writes nothing", async () => {
 		const { app } = await setup();

@@ -540,7 +540,8 @@ describe("Habits page", () => {
 			expect(qa<HTMLButtonElement>(el, 'button[aria-label="Delete check-in"]').every((b) => !b.disabled)).toBe(true);
 			await select(el, "Drink water");
 			expect(qa(el, ".cp-habit-entry-value").map((e) => text(e).slice(0, 2))).toEqual(Array(5).fill("+1"));
-			// Fifty at a time.
+			// Fifty at a time (a count stops at its goal, so the goal is raised to leave room).
+			await m.h.app.habits.update(habits.water.id, input({ name: "Drink water", icon: "droplet", color: "blue", timeOfDay: "anytime", goal: { type: "count", target: 100, unit: "glasses", period: "day" } }));
 			for (let i = 0; i < 52; i++) await m.h.app.habits.add(habits.water.id, "2026-10-04", 1);
 			await settle();
 			expect(qa(el, ".cp-habit-entry")).toHaveLength(50);
@@ -584,6 +585,18 @@ describe("Habits page", () => {
 			await expect(m.host.undoButtons.at(-1)!()).resolves.toBe(true);
 			await settle();
 			expect(qa(el, ".cp-habit-entry")).toHaveLength(6);
+		});
+
+		it("#243: an edit in the log that would pass a count's goal shows the message and leaves the value as it was", async () => {
+			const { m, el, habits } = await page();
+			await select(el, "Drink water");
+			Object.assign(m.host, { prompt: async () => ({ value: "9" }) });
+			const n = m.notices.length;
+			const entry = () => qa(el, ".cp-habit-entry")[0]!;
+			await click(q(entry(), 'button[aria-label="Edit check-in"]'));
+			expect(m.host.messages.at(-1)).toBe("This would go past the goal of 8.");
+			expect(m.notices).toHaveLength(n);
+			expect(m.h.app.habits.index().active(habits.water.id).map((c) => c.value)).toEqual([1, 1, 1, 1, 1]);
 		});
 
 		it("has more: archive and delete in a menu; Archive hides the habit and tells it", async () => {
@@ -907,6 +920,11 @@ describe("plusLabel", () => {
 	it("names the habit, whatever its unit", () => {
 		expect(plusLabel("Drink water")).toBe("Add one to Drink water");
 		expect(plusLabel("Push-ups")).toBe("Add one to Push-ups");
+	});
+
+	it("#243: says the goal is met once +1 is switched off", () => {
+		expect(plusLabel("Drink water", true)).toBe("Drink water: goal met");
+		expect(plusLabel("Drink water", false)).toBe("Add one to Drink water");
 	});
 });
 
